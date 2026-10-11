@@ -106,8 +106,8 @@ export function YueEnsureMp3(arg1) {
   return window['go']['main']['App']['YueEnsureMp3'](arg1);
 }
 
-export function YueFragmentJob(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['YueFragmentJob'](arg1, arg2, arg3, arg4, arg5);
+export function YueFragmentJob(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['YueFragmentJob'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function YueFxAssets() {
