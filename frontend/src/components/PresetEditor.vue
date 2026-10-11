@@ -205,13 +205,8 @@ function specLine(sp) {
 // тонкая правка цепочки engine-записи: edit-форма (fxChain), при сохранении — обратно в worker-форму
 function toggleEdit(sp, open) {
   if (!open) return
-  if (!sp.edit) {
-    // раскрыть форму — не правка: рабочая форма цепочки может отличаться от engine умолчаниями блоков, поэтому
-    // если до раскрытия правок не было, точка отсчёта переснимается
-    const clean = snapshot() === savedSnap
-    sp.edit = fromWorkerChain(sp.engine || [], BLOCKS)
-    if (clean) savedSnap = snapshot()
-  }
+  // раскрыть форму — не правка: снимок сравнивает цепочки в нормальной форме (editorSnapshot)
+  if (!sp.edit) sp.edit = fromWorkerChain(sp.engine || [], BLOCKS)
 }
 function syncEdit() {
   for (const sp of model.value.specs) {

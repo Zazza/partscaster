@@ -206,13 +206,16 @@ export function presetMasterChain(chain, targetLufs) {
   return out
 }
 
-/** Снимок редактора для «есть несохранённые правки?»: правка тонкой цепочки (sp.edit) — в рабочей форме engine
- *  (в engine она попадает только при сохранении); id пресета не в счёт (появляется после сохранения нового). */
+/** Снимок редактора для «есть несохранённые правки?». Цепочки — в одной нормальной форме (с умолчаниями блоков):
+ *  правка тонкой цепочки (sp.edit) учитывается, а раскрытие формы и запись мастера с умолчаниями правкой не считаются.
+ *  id пресета не в счёт (появляется после сохранения нового); мастер — только из формы редактора (master). */
 export function editorSnapshot(model, master) {
   const m = model || {}
+  const norm = (sp) => (sp.edit ? toWorkerChain(sp.edit)
+    : Array.isArray(sp.engine) ? toWorkerChain(fromWorkerChain(sp.engine, BLOCKS)) : sp.engine)
   return JSON.stringify({
-    m: { ...m, id: undefined, specs: (m.specs || []).map((sp) => ({ ...sp, edit: undefined,
-      engine: sp.edit ? toWorkerChain(sp.edit) : sp.engine })) },
+    m: { ...m, id: undefined, master: undefined, specs: (m.specs || []).map((sp) => ({ ...sp, edit: undefined,
+      engine: norm(sp) })) },
     master: master || [],
   })
 }

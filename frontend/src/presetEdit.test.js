@@ -10,7 +10,7 @@ import {
   itemForTarget, masterPresets, newModel, presetMasterChain, previewSource, rhythmSpecs, specFromItem, specKindOk,
   specStemsFor, specKind, toModel, toggleStem, editorSnapshot,
 } from './presetEdit.js'
-import { fromWorkerChain, setParam } from './fxChain.js'
+import { fromWorkerChain, setParam, toWorkerChain } from './fxChain.js'
 import BLOCKS from './fxBlocks.json'
 
 // пресет со всеми видами записей и необязательными полями — roundtrip должен сохранить всё
@@ -391,5 +391,39 @@ describe('editorSnapshot — снимок состояния редактора'
     const s0 = editorSnapshot(m, [])
     expect(s0).toBeDefined()
     expect(editorSnapshot({ ...m, name: 'другое' }, [])).not.toEqual(s0)
+  })
+})
+
+// ТК159 (127ж): цепочки в снимке сравниваются в нормальной форме (с умолчаниями блоков) — раскрытие тонкой
+// правки без изменений и запись мастера с умолчаниями («Применить к эталону») не считаются правкой.
+describe('editorSnapshot — нормальная форма цепочек (ТК159)', () => {
+  const SHORT = [{ type: 'limiter' }]
+  const MASTER = [{ type: 'limiter', target_lufs: -14 }]
+  const withEngine = () => toModel({ id: 3, name: 'л', specs: [{ stems: ['other'], engine: SHORT, db: 0 }] })
+
+  it('краткая engine-форма и та же запись с edit = fromWorkerChain(engine) без изменений — одинаковый снимок', () => {
+    const plain = withEngine()
+    const opened = JSON.parse(JSON.stringify(plain))
+    opened.specs[0].edit = fromWorkerChain(opened.specs[0].engine, BLOCKS)
+    expect(opened.specs[0].edit).not.toEqual(SHORT)   // форма действительно раскрыта
+    expect(editorSnapshot(opened, MASTER)).toEqual(editorSnapshot(plain, MASTER))
+  })
+
+  it('model.master краткий и он же с умолчаниями блоков — одинаковый снимок при том же master', () => {
+    const short = withEngine()
+    short.master = [{ type: 'limiter' }]
+    const full = JSON.parse(JSON.stringify(short))
+    full.master = toWorkerChain(fromWorkerChain([{ type: 'limiter' }], BLOCKS))
+    expect(full.master).not.toEqual(short.master)   // запись действительно отличается по форме
+    expect(editorSnapshot(full, MASTER)).toEqual(editorSnapshot(short, MASTER))
+  })
+
+  it('изменённый параметр в edit краткой записи — снимок отличается (регрессия 127е)', () => {
+    const plain = withEngine()
+    const edited = JSON.parse(JSON.stringify(plain))
+    const sp = edited.specs[0]
+    sp.edit = setParam(fromWorkerChain(sp.engine, BLOCKS), 0, 'ceiling_db', -2, BLOCKS)
+    expect(sp.edit[0].params.ceiling_db).toBe(-2)
+    expect(editorSnapshot(edited, MASTER)).not.toEqual(editorSnapshot(plain, MASTER))
   })
 })
