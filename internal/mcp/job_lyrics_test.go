@@ -32,6 +32,7 @@ func newLyricsServer(t *testing.T) (*Server, *lyricsFake) {
 }
 
 func TestJobLyricsPassesLanguage(t *testing.T) {
+	t.Parallel()
 	s, fake := newLyricsServer(t)
 	out, ok := call(t, s, "job_lyrics", map[string]any{"job_id": float64(44), "language": "ru"})
 	if !ok {
@@ -43,6 +44,7 @@ func TestJobLyricsPassesLanguage(t *testing.T) {
 }
 
 func TestJobLyricsNoLanguageIsEmpty(t *testing.T) {
+	t.Parallel()
 	s, fake := newLyricsServer(t)
 	out, ok := call(t, s, "job_lyrics", map[string]any{"job_id": float64(45)})
 	if !ok {

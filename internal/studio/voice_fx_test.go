@@ -60,6 +60,7 @@ func voice200Drop(t *testing.T, out, base []float32, from, to float64) float64 {
 // (выравнивание RMS: перегруз громчит), тон ниже полосы срезан ≥ 12 дБ,
 // группа не тронута.
 func TestRebuildSectionsVoiceChainLevelMatch(t *testing.T) {
+	t.Parallel()
 	f, base := voiceFxSetup(t)
 	run(t, f, voiceFxSpec(0))
 	out := uploadedOnly(t, f)
@@ -78,6 +79,7 @@ func TestRebuildSectionsVoiceChainLevelMatch(t *testing.T) {
 // Карточка: дБ спеки — поверх выравнивания: +6 дБ даёт +6 к тону в полосе,
 // группа как была.
 func TestRebuildSectionsVoiceChainDbOnTop(t *testing.T) {
+	t.Parallel()
 	f, base := voiceFxSetup(t)
 	run(t, f, voiceFxSpec(6))
 	out := uploadedOnly(t, f)
@@ -92,6 +94,7 @@ func TestRebuildSectionsVoiceChainDbOnTop(t *testing.T) {
 
 // Карточка: окно [From, To) — эффект только в нём: вне окна трек = исходный.
 func TestRebuildSectionsVoiceChainWindow(t *testing.T) {
+	t.Parallel()
 	f, base := voiceFxSetup(t)
 	sp := voiceFxSpec(0)
 	sp.From, sp.To = 3, 6
@@ -114,6 +117,7 @@ func TestRebuildSectionsVoiceChainWindow(t *testing.T) {
 // Карточка: гейн выравнивания в отчёте — приглушающий (перегруз громчит),
 // не 1 и не потолок; общий RMS окна ≈ исходному.
 func TestRebuildSectionsVoiceChainGainReported(t *testing.T) {
+	t.Parallel()
 	f, base := voiceFxSetup(t)
 	sp := voiceFxSpec(0)
 	sp.From, sp.To = 2, 6
@@ -130,6 +134,7 @@ func TestRebuildSectionsVoiceChainGainReported(t *testing.T) {
 // Карточка: та же цепочка на дорожке группы работает и там: мегафон на other —
 // 500 Гц (в полосе) обработан и выровнен, голос не тронут.
 func TestRebuildSectionsVoiceChainOnOtherStem(t *testing.T) {
+	t.Parallel()
 	f, base := voiceFxSetup(t)
 	run(t, f, SectionSpec{ChildID: 0, From: 0, To: 0, Stems: []string{"other"},
 		Chain: "megaphone", Params: map[string]float64{}})

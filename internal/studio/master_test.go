@@ -129,6 +129,7 @@ func msCheckMasterCall(t *testing.T, f *msFake, file string) {
 // in_place, chain мастера, source mix) → UploadDsp(overdub-premaster-0); результат — файл микса
 // с метриками ответа ApplyFx.
 func TestRebuildSectionsMasterOrderAndResult(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	res, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{msMute(), msMaster()})
 	if err != nil {
@@ -164,6 +165,7 @@ func TestRebuildSectionsMasterOrderAndResult(t *testing.T) {
 
 // 44а: без мастера «микса без мастера» нет — одна загрузка, ApplyFx не зовётся.
 func TestRebuildSectionsNoMasterNoPremaster(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	if _, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{msMute()}); err != nil {
 		t.Fatalf("RebuildSections: %v", err)
@@ -175,6 +177,7 @@ func TestRebuildSectionsNoMasterNoPremaster(t *testing.T) {
 
 // ТК72 / усл. 44: имя микса — overdub-inst-N.flac по последней вклейке; мастер — на нём же.
 func TestRebuildSectionsMasterOnChildMix(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	if _, err := RebuildSections(context.Background(), f, parentID,
 		[]SectionSpec{spec7([]string{"other"}, 0), msMaster()}); err != nil {
@@ -189,6 +192,7 @@ func TestRebuildSectionsMasterOnChildMix(t *testing.T) {
 
 // ТК72: реестр только из мастера — загружается оригинал, мастер на нём.
 func TestRebuildSectionsMasterOnly(t *testing.T) {
+	t.Parallel()
 	f, pf := msSetup(t)
 	if _, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{msMaster()}); err != nil {
 		t.Fatalf("RebuildSections: %v", err)
@@ -211,6 +215,7 @@ func TestRebuildSectionsMasterOnly(t *testing.T) {
 
 // ТК72: две активные записи мастера → ошибка без UploadDsp и без ApplyFx.
 func TestRebuildSectionsTwoMastersIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{msMaster(), msMute(), msMaster()})
 	if err == nil {
@@ -223,6 +228,7 @@ func TestRebuildSectionsTwoMastersIsError(t *testing.T) {
 
 // Усл. 44: мастер считается на воркере — его ошибка — ошибка пересборки.
 func TestRebuildSectionsMasterFxErrorIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	f.err = errors.New("limiter: target_lufs вне пределов")
 	if _, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{msMute(), msMaster()}); err == nil {
@@ -232,6 +238,7 @@ func TestRebuildSectionsMasterFxErrorIsError(t *testing.T) {
 
 // Усл. 44: мастер — «с Engine»: запись мастера без цепочки → ошибка, ничего не загружено.
 func TestRebuildSectionsMasterWithoutEngineIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := msSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID,
 		[]SectionSpec{msMute(), {ChildID: 0, Master: true}})

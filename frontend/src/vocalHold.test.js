@@ -8,6 +8,7 @@
 // цель на голосе Ins игнорируется (приём только для Vocal); pickTargets для vocalHold берёт только
 // вокальный голос, как для vocalVary (то же условие видимости кнопки).
 import { readFileSync } from 'node:fs'
+import { templateAst, findElements, dir } from './testkit/sfc.js'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
@@ -135,24 +136,22 @@ describe('vocalHold — для «перепеть с места» и выбор�
 })
 
 describe('кнопка «голос: протянуть концы» в студии (условие 88)', () => {
-  const vue = readFileSync(join(here, 'components', 'StudioPage.vue'), 'utf8')
   const ru = readFileSync(join(here, 'i18n', 'ru.js'), 'utf8')
-  const en = readFileSync(join(here, 'i18n', 'en.js'), 'utf8')
 
   it('кнопка runTrick(\'vocalHold\') в той же группе «голос», что и vocalVary (видимость hasVocalSel)', () => {
-    const start = vue.indexOf('<div v-if="hasVocalSel" class="trick-group">')
-    expect(start).toBeGreaterThan(-1)
-    const end = vue.indexOf('<div class="trick-group">', start + 1)
-    const group = vue.slice(start, end > -1 ? end : undefined)
-    expect(group).toContain("runTrick('vocalVary')")
-    expect(group).toContain("runTrick('vocalHold')")
-    expect(group).toContain("t('studio.trick.vocalHold.tip')")
+    const root = templateAst('components/StudioPage.vue')
+    const btn = (kind) => findElements(root, (n) => n.tag === 'button' && dir(n, 'on', 'click') === `runTrick('${kind}')`)
+    const [hold] = btn('vocalHold')
+    const [vary] = btn('vocalVary')
+    expect(hold && vary).toBeTruthy()
+    const group = hold.ancestors[hold.ancestors.length - 1]
+    expect(vary.ancestors[vary.ancestors.length - 1]).toBe(group)
+    expect(hold.ancestors.some((a) => dir(a, 'if') === 'hasVocalSel'), 'группа «голос» видна по hasVocalSel').toBe(true)
+    expect(dir(hold.node, 'bind', 'title')).toBe("t('studio.trick.vocalHold.tip')")
   })
 
-  it('подписи и подсказки ru/en', () => {
+  // наличие ключей в ru и en — общий тест i18n.test.js; здесь — подпись из условия
+  it('русская подпись — «голос: протянуть концы»', () => {
     expect(ru).toMatch(/'studio\.trick\.vocalHold':\s*'голос: протянуть концы'/)
-    expect(ru).toContain("'studio.trick.vocalHold.tip'")
-    expect(en).toContain("'studio.trick.vocalHold'")
-    expect(en).toContain("'studio.trick.vocalHold.tip'")
   })
 })

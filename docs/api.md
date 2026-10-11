@@ -58,7 +58,7 @@ DELETE /voices/{id}   удалить карточку (строка БД + voice
 POST /jobs/{id}/dsp?label=  вариант эффекта/микс от приложения (байты, X-Filename dsp-*/overdub-*.flac);
                        label (до 300 символов) — что сделано («Перегруз голоса · голос»)
 GET  /jobs/{id}/dsp    варианты с метриками и label (пусто — понятно по имени файла)
-DELETE /jobs/{id}/dsp/{file}  удалить вариант эффекта/вклейки (файл + метрики)
+DELETE /jobs/{id}/dsp/{file}  удалить вариант эффекта/вклейки (файл + метрики); дорожки stem-* — 422
 POST /jobs/{id}/fx     звуковой движок: {source: mix|vocals|drums|bass|other|guitar|piano|kick…,
                        chain: [{type: gate|eq|comp|drive|amp|cab|reverb|delay, …}], from?, to?,
                        output?: mix|solo, label?} → вариант dsp-fx-<source>-<хэш>.flac (как у /dsp,

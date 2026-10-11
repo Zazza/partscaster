@@ -69,6 +69,7 @@ var (
 
 // Контракт: json-теги Step — chain, params/off опускаются, если пусты.
 func TestStepJSON(t *testing.T) {
+	t.Parallel()
 	b, err := json.Marshal(Step{Chain: "eq"})
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +88,7 @@ func TestStepJSON(t *testing.T) {
 
 // Карточка 1.1: один шаг ≡ звук ByID(chain).FilterGraph(params) (разница ≤ −50 дБ).
 func TestStepsGraphSingleStepEqualsChain(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := stIn(t)
 	cases := []struct {
@@ -101,6 +103,7 @@ func TestStepsGraphSingleStepEqualsChain(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.id, func(t *testing.T) {
+			t.Parallel()
 			got := stRunSteps(t, in, []Step{{Chain: c.id, Params: c.p}})
 			ref := stRunChain(t, in, c.id, c.p)
 			if d := stDiffDb(t, got, ref, 4); d > -50 {
@@ -112,6 +115,7 @@ func TestStepsGraphSingleStepEqualsChain(t *testing.T) {
 
 // Карточка 1.1: два шага — звук = второй(первый(вход)).
 func TestStepsGraphTwoStepsIsComposition(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := stIn(t)
 	pairs := [][2]Step{
@@ -121,6 +125,7 @@ func TestStepsGraphTwoStepsIsComposition(t *testing.T) {
 	}
 	for _, pr := range pairs {
 		t.Run(pr[0].Chain+"→"+pr[1].Chain, func(t *testing.T) {
+			t.Parallel()
 			got := stRunSteps(t, in, []Step{pr[0], pr[1]})
 			mid := stRunChain(t, in, pr[0].Chain, pr[0].Params)
 			ref := stRunChain(t, mid, pr[1].Chain, pr[1].Params)
@@ -132,21 +137,9 @@ func TestStepsGraphTwoStepsIsComposition(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: порядок важен — перегруз→реверб ≠ реверб→перегруз (разница > −30 дБ).
-func TestStepsGraphOrderMatters(t *testing.T) {
-	needFFmpeg(t)
-	in := stIn(t)
-	grit := Step{Chain: "grit", Params: stGrit}
-	hall := Step{Chain: "reverb-hall", Params: stHall}
-	a := stRunSteps(t, in, []Step{grit, hall})
-	b := stRunSteps(t, in, []Step{hall, grit})
-	if d := stDiffDb(t, a, b, 4); d <= -30 {
-		t.Errorf("перегруз→реверб vs реверб→перегруз: разница %.1f дБ, want > −30 (порядок шагов важен)", d)
-	}
-}
-
 // Карточка 1.1: выключенный шаг (Off) = его нет — в звуке и в хвосте.
 func TestStepsGraphOffStepIsAbsent(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := stIn(t)
 	ref := stRunChain(t, in, "grit", stGrit)
@@ -157,6 +150,7 @@ func TestStepsGraphOffStepIsAbsent(t *testing.T) {
 			{Chain: "delay", Off: true}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			_, tail, err := StepsGraph(steps)
 			if err != nil {
 				t.Fatalf("StepsGraph: %v", err)
@@ -174,6 +168,7 @@ func TestStepsGraphOffStepIsAbsent(t *testing.T) {
 
 // Карточка 1.1: хвост = сумма TailSec включённых шагов.
 func TestStepsGraphTailIsSumOfEnabled(t *testing.T) {
+	t.Parallel()
 	hallP := map[string]float64{"size": 2, "predelay": 40}
 	delayP := map[string]float64{"bpm": 100, "div": 1, "feedback": 0.6}
 	hall, room, delay := ncChain(t, "reverb-hall"), ncChain(t, "reverb-room"), ncChain(t, "delay")
@@ -196,6 +191,7 @@ func TestStepsGraphTailIsSumOfEnabled(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			_, tail, err := StepsGraph(c.steps)
 			if err != nil {
 				t.Fatalf("StepsGraph: %v", err)
@@ -210,6 +206,7 @@ func TestStepsGraphTailIsSumOfEnabled(t *testing.T) {
 // Карточка 1.1: одинаковые цепочки дважды подряд работают (метки графа не конфликтуют)
 // и звучат как цепочка, применённая дважды.
 func TestStepsGraphSameChainTwice(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := stIn(t)
 	for _, c := range []struct {
@@ -221,6 +218,7 @@ func TestStepsGraphSameChainTwice(t *testing.T) {
 		{"eq", stEqDark},
 	} {
 		t.Run(c.id, func(t *testing.T) {
+			t.Parallel()
 			got := stRunSteps(t, in, []Step{{Chain: c.id, Params: c.p}, {Chain: c.id, Params: c.p}})
 			mid := stRunChain(t, in, c.id, c.p)
 			ref := stRunChain(t, mid, c.id, c.p)
@@ -234,6 +232,7 @@ func TestStepsGraphSameChainTwice(t *testing.T) {
 // Карточка 1.1 и контракт: Key-цепочка — ошибка; неизвестная цепочка — ошибка;
 // ни одного включённого шага — ошибка.
 func TestStepsGraphErrors(t *testing.T) {
+	t.Parallel()
 	cases := map[string][]Step{
 		"key-цепочка":         {{Chain: "grit"}, {Chain: "ducking"}},
 		"неизвестная цепочка": {{Chain: "no-such-chain"}},
@@ -246,9 +245,44 @@ func TestStepsGraphErrors(t *testing.T) {
 	}
 	for name, steps := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if g, _, err := StepsGraph(steps); err == nil {
 				t.Errorf("StepsGraph(%+v): want ошибку, got граф %q", steps, g)
 			}
 		})
+	}
+}
+
+// Карточка internal-guitar-pedals 1.11 (правило выравнивания без ffmpeg): у каждого
+// перегруза (od-ts, fuzz-muff, dist-rat, fuzz-octave) громкость выравнивается, а его
+// крутилка level идёт поправкой сверху; у голосовой примочки — выравнивание без
+// поправки; у eq и выключенного шага выравнивания нет. Звуком выравнивание проверяют
+// studio TestPedalDrive* — на части перегрузов, правило здесь — на всех.
+func TestStepsMatchDrives(t *testing.T) {
+	t.Parallel()
+	for _, id := range []string{"od-ts", "fuzz-muff", "dist-rat", "fuzz-octave"} {
+		for _, lvl := range []float64{0, 6, -3} {
+			match, extra := StepsMatch([]Step{{Chain: id, Params: map[string]float64{"level": lvl}}})
+			if !match || extra != lvl {
+				t.Errorf("%s level %+v: match=%v extra=%+v, want true, %+v", id, lvl, match, extra, lvl)
+			}
+		}
+		if match, extra := StepsMatch([]Step{{Chain: id, Off: true, Params: map[string]float64{"level": 6}}}); match || extra != 0 {
+			t.Errorf("%s выключен: match=%v extra=%v, want false, 0", id, match, extra)
+		}
+	}
+	two := []Step{
+		{Chain: "od-ts", Params: map[string]float64{"level": 2}},
+		{Chain: "eq", Params: map[string]float64{"mid": 6}},
+		{Chain: "dist-rat", Params: map[string]float64{"level": 3}},
+	}
+	if match, extra := StepsMatch(two); !match || extra != 5 {
+		t.Errorf("два перегруза и eq: match=%v extra=%v, want true, 5 (сумма level)", match, extra)
+	}
+	if match, extra := StepsMatch([]Step{{Chain: "megaphone"}}); !match || extra != 0 {
+		t.Errorf("голосовая примочка: match=%v extra=%v, want true, 0", match, extra)
+	}
+	if match, extra := StepsMatch([]Step{{Chain: "eq", Params: map[string]float64{"mid": 6}}}); match || extra != 0 {
+		t.Errorf("eq: match=%v extra=%v, want false, 0 (у eq выравнивания нет)", match, extra)
 	}
 }

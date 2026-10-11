@@ -63,28 +63,19 @@ class TestPhraseClippedFlag(fa._FxApiCase):
         self.assertIsInstance(out["clipped"], bool)
         return out
 
-    def test_clipped_true_and_kept_on_cache_repeat(self):
-        a = self._ok(**CLIP)
-        self.assertIs(a["clipped"], True, "kick +24 дБ не упёрся в пик — подобрать другую цепочку")
-        b = self._ok(**CLIP)
-        self.assertEqual(a["file"], b["file"], "повтор не из кэша")
-        self.assertIs(b["clipped"], True, "повтор из кэша потерял clipped")
-
-    def test_not_clipped_false_and_kept_on_cache_repeat(self):
-        a = self._ok(**SAFE)
-        self.assertIs(a["clipped"], False)
-        b = self._ok(**SAFE)
-        self.assertEqual(a["file"], b["file"], "повтор не из кэша")
-        self.assertIs(b["clipped"], False)
-
     def test_flags_independent_per_settings(self):
         """Кэш хранит флаг своего расчёта: чередование настроек не путает clipped."""
         clip = self._ok(**CLIP)
+        self.assertIs(clip["clipped"], True, "kick +24 дБ не упёрся в пик — подобрать другую цепочку")
         safe = self._ok(**SAFE)
+        self.assertIs(safe["clipped"], False)
         self.assertNotEqual(clip["file"], safe["file"])
-        for _ in range(2):
-            self.assertIs(self._ok(**CLIP)["clipped"], True)
-            self.assertIs(self._ok(**SAFE)["clipped"], False)
+        for _ in range(2):   # повторы — из кэша (тот же файл), флаг сохраняется
+            again_clip, again_safe = self._ok(**CLIP), self._ok(**SAFE)
+            self.assertEqual(again_clip["file"], clip["file"], "повтор не из кэша")
+            self.assertEqual(again_safe["file"], safe["file"], "повтор не из кэша")
+            self.assertIs(again_clip["clipped"], True)
+            self.assertIs(again_safe["clipped"], False)
 
     def test_clipped_file_peak_within_limit(self):
         """Ужатый круг в файле — пик не выше 0,99 (с запасом на 16 бит)."""
@@ -185,24 +176,12 @@ class TestBassPhraseFromKit(unittest.TestCase):
         notes = _note_windows(BASS_PHRASE)
         self.assertEqual([m for m, _, _ in notes[:2]], [40, 36])
 
-    def test_first_note_pitch_from_kit(self):
+    def test_all_notes_pitch(self):
+        # каждая нота (и первая, и C1 со сдвигом от ближайшего сэмпла m40) — на своей высоте из набора
+        import phrases
         res = _bass_kit()
         y, _ = self._bass(res)
-        m, t0, t1 = _note_windows(BASS_PHRASE)[0]
-        f = _f0(_window(y, SR, t0, t1), SR)
-        self.assertAlmostEqual(f, _hz(m), delta=_hz(m) * 0.03)
-        import phrases
         self.assertIn(phrases.BASS_KIT, res.calls, "набор не запрашивался")
-
-    def test_shifted_note_pitch_from_nearest_sample(self):
-        """C1 (36) — ближайший сэмпл m40, сдвиг вниз на 4 полутона → 32,7 Гц."""
-        y, _ = self._bass(_bass_kit())
-        m, t0, t1 = _note_windows(BASS_PHRASE)[1]
-        f = _f0(_window(y, SR, t0, t1), SR)
-        self.assertAlmostEqual(f, _hz(m), delta=_hz(m) * 0.03)
-
-    def test_all_notes_pitch(self):
-        y, _ = self._bass(_bass_kit())
         for m, t0, t1 in _note_windows(BASS_PHRASE):
             with self.subTest(midi=m):
                 f = _f0(_window(y, SR, t0, t1), SR)

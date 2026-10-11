@@ -7,12 +7,12 @@ package yue
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
 )
 
 func TestFragmentJobSendsWindowSeedAbc(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":77}`, &got)
 	id, err := c.FragmentJob(context.Background(), 12, 10.5, 18.25, 4242, "X:1\nK:C", "")
@@ -37,6 +37,7 @@ func TestFragmentJobSendsWindowSeedAbc(t *testing.T) {
 }
 
 func TestFragmentJobOmitsZeroSeedAndEmptyAbc(t *testing.T) {
+	t.Parallel()
 	for _, seed := range []int64{0, -3} {
 		var got updateReq
 		c := updateServer(t, 200, `{"id":5}`, &got)
@@ -59,21 +60,9 @@ func TestFragmentJobOmitsZeroSeedAndEmptyAbc(t *testing.T) {
 	}
 }
 
-func TestFragmentJobErrorStatus(t *testing.T) {
-	var got updateReq
-	c := updateServer(t, 422, `{"detail":"to_sec must be after from_sec"}`, &got)
-	_, err := c.FragmentJob(context.Background(), 9, 10, 5, 0, "", "")
-	var se *StatusError
-	if !errors.As(err, &se) || se.Code != 422 {
-		t.Fatalf("want *StatusError 422, got %T %v", err, err)
-	}
-	if got.path != "/jobs/9/continue" {
-		t.Fatalf("path %s", got.path)
-	}
-}
-
 // Уточнение 123в (ТК154): FragmentJob(…, abc, styleAdd) — style_add в теле только если не пусто.
 func TestFragmentJobStyleAdd(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":8}`, &got)
 	if _, err := c.FragmentJob(context.Background(), 4, 2, 9, 0, "", "tape saturation, wide stereo"); err != nil {

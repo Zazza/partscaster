@@ -766,7 +766,7 @@ class TestPreviewPad(_FadeCase):
                 a = int(round(fr * SR))
                 self.assertEqual(len(ya), a + len(yb), "pad: длина ≠ round(from·sr) + длина куска без pad")
                 self.assertEqual(float(np.abs(ya[:a]).max()), 0.0, "до round(from·sr) не тишина")
-                self.assertLessEqual(_residual_db(ya[a:], yb), -60, "после тишины — не тот же кусок, что без pad")
+                np.testing.assert_array_equal(ya[a:], yb, "после тишины — не побитно тот же кусок, что без pad")
 
     def test_pad_length_is_end_from_zero(self):
         jid, d = self._audio_job()
@@ -830,7 +830,7 @@ class TestPreviewPad(_FadeCase):
 # пишет мимо SoundFile.write (buffer_write, ffmpeg), шпион ничего не увидит — для этого
 # есть проверка «шпион видел все кадры файла».
 
-PAD_TRACK_DUR = 125.0
+PAD_TRACK_DUR = 8.0   # окно с 5 с: тишины до окна больше блока 1 с (длина и побитное равенство — TestPreviewPad)
 
 
 @unittest.skipUnless(fa._OK, fa._SKIP)
@@ -873,27 +873,7 @@ class TestPreviewPadStream(_FadeCase):
 
         return calls, mock.patch.object(sf.SoundFile, "write", spy)
 
-    CASES = ((CUT_1K, 120.0, 122.0), (ECHO, 120.0, 121.0), (CUT_1K, 120.3456, 124.5))
-
-    def test_tc42_file_same_as_before(self):
-        import numpy as np
-        jid, d = self._long_job()
-        n = int(round(PAD_TRACK_DUR * SR))
-        for chain, fr, to in self.CASES:
-            with self.subTest(chain=chain, fr=fr, to=to):
-                a = self._ok_preview(jid, chain, fr, to, source="vocals", output="solo", fade=FADE, pad=True)
-                b = self._ok_preview(jid, chain, fr, to, source="vocals", output="solo", fade=FADE, pad=False)
-                ya, sr = _read(d / a["file"])
-                yb, _ = _read(d / b["file"])
-                self.assertEqual(sr, SR)
-                s0 = int(round(fr * SR))
-                bb, F = int(round(to * SR)), int(round(FADE * SR))
-                has_tail = any(blk["type"] in ("reverb", "delay") for blk in chain)
-                end = min(bb + F + (int(round(TAIL * SR)) if has_tail else 0), n)
-                self.assertEqual(len(ya), end, "длина ≠ to+fade+хвост от начала трека")
-                self.assertEqual(float(np.abs(ya[:s0]).max()), 0.0, "до from не тишина")
-                np.testing.assert_array_equal(ya[s0:], yb, "кусок после тишины не побитно тот же, что без pad")
-                self.assertAlmostEqual(a["duration_sec"], len(ya) / SR, delta=0.001)
+    CASES = ((CUT_1K, 5.0, 6.0), (ECHO, 5.0, 6.0), (CUT_1K, 5.3456, 7.5))
 
     def test_tc42_silence_written_in_blocks_le_1s(self):
         jid, d = self._long_job()
@@ -1314,15 +1294,6 @@ class TestBlocksCopies(unittest.TestCase):
         self.assertEqual(set(tuple(b)[len(TYPES):]), set(SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES),
                          "блоки синтов, мастера и гитар")
 
-    def test_gain_block_described(self):
-        # условие 12: блок «громкость» — один параметр gain_db, −24…+24, по умолчанию 0
-        g = _blocks()["gain"]
-        self.assertEqual([p["id"] for p in g["params"]], ["gain_db"])
-        p = g["params"][0]
-        self.assertEqual((p["default"], p["min"], p["max"]), (0, -24, 24))
-        self.assertFalse(p.get("zero_off"))
-        self.assertFalse(g.get("strings"))
-
     def test_tc7_copies_identical(self):
         src = BLOCKS_JSON.read_bytes()
         for rel in ("frontend/src/fxBlocks.json", "internal/mcp/fx_blocks.json"):
@@ -1481,6 +1452,56 @@ class TestStage2Unchanged(_ParseCase):
         self.assertEqual(self._ok("reverb")["ir"], "")
         self.assertEqual(dict(self.fx.BAND_SPEC), {"freq_hz": (1000, 20, 20000), "gain_db": (0, -24, 24),
                                                     "q": (1, 0.1, 10)})
+
+
+# ---------- ТК81: превью из кэша — без расчётов партии ----------
+
+@unittest.skipUnless(fa._OK, fa._SKIP)
+class TestPreviewCacheSkipsPartLevel(fa._FxApiCase):
+    """ТК81 / 49а (бывший test_tails): повтор превью synth/perc — из кэша, без расчёта уровня партии и окна;
+    другое окно — считается заново. Расчёты подменены счётчиками-обёртками (поведение то же)."""
+
+
+    def _track(self, dur=12.0):
+        import numpy as np
+        import soundfile as sf
+        jid = self._job(duration=dur, semantic=False)
+        d = self.jobs_dir / str(jid)
+        d.mkdir(parents=True, exist_ok=True)
+        sf.write(str(d / "audio.flac"), fa._tone(fa.SYN_TRACK_HZ, amp=0.3, dur=dur).astype(np.float32), fa.SR)
+        with self._conn() as c:
+            c.execute("UPDATE jobs SET audio_file='audio.flac' WHERE id=?", (jid,))
+        return jid
+
+    def _preview(self, jid, chain, fr, to, add):
+        body = {"source": "mix", "output": "solo", "preview": True, "chain": chain, "from": fr, "to": to}
+        if add:
+            body["add"] = True
+        r = self.client.post(f"/jobs/{jid}/fx", json=body)
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["file"]
+
+    def _check(self, target, attr, chain, add):
+        jid = self._track()
+        with mock.patch.object(target, attr, wraps=getattr(target, attr)) as spy:
+            a = self._preview(jid, json.loads(json.dumps(chain)), 2.0, 6.0, add)
+            first = spy.call_count
+            self.assertGreater(first, 0, f"{attr} не вызван даже в первый раз — счётчик не на том месте")
+            b = self._preview(jid, json.loads(json.dumps(chain)), 2.0, 6.0, add)
+            self.assertEqual(b, a, "повтор того же превью — другой файл")
+            self.assertEqual(spy.call_count, first, f"повтор из кэша считал {attr}")
+            c = self._preview(jid, json.loads(json.dumps(chain)), 3.0, 7.0, add)
+            self.assertNotEqual(c, a)
+            self.assertGreater(spy.call_count, first, f"другое окно — {attr} не вызван")
+
+    def test_tc81_synth_repeat_from_cache(self):
+        chain = fa._synth_chain([{"t": 2.5, "d": 1.0, "midi": [69], "vel": 1.0},
+                              {"t": 5.0, "d": 1.0, "midi": [72], "vel": 1.0}])
+        self._check(self.w, "synth_part_level", chain, add=False)
+
+    def test_tc81_perc_repeat_from_cache(self):
+        import fx_engine
+        self._check(fx_engine, "_perc_notes", fa._perc_chain([1.0, 2.5, 4.0, 5.5, 7.0]), add=True)
 
 
 if __name__ == "__main__":

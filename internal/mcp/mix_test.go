@@ -3,7 +3,6 @@ package mcp
 import (
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 
 	"yue-studio/internal/yue"
@@ -29,6 +28,7 @@ func mixChain(t *testing.T, s string) []map[string]any {
 
 // ТК77: записи с place и master разбираются в SectionSpec.Place / Master; place без width — ширина 1.
 func TestParseSectionSpecsPlaceMaster(t *testing.T) {
+	t.Parallel()
 	src := `[
 		{"from":0,"to":0,"stems":["other"],"place":{"pan":0.3,"width":1.4}},
 		{"from":2,"to":6,"stems":["mix"],"engine":[{"type":"synth"}],"add":true,"place":{"pan":-0.5}},
@@ -60,26 +60,10 @@ func TestParseSectionSpecsPlaceMaster(t *testing.T) {
 	}
 }
 
-// Условие 47: описание rebuild_sections называет поля place и master.
-func TestRebuildSectionsDescribesPlaceMaster(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool := s.tools["rebuild_sections"]
-	s.mu.RUnlock()
-	b, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, w := range []string{"place", "master"} {
-		if !strings.Contains(tool.Description+string(b), w) {
-			t.Errorf("в описании rebuild_sections нет поля %s", w)
-		}
-	}
-}
-
 // ТК77 сквозной: rebuild_sections с записью мастера — ApplyFx у трека (source mix, file =
 // загруженный микс overdub-inst-0.flac, in_place, цепочка мастера как есть).
 func TestRebuildSectionsMasterCallsWorker(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newFxServer(t)
 	const a, b = "0.3*sin(2*PI*3000*t)", "0.3*sin(2*PI*500*t)"
@@ -115,6 +99,7 @@ func TestRebuildSectionsMasterCallsWorker(t *testing.T) {
 
 // ТК77: fx_apply передаёт file и in_place.
 func TestFxApplyPassesFileInPlace(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	out, ok := call(t, s, "fx_apply", jsonArgs(t,
 		`{"job_id":466,"source":"mix","file":"overdub-inst-0.flac","in_place":true,"chain":`+mixMasterChain+`}`))
@@ -130,19 +115,9 @@ func TestFxApplyPassesFileInPlace(t *testing.T) {
 	}
 }
 
-// fx_apply без file/in_place — в запрос они не придумываются.
-func TestFxApplyNoFileByDefault(t *testing.T) {
-	s, fake := newFxServer(t)
-	if out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"mix","chain":[{"type":"comp"}]}`)); !ok {
-		t.Fatalf("fx_apply failed: %s", out)
-	}
-	if r := fake.applies[0].req; r.File != "" || r.InPlace {
-		t.Errorf("file=%q in_place=%v придуманы", r.File, r.InPlace)
-	}
-}
-
 // ТК77: sound_preset_create передаёт master и place у записей specs.
 func TestSoundPresetCreatePassesMasterPlace(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "sound_preset_create", jsonArgs(t, `{
 		"name":"Сведение","note":"",
@@ -166,6 +141,7 @@ func TestSoundPresetCreatePassesMasterPlace(t *testing.T) {
 
 // Условие 47: sound_preset_update тоже передаёт master.
 func TestSoundPresetUpdatePassesMaster(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "sound_preset_update", jsonArgs(t, `{
 		"preset_id":12,"name":"Мой тёплый","note":"",

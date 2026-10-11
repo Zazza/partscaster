@@ -74,16 +74,17 @@ describe('previewWindow: всегда from < to', () => {
   const sels = [null, { from: 0, to: 0 }, { from: 5, to: 5 }, { from: 300, to: 400 }, { from: 2, to: 9 }]
   const cursors = [null, 0, 7, 179.9, 180, 500]
   const durs = [0, 0.5, 3, 14, 30, 180]
-  for (const sel of sels) {
-    for (const cur of cursors) {
-      for (const dur of durs) {
-        it(`sel=${JSON.stringify(sel)} cursor=${cur} dur=${dur}`, () => {
+  it('на всей сетке выделение × курсор × длительность: from, to конечны, 0 ≤ from < to', () => {
+    const bad = []
+    for (const sel of sels) {
+      for (const cur of cursors) {
+        for (const dur of durs) {
           const w = win(sel, cur, dur)
-          expect(Number.isFinite(w.from) && Number.isFinite(w.to)).toBe(true)
-          expect(w.from).toBeLessThan(w.to)
-          expect(w.from).toBeGreaterThanOrEqual(0)
-        })
+          const ok = Number.isFinite(w.from) && Number.isFinite(w.to) && w.from < w.to && w.from >= 0
+          if (!ok) bad.push(`sel=${JSON.stringify(sel)} cursor=${cur} dur=${dur} → ${JSON.stringify(w)}`)
+        }
       }
     }
-  }
+    expect(bad).toEqual([])
+  })
 })

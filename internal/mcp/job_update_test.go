@@ -53,6 +53,7 @@ func newUpdateServer(t *testing.T) (*Server, *updateFake) {
 }
 
 func TestJobUpdateTitleOnly(t *testing.T) {
+	t.Parallel()
 	s, fake := newUpdateServer(t)
 	out, ok := call(t, s, "job_update", map[string]any{"job_id": float64(12), "title": "Ночной гараж"})
 	if !ok {
@@ -74,6 +75,7 @@ func TestJobUpdateTitleOnly(t *testing.T) {
 }
 
 func TestJobUpdateFolderOnly(t *testing.T) {
+	t.Parallel()
 	s, fake := newUpdateServer(t)
 	out, ok := call(t, s, "job_update", map[string]any{"job_id": float64(7), "folder": "Альбом"})
 	if !ok {
@@ -92,6 +94,7 @@ func TestJobUpdateFolderOnly(t *testing.T) {
 }
 
 func TestJobUpdateEmptyFolderClears(t *testing.T) {
+	t.Parallel()
 	s, fake := newUpdateServer(t)
 	out, ok := call(t, s, "job_update", map[string]any{"job_id": float64(7), "folder": ""})
 	if !ok {
@@ -113,6 +116,7 @@ func TestJobUpdateEmptyFolderClears(t *testing.T) {
 }
 
 func TestJobUpdateBothFields(t *testing.T) {
+	t.Parallel()
 	s, fake := newUpdateServer(t)
 	out, ok := call(t, s, "job_update", map[string]any{"job_id": float64(3), "title": "T", "folder": "F"})
 	if !ok {
@@ -125,6 +129,7 @@ func TestJobUpdateBothFields(t *testing.T) {
 }
 
 func TestJobUpdateNothingToChangeIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newUpdateServer(t)
 	out, ok := call(t, s, "job_update", map[string]any{"job_id": float64(3)})
 	if ok {
@@ -135,7 +140,8 @@ func TestJobUpdateNothingToChangeIsError(t *testing.T) {
 	}
 }
 
-func TestJobsToolBriefHasNoStyle(t *testing.T) {
+func TestJobsToolPassesFolderLimitBrief(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{
 		{ID: 1, Title: "root", Status: "done", Folder: "Альбом", Style: "doom-style-marker", Lyrics: "lyrics-marker"},
@@ -146,10 +152,8 @@ func TestJobsToolBriefHasNoStyle(t *testing.T) {
 	if !ok {
 		t.Fatalf("jobs failed: %s", out)
 	}
-	if strings.Contains(out, `"style"`) || strings.Contains(out, "doom-style-marker") {
-		t.Fatalf("brief jobs must not contain style: %s", out)
-	}
-	// содержимое — то же, что listJobs
+	// folder/limit/brief доходят до listJobs: ответ — ровно его выборка (что в brief
+	// нет style, проверяет TestListJobsBriefFields)
 	want, _ := json.Marshal(listJobs(fake.jobs, "альбом", 10, true))
 	var gotV, wantV any
 	if err := json.Unmarshal([]byte(out), &gotV); err == nil {

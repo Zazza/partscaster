@@ -10,6 +10,7 @@ import (
 )
 
 func TestGetDecodesJSON(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/jobs" || r.Method != http.MethodGet {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -29,6 +30,7 @@ func TestGetDecodesJSON(t *testing.T) {
 }
 
 func TestPostJSONSendsBodyAndDecodesID(t *testing.T) {
+	t.Parallel()
 	var gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/jobs" || r.Method != http.MethodPost {
@@ -57,6 +59,7 @@ func TestPostJSONSendsBodyAndDecodesID(t *testing.T) {
 }
 
 func TestErrorStatusIncludesBody(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom-reason", http.StatusBadGateway)
 	}))
@@ -73,6 +76,7 @@ func TestErrorStatusIncludesBody(t *testing.T) {
 }
 
 func TestPostRawSendsFilenameHeader(t *testing.T) {
+	t.Parallel()
 	var gotName string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotName = r.Header.Get("X-Filename")
@@ -94,6 +98,7 @@ func TestPostRawSendsFilenameHeader(t *testing.T) {
 }
 
 func TestDeleteJob(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/jobs/3" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -110,6 +115,7 @@ func TestDeleteJob(t *testing.T) {
 }
 
 func TestValidFile(t *testing.T) {
+	t.Parallel()
 	// spec: имена артефактов плоские, известных расширений, без обхода путей
 	for _, ok := range []string{"audio.flac", "audio.mp3", "audio.wav", "score.abc", "m.json", "latent.npy"} {
 		if !validFile(ok) {
@@ -124,6 +130,7 @@ func TestValidFile(t *testing.T) {
 }
 
 func TestContentTypeByExt(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"a.flac": "audio/flac", "a.mp3": "audio/mpeg", "a.wav": "audio/wav",
 		"a.abc": "text/plain; charset=utf-8", "a.json": "application/json",
@@ -137,6 +144,7 @@ func TestContentTypeByExt(t *testing.T) {
 }
 
 func TestSetURLSwitchesBackend(t *testing.T) {
+	t.Parallel()
 	var hitPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hitPath = r.URL.Path
@@ -158,6 +166,7 @@ func TestSetURLSwitchesBackend(t *testing.T) {
 }
 
 func TestAudioURL(t *testing.T) {
+	t.Parallel()
 	c := New("http://w:8091")
 	if got, want := c.AudioURL(5, "audio.flac"), "http://w:8091/audio/5/audio.flac"; got != want {
 		t.Fatalf("AudioURL = %q, want %q", got, want)
@@ -165,6 +174,7 @@ func TestAudioURL(t *testing.T) {
 }
 
 func TestJobPeaks(t *testing.T) {
+	t.Parallel()
 	// spec: канонический вызов — /jobs/{id}/peaks без query; file/bins идут
 	// query-параметрами; ответ — JSON воркера как есть
 	var gotQuery string
@@ -203,6 +213,7 @@ func TestJobPeaks(t *testing.T) {
 }
 
 func TestJobSpectrum(t *testing.T) {
+	t.Parallel()
 	png := []byte("\x89PNG-fake-bytes")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/jobs/135/spectrum.png" {
@@ -227,6 +238,7 @@ func TestJobSpectrum(t *testing.T) {
 }
 
 func TestJobSpectrumErrorCarriesStatusAndBody(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ffmpeg not available on worker", http.StatusServiceUnavailable)
 	}))

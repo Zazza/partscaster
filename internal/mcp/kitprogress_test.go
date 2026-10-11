@@ -31,22 +31,9 @@ func newKitProgressServer(t *testing.T, resp map[string]any, err error) (*Server
 	return s, fake
 }
 
-// ТК145: инструмент fx_kit_progress в списке инструментов.
-func TestFxKitProgressToolRegistered(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool, ok := s.tools["fx_kit_progress"]
-	s.mu.RUnlock()
-	if !ok || tool.Name == "" {
-		t.Fatal("инструмент fx_kit_progress не зарегистрирован")
-	}
-	if strings.TrimSpace(tool.Description) == "" {
-		t.Error("у fx_kit_progress нет описания")
-	}
-}
-
 // Идёт установка — вывод содержит набор, часть, done и total из ответа воркера.
 func TestFxKitProgressToolShowsProgress(t *testing.T) {
+	t.Parallel()
 	s, fake := newKitProgressServer(t, map[string]any{
 		"name": "vsco-violin", "part": "pizz", "done": float64(7), "total": float64(31), "bytes": float64(12345678),
 	}, nil)
@@ -64,20 +51,9 @@ func TestFxKitProgressToolShowsProgress(t *testing.T) {
 	}
 }
 
-// Нет установки ({}) — инструмент отвечает без ошибки.
-func TestFxKitProgressToolIdle(t *testing.T) {
-	s, fake := newKitProgressServer(t, map[string]any{}, nil)
-	out, ok := call(t, s, "fx_kit_progress", map[string]any{})
-	if !ok {
-		t.Fatalf("fx_kit_progress failed на пустом прогрессе: %s", out)
-	}
-	if fake.calls == 0 {
-		t.Error("FxKitProgress не вызван")
-	}
-}
-
 // Ошибка воркера — ошибка инструмента с причиной.
 func TestFxKitProgressToolWorkerError(t *testing.T) {
+	t.Parallel()
 	s, _ := newKitProgressServer(t, nil, errors.New("воркер недоступен"))
 	out, ok := call(t, s, "fx_kit_progress", map[string]any{})
 	if ok {

@@ -1,13 +1,10 @@
 // Тесты редактора пресета по исходникам: библиотека открывает редактор (новый/правка/копия
 // встроенного), редактор собирает готовые кирпичи (ChainEditor, каталог, демо-эталон, плеер),
-// модалка следует общему паттерну, словари ru/en синхронны по новым ключам, документация
-// описывает редактор. Ловит «редактор сделали, а кнопки в библиотеку забыли».
+// документация описывает редактор. Ловит «редактор сделали, а кнопки в библиотеку забыли».
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
-import RU from './i18n/ru.js'
-import EN from './i18n/en.js'
 
 const srcDir = dirname(fileURLToPath(import.meta.url))
 const repoDir = join(srcDir, '..', '..')
@@ -87,14 +84,6 @@ test('редактор — превью через движок воркера �
   expect(src).toContain('soundPresetUpdate')
 })
 
-test('модалка редактора — общий паттерн: backdrop без @click, есть кнопка закрытия', () => {
-  const tpl = templateOf(read(EDITOR))
-  expect(tpl).toContain('class="modal-backdrop"')
-  expect(tpl).not.toMatch(/modal-backdrop[^>]*@click/)
-  // закрытие — сразу emit('close') или через обработчик close (подтверждение несохранённых правок, ревью s16)
-  expect(tpl).toMatch(/emit\('close'\)|@click="close"/)
-})
-
 test('PresetCatalog: табы дорожек и ритм-секция набором, ▶ и «+»', () => {
   const src = read(CATALOG)
   expect(importsName(src, 'EDITOR_TARGETS', 'presetEdit.js')).toBe(true)
@@ -104,35 +93,9 @@ test('PresetCatalog: табы дорожек и ритм-секция набор
   expect(templateOf(src)).toContain(`emit('add'`)
 })
 
-// --- словари и документация ---
-
-const EDIT_KEYS = [
-  'preset.lib.new', 'preset.lib.new.tip', 'preset.lib.editFull', 'preset.lib.dup', 'preset.lib.dup.tip',
-  'preset.lib.play', 'preset.lib.play.tip',
-  'preset.edit.title', 'preset.edit.new', 'preset.edit.copy', 'preset.edit.save.dup',
-  'preset.edit.ref', 'preset.edit.ref.tip', 'preset.edit.ref.demo',
-  'preset.edit.demo.cooking', 'preset.edit.demo.stems', 'preset.edit.demo.err', 'preset.edit.demo.again',
-  'preset.edit.tracks', 'preset.edit.empty', 'preset.edit.add',
-  'preset.edit.spec.chain', 'preset.edit.spec.remove', 'preset.edit.level', 'preset.edit.level.tip',
-  'preset.edit.rhythm', 'preset.edit.rhythm.kit', 'preset.edit.rhythm.treat', 'preset.edit.rhythm.add',
-  'preset.edit.master', 'preset.edit.parts', 'preset.edit.apply', 'preset.edit.apply.tip',
-  'preset.edit.applied', 'preset.edit.window', 'preset.edit.needRoformer', 'preset.edit.noStems',
-]
-
-test.each([
-  ['ru', RU],
-  ['en', EN],
-])('словарь %s: ключи редактора непусты', (_lang, dict) => {
-  for (const key of EDIT_KEYS) {
-    expect(typeof dict[key], `нет ключа ${key}`).toBe('string')
-    expect(dict[key].trim().length, `пустой ${key}`).toBeGreaterThan(0)
-  }
-})
-
-test('словари ru и en синхронны: ключи preset.edit.* и preset.lib.* совпадают', () => {
-  const sel = (dict) => Object.keys(dict).filter((k) => k.startsWith('preset.edit.') || k.startsWith('preset.lib.')).sort()
-  expect(sel(EN)).toEqual(sel(RU))
-})
+// --- документация ---
+// Ключи preset.* в словарях — общий тест i18n.test.js (литеральные t() есть в ru и en; ключи ru = en);
+// общий паттерн модалки — modalBackdrop.test.js по всем .vue.
 
 test('docs/ui-guide.md: раздел «Пресеты звука» описывает редактор и демо-эталоны', () => {
   const lines = read(UI_GUIDE).split('\n')

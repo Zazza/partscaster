@@ -15,6 +15,7 @@ import (
 // Карточка 6.1: in N — громкость в 0…N растёт монотонно от тишины (< −40 дБ на
 // первых 50 мс) до полной. N = 2 с — выбор теста (карточка задаёт порог для любого N).
 func TestFadeIn(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.5*sin(2*PI*1000*t)", 4, chSR)
 	src := decode(t, in)
@@ -40,6 +41,7 @@ func TestFadeIn(t *testing.T) {
 // Карточка 6.1: затухание — до start вход без изменений, в середине затухания тише
 // входа ≥ 3 дБ, после start+out — тишина (< −60 дБ).
 func TestFadeOut(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.5*sin(2*PI*1000*t)", 4.5, chSR)
 	src := decode(t, in)
@@ -60,6 +62,7 @@ func TestFadeOut(t *testing.T) {
 
 // Карточка 6.1: все 0 → выход = вход.
 func TestFadeAllZeroIsDry(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.5*sin(2*PI*1000*t)", 3, chSR)
 	src := decode(t, in)
@@ -81,6 +84,7 @@ func ncStepDiff(s []float32) float64 {
 // Карточка 6.3: разница уровней тихого и громкого сегментов при amount 1 меньше
 // входной ≥ 6 дБ; amount 0 → выход = вход (±0.5 дБ).
 func TestMultibandCompresses(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncStepLevels, 4, chSR)
 	src := decode(t, in)
@@ -102,6 +106,7 @@ func TestMultibandCompresses(t *testing.T) {
 // 20–60 мс после щелчка ≥ 6 дБ ниже, чем перед следующим щелчком; ключ в выходе
 // не слышен; длина = длине входа 0 (ключ длиннее).
 func TestDuckingFromKey(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	c := ncChain(t, "ducking")
 	if c.Key != "drums" {

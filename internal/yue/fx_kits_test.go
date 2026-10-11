@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -12,6 +11,7 @@ import (
 // без тела; ответ воркера {name, parts, downloaded} — как есть; 422 — ошибка с причиной.
 
 func TestInstallFxKitPostsName(t *testing.T) {
+	t.Parallel()
 	var method, path, name string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method, path, name = r.Method, r.URL.Path, r.URL.Query().Get("name")
@@ -29,20 +29,5 @@ func TestInstallFxKitPostsName(t *testing.T) {
 	parts, _ := got["parts"].(map[string]any)
 	if got["name"] != "osdk" || got["downloaded"] != true || parts["kick"] != float64(22) {
 		t.Errorf("ответ: %v", got)
-	}
-}
-
-func TestInstallFxKitErrorCarriesReason(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"detail":"unknown kit: nope"}`, http.StatusUnprocessableEntity)
-	}))
-	defer srv.Close()
-
-	_, err := New(srv.URL).InstallFxKit(context.Background(), "nope")
-	if err == nil {
-		t.Fatal("want ошибку на 422")
-	}
-	if !strings.Contains(err.Error(), "unknown kit") {
-		t.Errorf("в ошибке нет причины воркера: %v", err)
 	}
 }

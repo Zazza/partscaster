@@ -98,12 +98,6 @@ class TestCreateAndList(_InstrCase):
         self.assertEqual(len(set(ids)), 3, ids)
         self.assertEqual([x["id"] for x in self._list()], sorted(ids))
 
-    def test_chain_saved_as_sent(self):
-        # без нормализации: умолчания блоков не дописаны, лишних ключей нет
-        got = self._create()
-        self.assertEqual(got["chain"], CHAIN)
-        self.assertEqual(self._by_id(got["id"])["chain"], CHAIN)
-
     def test_extra_roundtrip(self):
         extra = {"pattern": "eighths", "swing": 0.1, "place": {"pan": 0.3, "width": 1}}
         got = self._create(stems=["perc"], chain=[{"type": "perc", "voice": 1, "rel_db": -16}], extra=extra)

@@ -136,6 +136,7 @@ func checkLoop(t *testing.T, out []byte, rate, channels, cycleFrames, phaseFrame
 
 // ТК135: фаза 0, длина 2,5 круга → не короче 2,5 круга, круг повторяется подряд с начала.
 func TestLoopWavPhaseZeroRepeatsCycle(t *testing.T) {
+	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
 	out, err := loopWav(in, 0, 2.5*lwCycle)
 	if err != nil {
@@ -146,6 +147,7 @@ func TestLoopWavPhaseZeroRepeatsCycle(t *testing.T) {
 
 // ТК135: первые отсчёты = отсчёты входа с phase, дальше — через конец круга в его начало.
 func TestLoopWavStartsAtPhase(t *testing.T) {
+	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
 	const phase = 0.0625 // 3000 кадров
 	out, err := loopWav(in, phase, 2*lwCycle)
@@ -161,6 +163,7 @@ func TestLoopWavStartsAtPhase(t *testing.T) {
 
 // ТК135: фаза больше круга — по модулю круга.
 func TestLoopWavPhaseModuloCycle(t *testing.T) {
+	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
 	for _, phase := range []float64{lwCycle + 0.0625, 10*lwCycle + 0.0625} {
 		out, err := loopWav(in, phase, 1.5*lwCycle)
@@ -173,6 +176,7 @@ func TestLoopWavPhaseModuloCycle(t *testing.T) {
 
 // Условие 96: каналы и частота — как у входа (не захардкожены 2 × 48000).
 func TestLoopWavKeepsFormatOfInput(t *testing.T) {
+	t.Parallel()
 	const rate, frames = 32000, 8000 // круг 0,25 с, моно
 	mono := func(i, _ int) int16 { return int16(i * 3) }
 	in := makeWav(rate, 1, frames, mono)
@@ -185,6 +189,7 @@ func TestLoopWavKeepsFormatOfInput(t *testing.T) {
 
 // Длина меньше круга — всё равно ≥ total, с фазы.
 func TestLoopWavShorterThanCycle(t *testing.T) {
+	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
 	out, err := loopWav(in, 0.125, 0.0625) // фаза 6000, длина 3000 кадров
 	if err != nil {
@@ -195,6 +200,7 @@ func TestLoopWavShorterThanCycle(t *testing.T) {
 
 // ТК135: не WAV → ошибка.
 func TestLoopWavRejectsNonWav(t *testing.T) {
+	t.Parallel()
 	for name, b := range map[string][]byte{
 		"nil":   nil,
 		"мусор": []byte("this is not a wav file at all, just some bytes......"),

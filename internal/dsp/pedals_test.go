@@ -128,6 +128,7 @@ func pdRun(t *testing.T, id, in string, p map[string]float64) []float32 {
 
 // Карточка 3.1: новые педали есть в dsp.All(), с флагом Pedal и названием из карточки.
 func TestPedalChainsRegistered(t *testing.T) {
+	t.Parallel()
 	inAll := map[string]*Chain{}
 	for _, c := range All() {
 		c := c
@@ -157,6 +158,7 @@ func TestPedalChainsRegistered(t *testing.T) {
 // Карточка 3.1: существующие chorus/flanger/phaser/tremolo/autowah/octaver/delay/
 // reverb-*/eq тоже с флагом Pedal.
 func TestOldChainsMarkedPedal(t *testing.T) {
+	t.Parallel()
 	for _, id := range pdOldPedalIDs {
 		c := ByID(id)
 		if c == nil {
@@ -171,6 +173,7 @@ func TestOldChainsMarkedPedal(t *testing.T) {
 
 // Контракт: Chain.Pedal — json `pedal,omitempty`.
 func TestChainPedalJSON(t *testing.T) {
+	t.Parallel()
 	c := ByID("od-ts")
 	if c == nil {
 		t.Fatal("od-ts не найдена")
@@ -209,10 +212,12 @@ func pdToneIn(t *testing.T, amp float64) string {
 // растёт (порог ≥ 3 дБ между минимумом и максимумом крутилки — выбран тестом,
 // карточка говорит «растёт»).
 func TestOverdriveMoreDriveMoreHarmonics(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := pdToneIn(t, 0.3)
 	for _, id := range pdDriveIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			k := pdDriveKnob(t, c)
 			lo := pdRun(t, id, in, map[string]float64{k.ID: k.Min})
@@ -231,10 +236,12 @@ func TestOverdriveMoreDriveMoreHarmonics(t *testing.T) {
 // Карточка 3.2: «тон» ниже → меньше верха: доля энергии выше 2 кГц при тоне в
 // минимуме меньше, чем в максимуме (порог ≥ 3 дБ выбран тестом).
 func TestOverdriveToneDarkens(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := pdToneIn(t, 0.3)
 	for _, id := range pdDriveIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			k := pdToneKnob(t, c)
 			dark := pdRun(t, id, in, map[string]float64{k.ID: k.Min})
@@ -252,10 +259,12 @@ func TestOverdriveToneDarkens(t *testing.T) {
 // Карточка 3.2: «громкость» — уровень выхода: максимум крутилки громче минимума
 // (порог ≥ 6 дБ выбран тестом: крутилка с меньшим ходом бесполезна), середина — между.
 func TestOverdriveLevelSetsOutput(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := pdToneIn(t, 0.3)
 	for _, id := range pdDriveIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			k := pdLevelKnob(t, c)
 			mid := (k.Min + k.Max) / 2
@@ -278,10 +287,12 @@ func TestOverdriveLevelSetsOutput(t *testing.T) {
 // Выход — float-WAV (иначе целочисленный формат сам обрезал бы пик и тест был бы
 // пустым); допуск 0.01 дБ на округление.
 func TestOverdrivePeakNotAboveZeroDbfs(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := pdToneIn(t, 0.9)
 	for _, id := range pdDriveIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			p := map[string]float64{}
 			for _, q := range c.Params {
@@ -309,6 +320,7 @@ func TestOverdrivePeakNotAboveZeroDbfs(t *testing.T) {
 
 // Карточка 3.3: октавный фузз — у тона f появляется 2f не тише −20 дБ к f.
 func TestFuzzOctaveAddsOctave(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const f = 440.0
 	in := ncGen(t, fmt.Sprintf("0.3*sin(2*PI*%g*t)", f), 3, ncSR)
@@ -326,6 +338,7 @@ func TestFuzzOctaveAddsOctave(t *testing.T) {
 // подавлен ≥ 20 дБ к входу. Боковые не тише −20 дБ к исходному f (порог выбран
 // тестом: у идеального кольцевого они по −6 дБ).
 func TestRingmodSidebands(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const f = 1000.0
 	c := ncChain(t, "ringmod")
@@ -356,6 +369,7 @@ func TestRingmodSidebands(t *testing.T) {
 // 0–0.5 с отличается от окна через полпериода качания (≥ 1 дБ в среднем — как у
 // chorus/flanger/phaser).
 func TestUnivibeSpectrumMoves(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	c := ncChain(t, "univibe")
 	k := pdMustKnob(t, c, "скорость", []string{"rate", "speed"}, []string{"скорост", "гц"})
@@ -381,6 +395,7 @@ func TestUnivibeSpectrumMoves(t *testing.T) {
 // постоянный фон (гул 1234 Гц) на −40 дБ к нотам. Паузы меряются с отступом 0.4 с
 // от конца ноты (время отпускания гейта), ноты — с отступом 50 мс от начала.
 func TestNoiseGateSilencesBetweenNotes(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const expr = "0.3*sin(2*PI*440*t)*lt(mod(t\\,1.5)\\,0.5)+0.003*sin(2*PI*1234*t)"
 	in := ncGen(t, expr, 4.5, ncSR)
@@ -402,6 +417,7 @@ func TestNoiseGateSilencesBetweenNotes(t *testing.T) {
 // тон 1000 Гц: секунды −30 и −6 дБFS по очереди; перепад на выходе меньше входного
 // (порог ≥ 3 дБ выбран тестом, у multiband — ≥ 6 дБ при amount 1).
 func TestCompPedalSquashesDynamics(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncStepLevels, 4, chSR)
 	src := decode(t, in)
@@ -415,6 +431,7 @@ func TestCompPedalSquashesDynamics(t *testing.T) {
 // Карточка 3.3: кабинет — на белом шуме энергия выше 6 кГц падает ≥ 12 дБ, ниже
 // 4 кГц меняется ≤ 3 дБ.
 func TestCabCutsHighs(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.2, 3, 3, ncSR)
 	src := pdMono(ncDecode2(t, in, ncSR))

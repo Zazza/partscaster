@@ -231,11 +231,6 @@ def _shift_fn(n, gain=-0.5):
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestNamLatency(unittest.TestCase):
 
-    def test_tc3_fx_nam_imports_without_torch(self):
-        # контракт: measure_latency — чистый numpy; модуль импортируется без torch
-        import fx_nam
-        self.assertTrue(callable(fx_nam.measure_latency))
-
     def test_tc3_measure_latency(self):
         import fx_nam
         for n in (-2, 0, 8):
@@ -913,24 +908,6 @@ class TestSampler(unittest.TestCase):
                     fx.parse_chain([blk])
                 self.assertIn("kit", str(cm.exception), "причина не называет поле kit")
 
-    def test_in_blocks_json_after_gain(self):
-        import os
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fx_blocks.json")) as f:
-            blocks = json.load(f)
-        keys = list(blocks)
-        self.assertIn("sampler", keys)
-        self.assertEqual(keys.index("sampler"), keys.index("gain") + 1)
-        spec = blocks["sampler"]
-        params = {p["id"]: p for p in spec["params"]}
-        self.assertEqual((params["floor_db"]["default"], params["floor_db"]["min"], params["floor_db"]["max"]),
-                         (-18, -40, 0))
-        self.assertEqual((params["output_db"]["default"], params["output_db"]["min"], params["output_db"]["max"]),
-                         (0, -24, 24))
-        kit = [s for s in spec["strings"] if s["id"] == "kit"]
-        self.assertEqual(len(kit), 1)
-        self.assertEqual(kit[0].get("asset"), "kit")
-        self.assertTrue(kit[0].get("required"))
-
 
 # ---------- Условие 14/ТК19: место удара sampler не зависит от начала окна ----------
 #
@@ -1315,8 +1292,31 @@ class TestBassHelpers(unittest.TestCase):
         self.assertEqual(len(_clicks(y, 0, 3, _hp_peak(y))), 3)
 
 
+# ---------- ТК44 (lead-ревью c36, Б-1): тот же NaN, что в 36a, — в блоке bass ----------
+#
+# Вход ТК10/ТК12 (ноты с паузами, ровно нулевые участки) → ни одного RuntimeWarning
+# (warnings как ошибки) по всем тестам блока bass; в паузах входа выход ≤ −40 дБ от пика
+# (с NaN обрезка конца ноты выключалась: бас звучал в паузах до −4,8 дБ).
+# «По всем тестам блока bass» — классы TestBass/TestBassOnsets/TestBassReview идут
+# со строгим режимом (примесь _StrictWarnings), без повторного прогона подклассами.
+
+
+class _StrictWarnings:
+    """RuntimeWarning внутри теста — ошибка (карточка: «ни одного RuntimeWarning»).
+    UserWarning librosa pyin (fmin=25 Гц меньше двух периодов в кадре) — не предмет ТК44,
+    в ошибку не превращается."""
+
+    def setUp(self):
+        import warnings
+        super().setUp()
+        cm = warnings.catch_warnings()
+        cm.__enter__()
+        self.addCleanup(cm.__exit__, None, None, None)
+        warnings.simplefilter("error", RuntimeWarning)
+
+
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
-class TestBass(unittest.TestCase):
+class TestBass(_StrictWarnings, unittest.TestCase):
 
     def _run(self, x, chain, res=None, sr=SR):
         out = _fx().process(x, sr, chain, res if res is not None else _bass_res(sr=sr))
@@ -1540,7 +1540,7 @@ def _line2(notes, eighth, frac, attack_ms, lead=LEAD, tail=0.5, amp=0.5, sr=SR):
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
-class TestBassOnsets(unittest.TestCase):
+class TestBassOnsets(_StrictWarnings, unittest.TestCase):
     """ТК16–18: щипок — только на настоящем ударе или смене ноты; ни лишних, ни пропущенных."""
 
     _run = TestBass._run
@@ -1700,7 +1700,7 @@ def _tag_of(y, p, sr=SR):
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
-class TestBassReview(unittest.TestCase):
+class TestBassReview(_StrictWarnings, unittest.TestCase):
     """ТК20–23: начало окна с тишиной, легато-смена на октаву, долгая нота, разные дубли."""
 
     _run = TestBass._run
@@ -2163,12 +2163,6 @@ class TestTailsChainLimits(unittest.TestCase):
         self.assertIn("16", msg, f"причина не называет предел: {msg!r}")
         self.assertIn("блок", msg.lower(), f"причина не про блоки: {msg!r}")
 
-    def test_tc39_17_blocks_rejected_by_process(self):
-        fx = _fx()
-        x, _ = _impulse(n=SR)
-        with self.assertRaises(fx.ChainError):
-            fx.process(x, SR, [{"type": "gain"}] * 17, FakeResources())
-
     def test_tc39_12_bands_ok(self):
         got = _fx().parse_chain([{"type": "eq", "bands": [self._band(i) for i in range(12)]}])
         self.assertEqual(len(got[0]["bands"]), 12)
@@ -2221,42 +2215,6 @@ class TestTailsNamLatencyTooLong(unittest.TestCase):
                 res = FakeResources(amps={"m": FakeAmp(shift=lat)})
                 out = _fx().process(x, SR, [_block("amp", model="m")], res)
                 self.assertEqual(_peak(out), pos)
-
-
-
-# ---------- ТК44 (lead-ревью c36, Б-1): тот же NaN, что в 36a, — в блоке bass ----------
-#
-# Вход ТК10/ТК12 (ноты с паузами, ровно нулевые участки) → ни одного RuntimeWarning
-# (warnings как ошибки) по всем тестам блока bass; в паузах входа выход ≤ −40 дБ от пика
-# (с NaN обрезка конца ноты выключалась: бас звучал в паузах до −4,8 дБ).
-# «По всем тестам блока bass» — классы TestBass/TestBassOnsets/TestBassReview повторно
-# запускаются в строгом режиме (подклассы ниже, сами тесты не меняются).
-
-
-class _StrictWarnings:
-    """RuntimeWarning внутри теста — ошибка (карточка: «ни одного RuntimeWarning»).
-    UserWarning librosa pyin (fmin=25 Гц меньше двух периодов в кадре) — не предмет ТК44,
-    в ошибку не превращается."""
-
-    def setUp(self):
-        import warnings
-        super().setUp()
-        cm = warnings.catch_warnings()
-        cm.__enter__()
-        self.addCleanup(cm.__exit__, None, None, None)
-        warnings.simplefilter("error", RuntimeWarning)
-
-
-class TestBassStrict(_StrictWarnings, TestBass):
-    """ТК44: все тесты TestBass без RuntimeWarning."""
-
-
-class TestBassOnsetsStrict(_StrictWarnings, TestBassOnsets):
-    """ТК44: все тесты TestBassOnsets без RuntimeWarning."""
-
-
-class TestBassReviewStrict(_StrictWarnings, TestBassReview):
-    """ТК44: все тесты TestBassReview без RuntimeWarning."""
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
@@ -2318,7 +2276,6 @@ class TestBassPausesQuiet(_StrictWarnings, unittest.TestCase):
         x, hits = _bass_line(ev, LEAD + 16 * EIGHTH + 0.5)
         y = self._run(x)
         self._check_pauses(y, self._pauses([p / SR for p in hits], dur, len(x) / SR))
-
 
 
 # ---------- internal-own-track, этап 2, условие 15: тамы по высоте — kit_mid/kit_low, ТК32–35 ----------
@@ -2482,18 +2439,6 @@ class TestSamplerTomsByPitch(unittest.TestCase):
         for bad in ({"kit_mid": 5}, {"kit_mid": ["a/b"]}, {"kit_low": 5}, {"kit_low": None}):
             with self.subTest(bad=bad), self.assertRaises(fx.ChainError):
                 fx.parse_chain([{"type": "sampler", "kit": "osdk/tom-small", **bad}])
-
-    def test_in_blocks_json_kit_mid_kit_low(self):
-        import os
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fx_blocks.json")) as f:
-            spec = json.load(f)["sampler"]
-        strings = {s["id"]: s for s in spec["strings"]}
-        for sid in ("kit_mid", "kit_low"):
-            with self.subTest(string=sid):
-                self.assertIn(sid, strings)
-                self.assertEqual(strings[sid].get("asset"), "kit")
-                self.assertFalse(strings[sid].get("required"))
-                self.assertEqual(strings[sid].get("default", ""), "")
 
 
 # --- ТК35: без kit_mid/kit_low выход sampler прежний ---
@@ -2854,17 +2799,6 @@ class TestSynthParse(unittest.TestCase):
             with self.subTest(param=p):
                 self.assertEqual(len(fx.parse_chain([_synth_block([], **p)])), 1)
 
-    def test_in_blocks_json(self):
-        blocks = _blocks_json()
-        for t in SYNTH_BLOCKS:
-            self.assertIn(t, blocks, f"блока {t} нет в fx_blocks.json")
-        ids = {p["id"] for p in blocks["synth"]["params"]}
-        for k in ("osc1", "osc2", "osc2_semi", "osc_mix", "unison", "detune_cents", "sub", "noise",
-                  "pwm", "cutoff_hz", "resonance", "env_amount", "f_attack_s", "f_decay_s",
-                  "attack_s", "decay_s", "sustain", "release_s", "vib_rate", "vib_cents",
-                  "lfo_cutoff", "output_db"):
-            self.assertIn(k, ids, f"synth.{k} нет в описании")
-
 
 # ---------- Условие 24, ТК48: эффекты для синтов ----------
 
@@ -2965,20 +2899,6 @@ class TestSynthEffects(unittest.TestCase):
         ok = [{"type": "chorus", "voices": 1}, {"type": "chorus", "voices": 4},
               {"type": "phaser", "stages": 2}, {"type": "phaser", "stages": 8}]
         self.assertEqual(len(fx.parse_chain(ok)), 4)
-
-    def test_in_blocks_json_params(self):
-        blocks = _blocks_json()
-        want = {"chorus": ("voices", "depth_ms", "rate_hz", "mix"),
-                "phaser": ("stages", "rate_hz", "depth", "feedback", "mix"),
-                "flanger": ("delay_ms", "depth_ms", "rate_hz", "feedback", "mix"),
-                "tape": ("wow", "flutter", "saturation", "lowpass_hz", "hiss"),
-                "spring": ("decay_s", "tone", "wet")}
-        for t, keys in want.items():
-            with self.subTest(block=t):
-                ids = {p["id"] for p in blocks[t]["params"]}
-                for k in keys:
-                    self.assertIn(k, ids)
-
 
 
 @unittest.skipUnless(_HAS_DEPS, "нужны numpy/scipy/librosa")

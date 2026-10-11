@@ -44,18 +44,22 @@ describe('готовые мастера (ТК76)', () => {
     expect(p.chain.length).toBeGreaterThan(0)
   })
 
-  it.each(masters.map((p) => [p.id, p]))('%s: цепочка проходит описание блоков', (_, p) => {
-    expect(p.chain.length).toBeLessThanOrEqual(16)
-    for (const b of p.chain) {
-      const spec = blocks[b.type]
-      expect(spec, `блок ${b.type}`).toBeDefined()
-      for (const [k, v] of Object.entries(b)) {
-        if (k === 'type') continue
-        const ps = spec.params.find((x) => x.id === k)
-        expect(ps, `${b.type}.${k}`).toBeDefined()
-        if (typeof v === 'number') expect(inRange(v, ps), `${b.type}.${k}=${v}`).toBe(true)
+  it('цепочка каждого мастера проходит описание блоков (сообщение — «id: что не так»)', () => {
+    const bad = masters.flatMap((p) => {
+      const out = p.chain.length <= 16 ? [] : [`${p.id}: блоков ${p.chain.length}`]
+      for (const b of p.chain) {
+        const spec = blocks[b.type]
+        if (!spec) { out.push(`${p.id}: блок ${b.type}`); continue }
+        for (const [k, v] of Object.entries(b)) {
+          if (k === 'type') continue
+          const ps = spec.params.find((x) => x.id === k)
+          if (!ps) out.push(`${p.id}: ${b.type}.${k} нет в описании`)
+          else if (typeof v === 'number' && !inRange(v, ps)) out.push(`${p.id}: ${b.type}.${k}=${v}`)
+        }
       }
-    }
+      return out
+    })
+    expect(bad).toEqual([])
   })
 })
 
@@ -69,21 +73,19 @@ describe('место готовых партий по умолчанию (ТК76
     expect(percs.filter((p) => SIDE.test(p.name.ru)).length).toBeGreaterThanOrEqual(5)
   })
 
-  it.each(percs.filter((p) => SIDE.test(p.name.ru)).map((p) => [p.name.ru, p]))(
-    '%s: сдвиг от центра 0,2…0,4', (_, p) => {
-      expect(p.place).toBeDefined()
-      expect(p.place.pan).not.toBe(0)
-      expect(Math.abs(p.place.pan)).toBeGreaterThanOrEqual(0.2)
-      expect(Math.abs(p.place.pan)).toBeLessThanOrEqual(0.4)
-    })
+  it('хэт, шейкер, бубен, ковбелл, райд — сдвиг от центра 0,2…0,4 (сообщение — нарушители)', () => {
+    const bad = percs.filter((p) => SIDE.test(p.name.ru))
+      .filter((p) => !(Math.abs(p.place?.pan ?? 0) >= 0.2 && Math.abs(p.place?.pan ?? 0) <= 0.4))
+      .map((p) => `${p.name.ru}: pan ${p.place?.pan}`)
+    expect(bad).toEqual([])
+  })
 
-  it.each(percs.filter((p) => CENTER.test(p.name.ru)).map((p) => [p.name.ru, p]))(
-    '%s: центр', (_, p) => {
-      expect(p.place?.pan ?? 0).toBe(0)
-    })
+  it('бочка, хлопки, римшот — в центре', () => {
+    expect(percs.filter((p) => CENTER.test(p.name.ru) && (p.place?.pan ?? 0) !== 0)
+      .map((p) => `${p.name.ru}: pan ${p.place.pan}`)).toEqual([])
+  })
 
-  it.each(pads.map((p) => [p.id, p]))('%s: пэд — ширина 1,5', (_, p) => {
-    expect(p.place).toBeDefined()
-    expect(p.place.width).toBe(1.5)
+  it('каждый пэд — ширина 1,5', () => {
+    expect(pads.filter((p) => p.place?.width !== 1.5).map((p) => `${p.id}: width ${p.place?.width}`)).toEqual([])
   })
 })

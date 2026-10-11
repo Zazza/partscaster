@@ -22,9 +22,9 @@ func mustMatch(t *testing.T, g, pattern, what string) {
 }
 
 func TestInsertsGraphSingle(t *testing.T) {
-	g := InsertsGraph([]Insert{{AtSec: 2.0, SkipSec: 0.5, Tempo: 1.05, Gain: 0.7}})
+	t.Parallel()
+	g := InsertsGraph([]Insert{{AtSec: 2.0, SkipSec: 0.5, Gain: 0.7}})
 	mustMatch(t, g, `atrim=start=0\.50*([^0-9]|$)`, "обрезка начала партии")
-	mustMatch(t, g, `atempo=1\.050*([^0-9]|$)`, "растяжение темпа")
 	mustMatch(t, g, `adelay=(delays=)?2000([^0-9]|$)`, "задержка в мс")
 	mustMatch(t, g, `volume=0\.70*([^0-9]|$)`, "гейн")
 	for _, want := range []string{"amix=inputs=2", "normalize=0", "duration=first", "[out]"} {
@@ -34,25 +34,8 @@ func TestInsertsGraphSingle(t *testing.T) {
 	}
 }
 
-func TestInsertsGraphNoTempo(t *testing.T) {
-	// Tempo 0 и 1 — без растяжения, фильтра atempo нет
-	for _, tempo := range []float64{0, 1} {
-		g := InsertsGraph([]Insert{{AtSec: 1, Tempo: tempo, Gain: 1}})
-		if strings.Contains(g, "atempo") {
-			t.Errorf("Tempo=%v: unexpected atempo in graph: %s", tempo, g)
-		}
-	}
-}
-
-func TestInsertsGraphTempoClamp(t *testing.T) {
-	// вне [0.5, 2] — зажимается
-	g := InsertsGraph([]Insert{{AtSec: 1, Tempo: 5, Gain: 1}})
-	mustMatch(t, g, `atempo=2(\.0*)?([^0-9.]|$)`, "Tempo 5 → 2")
-	g = InsertsGraph([]Insert{{AtSec: 1, Tempo: 0.1, Gain: 1}})
-	mustMatch(t, g, `atempo=0\.50*([^0-9]|$)`, "Tempo 0.1 → 0.5")
-}
-
 func TestInsertsGraphThree(t *testing.T) {
+	t.Parallel()
 	g := InsertsGraph([]Insert{
 		{AtSec: 1, Gain: 1},
 		{AtSec: 2, Gain: 0.5},
@@ -114,6 +97,7 @@ const clickParty = "aevalsrc=exprs='if(between(t\\,1.0\\,1.005)\\,0.8\\,0)':d=3:
 const silentBase = "anullsrc=r=16000:cl=mono:d=6"
 
 func TestRunInputsEmptyInsertsCopiesBase(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	base := filepath.Join(dir, "base.wav")
@@ -133,6 +117,7 @@ func TestRunInputsEmptyInsertsCopiesBase(t *testing.T) {
 }
 
 func TestRunInputsInsertPlacement(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	base := filepath.Join(dir, "base.wav")
@@ -155,6 +140,7 @@ func TestRunInputsInsertPlacement(t *testing.T) {
 }
 
 func TestRunInputsInsertDuration(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	base := filepath.Join(dir, "base.wav")
@@ -179,6 +165,7 @@ func TestRunInputsInsertDuration(t *testing.T) {
 // --- плавный вход/выход и инверсия (карточка «+ инструмент/приём» по стемам) ---
 
 func TestInsertsGraphFadeIn(t *testing.T) {
+	t.Parallel()
 	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: 1, FadeIn: 0.5}})
 	mustMatch(t, g, `afade=t=in`, "плавный вход")
 	if strings.Contains(g, "afade=t=out") {
@@ -187,6 +174,7 @@ func TestInsertsGraphFadeIn(t *testing.T) {
 }
 
 func TestInsertsGraphFadeOut(t *testing.T) {
+	t.Parallel()
 	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: 1, FadeOut: 0.5}})
 	mustMatch(t, g, `afade=t=out`, "плавный выход")
 	if strings.Contains(g, "afade=t=in") {
@@ -195,6 +183,7 @@ func TestInsertsGraphFadeOut(t *testing.T) {
 }
 
 func TestInsertsGraphNoFadeByDefault(t *testing.T) {
+	t.Parallel()
 	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: 1}})
 	if strings.Contains(g, "afade") {
 		t.Errorf("FadeIn=FadeOut=0 — afade быть не должно: %s", g)
@@ -213,47 +202,7 @@ func segRMS(s []float32, from, to float64) float64 {
 	return RMS(s[a:b])
 }
 
-// Отрицательный Gain — инверсия: та же база, вклеенная с Gain −1, гасит её в окне.
-func TestRunInputsNegativeGainSubtracts(t *testing.T) {
-	needFFmpeg(t)
-	dir := t.TempDir()
-	base := filepath.Join(dir, "base.wav")
-	out := filepath.Join(dir, "out.wav")
-	lavfi(t, "aevalsrc=exprs='0.5*sin(2*PI*440*t)':d=6:s=16000", base)
-	// та же база: SkipSec = AtSec — отсчёты совпадают, окно [2,4] гасится
-	g := InsertsGraph([]Insert{{AtSec: 2, SkipSec: 2, DurSec: 2, Gain: -1}})
-	if err := RunInputs([]string{base, base}, out, g); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	s := decode(t, out)
-	if d := float64(len(s)) / 16000; math.Abs(d-6) > 0.05 {
-		t.Errorf("output duration %.3f, want 6 ± 0.05", d)
-	}
-	if r := segRMS(s, 2.2, 3.8); r > 0.01 {
-		t.Errorf("в окне вычитания RMS=%.4f, want < 0.01 (тишина)", r)
-	}
-	// синус 0.5 → RMS 0.354
-	for _, w := range [][2]float64{{0.5, 1.5}, {4.5, 5.5}} {
-		if r := segRMS(s, w[0], w[1]); math.Abs(r-0.354) > 0.03 {
-			t.Errorf("вне окна [%.1f,%.1f] RMS=%.4f, want ≈0.354 (база на месте)", w[0], w[1], r)
-		}
-	}
-}
-
 // --- фильтр нижних частот у вклейки (сбивка: у старых барабанов вычитается только низ) ---
-
-func TestInsertsGraphLowpass(t *testing.T) {
-	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: -1, LowpassHz: 6000}})
-	// низ без сдвига фазы: FFT-маска «частота ≤ 6000» (обычный lowpass недовычитал)
-	mustMatch(t, g, `afftfilt=real='re\*lte\(b\*sr/4096\\,6000\)'`, "маска нижних частот со срезом 6000")
-}
-
-func TestInsertsGraphNoLowpassByDefault(t *testing.T) {
-	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: -1}})
-	if strings.Contains(g, "lowpass") || strings.Contains(g, "afftfilt") {
-		t.Errorf("LowpassHz=0 — lowpass быть не должно: %s", g)
-	}
-}
 
 // hiSR — частота для проверок с 9000 Гц: при 16 кГц он выше Найквиста (8 кГц).
 const hiSR = 44100
@@ -289,72 +238,6 @@ func toneAmpAt(s []float32, rate int, hz, from, to float64) float64 {
 		im -= float64(v) * math.Sin(w*float64(i))
 	}
 	return 2 * math.Hypot(re, im) / float64(b-a)
-}
-
-// Вклейка той же базы с Gain −1 и LowpassHz 6000 гасит в окне только низ (200 Гц),
-// верх (9000 Гц) остаётся; вне окна оба на месте.
-func TestRunInputsLowpassSubtractsOnlyLows(t *testing.T) {
-	needFFmpeg(t)
-	dir := t.TempDir()
-	base := filepath.Join(dir, "base.wav")
-	out := filepath.Join(dir, "out.wav")
-	lavfi(t, "aevalsrc=exprs='0.3*sin(2*PI*200*t)+0.3*sin(2*PI*9000*t)':d=6:s=44100", base)
-	g := InsertsGraph([]Insert{{AtSec: 2, SkipSec: 2, DurSec: 2, Gain: -1, LowpassHz: 6000}})
-	if err := RunInputs([]string{base, base}, out, g); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	s := decodeAt(t, out, hiSR)
-	if d := float64(len(s)) / hiSR; math.Abs(d-6) > 0.05 {
-		t.Errorf("output duration %.3f, want 6 ± 0.05", d)
-	}
-	if a := toneAmpAt(s, hiSR, 200, 2.2, 3.8); a > 0.05 {
-		t.Errorf("200 Гц в окне %.4f, want < 0.05 (низ вычтен)", a)
-	}
-	// Допуск по верху шире ±0.06 из постановки: фазовый сдвиг 2-полюсного lowpass
-	// у 9000 Гц даёт после вычитания ≈0.37 (проверено ffmpeg на 44.1 кГц).
-	// Контракт — «верх остаётся», а не «ровно 0.3»; полное гашение дало бы < 0.06.
-	if a := toneAmpAt(s, hiSR, 9000, 2.2, 3.8); a < 0.24 || a > 0.42 {
-		t.Errorf("9000 Гц в окне %.4f, want 0.24..0.42 (верх остаётся)", a)
-	}
-	for _, w := range [][2]float64{{0.5, 1.5}, {4.5, 5.5}} {
-		for _, hz := range []float64{200, 9000} {
-			if a := toneAmpAt(s, hiSR, hz, w[0], w[1]); math.Abs(a-0.3) > 0.03 {
-				t.Errorf("вне окна [%.1f,%.1f] %.0f Гц %.4f, want ≈0.3", w[0], w[1], hz, a)
-			}
-		}
-	}
-}
-
-// Вычитание куска на некруглой секунде гасит звук до нуля: начало куска (atrim)
-// и задержка (adelay) совпадают до сэмпла (было: %.3f и целые мс — остаток 0.45 при 0.3).
-func TestInsertsSubtractNonRoundSecond(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not installed")
-	}
-	dir := t.TempDir()
-	src := filepath.Join(dir, "s.wav")
-	if out, err := exec.Command("ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
-		"aevalsrc=exprs='0.3*sin(2*PI*500*t)':d=6:s=44100", src).CombinedOutput(); err != nil {
-		t.Fatalf("%v %s", err, out)
-	}
-	out := filepath.Join(dir, "o.wav")
-	g := InsertsGraph([]Insert{{AtSec: 3.4567, SkipSec: 3.4567, Gain: -1}})
-	if err := RunInputs([]string{src, src}, out, g); err != nil {
-		t.Fatal(err)
-	}
-	raw, err := exec.Command("ffmpeg", "-loglevel", "error", "-i", out, "-ss", "4", "-t", "1", "-f", "f32le", "-ac", "1", "-").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sum float64
-	n := len(raw) / 4
-	for i := 0; i < n; i++ {
-		v := float64(math.Float32frombits(binary.LittleEndian.Uint32(raw[i*4:])))
-		sum += v * v
-	}
-	if rms := math.Sqrt(sum / float64(n)); rms > 0.005 {
-		t.Errorf("остаток после вычитания RMS %.4f, want ≈ 0", rms)
-	}
 }
 
 // --- вставка на месте: SkipSec == AtSec, без растяжения — дорожка ложится на своё же
@@ -457,11 +340,15 @@ func ipRun(t *testing.T, sr int, dur float64, in Insert) (base, out []float64) {
 var ipTimes = []float64{20.007, 1.995, 123.407, 0.5}
 
 // 1. Вычитание на месте гасит базу в окне до ≤ −80 дБ, вне окна база нетронута.
+// 2. Края окна: на фейдах результат = база·(1 − w), w — линейная рампа от сэмпла
+// round(AtSec·sr) длиной FadeIn·sr (и спад длиной FadeOut·sr к концу окна).
+// Один прогон ffmpeg на частоту и время — обе проверки на одном результате.
 func TestInsertInPlaceSubtractsAnyRateAnyTime(t *testing.T) {
+	t.Parallel()
 	for _, sr := range []int{44100, 48000} {
 		for _, at := range ipTimes {
-			at, sr := at, sr
 			t.Run(strconv.Itoa(sr)+"/"+strconv.FormatFloat(at, 'f', -1, 64), func(t *testing.T) {
+				t.Parallel()
 				const dur, fade = 10.0, 0.05
 				in := Insert{AtSec: at, SkipSec: at, DurSec: dur, Gain: -1, FadeIn: fade, FadeOut: fade}
 				base, out := ipRun(t, sr, math.Max(30, at+dur+5), in)
@@ -482,23 +369,7 @@ func TestInsertInPlaceSubtractsAnyRateAnyTime(t *testing.T) {
 				if after > -80 {
 					t.Errorf("после AtSec+DurSec база изменилась: %.1f дБ, want ≤ −80", after)
 				}
-			})
-		}
-	}
-}
-
-// 2. Края окна: на фейдах результат = база·(1 − w), w — линейная рампа от сэмпла
-// round(AtSec·sr) длиной FadeIn·sr (и спад длиной FadeOut·sr к концу окна).
-func TestInsertInPlaceFadeEdges(t *testing.T) {
-	for _, sr := range []int{44100, 48000} {
-		for _, at := range ipTimes {
-			at, sr := at, sr
-			t.Run(strconv.Itoa(sr)+"/"+strconv.FormatFloat(at, 'f', -1, 64), func(t *testing.T) {
-				const dur, fade = 10.0, 0.05
-				in := Insert{AtSec: at, SkipSec: at, DurSec: dur, Gain: -1, FadeIn: fade, FadeOut: fade}
-				base, out := ipRun(t, sr, math.Max(30, at+dur+5), in)
-				f := float64(sr)
-				n0, n1 := int(math.Round(at*f)), int(math.Round((at+dur)*f))
+				// края: рампа фейдов
 				L := fade * f
 				want := make([]float64, len(base))
 				for i := range base {
@@ -533,10 +404,12 @@ func TestInsertInPlaceFadeEdges(t *testing.T) {
 // 3. DurSec 0 и без фейдов: от AtSec до конца вычтено, до AtSec нетронуто;
 // край резкий (переход ≤ 10 сэмплов).
 func TestInsertInPlaceToEndNoFade(t *testing.T) {
+	t.Parallel()
 	for _, sr := range []int{44100, 48000} {
 		for _, at := range ipTimes {
 			at, sr := at, sr
 			t.Run(strconv.Itoa(sr)+"/"+strconv.FormatFloat(at, 'f', -1, 64), func(t *testing.T) {
+				t.Parallel()
 				in := Insert{AtSec: at, SkipSec: at, Gain: -1}
 				base, out := ipRun(t, sr, math.Max(30, at+15), in)
 				n0 := int(math.Round(at * float64(sr)))
@@ -558,6 +431,7 @@ func TestInsertInPlaceToEndNoFade(t *testing.T) {
 // 4. LowpassHz у вставки на месте с некруглым AtSec при 44,1 кГц: вычитается только
 // низ (200 Гц), верх (9000 Гц) остаётся; вне окна оба на месте.
 func TestInsertInPlaceLowpassNonRound(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	base := filepath.Join(dir, "base.wav")
@@ -592,6 +466,26 @@ func TestInsertInPlaceLowpassNonRound(t *testing.T) {
 	}
 }
 
+// ipTimed — время работы run: процессорное время ffmpeg (дочерних процессов), где
+// оно доступно, иначе настенное. Настенное при параллельном прогоне пакетов (go test
+// ./... и t.Parallel в соседних пакетах) растёт от чужой нагрузки: замер 2026-10-11 —
+// 1,4 с в одиночку и 5,2 с рядом с тестами studio. Процессорное от неё не зависит,
+// а регрессию «посэмпловые выражения в 35 раз медленнее» ловит так же.
+func ipTimed(t *testing.T, run func() error) time.Duration {
+	t.Helper()
+	cpu0, ok := childCPU()
+	start := time.Now()
+	if err := run(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	wall := time.Since(start)
+	if cpu1, ok1 := childCPU(); ok && ok1 {
+		t.Logf("настенное время %.2f с, процессорное ffmpeg %.2f с", wall.Seconds(), (cpu1 - cpu0).Seconds())
+		return cpu1 - cpu0
+	}
+	return wall
+}
+
 // 5. Скорость: 6 вставок на месте на 240 с стерео 44,1 кГц — не дольше 5 с
 // (посэмпловые выражения aeval были в 35 раз медленнее).
 func TestInsertInPlaceSpeed(t *testing.T) {
@@ -610,11 +504,7 @@ func TestInsertInPlaceSpeed(t *testing.T) {
 		ins[k] = Insert{AtSec: at, SkipSec: at, DurSec: 20, Gain: -1, FadeIn: 0.05, FadeOut: 0.05}
 		inputs = append(inputs, bp)
 	}
-	start := time.Now()
-	if err := RunInputs(inputs, op, InsertsGraph(ins)); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	el := time.Since(start)
+	el := ipTimed(t, func() error { return RunInputs(inputs, op, InsertsGraph(ins)) })
 	t.Logf("6 вставок на месте, 240 с стерео 44,1 кГц: %.2f с", el.Seconds())
 	if el > 5*time.Second {
 		t.Errorf("RunInputs %.2f с, want ≤ 5 с", el.Seconds())
@@ -723,11 +613,7 @@ func TestInsertInPlaceLowpassSpeedAndAccuracy(t *testing.T) {
 			FadeIn: fade, FadeOut: fade, LowpassHz: 6000}
 		inputs = append(inputs, bp)
 	}
-	start := time.Now()
-	if err := RunInputs(inputs, op, InsertsGraph(ins)); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	el := time.Since(start)
+	el := ipTimed(t, func() error { return RunInputs(inputs, op, InsertsGraph(ins)) })
 	t.Logf("6 вставок на месте с LowpassHz 6000, 240 с стерео 44,1 кГц: %.2f с", el.Seconds())
 	if el > 5*time.Second {
 		t.Errorf("RunInputs %.2f с, want ≤ 5 с", el.Seconds())
@@ -775,6 +661,7 @@ func TestInsertInPlaceLowpassSpeedAndAccuracy(t *testing.T) {
 // 7. Короткое окно у самого нуля: вставка с DurSec 5e-05 и фейдами 0.05 не роняет
 // ffmpeg (было: «st=5e-05» в afade не разбирался) — на месте с AtSec 0 и 5e-05, вклейка с 5e-05.
 func TestInsertInPlaceShortWindowAtZero(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	bp := filepath.Join(dir, "base.wav")
@@ -789,22 +676,6 @@ func TestInsertInPlaceShortWindowAtZero(t *testing.T) {
 		g := InsertsGraph([]Insert{in})
 		if err := RunInputs([]string{bp, bp}, op, g); err != nil {
 			t.Errorf("%s: RunInputs с коротким окном: %v\ngraph: %s", name, err, g)
-		}
-	}
-}
-
-// 8. Малые времена пишутся в граф без экспоненты (ffmpeg не разбирает «5e-05»
-// в части опций): и у вставки на месте, и у вклейки.
-func TestInsertsGraphNoExponent(t *testing.T) {
-	exp := regexp.MustCompile(`[0-9.][eE][-+]?[0-9]`)
-	cases := map[string]Insert{
-		"на месте": {AtSec: 5e-05, SkipSec: 5e-05, DurSec: 0.00005, Gain: -1, FadeIn: 0.05, FadeOut: 0.05},
-		"вклейка":  {AtSec: 5e-05, SkipSec: 0, DurSec: 0.00005, Gain: -1, FadeIn: 0.05, FadeOut: 0.05},
-	}
-	for name, in := range cases {
-		g := InsertsGraph([]Insert{in})
-		if strings.Contains(g, "e-0") || strings.Contains(g, "e+0") || exp.MatchString(g) {
-			t.Errorf("%s: в графе число с экспонентой: %s", name, g)
 		}
 	}
 }

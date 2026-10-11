@@ -18,6 +18,7 @@ const ncChirp = "0.5*sin(2*PI*(200*t+75*t*t))"
 
 // Карточка 7.1: тон 440 → 440·2^(semis/12) ±1 %; длина та же ±0.05 с.
 func TestPitchShift(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, chSR)
 	for _, semis := range []float64{1, 3, -5, 12, -12} {
@@ -34,6 +35,7 @@ func TestPitchShift(t *testing.T) {
 
 // Карточка 7.1: semis 0 → вход.
 func TestPitchZeroIsDry(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, chSR)
 	src := decode(t, in)
@@ -46,6 +48,7 @@ func TestPitchZeroIsDry(t *testing.T) {
 // Карточка 7.2: при down 0.5 есть компонента 220 Гц не тише −12 дБ к 440; up 0 → нет
 // 880 сверх входного (во входе 880 нет — порог −30 дБ к 440).
 func TestOctaverDown(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, chSR)
 	out := decode(t, ncRun(t, "octaver", in, map[string]float64{"down": 0.5, "up": 0}))
@@ -60,6 +63,7 @@ func TestOctaverDown(t *testing.T) {
 
 // Карточка 7.2: up — октава вверх (обратная сторона «up 0 → нет 880»).
 func TestOctaverUp(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, chSR)
 	out := decode(t, ncRun(t, "octaver", in, map[string]float64{"down": 0, "up": 1}))
@@ -70,6 +74,7 @@ func TestOctaverUp(t *testing.T) {
 
 // Карточка 7.2: down 0 и up 0 → вход.
 func TestOctaverZeroIsDry(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, chSR)
 	src := decode(t, in)
@@ -93,6 +98,7 @@ func ncReversed(s []float32) []float32 {
 // (replace 1: корреляция с реверсом > 0.9); вне окна выход = вход (кроме краёв ≤ 20 мс).
 // src 0 — реверс куска до отметки, src 1 — куска после отметки.
 func TestReverseReplace(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncChirp, 6, chSR)
 	src := decode(t, in)
@@ -124,6 +130,7 @@ func TestReverseReplace(t *testing.T) {
 
 // Карточка 8.1: replace 0 — реверс поверх: в окне выход − вход = реверс источника.
 func TestReverseOverlay(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncChirp, 6, chSR)
 	src := decode(t, in)
@@ -149,6 +156,7 @@ func TestReverseOverlay(t *testing.T) {
 // Карточка 8.2: период p = 60/(bpm·div); окна k = 1…count−1 совпадают с окном k = 0
 // (корреляция > 0.95, края 5 мс исключены); после start + count·p — вход.
 func TestStutterRepeats(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncChirp, 5, chSR)
 	src := decode(t, in)
@@ -179,6 +187,7 @@ func TestStutterRepeats(t *testing.T) {
 // Карточка 8.3: в окне [start, start+dur] частота тона падает (последняя четверть
 // окна ≤ половины исходной), к концу окна уровень < −30 дБ; после окна — вход.
 func TestTapeStop(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 5, chSR)
 	src := decode(t, in)
@@ -221,6 +230,7 @@ func ncClicksPerSec(s []float32, rate int, from, to float64) float64 {
 
 // Карточка 9.1: на тишине crackle 0.4 → щелчки (> 0.05) от 2 до 200 в секунду.
 func TestVinylCrackle(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncFile(t, "anullsrc=r=44100:cl=mono:d=4")
 	out := decodeAt(t, ncRun(t, "vinyl", in, map[string]float64{"crackle": 0.4}), ncSR)
@@ -231,6 +241,7 @@ func TestVinylCrackle(t *testing.T) {
 
 // Карточка 9.1: crackle 0 и hiss 0 → тишина (< −80 дБ).
 func TestVinylZeroIsSilent(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncFile(t, "anullsrc=r=44100:cl=mono:d=3")
 	out := decodeAt(t, ncRun(t, "vinyl", in, map[string]float64{"crackle": 0, "hiss": 0}), ncSR)
@@ -241,6 +252,7 @@ func TestVinylZeroIsSilent(t *testing.T) {
 
 // Карточка 9.1: на тоне тон сохраняется (уровень ±1 дБ) при параметрах по умолчанию.
 func TestVinylKeepsTone(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncTone440, 3, ncSR)
 	src := decodeAt(t, in, ncSR)

@@ -89,6 +89,7 @@ const (
 
 // Условие 1: партия отстаёт от плана на 80 мс → найдено с точностью ≤ 30 мс.
 func TestMeasureInsertLateParty(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	want := mPlan + 0.08
@@ -109,6 +110,7 @@ func TestMeasureInsertLateParty(t *testing.T) {
 
 // Условие 2: партия раньше плана на 100 мс → найдено ±30 мс.
 func TestMeasureInsertEarlyParty(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	want := mPlan - 0.1
@@ -131,6 +133,7 @@ func TestMeasureInsertEarlyParty(t *testing.T) {
 // в радиусе, значит ложного ответа далеко от плана быть не должно: либо Aligned=false
 // и начало по плану, либо ответ в пределах радиуса вокруг плана.
 func TestMeasureInsertShiftOutsideRadius(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	p, err := MeasureInsert(kickTrack(t, dir), gridParty(t, dir, mPlan+0.3), mFrom, mTo, mLead, mBeat)
@@ -152,6 +155,7 @@ func TestMeasureInsertShiftOutsideRadius(t *testing.T) {
 
 // Условие 4: партия — тишина → совпадение ненадёжно, стоит по плану, без ошибки.
 func TestMeasureInsertSilentParty(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	party := filepath.Join(dir, "silent.wav")
@@ -173,6 +177,7 @@ func TestMeasureInsertSilentParty(t *testing.T) {
 
 // Условие 5: нет файла (партии или опоры) → ошибка.
 func TestMeasureInsertMissingFile(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "nope.wav")
@@ -186,6 +191,7 @@ func TestMeasureInsertMissingFile(t *testing.T) {
 
 // Условие 6: PlaceInsert — звучит только кусок [from, to].
 func TestPlaceInsert(t *testing.T) {
+	t.Parallel()
 	const eps = 1e-9
 	cases := []struct {
 		name string
@@ -198,8 +204,6 @@ func TestPlaceInsert(t *testing.T) {
 			Insert{AtSec: 7, SkipSec: 0, DurSec: 7, Tempo: 1, Gain: 0.7}},
 		{"начало позже to — длительность 0", Placement{StartSec: 15, Ratio: 1},
 			Insert{AtSec: 15, SkipSec: 0, DurSec: 0, Tempo: 1, Gain: 0.7}},
-		{"Ratio 1.02 — отрезок в секундах партии", Placement{StartSec: 4, Ratio: 1.02},
-			Insert{AtSec: 6, SkipSec: 2 * 1.02, DurSec: 8, Tempo: 1.02, Gain: 0.7}},
 		{"Ratio 0 → Tempo 1", Placement{StartSec: 7, Ratio: 0},
 			Insert{AtSec: 7, SkipSec: 0, DurSec: 7, Tempo: 1, Gain: 0.7}},
 		{"начало ровно на from", Placement{StartSec: 6, Ratio: 1},

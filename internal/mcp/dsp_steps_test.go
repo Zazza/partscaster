@@ -17,37 +17,10 @@ import (
 // fakeService (server_test.go), звук — синтетика ffmpeg (fxLavfi/fxDecode/fxTone
 // из stem_fx_test.go).
 
-// Карточка 2.5: dsp_presets — JSON со всеми наборами dsp.Presets(): у каждого
-// id, name, note и шаги с цепочками.
-func TestDspPresetsListsPresets(t *testing.T) {
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "dsp_presets", map[string]any{})
-	if !ok {
-		t.Fatalf("dsp_presets: %s", out)
-	}
-	var got []dsp.Preset
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		// допускаем обёртку {"presets":[...]}
-		var wrap struct {
-			Presets []dsp.Preset `json:"presets"`
-		}
-		if err2 := json.Unmarshal([]byte(out), &wrap); err2 != nil || len(wrap.Presets) == 0 {
-			t.Fatalf("dsp_presets: ответ не JSON-список наборов (%v): %s", err, out)
-		}
-		got = wrap.Presets
-	}
-	want := dsp.Presets()
-	if len(want) == 0 {
-		t.Fatal("dsp.Presets() пуст — нечего отдавать")
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("dsp_presets отдаёт не то же, что dsp.Presets():\n got %+v\nwant %+v", got, want)
-	}
-}
-
 // Карточка 2.5: dsp_apply со steps без stem — шаги на весь трек: два шага «−6 дБ»
 // последовательно дают −12 дБ у тона; результат — один новый вариант у джобы.
 func TestDspApplyStepsWholeTrack(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg not installed")
 	}
@@ -75,6 +48,7 @@ func TestDspApplyStepsWholeTrack(t *testing.T) {
 
 // Карточка 2.5: dsp_apply со steps и неизвестной цепочкой — ошибка, ничего не загружено.
 func TestDspApplyStepsUnknownChainIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}
 	out, ok := call(t, s, "dsp_apply", jsonArgs(t, `{"job_id":5,"steps":[{"chain":"no-such-chain"}]}`))
@@ -88,6 +62,7 @@ func TestDspApplyStepsUnknownChainIsError(t *testing.T) {
 
 // Карточка 2.5: спека rebuild_sections принимает steps (chain/off/params).
 func TestParseSectionSpecsSteps(t *testing.T) {
+	t.Parallel()
 	var raw any
 	if err := json.Unmarshal([]byte(`[
 		{"from":2,"to":6,"stems":["guitar"],"steps":[

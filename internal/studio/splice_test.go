@@ -92,6 +92,7 @@ func assertOnlyTone(t *testing.T, out []float32, from, to, want, amp float64, wh
 // в середине первого куска только 440, второго — только 660 (B с 2 с, не с 0),
 // третьего — только 550 (A с 4 с). Внутри кусков уровень исходный.
 func TestSpliceLengthAndPieceContent(t *testing.T) {
+	t.Parallel()
 	f := spliceSetup(t)
 	out := spliceOK(t, f, []SplicePart{
 		{JobID: spliceA, From: 0, To: 3},
@@ -111,6 +112,7 @@ func TestSpliceLengthAndPieceContent(t *testing.T) {
 // Кейс карточки: gain_db ±6 у куска → его уровень на ~столько же дБ выше/ниже (±1),
 // соседний кусок без gain_db не меняется.
 func TestSpliceGainDb(t *testing.T) {
+	t.Parallel()
 	for _, g := range []float64{6, -6} {
 		f := spliceSetup(t)
 		out := spliceOK(t, f, []SplicePart{
@@ -131,6 +133,7 @@ func TestSpliceGainDb(t *testing.T) {
 // Кейс карточки: To = 0 — кусок до конца файла: A 2–(конец 6) → длина 4 с,
 // в конце — 550 (A после 4 с).
 func TestSpliceToZeroTillEnd(t *testing.T) {
+	t.Parallel()
 	f := spliceSetup(t)
 	out := spliceOK(t, f, []SplicePart{{JobID: spliceA, From: 2, To: 0}}, 0.05)
 	if d := durOf(out); math.Abs(d-4) > 0.05 {
@@ -142,6 +145,7 @@ func TestSpliceToZeroTillEnd(t *testing.T) {
 
 // Условие 1: crossfade ≤ 0 → по умолчанию 0.05 с: [A 0–3, B 2–5] → 5.95 с.
 func TestSpliceDefaultCrossfade(t *testing.T) {
+	t.Parallel()
 	for _, xf := range []float64{0, -1} {
 		f := spliceSetup(t)
 		out := spliceOK(t, f, []SplicePart{
@@ -156,6 +160,7 @@ func TestSpliceDefaultCrossfade(t *testing.T) {
 
 // Условие 2 на другом переходе: crossfade 1 с → 3+3 − 1 = 5 с.
 func TestSpliceCustomCrossfadeLength(t *testing.T) {
+	t.Parallel()
 	f := spliceSetup(t)
 	out := spliceOK(t, f, []SplicePart{
 		{JobID: spliceA, From: 0, To: 3},
@@ -169,6 +174,7 @@ func TestSpliceCustomCrossfadeLength(t *testing.T) {
 // Кейсы карточки: ошибки — пустые parts, To ≤ From (To > 0), неизвестная джоба;
 // при ошибке ничего не загружено.
 func TestSpliceErrorsWithoutUpload(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		parts []SplicePart

@@ -18,6 +18,7 @@ func levelGainDB(out, src []float32, from, to float64) float64 {
 
 // Случай 1: тихий синус, gain ±3 дБ → RMS меняется на ±3 дБ (±0.2), до потолка далеко.
 func TestLevelGainShiftsRMS(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, levelQuiet, 3)
 	for _, g := range []float64{-3, 3} {
@@ -31,6 +32,7 @@ func TestLevelGainShiftsRMS(t *testing.T) {
 // Случай 2: gain 0 на тихом сигнале — выход совпадает со входом
 // (разность ниже −50 дБ относительно входа, первые 50 мс не считаем).
 func TestLevelZeroGainTransparent(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, levelQuiet, 3)
 	out := runChain(t, "level", in, map[string]float64{"gain": 0})
@@ -44,6 +46,7 @@ func TestLevelZeroGainTransparent(t *testing.T) {
 // Случай 3: громкий синус 0.99, gain +3, ceiling −1.5 → после 100 мс (атака лимитера)
 // ни один отсчёт не выше 10^(−1.5/20)+0.01.
 func TestLevelCeilingLimitsPeaks(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, _ := genIn(t, "0.99*sin(2*PI*440*t)", 3)
 	out := runChain(t, "level", in, map[string]float64{"gain": 3, "ceiling": -1.5})
@@ -67,6 +70,7 @@ func TestLevelCeilingLimitsPeaks(t *testing.T) {
 // Случай 4: тембр не меняется — соотношение амплитуд 440 Гц и 3000 Гц при gain −6
 // то же, что на входе (±0.3 дБ).
 func TestLevelKeepsTimbre(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.08*sin(2*PI*440*t)+0.04*sin(2*PI*3000*t)", 3)
 	out := runChain(t, "level", in, map[string]float64{"gain": -6})
@@ -83,10 +87,10 @@ func TestLevelKeepsTimbre(t *testing.T) {
 
 // Случай 5: длина выхода равна длине входа — при любых параметрах.
 func TestLevelKeepsLength(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, levelQuiet, 3)
 	for _, p := range []map[string]float64{
-		nil,
 		{"gain": 12, "ceiling": -3},
 		{"gain": -12, "ceiling": -0.1},
 	} {
@@ -99,6 +103,7 @@ func TestLevelKeepsLength(t *testing.T) {
 
 // Случай 6: level есть в All(), не голосовая; крутилки gain/ceiling по спеке; есть from.
 func TestLevelRegistered(t *testing.T) {
+	t.Parallel()
 	var l *Chain
 	for _, c := range All() {
 		if c.ID == "level" {

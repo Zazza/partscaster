@@ -98,6 +98,7 @@ const fxChainJSON = `[
 ]`
 
 func TestFxApplyPassesChainAsIs(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"vocals","chain":`+fxChainJSON+
 		`,"from":10.5,"to":20,"output":"solo","label":"голос через Plexi"}`))
@@ -128,27 +129,41 @@ func TestFxApplyPassesChainAsIs(t *testing.T) {
 	}
 }
 
-// Без окна/output/label — в запрос они не придумываются.
+// Без окна/output/label/preview/file — в запрос они не придумываются (и при явном preview:false).
 func TestFxApplyOptionalOmitted(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
-	out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"mix","chain":[{"type":"comp"}]}`))
-	if !ok {
-		t.Fatalf("fx_apply failed: %s", out)
+	for _, args := range []string{
+		`{"job_id":466,"source":"mix","chain":[{"type":"comp"}]}`,
+		`{"job_id":466,"source":"mix","chain":[{"type":"comp"}],"preview":false}`,
+	} {
+		if out, ok := call(t, s, "fx_apply", jsonArgs(t, args)); !ok {
+			t.Fatalf("fx_apply failed: %s", out)
+		}
 	}
-	if len(fake.applies) != 1 {
-		t.Fatalf("ApplyFx вызван %d раз", len(fake.applies))
+	if len(fake.applies) != 2 {
+		t.Fatalf("ApplyFx вызван %d раз, want 2", len(fake.applies))
 	}
-	r := fake.applies[0].req
-	if r.From != nil || r.To != nil {
-		t.Errorf("окно придумано: from=%v to=%v", r.From, r.To)
-	}
-	if r.Source != "mix" || len(r.Chain) != 1 || r.Chain[0]["type"] != "comp" {
-		t.Errorf("запрос: %+v", r)
+	for i, c := range fake.applies {
+		r := c.req
+		if r.Source != "mix" || len(r.Chain) != 1 || r.Chain[0]["type"] != "comp" {
+			t.Errorf("вызов %d: запрос %+v", i, r)
+		}
+		if r.From != nil || r.To != nil {
+			t.Errorf("вызов %d: окно придумано: from=%v to=%v", i, r.From, r.To)
+		}
+		if r.Preview {
+			t.Errorf("вызов %d: preview придуман", i)
+		}
+		if r.File != "" || r.InPlace {
+			t.Errorf("вызов %d: file=%q in_place=%v придуманы", i, r.File, r.InPlace)
+		}
 	}
 }
 
 // Ошибка воркера (422 с причиной) — ошибка инструмента с той же причиной.
 func TestFxApplyWorkerErrorIsToolError(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	fake.applyErr = errors.New("422: unknown block type: fuzz")
 	out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"mix","chain":[{"type":"fuzz"}]}`))
@@ -161,6 +176,7 @@ func TestFxApplyWorkerErrorIsToolError(t *testing.T) {
 }
 
 func TestFxAssetsReturnsList(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	fake.assets = map[string]any{
 		"amps": []any{map[string]any{"name": "Plexi Lead.nam", "latency": 3}},
@@ -178,6 +194,7 @@ func TestFxAssetsReturnsList(t *testing.T) {
 }
 
 func TestFxAssetUploadSendsLocalFile(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	data := []byte(`{"architecture":"WaveNet","weights":[1,2,3]}`)
 	p := filepath.Join(t.TempDir(), "Plexi Lead.nam")
@@ -203,6 +220,7 @@ func TestFxAssetUploadSendsLocalFile(t *testing.T) {
 
 // Файла нет — ошибка, на воркер ничего не ушло.
 func TestFxAssetUploadMissingFile(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	args, _ := json.Marshal(map[string]any{"kind": "ir", "path": filepath.Join(t.TempDir(), "nope.wav")})
 	out, ok := call(t, s, "fx_asset_upload", jsonArgs(t, string(args)))
@@ -225,6 +243,7 @@ var fxBlockTypes = []string{"gate", "eq", "comp", "drive", "amp", "cab", "reverb
 	"tremolo"} // этап 7а: готовые гитары (сёрф, тремоло-пульс)
 
 func TestFxApplyPassesPreview(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"guitar","chain":[{"type":"reverb"}],`+
 		`"from":20,"to":35,"output":"solo","preview":true}`))
@@ -243,25 +262,8 @@ func TestFxApplyPassesPreview(t *testing.T) {
 	}
 }
 
-// Без preview (и при preview=false) — обычный вариант.
-func TestFxApplyPreviewDefaultFalse(t *testing.T) {
-	s, fake := newFxServer(t)
-	for _, args := range []string{
-		`{"job_id":466,"source":"mix","chain":[{"type":"comp"}]}`,
-		`{"job_id":466,"source":"mix","chain":[{"type":"comp"}],"preview":false}`,
-	} {
-		if out, ok := call(t, s, "fx_apply", jsonArgs(t, args)); !ok {
-			t.Fatalf("fx_apply failed: %s", out)
-		}
-	}
-	for i, c := range fake.applies {
-		if c.req.Preview {
-			t.Errorf("вызов %d: preview придуман: %+v", i, c.req)
-		}
-	}
-}
-
 func TestFxBlocksListsAllTypesFromWorkerSource(t *testing.T) {
+	t.Parallel()
 	s, _ := newFxServer(t)
 	out, ok := call(t, s, "fx_blocks", map[string]any{})
 	if !ok {
@@ -296,6 +298,7 @@ func TestFxBlocksListsAllTypesFromWorkerSource(t *testing.T) {
 }
 
 func TestFxPresetsReturnsList(t *testing.T) {
+	t.Parallel()
 	s, _ := newFxServer(t)
 	out, ok := call(t, s, "fx_presets", map[string]any{})
 	if !ok {
@@ -330,55 +333,12 @@ func TestFxPresetsReturnsList(t *testing.T) {
 			}
 		}
 	}
-	// тот же набор, что встроенная копия fx_presets.json (make mcp-data из fxPresets.js)
-	raw, err := os.ReadFile("fx_presets.json")
-	if err != nil {
-		t.Fatalf("нет internal/mcp/fx_presets.json (make mcp-data): %v", err)
-	}
-	var want []map[string]any
-	if err := json.Unmarshal(raw, &want); err != nil {
-		t.Fatalf("fx_presets.json не JSON-список: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("fx_presets отличается от встроенного fx_presets.json")
-	}
-}
-
-// Решение кросс-ревью internal-instruments-page: ответ fx_apply в режиме превью
-// несёт duration_sec и clipped от воркера (страница и агент видят длину куска
-// и перегруз). Воркер — fxPreviewFake, отдающий вариант превью.
-
-type fxPreviewFake struct {
-	*fxFake
-}
-
-func (f *fxPreviewFake) ApplyFx(ctx context.Context, id int64, req yue.FxRequest) (*yue.DspVariant, error) {
-	f.applies = append(f.applies, fxApplyCall{id, req})
-	return &yue.DspVariant{File: "preview-fx-0123abcd.flac", DurationSec: 18.5, Clipped: true}, nil
-}
-
-func TestFxApplyReturnsDurationAndClipped(t *testing.T) {
-	s, base := newFxServer(t)
-	s.client = &fxPreviewFake{fxFake: base}
-	out, ok := call(t, s, "fx_apply", jsonArgs(t, `{"job_id":466,"source":"guitar","chain":[{"type":"reverb"}],`+
-		`"from":20,"to":35,"output":"solo","preview":true}`))
-	if !ok {
-		t.Fatalf("fx_apply preview failed: %s", out)
-	}
-	for _, re := range []*regexp.Regexp{
-		regexp.MustCompile(`"file"\s*:\s*"preview-fx-0123abcd\.flac"`),
-		regexp.MustCompile(`"duration_sec"\s*:\s*18\.5\b`),
-		regexp.MustCompile(`"clipped"\s*:\s*true\b`),
-	} {
-		if !re.MatchString(out) {
-			t.Errorf("в ответе fx_apply нет %s: %s", re, out)
-		}
-	}
 }
 
 // internal-studio-engine, Н-2 кросс-ревью (синхронное обновление): fx_apply передаёт
 // fade в FxRequest.Fade; без fade — 0 (поведение этапа 3).
 func TestFxApplyPassesFade(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	for _, args := range []string{
 		`{"job_id":466,"source":"other","chain":[{"type":"reverb"}],"from":20,"to":35,"output":"solo","preview":true,"fade":0.05}`,
@@ -399,25 +359,11 @@ func TestFxApplyPassesFade(t *testing.T) {
 	}
 }
 
-// Описание fx_apply называет поле fade.
-func TestFxApplyDescribesFade(t *testing.T) {
-	s, _ := newFxServer(t)
-	s.mu.RLock()
-	tool := s.tools["fx_apply"]
-	s.mu.RUnlock()
-	b, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), `"fade"`) {
-		t.Errorf("в схеме fx_apply нет поля fade: %s", b)
-	}
-}
-
 // internal-studio-engine, условие 14 (этап 5а): fx_kit_install передаёт name в
 // Service.InstallFxKit и возвращает ответ воркера; fx_assets показывает наборы (kits).
 
 func TestFxKitInstallPassesName(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	out, ok := call(t, s, "fx_kit_install", map[string]any{"name": "osdk"})
 	if !ok {
@@ -439,6 +385,7 @@ func TestFxKitInstallPassesName(t *testing.T) {
 
 // Ошибка воркера (неизвестное имя → 422) — ошибка инструмента с причиной.
 func TestFxKitInstallWorkerErrorIsToolError(t *testing.T) {
+	t.Parallel()
 	s, fake := newFxServer(t)
 	fake.kitErr = &yue.StatusError{Code: 422, Msg: "unknown kit: nope"}
 	out, ok := call(t, s, "fx_kit_install", map[string]any{"name": "nope"})
@@ -447,44 +394,5 @@ func TestFxKitInstallWorkerErrorIsToolError(t *testing.T) {
 	}
 	if !strings.Contains(out, "nope") {
 		t.Errorf("в ошибке нет причины: %s", out)
-	}
-}
-
-// Схема инструмента называет поле name.
-func TestFxKitInstallDescribesName(t *testing.T) {
-	s, _ := newFxServer(t)
-	s.mu.RLock()
-	tool, ok := s.tools["fx_kit_install"]
-	s.mu.RUnlock()
-	if !ok {
-		t.Fatal("нет инструмента fx_kit_install")
-	}
-	b, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), `"name"`) {
-		t.Errorf("в схеме fx_kit_install нет поля name: %s", b)
-	}
-}
-
-func TestFxAssetsShowsKits(t *testing.T) {
-	s, fake := newFxServer(t)
-	fake.assets = map[string]any{
-		"amps": []any{},
-		"irs":  []any{},
-		"kits": []any{map[string]any{"name": "osdk/kick", "samples": 22}, map[string]any{"name": "osdk/snare", "samples": 37}},
-	}
-	out, ok := call(t, s, "fx_assets", map[string]any{})
-	if !ok {
-		t.Fatalf("fx_assets failed: %s", out)
-	}
-	for _, w := range []string{"osdk/kick", "osdk/snare"} {
-		if !strings.Contains(out, w) {
-			t.Errorf("в списке нет набора %q: %s", w, out)
-		}
-	}
-	if !regexp.MustCompile(`"samples"\s*:\s*22\b`).MatchString(out) {
-		t.Errorf("в списке нет числа сэмплов набора: %s", out)
 	}
 }

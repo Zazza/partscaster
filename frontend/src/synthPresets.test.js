@@ -31,8 +31,8 @@ describe('ТК98: группы синтов (условие 64)', () => {
     expect(synths.length).toBeGreaterThanOrEqual(20)
   })
 
-  it.each(synths.map((p) => [p.id, p]))('%s: group — одна из групп синтов', (_, p) => {
-    expect(SYNTH_GROUPS).toContain(p.group)
+  it('у каждого синта group — одна из групп синтов (сообщение — id нарушителей)', () => {
+    expect(synths.filter((p) => !SYNTH_GROUPS.includes(p.group)).map((p) => `${p.id}: ${p.group}`)).toEqual([])
   })
 
   it('groupPresets по синтам — ровно 5 групп синтов, каждая непустая', () => {
@@ -71,11 +71,10 @@ describe('Условие 63: автор набора Salamander в подска�
     expect(pianos.length).toBeGreaterThanOrEqual(2)
   })
 
-  it.each(pianos.map((p) => [p.id, p]))('%s: note ru/en называет автора и лицензию', (_, p) => {
-    for (const loc of ['ru', 'en']) {
-      const note = p.note?.[loc] || ''
-      expect(note, `${p.id} note.${loc}`).toMatch(/Alexander Holm/)
-      expect(note, `${p.id} note.${loc}`).toMatch(/CC[- ]?BY/i)
-    }
+  it('у каждого note ru/en называет автора и лицензию (сообщение — «id note.язык»)', () => {
+    const bad = pianos.flatMap((p) => ['ru', 'en']
+      .filter((loc) => !/Alexander Holm/.test(p.note?.[loc] || '') || !/CC[- ]?BY/i.test(p.note?.[loc] || ''))
+      .map((loc) => `${p.id} note.${loc}`))
+    expect(bad).toEqual([])
   })
 })

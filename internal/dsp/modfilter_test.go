@@ -35,11 +35,13 @@ func ncMeanAbsDiff(a, b []float64) float64 {
 // Карточка 4.1: chorus/flanger/phaser на белом шуме — спектр меняется во времени:
 // АЧХ в окне 0–0.5 с отличается от окна, сдвинутого на полпериода LFO; mix 0 → сухой.
 func TestModulationSpectrumMoves(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.3, 3, 3, chSR)
 	src := decode(t, in)
 	for _, id := range []string{"chorus", "flanger", "phaser"} {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			const rate = 0.5 // период LFO 2 с, полпериода — 1 с
 			p := map[string]float64{"rate": rate, "mix": 1}
 			out := decode(t, ncRun(t, id, in, p))
@@ -68,6 +70,7 @@ func ncEnvelope5ms(s []float32, from, to float64) []float64 {
 // Карточка 4.2: tremolo на тоне — огибающая с периодом 1/rate (±10 %), минимум
 // ≈ 1−depth (±0.1), без ступенек (соседние окна 5 мс отличаются < 1.5 дБ при rate 5).
 func TestTremoloEnvelope(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.5*sin(2*PI*1000*t)", 3, chSR)
 	src := decode(t, in)
@@ -111,6 +114,7 @@ func ncEqDelta(out, src []float32, hz float64) float64 {
 
 // Карточка 5.1: все 0 → выход = вход (±0.1 дБ на каждом тоне).
 func TestEQFlatIsTransparent(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncEqTones, 2, ncSR)
 	src := decodeAt(t, in, ncSR)
@@ -124,6 +128,7 @@ func TestEQFlatIsTransparent(t *testing.T) {
 
 // Карточка 5.1: mid +6 на midf → тон на midf +6±1 дБ; на midf·4 и midf/4 — < 1.5 дБ.
 func TestEQMidBell(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncEqTones, 2, ncSR)
 	src := decodeAt(t, in, ncSR)
@@ -140,6 +145,7 @@ func TestEQMidBell(t *testing.T) {
 
 // Карточка 5.1: полки — тон 50 Гц при low +6 → +5…+7; тон 12 кГц при high −6 → −5…−7.
 func TestEQShelves(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, ncEqTones, 2, ncSR)
 	src := decodeAt(t, in, ncSR)
@@ -165,6 +171,7 @@ func ncSweepParams(over map[string]float64) map[string]float64 {
 // < 200 Гц в последней секунде окна на ≥ 10 дБ ниже, чем в первой; после окна при
 // hold 0 — снова сухой.
 func TestSweepHighpassHold0(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.3, 6, 6, ncSR)
 	src := decode(t, in)
@@ -183,6 +190,7 @@ func TestSweepHighpassHold0(t *testing.T) {
 
 // Карточка 5.2: hold 1 — после окна низ остаётся срезан.
 func TestSweepHighpassHold1(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.3, 6, 6, ncSR)
 	src := decode(t, in)
@@ -194,6 +202,7 @@ func TestSweepHighpassHold1(t *testing.T) {
 
 // Карточка 5.2: type 0 (НЧ) 20000→500 — верх > 4 кГц к концу окна ≥ 10 дБ ниже.
 func TestSweepLowpass(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.3, 6, 6, ncSR)
 	out := decode(t, ncRun(t, "sweep", in, ncSweepParams(map[string]float64{"type": 0, "f0": 20000, "f1": 500, "hold": 0})))
@@ -207,6 +216,7 @@ func TestSweepLowpass(t *testing.T) {
 // 1/rate (±15 %), размах ≥ (hi−lo)/3. Карточка не задаёт mix — берётся 1 (только
 // эффект): сухой широкополосный шум при mix < 1 сам задаёт центроид.
 func TestAutowahCentroidSwings(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncNoise(t, 0.3, 5, 5, chSR)
 	const rate, lo, hi = 2.0, 400.0, 2200.0

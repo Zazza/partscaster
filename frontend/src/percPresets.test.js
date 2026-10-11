@@ -35,15 +35,13 @@ describe('fxPresets: готовые перкуссии (ТК60)', () => {
     expect(percs.map((p) => p.name.ru).sort()).toEqual(Object.keys(WANT).sort())
   })
 
-  it.each(percs.map((p) => [p.id, p]))('%s: pattern из пяти и swing 0…0,5', (_, p) => {
-    expect(PATTERNS).toContain(p.pattern)
-    expect(typeof p.swing).toBe('number')
-    expect(p.swing).toBeGreaterThanOrEqual(0)
-    expect(p.swing).toBeLessThanOrEqual(0.5)
-  })
-
-  it.each(percs.map((p) => [p.id, p]))('%s: цепочка начинается с perc', (_, p) => {
-    expect(p.chain[0].type).toBe('perc')
+  it('у каждой: pattern из пяти, swing 0…0,5, цепочка начинается с perc (сообщение — нарушители)', () => {
+    const bad = percs.flatMap((p) => [
+      ...(PATTERNS.includes(p.pattern) ? [] : [`${p.id}: pattern ${p.pattern}`]),
+      ...(typeof p.swing === 'number' && p.swing >= 0 && p.swing <= 0.5 ? [] : [`${p.id}: swing ${p.swing}`]),
+      ...(p.chain[0]?.type === 'perc' ? [] : [`${p.id}: первый блок ${p.chain[0]?.type}`]),
+    ])
+    expect(bad).toEqual([])
   })
 
   it.each(Object.entries(WANT))('%s: звук и рисунок по названию', (name, [sound, pattern]) => {

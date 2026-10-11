@@ -46,6 +46,7 @@ func onlyUpload(t *testing.T, fake *fakeService) (string, []float32) {
 // загружен к job_id и стал версией-треком с этим файлом, своим title и voice_src
 // базы; в ответе — номер версии (#77 у fakeService) и длина 3+3 − 0.7 = 5.3 → 0:05.
 func TestSpliceToolBuildsVersion(t *testing.T) {
+	t.Parallel()
 	s, fake := spliceServer(t)
 	out, ok := call(t, s, "splice", jsonArgs(t, `{"job_id":258,"crossfade":0.7,"title":"с проигрышем",
 		"parts":[{"job_id":258,"from":0,"to":3},{"job_id":243,"from":0,"to":3,"gain_db":6}]}`))
@@ -81,6 +82,7 @@ func TestSpliceToolBuildsVersion(t *testing.T) {
 // Без title — название по умолчанию (непустое); без crossfade — переход 0.05:
 // 3 + 3 − 0.05 = 5.95.
 func TestSpliceToolDefaults(t *testing.T) {
+	t.Parallel()
 	s, fake := spliceServer(t)
 	out, ok := call(t, s, "splice", jsonArgs(t, `{"job_id":258,
 		"parts":[{"job_id":258,"from":0,"to":3},{"job_id":258,"from":3,"to":0}]}`))
@@ -99,6 +101,7 @@ func TestSpliceToolDefaults(t *testing.T) {
 // Ошибки: parts пустой / не массив / кусок to ≤ from / нет аудио у джобы — ошибка,
 // ничего не загружено и версия не создана.
 func TestSpliceToolErrorsWithoutUpload(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ name, args string }{
 		{"parts пустой", `{"job_id":258,"parts":[]}`},
 		{"parts нет", `{"job_id":258}`},

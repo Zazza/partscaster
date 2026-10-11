@@ -14,25 +14,9 @@ import (
 // Воркер — fakeService (server_test.go); звук — синтетика ffmpeg (fxLavfi/fxDecode/fxTone
 // из stem_fx_test.go).
 
-// Инструмент зарегистрирован, в схеме аргументов есть job_id, points, stem.
-func TestVolumeEnvelopeToolRegistered(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool, ok := s.tools["volume_envelope"]
-	s.mu.RUnlock()
-	if !ok || tool.Name == "" {
-		t.Fatal("инструмент volume_envelope не зарегистрирован")
-	}
-	props, _ := tool.InputSchema["properties"].(map[string]any)
-	for _, p := range []string{"job_id", "points", "stem"} {
-		if _, ok := props[p]; !ok {
-			t.Errorf("в схеме нет свойства %q: %v", p, tool.InputSchema)
-		}
-	}
-}
-
 // Без points или с пустым массивом — ошибка, ничего не загружено.
 func TestVolumeEnvelopeToolWithoutPointsIsError(t *testing.T) {
+	t.Parallel()
 	for _, args := range []string{
 		`{"job_id":5}`,
 		`{"job_id":5,"points":[]}`,
@@ -52,6 +36,7 @@ func TestVolumeEnvelopeToolWithoutPointsIsError(t *testing.T) {
 
 // Неизвестная дорожка — ошибка, ничего не загружено.
 func TestVolumeEnvelopeToolUnknownStemIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}
 	out, ok := call(t, s, "volume_envelope", jsonArgs(t, `{"job_id":5,"stem":"piano","points":[{"t":1,"db":-6}]}`))
@@ -73,6 +58,7 @@ func needFF(t *testing.T) {
 // Весь трек (stem не задан): загружен вариант dsp-envelope.flac, ответ — JSON варианта
 // с его файлом; громкость по точкам: до 1 с исходная, после 3 с −12 дБ.
 func TestVolumeEnvelopeToolWholeTrack(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}
@@ -100,6 +86,7 @@ func TestVolumeEnvelopeToolWholeTrack(t *testing.T) {
 // stem vocals: через пересборку меняется только голос (3000 Гц), остальное (500 Гц) цело;
 // загружен один вариант.
 func TestVolumeEnvelopeToolStem(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}

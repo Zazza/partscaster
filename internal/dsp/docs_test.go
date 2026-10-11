@@ -14,6 +14,7 @@ const effectsDoc = "../../docs/effects.md"
 // Новая цепочка без описания в docs/effects.md — тест падает: справочник не
 // отстаёт от кода. Число цепочек в тексте («Всего N цепочки») — тоже.
 func TestEffectsDocListsEveryChain(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile(effectsDoc)
 	if err != nil {
 		t.Fatalf("справочник эффектов: %v", err)

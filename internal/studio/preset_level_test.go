@@ -122,6 +122,7 @@ func lvPreset(id int64, specs ...yue.PresetSpec) yue.SoundPreset {
 
 // ТК101: bass level_db −10 → Db = −10 − (−30 − сумма основных) = +4,91 ±0,05.
 func TestPresetLevelDbBass(t *testing.T) {
+	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
 	got := lvApplied(t, f, orig, lvPreset(31, yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(-10)}), 200)
 	want := -10 - (-30 - lvSum)
@@ -136,6 +137,7 @@ func TestPresetLevelDbBass(t *testing.T) {
 
 // ТК101: Db записи задан — поправка складывается с ним: −2 + 4,91.
 func TestPresetLevelDbAddsToRecordDb(t *testing.T) {
+	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
 	got := lvApplied(t, f, orig, lvPreset(32, yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(-10), Db: -2}), 200)
 	want := -2 + (-10 - (-30 - lvSum))
@@ -146,10 +148,12 @@ func TestPresetLevelDbAddsToRecordDb(t *testing.T) {
 
 // ТК101: поправка не больше ±12 дБ: level_db +6 → +12, level_db −40 → −12.
 func TestPresetLevelDbClamp(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		level, want float64
 	}{{6, 12}, {-40, -12}} {
 		t.Run(fmt.Sprintf("level_db %+g", c.level), func(t *testing.T) {
+			t.Parallel()
 			f, orig := lvSetup(t, lvMain())
 			got := lvApplied(t, f, orig, lvPreset(33, yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(c.level)}), 200)
 			if math.Abs(got-c.want) > 0.05 {
@@ -161,6 +165,7 @@ func TestPresetLevelDbClamp(t *testing.T) {
 
 // ТК101: у дорожки нет замера → Db как в записи, без ошибки.
 func TestPresetLevelDbNoStemMetric(t *testing.T) {
+	t.Parallel()
 	m := lvMain()
 	delete(m, "bass")
 	f, orig := lvSetup(t, m)
@@ -172,6 +177,7 @@ func TestPresetLevelDbNoStemMetric(t *testing.T) {
 
 // Условие 67: нет замера ни у одной основной дорожки → Db как в записи, без ошибки.
 func TestPresetLevelDbNoMainMetrics(t *testing.T) {
+	t.Parallel()
 	f, orig := lvSetup(t, map[string]float64{"hh": -40})
 	got := lvApplied(t, f, orig, lvPreset(35, yue.PresetSpec{Stems: []string{"hh"}, LevelDb: lvF(-28)}), 5000)
 	if math.Abs(got) > 0.05 {
@@ -181,6 +187,7 @@ func TestPresetLevelDbNoMainMetrics(t *testing.T) {
 
 // ТК101: часть барабанов hh (замер −40) — та же сумма основных: level_db −28 → Db = −28 − (−40 − сумма) = −3,09.
 func TestPresetLevelDbDrumPart(t *testing.T) {
+	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
 	got := lvApplied(t, f, orig, lvPreset(36, yue.PresetSpec{Stems: []string{"hh"}, LevelDb: lvF(-28)}), 5000)
 	want := -28 - (-40 - lvSum)
@@ -191,6 +198,7 @@ func TestPresetLevelDbDrumPart(t *testing.T) {
 
 // Условие 69: поле level_db в JSON записи пресета (воркер ↔ приложение).
 func TestPresetSpecLevelDbJSON(t *testing.T) {
+	t.Parallel()
 	b, err := json.Marshal(yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(-8)})
 	if err != nil {
 		t.Fatal(err)

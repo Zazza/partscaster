@@ -265,6 +265,7 @@ func psTrackTitle(p yue.SoundPreset) string { return psTitle + " · " + p.Name }
 // исходном звуке), вариант dsp-preset-<id>.flac с подписью-именем пресета,
 // версия-трек из него с названием «<трек> · <пресет>»; ChildID — id версии.
 func TestApplySoundPresetSpecsAndFinal(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	p := psPreset(5, []yue.PresetSpec{
 		{Stems: []string{"bass"}, Engine: psAmpEngine()},
@@ -347,6 +348,7 @@ func TestApplySoundPresetSpecsAndFinal(t *testing.T) {
 // ТК19: нет kick (часть барабанов) → MakeStemsWith(id, "roformer"), после
 // разделения kick есть → применение продолжается.
 func TestApplySoundPresetSplitsRoformerForDrumParts(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	f.afterRoformer = map[string]string{"stem-kick.flac": psStemFile(t, "kick", "0.5*lt(mod(t\\,0.5)\\,0.02)")}
 	p := psPreset(6, []yue.PresetSpec{{Stems: []string{"kick"},
@@ -364,6 +366,7 @@ func TestApplySoundPresetSplitsRoformerForDrumParts(t *testing.T) {
 
 // ТК19: нет только guitar (не часть барабанов) → MakeStems (разделение по настройке, не roformer).
 func TestApplySoundPresetSplitsDefaultForGuitar(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	f.afterDefault = map[string]string{"stem-guitar.flac": psStemFile(t, "guitar", "0.2*sin(2*PI*700*t)")}
 	f.afterRoformer = f.afterDefault
@@ -383,6 +386,7 @@ func TestApplySoundPresetSplitsDefaultForGuitar(t *testing.T) {
 // ТК19: после разделения kick и snare так и нет → ошибка с именами дорожек,
 // пересборки нет (ни движка, ни загрузок), версии нет.
 func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	p := psPreset(8, []yue.PresetSpec{
 		{Stems: []string{"kick"}, Engine: []map[string]any{{"type": "sampler", "kit": "osdk/kick"}}},
@@ -414,6 +418,7 @@ func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
 
 // ТК20: specs пусты → финал на исходном звуке трека, пересборки нет; вариант и версия из него.
 func TestApplySoundPresetFinalOnly(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	p := psPreset(9, nil, []yue.PresetStep{{Chain: "level", Params: map[string]float64{"gain": -6, "ceiling": -0.5}}})
 
@@ -449,6 +454,7 @@ func TestApplySoundPresetFinalOnly(t *testing.T) {
 // ТК20: final пуст → без варианта финала, версия прямо из файла пересборки.
 // Final из одних off — то же самое.
 func TestApplySoundPresetSpecsOnly(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		final []yue.PresetStep
@@ -460,6 +466,7 @@ func TestApplySoundPresetSpecsOnly(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := psSetup(t, nil)
 			p := psPreset(10, []yue.PresetSpec{psVocalCut()}, tc.final)
 
@@ -490,6 +497,7 @@ func TestApplySoundPresetSpecsOnly(t *testing.T) {
 // с тем же набором growlybass) → InstallFxKit("growlybass") ровно один раз, до
 // работы движка; osdk не ставится.
 func TestApplySoundPresetInstallsMissingKits(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, map[string]string{"kick": "0.5*lt(mod(t\\,0.5)\\,0.02)"})
 	f.kits = []any{map[string]any{"name": "osdk/kick", "samples": 3.0}}
 	p := psPreset(11, []yue.PresetSpec{
@@ -513,6 +521,7 @@ func TestApplySoundPresetInstallsMissingKits(t *testing.T) {
 
 // ТК20а: все наборы есть (в т.ч. kit_open) → InstallFxKit не вызывается.
 func TestApplySoundPresetKitsPresentNoInstall(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, map[string]string{"snare": "0.5*lt(mod(t\\,0.5)\\,0.02)"})
 	f.kits = append(f.kits, map[string]any{"name": "osdk/hh_open", "samples": 2.0})
 	p := psPreset(12, []yue.PresetSpec{
@@ -531,7 +540,9 @@ func TestApplySoundPresetKitsPresentNoInstall(t *testing.T) {
 // ---------- условие 3: ошибка шага — ошибка функции, ничего не удаляется ----------
 
 func TestApplySoundPresetStepErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("движок упал", func(t *testing.T) {
+		t.Parallel()
 		f := psSetup(t, nil)
 		f.err = errors.New("fx engine off")
 		p := psPreset(13, []yue.PresetSpec{{Stems: []string{"bass"}, Engine: psAmpEngine()}}, psFinal())
@@ -544,6 +555,7 @@ func TestApplySoundPresetStepErrors(t *testing.T) {
 		}
 	})
 	t.Run("версия не создалась", func(t *testing.T) {
+		t.Parallel()
 		f := psSetup(t, nil)
 		f.promoteErr = errors.New("promote refused")
 		p := psPreset(14, nil, psFinal())
@@ -647,8 +659,10 @@ func rnRunner(f *rnFake, err error) (*PresetRunner, *[]rnApply) {
 
 // ТК21: есть джоба queued или running → тик ничего не делает (видеокарта занята).
 func TestPresetRunnerBusyWorkerDoesNothing(t *testing.T) {
+	t.Parallel()
 	for _, busy := range []string{"queued", "running"} {
 		t.Run(busy, func(t *testing.T) {
+			t.Parallel()
 			f := &rnFake{
 				jobs: []yue.Job{
 					{ID: 1, Status: "done", SoundPresets: rnPending(10)},
@@ -668,6 +682,7 @@ func TestPresetRunnerBusyWorkerDoesNothing(t *testing.T) {
 // ТК21: очередь пуста → первая по id готовая джоба с pending-пресетом: захват
 // (running), Apply с пресетом из списка, state done с child_id. Один пресет за тик.
 func TestPresetRunnerAppliesFirstPending(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs: []yue.Job{
 			{ID: 7, Status: "done", SoundPresets: rnPending(30)},
@@ -707,6 +722,7 @@ func TestPresetRunnerAppliesFirstPending(t *testing.T) {
 
 // ТК21: ошибка Apply → state error с причиной; done не пишется.
 func TestPresetRunnerApplyErrorMarksError(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs:    []yue.Job{{ID: 4, Status: "done", SoundPresets: rnPending(10)}},
 		presets: rnPresets(10),
@@ -729,6 +745,7 @@ func TestPresetRunnerApplyErrorMarksError(t *testing.T) {
 
 // ТК21: пресета нет в списке (удалён) → захват, затем state error «пресет удалён»; Apply не зовётся.
 func TestPresetRunnerDeletedPreset(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs:    []yue.Job{{ID: 4, Status: "done", SoundPresets: rnPending(10)}},
 		presets: rnPresets(11),
@@ -750,6 +767,7 @@ func TestPresetRunnerDeletedPreset(t *testing.T) {
 
 // ТК21: захват ответил 409 (пресет уже взят) → Apply не зовётся, done/error не пишется.
 func TestPresetRunnerCaptureConflictSkips(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs:     []yue.Job{{ID: 4, Status: "done", SoundPresets: rnPending(10)}},
 		presets:  rnPresets(10),
@@ -770,6 +788,7 @@ func TestPresetRunnerCaptureConflictSkips(t *testing.T) {
 
 // ТК21: draft-джоба (и не done) пропускается, даже если её id меньше.
 func TestPresetRunnerSkipsDraft(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs: []yue.Job{
 			{ID: 1, Status: "done", Draft: true, SoundPresets: rnPending(10)},
@@ -793,6 +812,7 @@ func TestPresetRunnerSkipsDraft(t *testing.T) {
 
 // ТК21 / условие 4: ошибка списка джоб или пресетов — тик тихо выходит, без паники и без state.
 func TestPresetRunnerListErrorsAreQuiet(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		f    *rnFake
@@ -804,6 +824,7 @@ func TestPresetRunnerListErrorsAreQuiet(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			r, calls := rnRunner(tc.f, nil)
 			r.Tick(context.Background()) // паника уронит тест
 			if len(*calls) != 0 {
@@ -820,6 +841,7 @@ func TestPresetRunnerListErrorsAreQuiet(t *testing.T) {
 
 // ТК21: нечего применять (pending нет) → ничего.
 func TestPresetRunnerNothingPending(t *testing.T) {
+	t.Parallel()
 	f := &rnFake{
 		jobs: []yue.Job{
 			{ID: 1, Status: "done"},
@@ -836,6 +858,7 @@ func TestPresetRunnerNothingPending(t *testing.T) {
 
 // Кросс-ревью s1: эффект ffmpeg на части барабанов пересборка молча пропускала бы — ошибка до работы.
 func TestApplySoundPresetFfmpegOnDrumPartIsError(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, nil)
 	p := psPreset(11, []yue.PresetSpec{{Stems: []string{"kick"}, Chain: "eq", Params: map[string]float64{"low": -12}}}, nil)
 	_, err := ApplySoundPreset(context.Background(), f, psJobID, p)
@@ -877,7 +900,9 @@ func psDb(a, ref float64) float64 { return 20 * math.Log10(a/ref) }
 // ТК29: target nil — поведение прежнее: замеры не нужны (их нет — не ошибка), AnalyzeJob
 // не зовётся; финал пуст → без варианта финала, версия из пересборки.
 func TestApplySoundPresetNoTargetNeedsNoMetrics(t *testing.T) {
+	t.Parallel()
 	t.Run("финал пуст", func(t *testing.T) {
+		t.Parallel()
 		f := psSetup(t, nil)
 		p := psPreset(37, []yue.PresetSpec{psVocalCut()}, nil)
 		res := psApply(t, f, p)
@@ -893,6 +918,7 @@ func TestApplySoundPresetNoTargetNeedsNoMetrics(t *testing.T) {
 		}
 	})
 	t.Run("финал [width] без правок", func(t *testing.T) {
+		t.Parallel()
 		f := psSetup(t, nil)
 		p := psPreset(38, nil, psWidth())
 		res := psApply(t, f, p)
@@ -907,6 +933,7 @@ func TestApplySoundPresetNoTargetNeedsNoMetrics(t *testing.T) {
 
 // Кросс-ревью этапа 2: kit_mid/kit_low тамов — тоже наборы для автоустановки.
 func TestApplySoundPresetInstallsTomKits(t *testing.T) {
+	t.Parallel()
 	f := psSetup(t, map[string]string{"kick": "0.5*lt(mod(t\\,0.5)\\,0.02)"})
 	f.kits = []any{map[string]any{"name": "osdk/kick", "samples": 3.0}}
 	p := psPreset(13, []yue.PresetSpec{

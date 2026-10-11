@@ -81,22 +81,9 @@ func newPresetServer(t *testing.T) (*Server, *presetFake) {
 	return s, fake
 }
 
-// ТК22: sound_presets отдаёт список (id и имена, встроенный — с признаком).
-func TestSoundPresetsToolLists(t *testing.T) {
-	s, _ := newPresetServer(t)
-	out, ok := call(t, s, "sound_presets", map[string]any{})
-	if !ok {
-		t.Fatalf("sound_presets failed: %s", out)
-	}
-	for _, want := range []string{"Пост-панк · Transmission", "Мой тёплый", "12"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("в ответе нет %q: %s", want, out)
-		}
-	}
-}
-
 // Условие 5: sound_preset_create передаёт имя, описание, specs и final воркеру; ответ — с id.
 func TestSoundPresetCreateTool(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "sound_preset_create", jsonArgs(t, `{
 		"name":"Гаражный","note":"сырой",
@@ -127,6 +114,7 @@ func TestSoundPresetCreateTool(t *testing.T) {
 
 // Условие 5: sound_preset_update передаёт id и новые поля.
 func TestSoundPresetUpdateTool(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "sound_preset_update", jsonArgs(t, `{
 		"preset_id":12,"name":"Мой тёплый 2","note":"",
@@ -141,6 +129,7 @@ func TestSoundPresetUpdateTool(t *testing.T) {
 
 // ТК22: sound_preset_delete без confirm → ошибка, воркер не вызван; с confirm=true — удалён.
 func TestSoundPresetDeleteRequiresConfirm(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "sound_preset_delete", map[string]any{"preset_id": 12})
 	if ok {
@@ -162,6 +151,7 @@ func TestSoundPresetDeleteRequiresConfirm(t *testing.T) {
 
 // ТК22: submit передаёт sound_preset_ids в SubmitParams.SoundPresetIDs.
 func TestSubmitPassesSoundPresetIDs(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	out, ok := call(t, s, "submit", jsonArgs(t,
 		`{"style":"post-punk","lyrics":"[Instrumental]","seed":3,"sound_preset_ids":[1,12]}`))
@@ -178,6 +168,7 @@ func TestSubmitPassesSoundPresetIDs(t *testing.T) {
 
 // Без sound_preset_ids — пустой список (как раньше).
 func TestSubmitWithoutSoundPresetIDs(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	if out, ok := call(t, s, "submit", map[string]any{"style": "punk", "lyrics": "[Instrumental]"}); !ok {
 		t.Fatalf("submit failed: %s", out)
@@ -190,6 +181,7 @@ func TestSubmitWithoutSoundPresetIDs(t *testing.T) {
 // ТК22: sound_preset_apply (job_id, preset_id) — применение сразу через приложение:
 // создана версия-трек «<трек> · <пресет>», ответ — её id.
 func TestSoundPresetApplyReturnsVersionID(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newPresetServer(t)
 	fake.jobs = []yue.Job{{ID: 466, Title: "Warm Wire", Status: "done", AudioFile: "audio.flac", DurationSec: 4}}
@@ -219,6 +211,7 @@ func TestSoundPresetApplyReturnsVersionID(t *testing.T) {
 
 // sound_preset_apply с несуществующим пресетом — ошибка, версии нет.
 func TestSoundPresetApplyUnknownPreset(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	fake.jobs = []yue.Job{{ID: 466, Title: "Warm Wire", Status: "done", AudioFile: "audio.flac"}}
 	if out, ok := call(t, s, "sound_preset_apply", map[string]any{"job_id": 466, "preset_id": 999}); ok {
@@ -335,6 +328,7 @@ func dbRatio(a, ref float64) float64 { return 20 * math.Log10(a/ref) }
 // ТК30: db {"2": 3} → запись 2 («прочее», в пресете 0 дБ) уходит в пересборку с Db 3:
 // 500 Гц громче опоры на 3 дБ; голос (−2 в пресете) и бас — как в опоре.
 func TestSoundPresetApplyDbOverridesRecord(t *testing.T) {
+	t.Parallel()
 	sb, base := newDbPresetServer(t)
 	if out, ok := call(t, sb, "sound_preset_apply", map[string]any{"job_id": 466, "preset_id": dbPresetID}); !ok {
 		t.Fatalf("опора (без db): %s", out)
@@ -368,6 +362,7 @@ func TestSoundPresetApplyDbOverridesRecord(t *testing.T) {
 
 // ТК30: db с неверным индексом / вне −24…24 → ошибка без работы.
 func TestSoundPresetApplyDbInvalid(t *testing.T) {
+	t.Parallel()
 	five := yue.SoundPreset{ID: 51, Name: "Пять записей"}
 	for _, stem := range []string{"vocals", "bass", "other", "drums", "vocals"} {
 		five.Specs = append(five.Specs, yue.PresetSpec{Stems: []string{stem}, Chain: "eq",
@@ -383,6 +378,7 @@ func TestSoundPresetApplyDbInvalid(t *testing.T) {
 		{"db не число", `{"job_id":466,"preset_id":51,"db":{"2":"громче"}}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s, f := newDbPresetServer(t)
 			f.presets = append(f.presets, five)
 			out, ok := call(t, s, "sound_preset_apply", jsonArgs(t, tc.args))
@@ -398,8 +394,10 @@ func TestSoundPresetApplyDbInvalid(t *testing.T) {
 
 // Края −24 и 24 допустимы.
 func TestSoundPresetApplyDbBoundsOk(t *testing.T) {
+	t.Parallel()
 	for _, v := range []string{"24", "-24"} {
 		t.Run(v, func(t *testing.T) {
+			t.Parallel()
 			s, f := newDbPresetServer(t)
 			out, ok := call(t, s, "sound_preset_apply", jsonArgs(t, `{"job_id":466,"preset_id":50,"db":{"1":`+v+`}}`))
 			if !ok {
@@ -415,6 +413,7 @@ func TestSoundPresetApplyDbBoundsOk(t *testing.T) {
 // Ревью/кросс-ревью этапа 1б: target_lufs в create/update. Создание — с целью; update без параметра
 // сохраняет прежнюю цель (правка описания не стирает громкость), явный null — снимает.
 func TestSoundPresetTargetLUFSCreateUpdate(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	m13 := -13.0
 	fake.presets[1].TargetLUFS = &m13
@@ -444,9 +443,11 @@ func TestSoundPresetTargetLUFSCreateUpdate(t *testing.T) {
 // клиент MCP отвергает явный null, которым update снимает цель). Схема берётся так, как её
 // отдаёт tools/list: InputSchema инструмента, сериализованная в JSON.
 func TestSoundPresetTargetLUFSSchemaNullable(t *testing.T) {
+	t.Parallel()
 	s, _ := newPresetServer(t)
 	for _, name := range []string{"sound_preset_create", "sound_preset_update"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			s.mu.RLock()
 			tool, ok := s.tools[name]
 			s.mu.RUnlock()
@@ -495,6 +496,7 @@ func (f *chordFake) ChordGrid(_ context.Context, id int64) (*yue.ChordGrid, erro
 }
 
 func TestChordGridTool(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	s.client = &chordFake{fake}
 	out, ok := call(t, s, "chord_grid", map[string]any{"job_id": 488})

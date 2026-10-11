@@ -2,6 +2,9 @@
 // порядке звука. Чистые функции — вход не меняют, возвращают новую доску;
 // покрываются vitest.
 
+// дорожки, на которые ставится доска: drums — активная дорожка «барабаны» (и их части), '' — весь трек
+export const PEDAL_STEMS = ['guitar', 'other', 'piano', 'vocals', 'bass', 'drums', '']
+
 // addPedal — педаль в конец доски с крутилками по умолчанию.
 export function addPedal(board, chainId, defaults) {
   return [...(board || []), { chain: chainId, params: { ...(defaults || {}) }, off: false }]

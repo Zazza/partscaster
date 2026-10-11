@@ -11,6 +11,7 @@ import (
 // запроса (без id/slug/builtin) и 409 захвата статуса как *StatusError.
 
 func TestSoundPresetUpdateSendsPutWithoutIdentity(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, http.StatusOK, `{"id":7,"name":"Мой"}`, &got)
 	p := SoundPreset{ID: 99, Slug: "x", Builtin: true, Name: "Мой", Final: []PresetStep{{Chain: "level"}}}
@@ -32,6 +33,7 @@ func TestSoundPresetUpdateSendsPutWithoutIdentity(t *testing.T) {
 }
 
 func TestSoundPresetStateConflictIsStatusError(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, http.StatusConflict, `{"detail":"running → running нельзя"}`, &got)
 	_, err := c.SoundPresetState(context.Background(), 5, 2, JobPreset{Status: "running"})

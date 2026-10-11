@@ -53,6 +53,7 @@ func assertRamp440(t *testing.T, out []float32) {
 // Кейс карточки: stem "" — загружен ровно один файл dsp-envelope.flac у той же джобы,
 // уровень меняется по огибающей; возвращён вариант.
 func TestVolumeEnvelopeWholeTrack(t *testing.T) {
+	t.Parallel()
 	f := envTrack(t)
 	v, err := VolumeEnvelope(context.Background(), f, parentID, "", rampPts)
 	if err != nil {
@@ -72,6 +73,7 @@ func TestVolumeEnvelopeWholeTrack(t *testing.T) {
 
 // Кейс карточки: импортированный трек — только audio.mp3 (audio.flac → 404) — тоже работает.
 func TestVolumeEnvelopeImportedMp3(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	flac := lavfi(t, aeval(expr440, 6), filepath.Join(dir, "src.flac"))
@@ -100,6 +102,7 @@ func TestVolumeEnvelopeImportedMp3(t *testing.T) {
 // Кейс карточки: stem vocals — через пересборку меняется только голос (3000 Гц) по
 // огибающей; тон другой дорожки (other, 500 Гц) в миксе не меняется (|Δ| ≤ 0.5 дБ).
 func TestVolumeEnvelopeStemOnlyThatStem(t *testing.T) {
+	t.Parallel()
 	f, _ := fxSetup(t)
 	v, err := VolumeEnvelope(context.Background(), f, parentID, "vocals", rampPts)
 	if err != nil {
@@ -130,6 +133,7 @@ func TestVolumeEnvelopeStemOnlyThatStem(t *testing.T) {
 
 // Кейс карточки: неизвестная дорожка — ошибка, ничего не загружено.
 func TestVolumeEnvelopeUnknownStemIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := fxSetup(t)
 	if _, err := VolumeEnvelope(context.Background(), f, parentID, "flute", rampPts); err == nil {
 		t.Fatal("stem flute: want ошибку, got nil")
@@ -141,6 +145,7 @@ func TestVolumeEnvelopeUnknownStemIsError(t *testing.T) {
 
 // Кейс карточки: пустые/невалидные точки — ошибка, ничего не загружено (и для трека, и для дорожки).
 func TestVolumeEnvelopeEmptyPointsIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := fxSetup(t)
 	cases := map[string][]dsp.EnvPoint{
 		"nil":            nil,
@@ -161,6 +166,7 @@ func TestVolumeEnvelopeEmptyPointsIsError(t *testing.T) {
 
 // Поле envelope спеки приходит из фронта/MCP по JSON.
 func TestSectionSpecEnvelopeJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	if err := json.Unmarshal([]byte(`{"child_id":0,"stems":["vocals"],"envelope":[{"t":1,"db":-3}]}`), &sp); err != nil {
 		t.Fatal(err)

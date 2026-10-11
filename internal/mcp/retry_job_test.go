@@ -31,6 +31,7 @@ func newRetryServer(t *testing.T) (*Server, *retryFake) {
 }
 
 func TestRetryJobCallsService(t *testing.T) {
+	t.Parallel()
 	s, fake := newRetryServer(t)
 	out, ok := call(t, s, "retry_job", map[string]any{"job_id": float64(321)})
 	if !ok {
@@ -45,6 +46,7 @@ func TestRetryJobCallsService(t *testing.T) {
 }
 
 func TestRetryJobBadIDIsError(t *testing.T) {
+	t.Parallel()
 	for _, args := range []map[string]any{
 		{},
 		{"job_id": float64(0)},
@@ -62,6 +64,7 @@ func TestRetryJobBadIDIsError(t *testing.T) {
 }
 
 func TestRetryJobServiceErrorIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newRetryServer(t)
 	fake.err = errors.New("409: задача не в ошибке")
 	out, ok := call(t, s, "retry_job", map[string]any{"job_id": float64(8)})

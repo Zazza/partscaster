@@ -78,6 +78,7 @@ func checkAlign(t *testing.T, got Alignment, wantOffset, offTol, wantRatio, rati
 }
 
 func TestAlignAudioPositiveOffset(t *testing.T) {
+	t.Parallel()
 	// партия вступает на 0.25 с позже: событие оригинала в 1.0 — в партии на 0.75
 	ev := irregularPattern(1, -3, 15)
 	ref := renderRef(ev, 12)
@@ -87,6 +88,7 @@ func TestAlignAudioPositiveOffset(t *testing.T) {
 }
 
 func TestAlignAudioRegularAccentedClickTrack(t *testing.T) {
+	t.Parallel()
 	// клик-трек 120 BPM (каждые 0.5 с), акцент на каждый 4-й клик; сдвиг 0.25 с
 	// меньше полупериода акцента (1 с), так что ответ однозначен
 	var ev []event
@@ -104,6 +106,7 @@ func TestAlignAudioRegularAccentedClickTrack(t *testing.T) {
 }
 
 func TestAlignAudioSlowerCandidate(t *testing.T) {
+	t.Parallel()
 	// партия сыграна на 3% медленнее (≈116.5 BPM против 120): ускорить в 1.03 раза
 	ev := irregularPattern(2, -3, 15)
 	ref := renderRef(ev, 12)
@@ -113,6 +116,7 @@ func TestAlignAudioSlowerCandidate(t *testing.T) {
 }
 
 func TestAlignAudioNegativeOffset(t *testing.T) {
+	t.Parallel()
 	// партия начинается раньше оригинала: событие партии в 0.5 — начало оригинала
 	ev := irregularPattern(3, -3, 15)
 	ref := renderRef(ev, 12)
@@ -122,6 +126,7 @@ func TestAlignAudioNegativeOffset(t *testing.T) {
 }
 
 func TestAlignAudioExpectedOffsetWindow(t *testing.T) {
+	t.Parallel()
 	// поиск вокруг ожидаемого сдвига в узком радиусе находит истинный сдвиг 1.0
 	ev := irregularPattern(4, -3, 15)
 	ref := renderRef(ev, 12)
@@ -131,6 +136,7 @@ func TestAlignAudioExpectedOffsetWindow(t *testing.T) {
 }
 
 func TestAlignAudioNoiseIsUnreliable(t *testing.T) {
+	t.Parallel()
 	// белый шум без атак — совпадения нет, выравнивание ненадёжно
 	ev := irregularPattern(5, -3, 15)
 	ref := renderRef(ev, 12)
@@ -149,6 +155,7 @@ func TestAlignAudioNoiseIsUnreliable(t *testing.T) {
 }
 
 func TestAlignAudioSilence(t *testing.T) {
+	t.Parallel()
 	// тишина: без паники, без NaN, темп не трогаем, выравнивание ненадёжно
 	ev := irregularPattern(6, -3, 15)
 	ref := renderRef(ev, 12)
@@ -166,6 +173,7 @@ func TestAlignAudioSilence(t *testing.T) {
 }
 
 func TestAlignAudioEmptyInputs(t *testing.T) {
+	t.Parallel()
 	// пустые входы — краевой случай: не паниковать и не выдавать надёжный результат
 	ref := renderRef(irregularPattern(7, 0, 12), 12)
 	for name, pair := range map[string][2][]float32{
@@ -181,6 +189,7 @@ func TestAlignAudioEmptyInputs(t *testing.T) {
 }
 
 func TestInsertGain(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name                string
 		ref, cand, db, want float64
@@ -200,6 +209,7 @@ func TestInsertGain(t *testing.T) {
 }
 
 func TestRMS(t *testing.T) {
+	t.Parallel()
 	if got := RMS(nil); got != 0 {
 		t.Errorf("RMS(nil) = %v, want 0", got)
 	}

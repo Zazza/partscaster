@@ -292,7 +292,7 @@ func installSteps(local, whisper, seedvc, roformer bool, need float64, hfHome, s
 	if local {
 		steps = append(steps, step{name: "скопировать файлы воркера", must: true, cmd: "test -f worker/yue_worker.py || " +
 			"{ echo 'запусти из корня репозитория Yue Studio'; exit 1; }; mkdir -p ~/yue-studio && " +
-			"cp worker/*.py worker/fx_blocks.json worker/fx_kit_files.json worker/requirements.txt worker/requirements-seedvc.txt worker/seedvc_install.sh ~/yue-studio/ && " +
+			"cp worker/*.py worker/*.json worker/requirements.txt worker/requirements-seedvc.txt worker/seedvc_install.sh ~/yue-studio/ && " +
 			"mkdir -p ~/yue-studio/phrases && cp worker/phrases/*.flac worker/phrases/README.md ~/yue-studio/phrases/"})
 	}
 	steps = append(steps,

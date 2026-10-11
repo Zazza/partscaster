@@ -113,16 +113,10 @@ it('replayRequest возвращает ровно {style, lyrics, gain, seed}', 
 // ---------- по исходнику ----------
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
-const STUDIO = read('./components/StudioPage.vue')
 const APP = read('./App.vue')
 const MODAL = read('./components/ReplayModal.vue')
 
 describe('исходник: овердаб ушёл из студии в действие трека', () => {
-  it('StudioPage.vue не содержит блока овердаба (submitOverdub, studio.overdub)', () => {
-    expect(STUDIO).not.toMatch(/submitOverdub/)
-    expect(STUDIO).not.toMatch(/studio\.overdub/)
-  })
-
   it('App.vue импортирует ReplayModal и показывает его', () => {
     expect(APP).toMatch(/import\s+ReplayModal\s+from\s+['"][^'"]*ReplayModal\.vue['"]/)
     const template = (APP.match(/<template>([\s\S]*)<\/template>/) || [])[1] || ''

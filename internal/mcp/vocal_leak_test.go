@@ -9,6 +9,7 @@ import (
 
 // jobs brief=true: vocal_leak виден у джоб, где он непустой, и отсутствует у остальных.
 func TestJobsToolBriefVocalLeak(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{
 		{ID: 1, Title: "leaky", Status: "done", Style: "instrumental", VocalLeak: "25.4, 61.2"},

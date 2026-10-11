@@ -221,18 +221,6 @@ describe('страница «Инструменты» по исходнику (�
   const here = dirname(fileURLToPath(import.meta.url))
   const src = readFileSync(join(here, 'components', 'InstrumentsPage.vue'), 'utf8')
 
-  it('нет выбора трека/дорожки и секунд', () => {
-    expect(src).not.toMatch(/\bjobId\b/)
-    expect(src).not.toMatch(/['"]instr\.start['"]/)
-    expect(src).not.toMatch(/['"]instr\.len['"]/)
-  })
-
-  it('нет «→ в треки», «→ в студию», «было/стало»', () => {
-    expect(src).not.toMatch(/\btoTrack\b/)
-    expect(src).not.toMatch(/\btoStudio\b/)
-    expect(src).not.toMatch(/\bplayBefore\b/)
-  })
-
   it('расчёт фразы и игра по кругу — через api.fxPhrase и api.playLoop', () => {
     expect(src).toMatch(/api\.fxPhrase\s*\(/)
     expect(src).toMatch(/api\.playLoop\s*\(/)

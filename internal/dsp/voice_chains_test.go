@@ -17,6 +17,7 @@ func voiceTone(hz float64) string { return fmt.Sprintf("0.3*sin(2*PI*%.0f*t)", h
 // Карточка: голосовые цепочки доступны по ID, помечены Voice, у каждой есть
 // крутилка mix «сухой/обработанный» с дефолтом 1; старые цепочки — не голосовые.
 func TestVoiceChainsMarked(t *testing.T) {
+	t.Parallel()
 	for _, id := range []string{"megaphone", "phone", "voice-drive", "slapback"} {
 		c := ByID(id)
 		if c == nil {
@@ -46,6 +47,7 @@ func TestVoiceChainsMarked(t *testing.T) {
 // Карточка: мегафон — узкая полоса: тон ниже 300 Гц и выше 4 кГц гасится
 // ≥ 12 дБ (каскады по два фильтра), тон в середине полосы остаётся.
 func TestMegaphoneBand(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	for _, hz := range []float64{200, 6000} {
 		in, src := genIn(t, voiceTone(hz), 3)
@@ -64,6 +66,7 @@ func TestMegaphoneBand(t *testing.T) {
 // Карточка: телефон — полоса ещё уже и суше: 200 Гц и 6 кГц гасятся ≥ 12 дБ,
 // тон в полосе остаётся.
 func TestPhoneBand(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	for _, hz := range []float64{200, 6000} {
 		in, src := genIn(t, voiceTone(hz), 3)
@@ -82,6 +85,7 @@ func TestPhoneBand(t *testing.T) {
 // Карточка: слэпбэк 100 мс — щелчок и одиночный повтор через 100 ± 5 мс
 // громкостью echo; после повтора тишина (второго повтора нет).
 func TestSlapbackEchoTiming(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, _ := genIn(t, "if(gte(t,1)*lt(t,1.01),1,0)", 2.5)
 	out := runChain(t, "slapback", in, map[string]float64{"delay": 100, "echo": 0.45})
@@ -111,6 +115,7 @@ func TestSlapbackEchoTiming(t *testing.T) {
 // Карточка: mix=0 — сухой сигнал: эффект (включая шум и эхо внутри графа)
 // выключен, выход совпадает со входом.
 func TestVoiceMixZeroIsDry(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	for _, id := range []string{"megaphone", "phone", "voice-drive", "slapback"} {
 		in, src := genIn(t, voiceTone(1000), 3)
@@ -125,6 +130,7 @@ func TestVoiceMixZeroIsDry(t *testing.T) {
 // середина, срезанный низ, верх НЕ раздут (прежняя цепочка поднимала >4 кГц
 // на +15 дБ и звучала шипящим песком), голос уплотнён (пики над средним ниже).
 func TestVoiceDriveLikeReference(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	// «голос»: гармоники 150 Гц до 3 кГц со спадом, амплитуда как у живого стема
 	expr := "0"

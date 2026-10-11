@@ -52,6 +52,7 @@ func addSpec(stems []string, add bool) SectionSpec {
 
 // ТК49: Add с Engine на mix → один ApplyFx у родителя: source mix, output solo, preview, pad.
 func TestRebuildSectionsAddMixRequest(t *testing.T) {
+	t.Parallel()
 	f, _ := addSetup(t)
 	engRun(t, f, addSpec([]string{"mix"}, true))
 	if len(f.calls) != 1 {
@@ -90,6 +91,7 @@ func TestRebuildSectionsAddMixRequest(t *testing.T) {
 
 // ТК49: в графе пересборки только +кусок — тоны трека в окне на месте, кусок звучит поверх.
 func TestRebuildSectionsAddMixOnlyPlusChunk(t *testing.T) {
+	t.Parallel()
 	f, base := addSetup(t)
 	out := engRun(t, f, addSpec([]string{"mix"}, true))
 	if d := float64(len(out)) / sr; !near(d, engDur, 0.05) {
@@ -116,6 +118,7 @@ func TestRebuildSectionsAddMixOnlyPlusChunk(t *testing.T) {
 
 // ТК49: mix без Add → ошибка пересборки, к воркеру не ходили, ничего не загружено.
 func TestRebuildSectionsMixWithoutAddFails(t *testing.T) {
+	t.Parallel()
 	f, _ := addSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{addSpec([]string{"mix"}, false)})
 	if err == nil {
@@ -134,6 +137,7 @@ func TestRebuildSectionsMixWithoutAddFails(t *testing.T) {
 
 // ТК49: Add на дорожке bass → ApplyFx(source bass), +кусок, исходный bass НЕ вычтен.
 func TestRebuildSectionsAddOnBassNoSubtract(t *testing.T) {
+	t.Parallel()
 	f, _ := addSetup(t)
 	out := engRun(t, f, addSpec([]string{"bass"}, true))
 	if len(f.calls) != 1 || f.calls[0].req.Source != "bass" {
@@ -150,6 +154,7 @@ func TestRebuildSectionsAddOnBassNoSubtract(t *testing.T) {
 // Контроль: та же запись на bass без Add — по-прежнему замена (−bass): тест выше
 // отличает add от обычной записи движка.
 func TestRebuildSectionsBassWithoutAddSubtracts(t *testing.T) {
+	t.Parallel()
 	f, _ := addSetup(t)
 	out := engRun(t, f, addSpec([]string{"bass"}, false))
 	if a := toneAmp(out, 200, 2.5, 5.5); a > 0.01 {
@@ -159,6 +164,7 @@ func TestRebuildSectionsBassWithoutAddSubtracts(t *testing.T) {
 
 // Поле add приходит из фронта/MCP по JSON; без add в JSON его нет (omitempty).
 func TestSectionSpecAddJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	if err := json.Unmarshal([]byte(`{"child_id":0,"from":2,"to":6,"stems":["mix"],
 		"engine":[{"type":"synth"}],"add":true}`), &sp); err != nil {

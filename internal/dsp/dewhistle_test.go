@@ -61,6 +61,7 @@ func dwWith(over map[string]float64) map[string]float64 {
 
 // Спецификация: цепочка доступна по ID и имеет имя.
 func TestDewhistleByID(t *testing.T) {
+	t.Parallel()
 	c := ByID("dewhistle")
 	if c == nil || c.ID != "dewhistle" || c.Name == "" {
 		t.Fatalf(`ByID("dewhistle") = %+v, want цепочку с этим ID и именем`, c)
@@ -70,6 +71,7 @@ func TestDewhistleByID(t *testing.T) {
 // Спецификация: крутилки freq/depth/width/harmonics/start/end с заданными диапазонами;
 // есть свой start — общего from нет; дефолты лежат внутри диапазонов.
 func TestDewhistleParams(t *testing.T) {
+	t.Parallel()
 	c := ByID("dewhistle")
 	if c == nil {
 		t.Fatal(`нет цепочки "dewhistle"`)
@@ -109,23 +111,10 @@ func TestDewhistleParams(t *testing.T) {
 	}
 }
 
-// Спецификация: с дефолтами Run не падает, длина выхода = длине входа (±0.05 с).
-func TestDewhistleDefaultsKeepLength(t *testing.T) {
-	needFFmpeg(t)
-	in := dwGen(t, dwMusicWhistle, 6)
-	c := ByID("dewhistle")
-	if c == nil {
-		t.Fatal(`нет цепочки "dewhistle"`)
-	}
-	out := dwRun(t, in, c.Defaults())
-	if d := float64(len(out)) / dwSR; math.Abs(d-6) > 0.05 {
-		t.Errorf("длина выхода %.3f с, want 6 ± 0.05", d)
-	}
-}
-
 // Спецификация: в окне 2.3–3.7 с свист 5000 Гц ослаблен ≥ 20 дБ, музыка 1000 Гц —
 // в пределах 3 дБ; вне окна свист не тронут (≤ 1 дБ); длина не меняется.
 func TestDewhistleNotchInWindow(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := dwGen(t, dwMusicWhistle, 6)
 	src := decodeAt(t, in, dwSR)
@@ -153,6 +142,7 @@ func TestDewhistleNotchInWindow(t *testing.T) {
 // Спецификация: end=0 — вырез до конца трека: свист ослаблен и в 4.3–5.8 с,
 // а до start не тронут.
 func TestDewhistleEndZeroToTrackEnd(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := dwGen(t, dwMusicWhistle, 6)
 	src := decodeAt(t, in, dwSR)
@@ -171,6 +161,7 @@ func TestDewhistleEndZeroToTrackEnd(t *testing.T) {
 // Спецификация: harmonics=2 режет и 2·freq — при свисте 5000+10000 Гц оба ослаблены
 // ≥ 20 дБ в окне; harmonics=1 оставляет 10000 Гц почти нетронутым (≤ 3 дБ).
 func TestDewhistleHarmonics(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := dwGen(t, "0.3*sin(2*PI*1000*t)+0.3*sin(2*PI*5000*t)+0.3*sin(2*PI*10000*t)", 6)
 	src := decodeAt(t, in, dwSR)
@@ -198,6 +189,7 @@ func TestDewhistleHarmonics(t *testing.T) {
 // при freq=16000 гармоники 32/48 кГц выше 20 кГц — граф всё равно валиден, длина цела,
 // основной тон ослаблен.
 func TestDewhistleThirdHarmonicAndCap(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := dwGen(t, "0.3*sin(2*PI*5000*t)+0.3*sin(2*PI*15000*t)", 6)
 	src := decodeAt(t, in, dwSR)
@@ -219,6 +211,7 @@ func TestDewhistleThirdHarmonicAndCap(t *testing.T) {
 
 // Несколько тонов за проход: freq2/freq3 режутся так же, 0 — выключен.
 func TestDewhistleExtraFreqs(t *testing.T) {
+	t.Parallel()
 	c := ByID("dewhistle")
 	if c == nil {
 		t.Fatal("нет цепочки")

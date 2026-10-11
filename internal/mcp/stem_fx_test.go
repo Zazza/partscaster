@@ -24,6 +24,7 @@ import (
 // ---------- parseSectionSpecs: chain / params ----------
 
 func TestParseSectionSpecsChainParams(t *testing.T) {
+	t.Parallel()
 	var raw any
 	if err := json.Unmarshal([]byte(`[
 		{"from":176,"to":0,"stems":["vocals"],"chain":"dewhistle","params":{"freq":2638,"freq2":3628,"depth":15}},
@@ -56,6 +57,7 @@ func TestParseSectionSpecsChainParams(t *testing.T) {
 // ---------- find_tones: stem ----------
 
 func TestFindTonesPassesStem(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.tonesOut = []yue.Tone{{Hz: 2638, ProminenceDb: 18}}
 	out, ok := call(t, s, "find_tones", jsonArgs(t, `{"job_id":254,"from":176,"to":0,"stem":"vocals"}`))
@@ -72,6 +74,7 @@ func TestFindTonesPassesStem(t *testing.T) {
 
 // Без stem — микс, как раньше: клиенту уходит пустой stem.
 func TestFindTonesWithoutStemIsMix(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "find_tones", jsonArgs(t, `{"job_id":3,"from":1,"to":5}`))
 	if !ok {
@@ -86,6 +89,7 @@ func TestFindTonesWithoutStemIsMix(t *testing.T) {
 
 // С stem неизвестная цепочка — ошибка, ничего не загружено.
 func TestDspApplyStemUnknownChainIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}
 	out, ok := call(t, s, "dsp_apply", jsonArgs(t, `{"job_id":5,"chain":"no-such-chain","stem":"vocals","from":2,"to":4}`))
@@ -154,6 +158,7 @@ func fxTone(s []float32, hz, from, to float64) float64 {
 // ослаблен ≥ 15 дБ, 500 цел; вне окна 3000 на месте (вырез на весь трек срезал бы
 // его везде). Результат — новый вариант у той же джобы.
 func TestDspApplyStemWindowGoesThroughRebuild(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg not installed")
 	}
@@ -195,6 +200,7 @@ func TestDspApplyStemWindowGoesThroughRebuild(t *testing.T) {
 // Голосовая цепочка (мегафон) на vocals: тон ниже полосы срезан ≥ 12 дБ, тон
 // в полосе выровнен по исходному (RMS), остальное не тронуто; db принимается.
 func TestDspApplyVoiceChainOnVocals(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg not installed")
 	}

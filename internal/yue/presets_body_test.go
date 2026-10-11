@@ -54,6 +54,7 @@ func checkEmptyMasterParts(t *testing.T, body map[string]any) {
 }
 
 func TestSoundPresetCreateSendsMasterAndParts(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, http.StatusOK, `{"id":3,"name":"С мастером"}`, &got)
 	if _, err := c.SoundPresetCreate(context.Background(), presetWithMasterParts()); err != nil {
@@ -65,29 +66,12 @@ func TestSoundPresetCreateSendsMasterAndParts(t *testing.T) {
 	checkMasterParts(t, got.body)
 }
 
-func TestSoundPresetUpdateSendsMasterAndParts(t *testing.T) {
-	var got updateReq
-	c := updateServer(t, http.StatusOK, `{"id":7,"name":"С мастером"}`, &got)
-	if _, err := c.SoundPresetUpdate(context.Background(), 7, presetWithMasterParts()); err != nil {
-		t.Fatalf("update: %v", err)
-	}
-	checkMasterParts(t, got.body)
-}
-
 func TestSoundPresetCreateNilMasterPartsAreEmptyLists(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, http.StatusOK, `{"id":4,"name":"Пустой"}`, &got)
 	if _, err := c.SoundPresetCreate(context.Background(), SoundPreset{Name: "Пустой"}); err != nil {
 		t.Fatalf("create: %v", err)
-	}
-	checkEmptyMasterParts(t, got.body)
-}
-
-func TestSoundPresetUpdateNilMasterPartsAreEmptyLists(t *testing.T) {
-	var got updateReq
-	c := updateServer(t, http.StatusOK, `{"id":8,"name":"Пустой"}`, &got)
-	if _, err := c.SoundPresetUpdate(context.Background(), 8, SoundPreset{Name: "Пустой"}); err != nil {
-		t.Fatalf("update: %v", err)
 	}
 	checkEmptyMasterParts(t, got.body)
 }

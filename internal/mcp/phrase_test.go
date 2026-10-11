@@ -43,22 +43,9 @@ func newPhraseServer(t *testing.T) (*Server, *phraseFake) {
 	return s, fake
 }
 
-// ТК135: инструмент fx_phrase в списке инструментов.
-func TestFxPhraseToolRegistered(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool, ok := s.tools["fx_phrase"]
-	s.mu.RUnlock()
-	if !ok || tool.Name == "" {
-		t.Fatal("инструмент fx_phrase не зарегистрирован")
-	}
-	if strings.TrimSpace(tool.Description) == "" {
-		t.Error("у fx_phrase нет описания")
-	}
-}
-
 // Без фразы — список фраз воркера (id видны в выводе).
 func TestFxPhraseToolListsPhrases(t *testing.T) {
+	t.Parallel()
 	s, fake := newPhraseServer(t)
 	out, ok := call(t, s, "fx_phrase", map[string]any{})
 	if !ok {
@@ -76,6 +63,7 @@ func TestFxPhraseToolListsPhrases(t *testing.T) {
 
 // С фразой и цепочкой — расчёт: запрос доходит до воркера, в выводе file и cycle_sec.
 func TestFxPhraseToolRenders(t *testing.T) {
+	t.Parallel()
 	s, fake := newPhraseServer(t)
 	chain := `[{"type":"delay","time_ms":300,"feedback":0.5}]`
 	out, ok := call(t, s, "fx_phrase", jsonArgs(t,

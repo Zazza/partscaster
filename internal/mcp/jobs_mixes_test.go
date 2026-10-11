@@ -10,6 +10,7 @@ import (
 // jobs brief=true: число миксов (mixes) видно у трека с миксами,
 // у трека без миксов поле отсутствует.
 func TestJobsToolBriefMixes(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{
 		{ID: 1, Title: "с миксами", Status: "done", Mixes: 2},

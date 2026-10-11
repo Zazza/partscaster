@@ -149,6 +149,7 @@ func plTone(t *testing.T, what string, s []float32, hz, from, to, want, ref floa
 // ТК68 / усл. 40б: запись «место» other pan 1 без других правок — гитары только справа:
 // левый = база − other (500 Гц слева нет), правый = база + (√2 − 1)·other; голос не тронут.
 func TestRebuildSectionsPlaceOnlyRight(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	l, r := plRun(t, f, plPlace("other", 1, 1))
 	if d := float64(len(l)) / sr; math.Abs(d-plDur) > 0.05 {
@@ -162,6 +163,7 @@ func TestRebuildSectionsPlaceOnlyRight(t *testing.T) {
 
 // Усл. 40б: Db у записи «место» не применяется — результат тот же, что при Db 0.
 func TestRebuildSectionsPlaceIgnoresDb(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	sp := plPlace("other", 1, 1)
 	sp.Db = -6
@@ -174,12 +176,14 @@ func TestRebuildSectionsPlaceIgnoresDb(t *testing.T) {
 // M·(новая дорожка): кусок 1000 Гц только справа ×√2, исходная other (500 Гц) не возвращается
 // ни в одном канале (≤ −40 дБ); вне окна other — справа ×√2. Порядок записей не важен.
 func TestRebuildSectionsPlaceOverEngine(t *testing.T) {
+	t.Parallel()
 	eng := SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"other"}, Engine: engChain()}
 	for name, specs := range map[string][]SectionSpec{
 		"движок, потом место": {eng, plPlace("other", 1, 1)},
 		"место, потом движок": {plPlace("other", 1, 1), eng},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			f := plSetup(t)
 			l, r := plRun(t, f, specs...)
 			plTone(t, "окно, левый, исходная other", l, 500, 3, 5, 0, plAmp)
@@ -196,6 +200,7 @@ func TestRebuildSectionsPlaceOverEngine(t *testing.T) {
 // Усл. 40б: матрица и на заглушение той же дорожки — в окне заглушения other нет ни слева,
 // ни справа (без матрицы на вычитании слева осталось бы −other), вне окна — справа ×√2.
 func TestRebuildSectionsPlaceOverMute(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	mute := SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"other"}, Db: -100}
 	l, r := plRun(t, f, mute, plPlace("other", 1, 1))
@@ -208,6 +213,7 @@ func TestRebuildSectionsPlaceOverMute(t *testing.T) {
 // ТК68 / усл. 40а: запись-добавление (Add, дорожка mix) с Place pan −1 — партия только слева
 // ×√2; трек под ней не тронут.
 func TestRebuildSectionsAddWithPlace(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	add := SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"mix"}, Engine: engChain(), Add: true,
 		Place: &yue.Place{Pan: -1, Width: 1}}
@@ -222,8 +228,10 @@ func TestRebuildSectionsAddWithPlace(t *testing.T) {
 // M_place·M_add·партия. Партия L = R = c: M_add (pan 1) → (0, c·√2); M_place (pan −1) → (c, 0).
 // Только M_add дал бы (0, c·√2), только M_place — (c·√2, 0): слева ровно c, справа ≈ 0.
 func TestRebuildSectionsAddPlaceComposedWithStemPlace(t *testing.T) {
+	t.Parallel()
 	for name, order := range map[string]bool{"добавление, потом место": false, "место, потом добавление": true} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			f := plSetup(t)
 			add := SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"bass"}, Engine: engChain(), Add: true,
 				Place: &yue.Place{Pan: 1, Width: 1}}
@@ -242,6 +250,7 @@ func TestRebuildSectionsAddPlaceComposedWithStemPlace(t *testing.T) {
 
 // ТК68: две записи «место» на одну дорожку → ошибка, ничего не загружено.
 func TestRebuildSectionsTwoPlacesSameStemIsError(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID,
 		[]SectionSpec{plPlace("other", 1, 1), plPlace("other", -0.5, 1.2)})
@@ -255,6 +264,7 @@ func TestRebuildSectionsTwoPlacesSameStemIsError(t *testing.T) {
 
 // ТК68: запись «место» на mix → ошибка, ничего не загружено.
 func TestRebuildSectionsPlaceOnMixIsError(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{plPlace("mix", 1, 1)})
 	if err == nil {
@@ -267,6 +277,7 @@ func TestRebuildSectionsPlaceOnMixIsError(t *testing.T) {
 
 // Усл. 39–40: место вне пределов (pan 2, width 3) → ошибка, ничего не загружено.
 func TestRebuildSectionsPlaceOutOfRangeIsError(t *testing.T) {
+	t.Parallel()
 	for _, p := range []yue.Place{{Pan: 2, Width: 1}, {Pan: 0, Width: 3}} {
 		f := plSetup(t)
 		_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{plPlace("other", p.Pan, p.Width)})
@@ -281,6 +292,7 @@ func TestRebuildSectionsPlaceOutOfRangeIsError(t *testing.T) {
 
 // Усл. 40в: подпись пересборки — «место: <дорожка> 30 % вправо, ширина 1,4».
 func TestRebuildSectionsPlaceLabel(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	plRun(t, f, plPlace("other", 0.3, 1.4))
 	var label string
@@ -294,6 +306,7 @@ func TestRebuildSectionsPlaceLabel(t *testing.T) {
 
 // Договорённость интерфейса: place без width в JSON — ширина 1 (как есть); явный 0 — 0 (моно).
 func TestSectionSpecPlaceJSONDefaultWidth(t *testing.T) {
+	t.Parallel()
 	var s SectionSpec
 	if err := json.Unmarshal([]byte(`{"child_id":0,"stems":["other"],"place":{"pan":0.3}}`), &s); err != nil {
 		t.Fatal(err)
@@ -322,6 +335,7 @@ func TestSectionSpecPlaceJSONDefaultWidth(t *testing.T) {
 // ТК79а: единственная запись «место» vocals pan 1 — голос только справа ×√2, слева ≈ 0;
 // гитары (other) не тронуты.
 func TestRebuildSectionsPlaceVocalsOnly(t *testing.T) {
+	t.Parallel()
 	f := plSetup(t)
 	l, r := plRun(t, f, plPlace("vocals", 1, 1))
 	plTone(t, "левый, голос", l, 3000, 1, 9, 0, plAmp)
@@ -357,6 +371,7 @@ func plDrumSetup(t *testing.T) *plFake {
 // барабанов (200 и 6000 Гц), ни новой бочки (1000 Гц куска) — ≤ −40 дБ; справа новая бочка
 // ×√2 (своего места у kick нет: M_drums·I). Порядок записей не важен.
 func TestRebuildSectionsDrumsPlaceOverKickEngine(t *testing.T) {
+	t.Parallel()
 	sampler := []map[string]any{{"type": "sampler", "kit": "osdk/kick"}}
 	eng := SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"kick"}, Engine: sampler}
 	for name, specs := range map[string][]SectionSpec{
@@ -364,6 +379,7 @@ func TestRebuildSectionsDrumsPlaceOverKickEngine(t *testing.T) {
 		"место, потом движок": {plPlace("drums", 1, 1), eng},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			f := plDrumSetup(t)
 			l, r := plRun(t, f, specs...)
 			plTone(t, "окно, левый, новая бочка", l, 1000, 3, 5, 0, plChunk)
@@ -383,6 +399,7 @@ func TestRebuildSectionsDrumsPlaceOverKickEngine(t *testing.T) {
 // стерео копией канала (L = R, без −3 дБ): голос в обоих каналах на прежнем уровне 0,3 ±0,1 дБ,
 // other слева ≈ 0, справа ×√2.
 func TestRebuildSectionsPlaceOnMonoTrack(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	p := func(n string) string { return filepath.Join(dir, n) }
@@ -438,6 +455,7 @@ func (f *plMonoFake) ApplyFx(_ context.Context, id int64, req yue.FxRequest) (*y
 // барабанов нет (≤ −40 дБ), кусок звучит в обоих каналах на своём уровне ±0,1 дБ (копия канала,
 // без −3 дБ), голос — тоже; other слева ≈ 0, справа ×√2.
 func TestRebuildSectionsPlaceMonoOtherInsertsStereoCopy(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const a = 0.2
 	dir := t.TempDir()

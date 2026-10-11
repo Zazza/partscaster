@@ -42,6 +42,7 @@ func newGridServer(t *testing.T) (*Server, *gridFake) {
 }
 
 func TestBeatGridPassesWindow(t *testing.T) {
+	t.Parallel()
 	s, fake := newGridServer(t)
 	out, ok := call(t, s, "beat_grid", map[string]any{
 		"job_id": float64(214), "from": float64(10), "to": float64(25.5)})
@@ -63,6 +64,7 @@ func TestBeatGridPassesWindow(t *testing.T) {
 }
 
 func TestBeatGridWithoutWindowCallsOnce(t *testing.T) {
+	t.Parallel()
 	s, fake := newGridServer(t)
 	out, ok := call(t, s, "beat_grid", map[string]any{"job_id": float64(5)})
 	if !ok {
@@ -74,6 +76,7 @@ func TestBeatGridWithoutWindowCallsOnce(t *testing.T) {
 }
 
 func TestBeatGridClientErrorIsToolError(t *testing.T) {
+	t.Parallel()
 	s, fake := newGridServer(t)
 	fake.grid, fake.err = nil, errors.New("422: window shorter than 4 s")
 	out, ok := call(t, s, "beat_grid", map[string]any{

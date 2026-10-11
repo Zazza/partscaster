@@ -93,6 +93,14 @@ def _residual_db(got, want):
     return _db(float(np.sqrt(np.mean(d ** 2)) / np.sqrt(np.mean(want[:n] ** 2))))
 
 
+def _lufs_only_metrics(path):
+    """Подмена dsp.analyze_file в тестах цепочек: метрики — только интегральная громкость."""
+    import dsp
+    import soundfile as sf
+    x, sr = sf.read(str(path), dtype="float32", always_2d=True)
+    return {"lufs": dsp.loudness(x, sr, true_peak=False)["lufs"]}
+
+
 class _FxApiCase(tp._WorkerApiCase):
     """Своя БД, каталог джоб, каталог данных и настройки на тест; YUE_FX_ENGINE снят;
     fx_resources — фейк с захватом «fake» (задержка 5 сэмплов)."""
@@ -115,6 +123,11 @@ class _FxApiCase(tp._WorkerApiCase):
         self.real_fx_resources = self.w.fx_resources  # для тестов с настоящим хранилищем
         self.resources = FakeResources(amps={"fake": self.amp_model})
         p = mock.patch.object(self.w, "fx_resources", lambda: self.resources)
+        p.start()
+        self.addCleanup(p.stop)
+        # метрики варианта: только громкость (полный analyze_file — темп/аккорды librosa, ~0,7 с на
+        # рендер — эти тесты не проверяют; lufs нужен проверкам «на месте» в test_master)
+        p = mock.patch.object(self.w, "analyze_file", _lufs_only_metrics)
         p.start()
         self.addCleanup(p.stop)
 
@@ -711,7 +724,6 @@ class TestTailsChainErrors422(_FxApiCase):
         self.assertEqual(self._fx_files(d), [])
 
 
-
 # ---------- Карточка internal-own-track, этап 4, условие 25 (ТК50): synth в /fx ----------
 #
 # Контракт: POST /jobs/{id}/fx {source: "mix", output: "solo", preview: true, from, to,
@@ -825,10 +837,6 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertEqual(r.status_code, 422, r.text)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 @unittest.skipUnless(_OK, _SKIP)
 class TestSynthWindowPrep(unittest.TestCase):
     """Кросс-ревью s4 r2: подготовка нот партии к окну превью (synth_window) — давние ноты не ломают превью."""
@@ -846,7 +854,6 @@ class TestSynthWindowPrep(unittest.TestCase):
         self.assertEqual(out["_until"], 4.0)
         import fx_engine
         fx_engine.parse_chain([out])          # лимит начала ноты не мешает
-
 
 
 @unittest.skipUnless(_OK, _SKIP)
@@ -1041,3 +1048,7 @@ class TestPercWindowCarry(TestPercWindow):
         text = (detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False)).lower()
         self.assertIn("набор", text)
         self.assertEqual(self._fx_files(d), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

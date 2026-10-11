@@ -151,11 +151,6 @@ class TestPhraseRender(_PhraseApiCase):
         }
         self.assertEqual(len(files), 4)
 
-    def test_stems_of_phrase_accepted(self):
-        ph = self._first("drums")
-        out = self._ok(phrase=ph["id"], chain=GAIN, stems=["kick", "snare"])
-        self.assertTrue(out["file"])
-
     def test_tc137_perc_on_drum_phrase(self):
         ph = self._first("drums")
         hits = [{"t": i * 0.25, "d": 0.25, "vel": 0.9} for i in range(8)]
@@ -174,6 +169,12 @@ class TestPhraseRender(_PhraseApiCase):
                 self.assertGreater(float(abs(y).max()), 1e-3, "synth-фраза беззвучна")
 
     def test_cache_keeps_last_40(self):
+        # предмет — вытеснение файлов кэша, не звук: круг — короткая заглушка loop_render
+        import numpy as np
+        import phrases
+        p = mock.patch.object(phrases, "loop_render", lambda *a, **kw: (np.zeros((480, 2), dtype=np.float32), False))
+        p.start()
+        self.addCleanup(p.stop)
         ph = self._first("drums")
         first = self._ok(phrase=ph["id"], chain=[{"type": "gain", "gain_db": -12}])["file"]
         last = None

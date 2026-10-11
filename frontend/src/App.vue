@@ -5,7 +5,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { api } from './api.js'
 import { rackGroups, rackEffects, rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
-import { slotKeys, slotHints, durOptions, durTokens } from './slotOptions.js'
+import { slotKeys, slotHints, durOptions } from './slotOptions.js'
 import { CHARACTER, characterPayload, characterLabel } from './character.js'
 import { useI18n } from './i18n/index.js'
 import { voiceDescriptor, normalizeVoiceParams } from './voiceLab.js'
@@ -15,7 +15,8 @@ import { isResultJob, mixChildId, mixLabel } from './insertLabels.js'
 import { useInserts } from './composables/useInserts.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
-import { SLOT_ORDER, buildStyleLine, dictStyle, cleanLyrics, effectiveLyrics } from './styleLogic.js'
+import { buildStyleLine, cleanLyrics } from './styleLogic.js'
+import { formStyle, needsTranslate, translateOr, newTrackPayload } from './requests.js'
 import { usePlayer, fmtDur } from './composables/usePlayer.js'
 import { useConfirm } from './composables/useConfirm.js'
 import VSelect from './VSelect.vue'
@@ -165,48 +166,21 @@ const styleLine = computed({
 
 // финальная строка стиля к отправке: русские значения из списков подставляются
 // словарём, самописная кириллица переводится через Ollama; английское — как есть
-const CYR = /[а-яё]/i
-
 async function finalStyle() {
-  let s
-  if (styleOverride.value.trim()) {
-    s = styleOverride.value.trim()
-  } else {
-    const parts = SLOT_ORDER.map(k => (slots.value[k] || '').trim())
-      .filter(Boolean).map(dictStyle)
-    const rack = rackCompile(rackSel.value)
-    if (rack) parts.push(rack)
-    if (slots.value.bpm) parts.push(slots.value.bpm + ' BPM')
-    s = parts.join(', ')
-  }
-  if (!autoTranslate.value || !CYR.test(s)) return s
+  const s = formStyle(styleOverride.value, slots.value, rackCompile(rackSel.value))
+  if (!needsTranslate(s, autoTranslate.value)) return s
   translateBusy.value = true
   try {
-    const r = await api.translate(s)
-    return r.text
-  } catch (e) {
-    console.warn('translate failed, using as-is:', e)
-    return s
+    return await translateOr(s, api.translate)
   } finally { translateBusy.value = false }
 }
 
 function payload(extra = {}) {
-  const abc = customAbc.value.trim()
-  return {
-    title: title.value,
-    lyrics: effectiveLyrics(lyrics.value, noLyrics.value, durMode.value),
-    seed: seed.value ? Number(seed.value) : 0,
-    // драматургии и прикреплённому ABC нужен план: off его не строит — молча повышаем до melody
-    cot: (arcKind.value || abc) && cot.value === 'off' ? 'melody' : cot.value,
-    arc: arcKind.value,
-    // потолок длины из селектора длительности (0 = бюджет воркера)
-    max_tokens: durTokens[durMode.value] || 0,
-    ...characterPayload(temperature.value, cfgScale.value),
-    ...(abc ? { abc } : {}),
-    // пресеты звука — только у полного трека (черновик их не получает)
-    ...(soundPresetIds.value.length && !extra.draft ? { sound_preset_ids: [...soundPresetIds.value] } : {}),
-    ...extra,
-  }
+  return newTrackPayload({
+    title: title.value, lyrics: lyrics.value, noLyrics: noLyrics.value, durMode: durMode.value,
+    seed: seed.value, cot: cot.value, arc: arcKind.value, abc: customAbc.value,
+    temperature: temperature.value, cfg: cfgScale.value, soundPresetIds: soundPresetIds.value,
+  }, extra)
 }
 
 // guard отправки: стиль есть и стих есть (или инструментал)

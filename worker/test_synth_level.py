@@ -26,14 +26,11 @@ A-взвешивание для проверки — своё (частотна�
   |отсчёта| выхода цепочки; сторож eq +8 — на этом же треке, rel_db −8, допуск ±1,5.
 - ТК120: «ресурсы открыты» — фабрика yue_worker.fx_resources вызвана хотя бы раз; «закрыты» — close() вызван
   столько же раз, сколько фабрика; ресурсы подменены заглушкой (внешняя граница — хранилище наборов на диске).
-- ТК121: «перечисляют» — модуль test_synth_level есть в списке модулей команды `python3 -m unittest` цели
-  test-worker (Makefile) и шага unittest (ci.yml), с учётом переноса строки обратным слэшем.
+- ТК121: отменено — make test-worker и CI запускают `unittest discover -p 'test_*.py'`, ручного списка
+  модулей нет (этап 17, условие 132); умолчание perc −14 (ТК117) проверено поведением в test_perc.
 
 Запуск: cd worker && python3 -m unittest test_synth_level -v
 """
-import json
-import os
-import re
 import unittest
 from unittest import mock
 
@@ -225,16 +222,6 @@ class TestSynthLevelDefault(unittest.TestCase):
         y = _render([part], track)
         self.assertAlmostEqual(_a_rms_db(y, *MEAS) - ref_a, -8, delta=1.0)
 
-    def test_tk117_fx_blocks_defaults(self):
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fx_blocks.json"), encoding="utf-8") as f:
-            blocks = json.load(f)
-
-        def default(typ):
-            return next(p["default"] for p in blocks[typ]["params"] if p["id"] == "rel_db")
-
-        self.assertEqual(default("synth"), -8)
-        self.assertEqual(default("perc"), -14)
-
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelQuietTrack(unittest.TestCase):
@@ -340,44 +327,6 @@ class TestSynthLevelPostResources(unittest.TestCase):
     def test_tk120_reverb_without_ir_no_resources(self):
         _, c = self._run([_part(DARK, DARK_MIDI, rel_db=-8), REVERB])
         self.assertEqual(c["open"], 0, "reverb без ir открыл хранилище")
-
-
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def _unittest_modules(text):
-    """Модули всех команд `python3 -m unittest …` в тексте (перенос строки обратным слэшем склеивается)."""
-    joined = re.sub(r"\\\n", " ", text)
-    mods = set()
-    for line in joined.splitlines():
-        m = re.search(r"-m\s+unittest\s+(.*)", line)
-        if m:
-            mods.update(tok for tok in m.group(1).split() if not tok.startswith("-"))
-    return mods
-
-
-class TestSynthLevelInTestLists(unittest.TestCase):
-    """ТК121 (условие 81а): test_synth_level — в списках unittest цели make test-worker и CI."""
-
-    def _read(self, *parts):
-        with open(os.path.join(_ROOT, *parts), encoding="utf-8") as f:
-            return f.read()
-
-    def test_tk121_makefile_test_worker(self):
-        text = self._read("Makefile")
-        m = re.search(r"^test-worker:.*\n((?:\t.*\n?)+)", text, re.M)
-        self.assertIsNotNone(m, "в Makefile нет цели test-worker")
-        mods = _unittest_modules(m.group(1))
-        self.assertIn("test_pure", mods)                               # опора: разбор находит список
-        self.assertIn("test_synth_level", mods)
-
-    def test_tk121_ci_unittest_step(self):
-        text = self._read(".github", "workflows", "ci.yml")
-        m = re.search(r"- name: unittest\n(.*?)(?=\n\s*- name:|\Z)", text, re.S)
-        self.assertIsNotNone(m, "в ci.yml нет шага unittest")
-        mods = _unittest_modules(m.group(1))
-        self.assertIn("test_pure", mods)
-        self.assertIn("test_synth_level", mods)
 
 
 if __name__ == "__main__":

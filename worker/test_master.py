@@ -55,6 +55,12 @@ def _loud(x, sr=SR):
     return dsp.loudness(x, sr)
 
 
+def _lufs(x, sr=SR):
+    """Только громкость (без истинного пика — вдвое быстрее): для подгонки сигналов теста."""
+    import dsp
+    return dsp.loudness(x, sr, true_peak=False)["lufs"]
+
+
 def _rms_db(x):
     x = np.asarray(x, dtype=np.float64)
     return 20 * np.log10(max(float(np.sqrt(np.mean(x ** 2))), 1e-12))
@@ -104,7 +110,7 @@ def _peaky(dur=8.0, lufs=-20.0, every=0.5, seed=5):
         return x
     g = 0.05
     for _ in range(8):
-        g *= 10 ** ((lufs - _loud(mk(g))["lufs"]) / 20)
+        g *= 10 ** ((lufs - _lufs(mk(g))) / 20)
     return mk(g)
 
 
@@ -114,7 +120,7 @@ def _scale_peak_db(x, peak_db):
 
 def _scale_lufs(x, lufs):
     for _ in range(3):
-        x = x * 10 ** ((lufs - _loud(x)["lufs"]) / 20)
+        x = x * 10 ** ((lufs - _lufs(x)) / 20)
     return x
 
 
@@ -360,7 +366,7 @@ class TestFxFileInPlace(fa._FxApiCase):
 class TestLimiterPreview(fa._FxApiCase):
     """Превью с limiter: считается по всему входу, режется окном."""
 
-    LONG = 30.0
+    LONG = 12.0
 
     def _write_job(self, x):
         import soundfile as sf
@@ -373,9 +379,9 @@ class TestLimiterPreview(fa._FxApiCase):
         return jid, d
 
     def _long_job(self):
-        """Трек 30 с: первые 10 с тихо, дальше громко — LUFS окна ≠ LUFS всего трека."""
+        """Трек 12 с: первые 4 с тихо, дальше громко — LUFS окна ≠ LUFS всего трека."""
         x = _music(self.LONG, SR, seed=3)
-        x[:int(10 * SR)] *= 0.05
+        x[:int(4 * SR)] *= 0.05
         return self._write_job(_scale_peak_db(x, -3.0))
 
     def _check_preview_matches(self, jid, d, chain, fr, to):
@@ -388,25 +394,21 @@ class TestLimiterPreview(fa._FxApiCase):
         self.assertGreater(n, int((to - fr - 0.1) * SR))
         self.assertAlmostEqual(_rms_db(y_prev[:n]), _rms_db(seg[:n]), delta=0.5)
 
-    def test_tc71_preview_limiter_matches_full_render(self):
-        jid, d = self._long_job()
-        self._check_preview_matches(jid, d, [{"type": "limiter", "target_lufs": -14}], 10.0, 20.0)
-
     def test_tc78c_preview_quiet_part_matches_full_render(self):
-        # тихие 20 с (−40 LUFS) + громкие 20 с (−12 LUFS), окно [2, 12) — тихая часть: по всему
+        # тихие 6 с (−40 LUFS) + громкие 6 с (−12 LUFS), окно [1, 5) — тихая часть: по всему
         # треку усиление ≈ −2 дБ, окно отдельно подняло бы тихую часть на +12 дБ (зажим)
-        quiet = _scale_lufs(_music(20.0, SR, seed=5), -40.0)
-        loud = _scale_lufs(_music(20.0, SR, seed=4), -12.0)
+        quiet = _scale_lufs(_music(6.0, SR, seed=5), -40.0)
+        loud = _scale_lufs(_music(6.0, SR, seed=4), -12.0)
         self.assertLess(np.max(np.abs(loud)), 0.99, "громкая часть клиппует в PCM_24")
         jid, d = self._write_job(np.concatenate([quiet, loud]))
-        self._check_preview_matches(jid, d, [{"type": "limiter", "target_lufs": -14}], 2.0, 12.0)
+        self._check_preview_matches(jid, d, [{"type": "limiter", "target_lufs": -14}], 1.0, 5.0)
 
     def test_preview_cache_depends_on_file_and_version(self):
         import soundfile as sf
         jid, d = self._long_job()
         sf.write(str(d / VAR), fa._tone(VAR_HZ, amp=0.1, dur=self.LONG), SR)
         chain = [{"type": "limiter", "target_lufs": -14}]
-        win = {"from": 10.0, "to": 12.0}
+        win = {"from": 4.0, "to": 6.0}
         a = self._ok(jid, source="mix", chain=chain, preview=True, **win)["file"]
         b = self._ok(jid, source="mix", file=VAR, chain=chain, preview=True, **win)["file"]
         self.assertNotEqual(a, b, "превью трека и варианта — один файл кэша")

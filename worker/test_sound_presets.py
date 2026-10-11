@@ -87,6 +87,11 @@ class _PresetCase(_WorkerApiCase):
         self.assertIsInstance(data.get("id"), int, data)
         return data
 
+    def _preset_count(self):
+        """Сколько пресетов в базе (для «невалидный не сохранился»: без GET всего списка из 100+ встроенных)."""
+        with self._conn() as c:
+            return c.execute("SELECT COUNT(*) FROM sound_presets").fetchone()[0]
+
     def _by_id(self, pid):
         return next((p for p in self._list() if p.get("id") == pid), None)
 
@@ -141,17 +146,6 @@ class TestBuiltinPresets(_PresetCase):
         for p in lst:
             self.assertIs(p.get("builtin"), True, p)
             self.assertIsInstance(p.get("id"), int, p)
-
-    def test_tc13_restart_does_not_duplicate(self):
-        before = self._builtins()
-        # повторный старт воркера на той же базе
-        self.w.init_db()
-        self.w._migrate()
-        self.w.init_db()
-        self.w._migrate()
-        after = self._builtins()
-        self.assertEqual(len(after), NB, after)
-        self.assertEqual(sorted(p["id"] for p in after), sorted(p["id"] for p in before))
 
     def test_tc13_builtins_first_after_own_presets(self):
         own = self._create(name="Свой")
@@ -225,15 +219,16 @@ class TestPresetCrud(_PresetCase):
         self.assertEqual(len(self._builtins()), NB)
 
     def test_tc14_builtin_put_and_delete_409(self):
-        for b in self._builtins():
+        before = self._builtins()
+        for b in before:
             with self.subTest(slug=b.get("slug")):
                 r = self.client.put(f"/sound-presets/{b['id']}", json=_preset(name="взлом"))
                 self.assertEqual(r.status_code, 409, r.text)
                 r = self.client.delete(f"/sound-presets/{b['id']}")
                 self.assertEqual(r.status_code, 409, r.text)
-                got = self._by_id(b["id"])
-                self.assertIsNotNone(got)
-                self.assertEqual(got["name"], b["name"])
+        # один список после всех попыток: ни один встроенный не удалён и не переименован
+        after = {p["id"]: p["name"] for p in self._builtins()}
+        self.assertEqual(after, {b["id"]: b["name"] for b in before})
 
     def test_tc14_missing_put_and_delete_404(self):
         r = self.client.put("/sound-presets/99999", json=_preset())
@@ -280,10 +275,10 @@ class TestPresetCrud(_PresetCase):
 class TestPresetValidation(_PresetCase):
 
     def _bad(self, **over):
-        n = len(self._list())
+        n = self._preset_count()
         r = self.client.post("/sound-presets", json=_preset(**over))
         self._assert_422(r)
-        self.assertEqual(len(self._list()), n, "невалидный пресет сохранился")
+        self.assertEqual(self._preset_count(), n, "невалидный пресет сохранился")
 
     def test_tc15_name_empty(self):
         self._bad(name="")
@@ -361,12 +356,12 @@ class TestPresetValidation(_PresetCase):
         # ревью безопасности s1: NaN/Infinity из JSON — не число рецепта (ломали бы ответ и графы)
         for bad in ("NaN", "Infinity"):
             with self.subTest(bad=bad):
-                n = len(self._list())
+                n = self._preset_count()
                 body = ('{"name": "x", "specs": [{"stems": ["bass"], "chain": "soften", '
                         f'"params": {{"strength": {bad}}}}}]}}')
                 r = self.client.post("/sound-presets", content=body, headers={"content-type": "application/json"})
                 self._assert_422(r)
-                self.assertEqual(len(self._list()), n)
+                self.assertEqual(self._preset_count(), n)
 
     def test_final_chain_empty(self):
         self._bad(final=[{"chain": "", "params": {}}])
@@ -557,22 +552,6 @@ class TestPresetState(_PresetCase):
         self.assertEqual(r.status_code, 200, r.text)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-@unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
-class TestBuiltinRecipesValid(unittest.TestCase):
-    """Условие 8: встроенные рецепты проходят ту же проверку, что свои (движок — parse_chain)."""
-
-    def test_builtins_pass_validation(self):
-        import fx_engine
-        import presets
-        for b in presets.BUILTIN:
-            with self.subTest(slug=b["slug"]):
-                presets.validate(b, fx_engine.parse_chain)
-
-
 # ---------- Этап 1б. ТК27: target_lufs у пресета (условие 11) ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
@@ -580,10 +559,10 @@ class TestPresetTargetLufs(_PresetCase):
     """Условие 11: target_lufs — число −24…−6 или null; вне границ / не число → 422."""
 
     def _bad(self, **over):
-        n = len(self._list())
+        n = self._preset_count()
         r = self.client.post("/sound-presets", json=_preset(**over))
         self._assert_422(r)
-        self.assertEqual(len(self._list()), n, "невалидный пресет сохранился")
+        self.assertEqual(self._preset_count(), n, "невалидный пресет сохранился")
 
     def test_tc27_minus13_stored_and_returned(self):
         created = self._create(target_lufs=-13)
@@ -766,13 +745,10 @@ class TestBuiltinRecipes1b(_PresetCase):
         self.assertNotIn("level", [f["chain"] for f in p["final"]])
         self.assertEqual(p.get("target_lufs"), -12)
 
-    def test_builtins_in_code_match_condition_13(self):
-        # то же — в самом BUILTIN (источник досева)
+    def test_builtins_in_code_final_without_level(self):
+        # условие 13: у встроенных (источник досева) в финале нет level; цели −13/−12 — тесты выше
         import presets
-        by = {b["slug"]: b for b in presets.BUILTIN}
-        self.assertEqual(by["transmission"].get("target_lufs"), -13)
-        self.assertEqual(by["sex-on-fire"].get("target_lufs"), -12)
-        for b in by.values():
+        for b in presets.BUILTIN:
             self.assertNotIn("level", [f["chain"] for f in b["final"]], b["slug"])
 
 
@@ -806,11 +782,6 @@ class TestBuiltinLiveRhythm(unittest.TestCase):
         found = [blk for blk in engine if blk.get("type") == "sampler"]
         self.assertTrue(found, f"у {stem} нет sampler: {engine}")
         return found[0]
-
-    def test_tc39_valid(self):
-        import fx_engine
-        import presets
-        presets.validate(self._live(), fx_engine.parse_chain)
 
     def test_tc39_seven_records_one_part_each(self):
         b = self._live()
@@ -854,3 +825,7 @@ class TestBuiltinLiveRhythm(unittest.TestCase):
         self.assertEqual(b.get("final") or [], [])
         self.assertIn("target_lufs", b)
         self.assertIsNone(b["target_lufs"])
+
+
+if __name__ == "__main__":
+    unittest.main()

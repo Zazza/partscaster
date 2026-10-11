@@ -152,8 +152,10 @@ func ppSameValue(g, w any) string {
 
 // ТК102: PartNotes = synthPart.partNotes на эталонах (стили, октавы, секции, трудные аккорды и такты).
 func TestPartNotesGolden(t *testing.T) {
+	t.Parallel()
 	for _, c := range ppLoadGolden(t).PartNotes {
 		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
 			got := PartNotes(c.Bars, PartOpts{Style: c.Opts.Style, Octave: c.Opts.Octave, Sections: c.Opts.Sections})
 			if msg := ppSame(ppGeneric(t, got), c.Out, []string{"t", "d", "midi", "vel"}); msg != "" {
 				t.Error(msg)
@@ -164,8 +166,10 @@ func TestPartNotesGolden(t *testing.T) {
 
 // ТК102: PercHits = percPart.percHits на эталонах (рисунки, swing, accent, секции, трудные такты).
 func TestPercHitsGolden(t *testing.T) {
+	t.Parallel()
 	for _, c := range ppLoadGolden(t).PercHits {
 		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
 			got := PercHits(c.Bars, PercOpts{Pattern: c.Opts.Pattern, Sections: c.Opts.Sections,
 				Swing: c.Opts.Swing, Accent: c.Opts.Accent})
 			if msg := ppSame(ppGeneric(t, got), c.Out, []string{"t", "d", "vel"}); msg != "" {
@@ -177,8 +181,10 @@ func TestPercHitsGolden(t *testing.T) {
 
 // ТК102: BarsFromBeat = percPart.barsFromBeat на эталонах (неполный последний такт, shift, пределы).
 func TestBarsFromBeatGolden(t *testing.T) {
+	t.Parallel()
 	for _, c := range ppLoadGolden(t).BarsFromBeat {
 		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
 			got := BarsFromBeat(c.Grid, c.Dur, c.Shift)
 			if msg := ppSame(ppGeneric(t, got), c.Out, []string{"start", "end", "section"}); msg != "" {
 				t.Error(msg)
@@ -189,6 +195,7 @@ func TestBarsFromBeatGolden(t *testing.T) {
 
 // Условие 68: sections пусто — все такты (как nil), и у синта, и у перкуссии.
 func TestPartNotesEmptySectionsAll(t *testing.T) {
+	t.Parallel()
 	bars := ppBars()
 	all := PartNotes(bars, PartOpts{Style: "pad"})
 	empty := PartNotes(bars, PartOpts{Style: "pad", Sections: []string{}})
@@ -332,6 +339,7 @@ func ppApply(t *testing.T, f *ppFake, p yue.SoundPreset) {
 // ТК103: трек с ChordGrid из 4 тактов (2 — припев): synth pad — ноты только в тактах припева,
 // perc backbeat — 4×2 удара; обе — записи пересборки на mix с add; наборы партий докачаны.
 func TestPresetPartsWithChords(t *testing.T) {
+	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
 	ppApply(t, f, ppPreset(t, 41, ppPartsTK103))
 
@@ -377,6 +385,7 @@ func TestPresetPartsWithChords(t *testing.T) {
 // ТК103: трек без аккордов (ChordGrid пуст, JobGrid 120 BPM offset 0, длина 8 с) — synth пропущена,
 // perc — по 4 тактам BarsFromBeat; ошибки нет.
 func TestPresetPartsWithoutChords(t *testing.T) {
+	t.Parallel()
 	f := ppSetup(t, 8, nil)
 	ppApply(t, f, ppPreset(t, 42, ppPartsTK103))
 
@@ -404,6 +413,7 @@ func TestPresetPartsWithoutChords(t *testing.T) {
 
 // Условие 68: нет нот (секция, которой нет в песне) — партия пропускается, не ошибка; другая партия идёт.
 func TestPresetPartsNoNotesSkipped(t *testing.T) {
+	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
 	ppApply(t, f, ppPreset(t, 43, `[
  {"kind": "synth", "engine": [{"type": "synth"}], "style": "arp", "sections": ["solo"]},
@@ -426,6 +436,7 @@ func TestPresetPartsNoNotesSkipped(t *testing.T) {
 
 // Условие 68: октава и accent из рецепта доходят до нот/ударов (octave −1 у pulse, accent 0 — все .9).
 func TestPresetPartsOptionsApplied(t *testing.T) {
+	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
 	ppApply(t, f, ppPreset(t, 44, `[
  {"kind": "synth", "engine": [{"type": "synth"}], "style": "pulse", "octave": -1, "sections": ["verse"]},
@@ -470,6 +481,7 @@ func ppAt(n []ppNote, i int) any {
 
 // Условие 68/69: поля партии в JSON (воркер ↔ приложение) читаются в yue.PresetPart.
 func TestPresetPartJSON(t *testing.T) {
+	t.Parallel()
 	p := ppPreset(t, 45, `[{"kind": "perc", "engine": [{"type": "perc"}], "pattern": "offbeat", "swing": 0.3,
  "accent": 0.5, "sections": ["chorus"], "place": {"pan": -0.4}},
  {"kind": "synth", "engine": [{"type": "synth"}], "style": "drone", "octave": -2}]`)
@@ -511,6 +523,7 @@ func (f *ppChordErrFake) ChordGrid(context.Context, int64) (*yue.ChordGrid, erro
 // ТК103а (условие 68а): ChordGrid → 404 (у трека нет плана) — это «аккордов нет», не ошибка пресета:
 // synth пропущена, perc — по сетке долей JobGrid.
 func TestPresetPartsChordGrid404NoChords(t *testing.T) {
+	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 404, Msg: "yue /chords: 404 Not Found: no plan"}}
 	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 45, ppPartsTK103)); err != nil {
@@ -534,6 +547,7 @@ func TestPresetPartsChordGrid404NoChords(t *testing.T) {
 
 // ТК103а (условие 68а): прочие ошибки ChordGrid (500) — ошибка ApplySoundPreset, как раньше.
 func TestPresetPartsChordGrid500Error(t *testing.T) {
+	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 500, Msg: "yue /chords: 500 Internal Server Error: boom"}}
 	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 46, ppPartsTK103)); err == nil {
@@ -558,6 +572,7 @@ func (f *ppKitFailFake) InstallFxKit(ctx context.Context, name string) (map[stri
 // ТК103в (условие 68б): synth-партия только в секции solo (такой нет) с набором badkit, установка которого
 // падает, + perc-партия: пропущенная партия набор не качает и пресет не роняет; perc идёт в пересборку.
 func TestPresetPartsSkippedPartKitNotInstalled(t *testing.T) {
+	t.Parallel()
 	f := &ppKitFailFake{ppFake: ppSetup(t, 8, ppBars())}
 	p := ppPreset(t, 47, `[
  {"kind": "synth", "engine": [{"type": "synth", "kit": "badkit/x"}], "style": "pad", "sections": ["solo"]},

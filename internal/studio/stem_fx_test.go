@@ -73,6 +73,7 @@ func relDiffDb(out, base []float32, from, to float64) float64 {
 // Кейс карточки: в окне 2–4 с тон стема A (3000) ослаблен ≥ 15 дБ, тон стема B (500)
 // не изменился (≤ 0.5 дБ); вне окна трек = исходный (разница ≤ −40 дБ); длина та же.
 func TestRebuildSectionsStemChainInWindow(t *testing.T) {
+	t.Parallel()
 	f, base := fxSetup(t)
 	run(t, f, fxSpec(2, 4))
 	out := uploadedOnly(t, f)
@@ -98,6 +99,7 @@ func TestRebuildSectionsStemChainInWindow(t *testing.T) {
 
 // Кейс карточки: To = 0 — эффект до конца трека; до From трек исходный.
 func TestRebuildSectionsStemChainToZeroTillEnd(t *testing.T) {
+	t.Parallel()
 	f, base := fxSetup(t)
 	run(t, f, fxSpec(2, 0))
 	out := uploadedOnly(t, f)
@@ -117,6 +119,7 @@ func TestRebuildSectionsStemChainToZeroTillEnd(t *testing.T) {
 
 // Кейс карточки: неизвестная цепочка — ошибка, ничего не загружено.
 func TestRebuildSectionsStemChainUnknownIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := fxSetup(t)
 	sp := fxSpec(2, 4)
 	sp.Chain = "no-such-chain"
@@ -131,6 +134,7 @@ func TestRebuildSectionsStemChainUnknownIsError(t *testing.T) {
 // Кейс карточки: вместе с обычной заглушкой в одном вызове — применены обе:
 // в 2–4 с вырезан 3000 (голос), в 5–7 с заглушён other (500), остальное на месте.
 func TestRebuildSectionsStemChainWithMute(t *testing.T) {
+	t.Parallel()
 	f, base := fxSetup(t)
 	mute := SectionSpec{ChildID: 0, From: 5, To: 7, Stems: []string{"other"}, Db: -100}
 	run(t, f, fxSpec(2, 4), mute)
@@ -157,6 +161,7 @@ func TestRebuildSectionsStemChainWithMute(t *testing.T) {
 
 // Поля приходят из фронта/MCP по JSON под именами chain и params.
 func TestSectionSpecChainParamsJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	err := json.Unmarshal([]byte(`{"child_id":0,"from":2,"to":4,"stems":["vocals"],
 		"chain":"dewhistle","params":{"freq":2638,"depth":15}}`), &sp)

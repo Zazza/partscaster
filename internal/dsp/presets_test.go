@@ -14,6 +14,7 @@ import (
 // Карточка 2.5: список наборов не пуст; id уникальны и не пусты; у каждого есть
 // name и note и хотя бы один шаг.
 func TestPresetsListWellFormed(t *testing.T) {
+	t.Parallel()
 	ps := Presets()
 	if len(ps) == 0 {
 		t.Fatal("Presets() пуст, want хотя бы один набор")
@@ -43,6 +44,7 @@ func TestPresetsListWellFormed(t *testing.T) {
 // с Key (шаги идут на одну дорожку/трек, второго входа нет); параметры шага —
 // крутилки этой цепочки.
 func TestPresetsReferenceExistingChains(t *testing.T) {
+	t.Parallel()
 	for _, p := range Presets() {
 		for j, s := range p.Steps {
 			c := ByID(s.Chain)
@@ -62,26 +64,14 @@ func TestPresetsReferenceExistingChains(t *testing.T) {
 	}
 }
 
-// Карточка 2.5/4.1: каждый набор собирается в граф без ошибки.
-func TestPresetsBuildGraph(t *testing.T) {
-	for _, p := range Presets() {
-		g, _, err := StepsGraph(p.Steps)
-		if err != nil {
-			t.Errorf("набор %q: StepsGraph: %v", p.ID, err)
-			continue
-		}
-		if g == "" {
-			t.Errorf("набор %q: пустой граф", p.ID)
-		}
-	}
-}
-
 // Карточка 2.5/4.1: наборы реально звучат — граф проходит через ffmpeg (Run).
 func TestPresetsRunOnSine(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, _ := genIn(t, "0.3*sin(2*PI*220*t)", 2)
 	for _, p := range Presets() {
 		t.Run(p.ID, func(t *testing.T) {
+			t.Parallel()
 			g, _, err := StepsGraph(p.Steps)
 			if err != nil {
 				t.Fatalf("StepsGraph: %v", err)
@@ -96,6 +86,7 @@ func TestPresetsRunOnSine(t *testing.T) {
 
 // Контракт: json-теги Preset — id/name/note/steps.
 func TestPresetJSON(t *testing.T) {
+	t.Parallel()
 	b, err := json.Marshal(Preset{ID: "x", Name: "Икс", Note: "заметка",
 		Steps: []Step{{Chain: "od-ts"}}})
 	if err != nil {

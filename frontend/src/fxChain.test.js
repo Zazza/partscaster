@@ -55,12 +55,17 @@ describe('описание блоков (fxBlocks.json)', () => {
 })
 
 describe('newBlock / addBlock: умолчания из описания', () => {
-  it.each(TYPES)('%s: включён, все параметры с умолчаниями', (type) => {
-    const b = newBlock(type, blocks)
-    expect(b.type).toBe(type)
-    expect(b.on).toBe(true)
-    const want = defaults(type)
-    for (const [k, v] of Object.entries(want)) expect(b.params[k]).toBe(v)
+  it('каждый тип: включён, все параметры с умолчаниями (список нарушителей «тип: что не так»)', () => {
+    const bad = TYPES.flatMap((type) => {
+      const b = newBlock(type, blocks)
+      return [
+        ...(b.type === type ? [] : [`${type}: type ${b.type}`]),
+        ...(b.on === true ? [] : [`${type}: выключен`]),
+        ...Object.entries(defaults(type)).filter(([k, v]) => b.params[k] !== v)
+          .map(([k, v]) => `${type}.${k}=${JSON.stringify(b.params[k])}, ждали ${JSON.stringify(v)}`),
+      ]
+    })
+    expect(bad).toEqual([])
   })
 
   it('eq — пустой список полос', () => {
@@ -280,16 +285,28 @@ function fill(b) {
   return out
 }
 
+// JSON с ключами по алфавиту: порядок ключей не важен, как у toEqual
+const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === 'object' && !Array.isArray(x)
+  ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x))
+
 describe('ТК2: пресет → редактируемая цепочка → JSON', () => {
   it('пресеты есть', () => {
     expect(fxPresets.length).toBeGreaterThan(0)
   })
 
-  it.each(fxPresets.map((p) => [p.id, p]))('%s: туда-обратно — тот же JSON (с умолчаниями)', (_, p) => {
-    const chain = deepFreeze(JSON.parse(JSON.stringify(p.chain)))
-    const editable = fromWorkerChain(chain, blocks)
-    expect(editable.length).toBe(p.chain.length)
-    expect(toWorkerChain(editable)).toEqual(p.chain.map(fill))
+  it('каждый пресет: туда-обратно — тот же JSON (с умолчаниями); сообщение — id нарушителей', () => {
+    const bad = fxPresets.flatMap((p) => {
+      try {
+        const editable = fromWorkerChain(deepFreeze(JSON.parse(JSON.stringify(p.chain))), blocks)
+        if (editable.length !== p.chain.length) return [`${p.id}: блоков ${editable.length} из ${p.chain.length}`]
+        const got = canon(toWorkerChain(editable))
+        const want = canon(p.chain.map(fill))
+        return got === want ? [] : [`${p.id}: ${got} ≠ ${want}`]
+      } catch (e) {
+        return [`${p.id}: ${e.message}`]
+      }
+    })
+    expect(bad).toEqual([])
   })
 
   it('JSON → цепочка → JSON — неподвижная точка', () => {

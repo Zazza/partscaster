@@ -11,12 +11,13 @@
 //     detail — полный label; пустой label — запасные имена (заголовок не пустой);
 //   - resultsOrder(list) — новые сверху по created_at, без даты — в конце;
 //   - resultDate(iso, now) — «10.10 14:00», другой год — с годом;
-//   - по исходнику StudioPage.vue: строка «Δ крест» — под v-if флага «подробнее»
-//     (одна галочка на список, по умолчанию выкл.).
+//   - галочка «подробнее» запоминается, по умолчанию выкл. (readFlag/writeFlag из prefs.js); по дереву шаблона
+//     StudioPage.vue строка «Δ крест» — под v-if флага этой галочки (одна галочка на список).
 // Написаны по карточке, без чтения реализации.
-import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { resultTitle, resultsOrder, resultDate } from './results.js'
+import { readFlag, writeFlag } from './prefs.js'
+import { templateAst, findElements, dir, attr, shownIf, idents } from './testkit/sfc.js'
 
 // chainName — функция id цепочки → имя (нет — undefined); форма уточнена по JSDoc results.js: карточка её не задаёт
 const NAMES = { wall: 'Стена звука' }
@@ -205,80 +206,55 @@ describe('resultDate: «10.10 14:00»', () => {
   })
 })
 
-// ---------- по исходнику: дельты под «подробнее» ----------
+// ---------- «подробнее»: дельты метрик под одной галочкой, по умолчанию выкл. ----------
 
-const SRC = readFileSync(new URL('./components/StudioPage.vue', import.meta.url), 'utf8')
-const script = (SRC.match(/<script[^>]*>([\s\S]*?)<\/script>/) || [])[1] || ''
-const template = (SRC.match(/<template>([\s\S]*)<\/template>/) || [])[1] || ''
-
-// открытые теги шаблона в позиции pos (от ближайшего к корню)
-function openAt(tpl, pos) {
-  const re = /<(\/?)([A-Za-z][\w-]*)((?:\s+[^\s=>/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'))?)*)\s*(\/?)>/g
-  const VOID = new Set(['input', 'br', 'img', 'hr', 'meta', 'link'])
-  const stack = []
-  let m
-  while ((m = re.exec(tpl)) && m.index < pos) {
-    if (m[1]) {
-      const i = stack.map((s) => s.name).lastIndexOf(m[2])
-      if (i >= 0) stack.length = i
-    } else if (!m[4] && !VOID.has(m[2])) {
-      stack.push({ name: m[2], attrs: m[3] })
-    }
-  }
-  return stack.reverse()
+class MemStorage {
+  constructor(init = {}) { this.m = new Map(Object.entries(init)) }
+  getItem(k) { return this.m.has(k) ? this.m.get(k) : null }
+  setItem(k, v) { this.m.set(k, String(v)) }
 }
 
-const vIfOf = (attrs) => (attrs.match(/(?:^|\s)v-(?:if|show)\s*=\s*"([^"]*)"/) || [])[1] || null
-const idents = (expr) => expr.match(/[A-Za-z_$][\w$]*/g) || []
-
-describe('StudioPage.vue: «Δ крест» — под флагом «подробнее»', () => {
-  const pos = template.indexOf('Δ крест')
-
-  it('строка дельт есть в шаблоне', () => {
-    expect(pos).toBeGreaterThan(-1)
+describe('readFlag / writeFlag — запомненная галочка «подробнее» (prefs.js)', () => {
+  it('по умолчанию выключена: записи нет → def false', () => {
+    expect(readFlag('yue_done_deltas', false, new MemStorage())).toBe(false)
   })
 
-  // флаг «подробнее»: ref в скрипте, переключается галочкой (input checkbox с v-model на него)
-  const flagNames = () => {
-    const out = []
-    const re = /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*ref\(/g
-    let m
-    while ((m = re.exec(script))) out.push(m[1])
-    return out.filter((name) => {
-      const cb = new RegExp(`<input[^>]*type="checkbox"[^>]*v-model="${name}"|<input[^>]*v-model="${name}"[^>]*type="checkbox"`)
-      return cb.test(template)
-    })
-  }
-
-  it('предок строки «Δ крест» скрыт v-if/v-show по флагу-галочке', () => {
-    const flags = flagNames()
-    expect(flags.length).toBeGreaterThan(0)
-    const guards = openAt(template, pos).map((tg) => vIfOf(tg.attrs)).filter(Boolean)
-    const guarded = guards.some((expr) => idents(expr).some((id) => flags.includes(id)))
-    expect(guarded, `условия предков: ${JSON.stringify(guards)}; флаги-галочки: ${flags}`).toBe(true)
+  it('запомненный выбор переживает перезапуск: запись → чтение', () => {
+    const st = new MemStorage()
+    writeFlag('yue_done_deltas', true, st)
+    expect(readFlag('yue_done_deltas', false, st)).toBe(true)
+    writeFlag('yue_done_deltas', false, st)
+    expect(readFlag('yue_done_deltas', true, st)).toBe(false)
   })
 
-  // «по умолчанию выкл.»: исходник проверяет лишь грубо — флаг не заводится как ref(true) и начальное значение
-  // может быть false (запомненный выбор из localStorage допустим); точное поведение — на ручной проверке
-  it('флаг «подробнее» по умолчанию выключен (не ref(true), в инициализаторе есть false)', () => {
-    const guards = openAt(template, pos).map((tg) => vIfOf(tg.attrs)).filter(Boolean)
-    const flag = flagNames().find((f) => guards.some((expr) => idents(expr).includes(f)))
-    expect(flag).toBeTruthy()
-    const line = script.split('\n').find((l) => new RegExp(`(?:const|let)\\s+${flag}\\s*=\\s*ref\\(`).test(l))
-    expect(line).not.toMatch(/ref\(\s*true\s*\)/)
-    expect(line).toMatch(/\bfalse\b|=== ?['"](?:1|true)['"]/)
+  it('чужое значение → def; хранилище бросает или его нет → def, запись молча пропускается', () => {
+    expect(readFlag('k', false, new MemStorage({ k: 'yes' }))).toBe(false)
+    const broken = { getItem() { throw new Error('denied') }, setItem() { throw new Error('denied') } }
+    expect(readFlag('k', true, broken)).toBe(true)
+    expect(() => writeFlag('k', true, broken)).not.toThrow()
+    expect(readFlag('k', false, undefined)).toBe(false)
+  })
+})
+
+// шаблон StudioPage по дереву разбора (vue/compiler-sfc), не регэкспом: дельты — только под флагом-галочкой
+describe('StudioPage.vue: «Δ крест» — под галочкой «подробнее»', () => {
+  const root = templateAst('components/StudioPage.vue')
+  const deltas = findElements(root, (n) => (n.children || []).some((c) => c.type === 2 && c.content.includes('Δ крест')))
+  const boxes = findElements(root, (n) => n.tag === 'input' && attr(n, 'type') === 'checkbox' && dir(n, 'model') !== null)
+
+  it('строка дельт есть и каждый её показ зависит от флага, который переключает галочка', () => {
+    expect(deltas.length).toBeGreaterThan(0)
+    for (const { ancestors } of deltas) {
+      const guards = ancestors.map(shownIf).filter(Boolean)
+      const flag = boxes.map((b) => dir(b.node, 'model')).find((m) => guards.some((g) => idents(g).includes(m)))
+      expect(flag, `условия предков: ${JSON.stringify(guards)}`).toBeTruthy()
+    }
   })
 
-  it('галочка «подробнее» — одна на список, а не своя у каждой версии (вне v-for версий)', () => {
-    const flags = flagNames()
-    const guards = openAt(template, pos).map((tg) => vIfOf(tg.attrs)).filter(Boolean)
-    const flag = flags.find((f) => guards.some((expr) => idents(expr).includes(f)))
-    expect(flag).toBeTruthy()
-    const cbRe = new RegExp(`<input[^>]*v-model="${flag}"`, 'g')
-    const hits = [...template.matchAll(cbRe)]
-    expect(hits).toHaveLength(1)
-    const parents = openAt(template, hits[0].index)
-    const inVariantLoop = parents.some((tg) => /v-for\s*=\s*"[^"]*\bin\b/.test(tg.attrs) && /\bv\b/.test(tg.attrs.match(/v-for\s*=\s*"([^"]*)"/)[1].split(/\bin\b/)[0]))
-    expect(inVariantLoop).toBe(false)
+  it('галочка «подробнее» — одна на список версий, вне v-for', () => {
+    const guards = deltas[0].ancestors.map(shownIf).filter(Boolean)
+    const mine = boxes.filter((b) => guards.some((g) => idents(g).includes(dir(b.node, 'model'))))
+    expect(mine).toHaveLength(1)
+    expect(mine[0].ancestors.some((a) => dir(a, 'for') !== null), 'галочка внутри v-for').toBe(false)
   })
 })

@@ -32,6 +32,7 @@ func newChecker(build string, h *fakeHash, c *fakeClock) *staleChecker {
 func newClock() *fakeClock { return &fakeClock{t: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)} }
 
 func TestStaleNilChecker(t *testing.T) {
+	t.Parallel()
 	var c *staleChecker
 	if w := c.warning(); w != "" {
 		t.Fatalf("nil checker: %q", w)
@@ -39,6 +40,7 @@ func TestStaleNilChecker(t *testing.T) {
 }
 
 func TestStaleNoBuildInfoSkipsHash(t *testing.T) {
+	t.Parallel()
 	cases := map[string]*staleChecker{}
 	h1, h2 := &fakeHash{value: "bbbbbbbbbbbb"}, &fakeHash{value: "bbbbbbbbbbbb"}
 	clk := newClock()
@@ -55,6 +57,7 @@ func TestStaleNoBuildInfoSkipsHash(t *testing.T) {
 }
 
 func TestStaleFresh(t *testing.T) {
+	t.Parallel()
 	h := &fakeHash{value: "aaaaaaaaaaaa"}
 	if w := newChecker("aaaaaaaaaaaa", h, newClock()).warning(); w != "" {
 		t.Fatalf("fresh build: %q", w)
@@ -65,6 +68,7 @@ func TestStaleFresh(t *testing.T) {
 }
 
 func TestStaleWarns(t *testing.T) {
+	t.Parallel()
 	h := &fakeHash{value: "bbbbbbbbbbbb"}
 	w := newChecker("aaaaaaaaaaaa", h, newClock()).warning()
 	if w == "" {
@@ -76,6 +80,7 @@ func TestStaleWarns(t *testing.T) {
 }
 
 func TestStaleHashErrorIsSilent(t *testing.T) {
+	t.Parallel()
 	h := &fakeHash{err: errors.New("no such dir")}
 	if w := newChecker("aaaaaaaaaaaa", h, newClock()).warning(); w != "" {
 		t.Fatalf("hash error must be silent: %q", w)
@@ -83,6 +88,7 @@ func TestStaleHashErrorIsSilent(t *testing.T) {
 }
 
 func TestStaleCachingAndRecheck(t *testing.T) {
+	t.Parallel()
 	h := &fakeHash{value: "bbbbbbbbbbbb"}
 	clk := newClock()
 	c := newChecker("aaaaaaaaaaaa", h, clk)
@@ -155,6 +161,7 @@ func registerProbeTools(s *Server) {
 }
 
 func TestToolCallPrefixesStaleWarning(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	registerProbeTools(s)
 	s.SetBuildInfo("aaaaaaaaaaaa", t.TempDir())
@@ -177,6 +184,7 @@ func TestToolCallPrefixesStaleWarning(t *testing.T) {
 }
 
 func TestToolCallNoWarningWithoutBuildInfo(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	registerProbeTools(s)
 	if got := callTool(t, s, "probe_ok").Content[0].Text; got != "ok-result" {
@@ -188,6 +196,7 @@ func TestToolCallNoWarningWithoutBuildInfo(t *testing.T) {
 }
 
 func TestToolCallNoWarningWhenFresh(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	registerProbeTools(s)
 	s.SetBuildInfo("aaaaaaaaaaaa", t.TempDir())

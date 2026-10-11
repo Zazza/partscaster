@@ -103,6 +103,7 @@ func ppSteps() []dsp.Step { return []dsp.Step{{Chain: "eq", Params: map[string]f
 // Карточка 1.6: превью ещё нет — любое допустимое имя слота/куска даёт ошибку,
 // плеер не трогается.
 func TestPlayPreviewNotMadeIsError(t *testing.T) {
+	t.Parallel()
 	p := &recPlayer{}
 	a := newTestApp(&fakeService{jobs: []yue.Job{{ID: 1, Status: "done", AudioFile: "audio.flac"}}}, p)
 	defer a.fxCleanup()
@@ -122,6 +123,7 @@ func TestPlayPreviewNotMadeIsError(t *testing.T) {
 // Превью в слотах "" и "A" сделано (на дорожку — есть и соло), поэтому ошибка
 // может быть только из-за имени, а не из-за отсутствия превью.
 func TestPlayPreviewUnknownNameIsError(t *testing.T) {
+	t.Parallel()
 	a, p := ppApp(t)
 	for _, slot := range []string{"", "A"} {
 		if _, err := a.YueFxPreview(1, "other", ppSteps(), 2, 4, slot); err != nil {
@@ -148,9 +150,11 @@ func TestPlayPreviewUnknownNameIsError(t *testing.T) {
 // в плеер и стартует с заданной секунды (Seek на неё либо кусок, начатый с неё).
 // Другие допустимые слоты, где превью не делалось, — по-прежнему ошибка.
 func TestPlayPreviewPlaysByNameFromSecond(t *testing.T) {
+	t.Parallel()
 	const from, to, start = 2.0, 4.0, 0.5
 	for _, slot := range ppSlots {
 		t.Run("слот "+slot, func(t *testing.T) {
+			t.Parallel()
 			a, p := ppApp(t)
 			res, err := a.YueFxPreview(1, "other", ppSteps(), from, to, slot)
 			if err != nil {
@@ -196,6 +200,7 @@ func TestPlayPreviewPlaysByNameFromSecond(t *testing.T) {
 // Карточка 1.10: у превью на весь трек соло нет — wet_solo/dry_solo для него —
 // ошибка, плеер не трогается; wet/dry играются.
 func TestPlayPreviewWholeTrackHasNoSolo(t *testing.T) {
+	t.Parallel()
 	a, p := ppApp(t)
 	if _, err := a.YueFxPreview(1, "", ppSteps(), 2, 4, "A"); err != nil {
 		t.Fatalf("YueFxPreview весь трек: %v", err)

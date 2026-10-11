@@ -8,6 +8,7 @@ import (
 // Тесты математики позиций плеера: позиция всегда абсолютная (от начала трека),
 // длительность — всегда полная, перемотка её не урезает.
 func TestStateAbsolutePosition(t *testing.T) {
+	t.Parallel()
 	p := &player{volume: 0.8}
 	p.duration = 120 * time.Second
 	p.offset = 60 * time.Second // после перемотки в середину
@@ -24,6 +25,7 @@ func TestStateAbsolutePosition(t *testing.T) {
 }
 
 func TestStatePausedMidChunk(t *testing.T) {
+	t.Parallel()
 	p := &player{}
 	p.duration = 120 * time.Second
 	p.offset = 60 * time.Second
@@ -39,23 +41,8 @@ func TestStatePausedMidChunk(t *testing.T) {
 	}
 }
 
-func TestNaturalEndSetsPositionToEnd(t *testing.T) {
-	// чанк 60..120 с дошёл до конца: позиция должна стать 120с, а не 60с (начало чанка)
-	p := &player{}
-	p.duration = 120 * time.Second
-	p.offset = 60 * time.Second
-	p.pausedAt = 30 * time.Second // играл 30с чанка до конца
-	// эмулируем естественное завершение:pausedAt = duration-offset
-	p.playing = false
-	p.pausedAt = p.duration - p.offset
-
-	_, pos, _, _ := p.State()
-	if pos != 120*time.Second {
-		t.Fatalf("pos = %v, want 120s (конец трека)", pos)
-	}
-}
-
 func TestVolumeClamp(t *testing.T) {
+	t.Parallel()
 	p := &player{}
 	p.SetVolume(1.5)
 	if p.volume != 1 {

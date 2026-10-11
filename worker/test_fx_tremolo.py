@@ -12,9 +12,7 @@
 Написаны по карточке, без чтения реализации. Внешних границ нет — моков нет.
 Запуск: cd worker && python3 -m unittest test_fx_tremolo -v
 """
-import json
 import unittest
-from pathlib import Path
 
 try:
     import numpy as np
@@ -72,19 +70,6 @@ def _corr(a, b):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TremoloSpecTest(unittest.TestCase):
-    def test_block_described_in_fx_blocks_json(self):
-        blocks = json.loads(Path(__file__).with_name("fx_blocks.json").read_text(encoding="utf-8"))
-        self.assertIn("tremolo", sorted(blocks))
-        b = blocks["tremolo"]
-        for lang in ("ru", "en"):
-            self.assertTrue(b["label"][lang].strip())
-        params = {p["id"]: p for p in b["params"]}
-        want = {"rate_hz": (0.5, 15, 5), "depth": (0, 1, 0.5), "shape": (0, 1, 0), "stereo": (0, 1, 0)}
-        self.assertEqual(set(params), set(want))
-        for k, (lo, hi, d) in want.items():
-            self.assertAlmostEqual(params[k]["min"], lo, msg=k)
-            self.assertAlmostEqual(params[k]["max"], hi, msg=k)
-            self.assertAlmostEqual(params[k]["default"], d, msg=k)
 
     def test_defaults_filled(self):
         norm = _fx().parse_chain(_trem())[0]
@@ -189,14 +174,13 @@ class TremoloSoundTest(unittest.TestCase):
                     self.assertTrue(np.all(np.isfinite(y)))
 
 
-
 # ---------- Кросс-ревью s7a r1: условие 50а, ТК85а — фаза LFO от времени в треке ----------
 # Контракт: LFO считается от t = _t0 + отсчёт/sr; _t0 (начало куска в треке, с) ставит только
 # воркер: превью окна [from, to) — _t0 = from, полный рендер — 0; присланный в запросе _t0
 # выбрасывается. Служебный _t0 разрешён только tremolo и perc, у прочих блоков — ChainError.
 
-T0, T1 = 20.1, 21.1
-LONG = 30.0
+T0, T1 = 2.1, 3.1   # не с начала трека: фаза LFO 5 Гц в окне — полпериода, как и на 20,1 с
+LONG = 4.0
 TREM_FULL = {"rate_hz": 5, "depth": 1, "stereo": 1}
 
 
@@ -254,7 +238,7 @@ except Exception as e:  # окружение без fastapi/httpx — пропу
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TremoloPreviewMatchesRenderTest(_ApiBase):
-    """ТК85а (воркер): превью окна [20,1; 21,1) (source mix, output mix) = тот же отрезок
+    """ТК85а (воркер): превью окна [2,1; 3,1) (source mix, output mix) = тот же отрезок
     полного /fx-рендера ±1e-4; присланный в запросе _t0 игнорируется."""
 
     def _long_job(self):
@@ -283,18 +267,12 @@ class TremoloPreviewMatchesRenderTest(_ApiBase):
         a, b = int(round(T0 * sr)), int(round(T1 * sr))
         return y[a:b]
 
-    def test_tc85a_preview_window_equals_full_render_slice(self):
-        jid, d = self._long_job()
-        want = self._render_slice(jid, d)
-        out = self._preview(jid, _trem(**TREM_FULL))
-        got, _ = _fa._read(d / out["file"])
-        self.assertEqual(got.shape, want.shape)
-        np.testing.assert_allclose(got, want, rtol=0, atol=1e-4)
-
     def test_tc85a_t0_from_request_is_ignored(self):
         jid, d = self._long_job()
         want = self._render_slice(jid, d)
         base, _ = _fa._read(d / self._preview(jid, _trem(**TREM_FULL))["file"])
+        self.assertEqual(base.shape, want.shape)
+        np.testing.assert_allclose(base, want, rtol=0, atol=1e-4)   # превью окна = отрезок полного рендера
         for t0 in (0, 5.0, 123.4):
             with self.subTest(t0=t0):
                 out = self._preview(jid, _trem(**TREM_FULL, _t0=t0))

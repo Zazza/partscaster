@@ -1,13 +1,15 @@
 // Тесты карточки internal-instruments-page, тест-кейс 3 (условие 3): готовые цепочки
 // движка fxPresets.js — [{id, name: {ru, en}, note: {ru, en}, chain}], chain — JSON
 // воркера. Каждый пресет проходит проверку по описанию блоков воркера: снимок SPEC —
-// fxBlocks.json (побайтная копия worker/fx_blocks.json, паритет сверяет тест воркера).
+// fxBlocks.json (побайтная копия worker/fx_blocks.json, паритет сверяет tails.test.js).
 // Написаны по карточке и контракту, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import blocks from './fxBlocks.json'
 import { fxPresets } from './fxPresets.js'
 
-const cases = fxPresets.map((p) => [p.id, p])
+// Правило — один тест: собирается список нарушителей «id: причина», пустой список = зелёный.
+// При падении сообщение называет каждый пресет и что в нём не так.
+const violations = (list, check) => list.flatMap((p) => check(p).map((why) => `${p.id}: ${why}`))
 
 // проверка числа по описанию параметра: [min, max] или 0 при zero_off
 function inRange(v, spec) {
@@ -41,68 +43,53 @@ describe('fxPresets: набор', () => {
   })
 })
 
-describe.each(cases)('пресет %s', (_, p) => {
+describe('fxPresets: правила для каждого пресета', () => {
   it('name и note — ru и en, непустые', () => {
-    for (const f of ['name', 'note']) {
-      for (const lang of ['ru', 'en']) {
-        expect(typeof p[f]?.[lang], `${f}.${lang}`).toBe('string')
-        expect(p[f][lang].trim(), `${f}.${lang}`).not.toBe('')
-      }
-    }
+    expect(violations(fxPresets, (p) => ['name', 'note'].flatMap((f) => ['ru', 'en']
+      .filter((lang) => typeof p[f]?.[lang] !== 'string' || p[f][lang].trim() === '')
+      .map((lang) => `${f}.${lang} пусто`)))).toEqual([])
   })
 
   it('цепочка — непустой список известных блоков', () => {
-    expect(Array.isArray(p.chain)).toBe(true)
-    expect(p.chain.length).toBeGreaterThan(0)
-    for (const b of p.chain) expect(Object.keys(blocks), `тип ${b.type}`).toContain(b.type)
+    expect(violations(fxPresets, (p) => {
+      if (!Array.isArray(p.chain) || p.chain.length === 0) return ['пустая цепочка']
+      return p.chain.filter((b) => !(b.type in blocks)).map((b) => `неизвестный блок ${b.type}`)
+    })).toEqual([])
   })
 
   it('каждый параметр есть в описании блока, значение — в диапазоне и нужного вида', () => {
-    for (const [i, b] of p.chain.entries()) {
+    expect(violations(fxPresets, (p) => p.chain.flatMap((b, i) => {
       const d = blocks[b.type]
+      if (!d) return []
       const nums = Object.fromEntries(d.params.map((x) => [x.id, x]))
       const strs = Object.fromEntries((d.strings || []).map((x) => [x.id, x]))
-      for (const [k, v] of Object.entries(b)) {
-        if (k === 'type') continue
+      return Object.entries(b).flatMap(([k, v]) => {
+        if (k === 'type') return []
         const where = `блок ${i + 1} (${b.type}).${k}=${JSON.stringify(v)}`
-        if (k === 'bands') {
-          expect(d.bands, `${where}: полосы только у eq`).toBeTruthy()
-          continue
-        }
-        if (k in nums) {
-          expect(inRange(v, nums[k]), `${where} вне [${nums[k].min}, ${nums[k].max}]`).toBe(true)
-        } else if (k in strs) {
-          expect(typeof v, where).toBe('string')
-        } else {
-          throw new Error(`${where}: параметра нет в описании блока`)
-        }
-      }
-    }
+        if (k === 'bands') return d.bands ? [] : [`${where}: полосы только у eq`]
+        if (k in nums) return inRange(v, nums[k]) ? [] : [`${where} вне [${nums[k].min}, ${nums[k].max}]`]
+        if (k in strs) return typeof v === 'string' ? [] : [`${where}: не строка`]
+        return [`${where}: параметра нет в описании блока`]
+      })
+    }))).toEqual([])
   })
 
   it('полосы eq: известные поля, значения в диапазонах', () => {
-    for (const b of p.chain.filter((x) => x.bands !== undefined)) {
-      expect(b.type).toBe('eq')
-      expect(Array.isArray(b.bands)).toBe(true)
-      for (const band of b.bands) {
-        for (const [k, v] of Object.entries(band)) {
-          const spec = blocks.eq.bands[k]
-          expect(spec, `поле полосы ${k}`).toBeTruthy()
-          expect(inRange(v, spec), `полоса ${k}=${v}`).toBe(true)
-        }
-      }
-    }
+    expect(violations(fxPresets, (p) => p.chain.filter((x) => x.bands !== undefined).flatMap((b) => {
+      if (b.type !== 'eq') return [`полосы у ${b.type}`]
+      if (!Array.isArray(b.bands)) return ['bands не список']
+      return b.bands.flatMap((band) => Object.entries(band)
+        .filter(([k, v]) => !blocks.eq.bands[k] || !inRange(v, blocks.eq.bands[k]))
+        .map(([k, v]) => `полоса ${k}=${v}`))
+    }))).toEqual([])
   })
 
   // захваты NAM в поставку не входят (карточка, условие 3): у пресета обязательная строка —
   // ключ есть и это строка; пустая значит «выберите захват», страница подставит загруженный
   it('обязательные строки есть ключом (у amp — model, пустая — выбор захвата)', () => {
-    for (const b of p.chain) {
-      for (const s of blocks[b.type].strings || []) {
-        if (!s.required) continue
-        expect(typeof b[s.id], `${b.type}.${s.id}`).toBe('string')
-      }
-    }
+    expect(violations(fxPresets, (p) => p.chain.flatMap((b) => (blocks[b.type]?.strings || [])
+      .filter((s) => s.required && typeof b[s.id] !== 'string')
+      .map((s) => `${b.type}.${s.id} нет`)))).toEqual([])
   })
 })
 
@@ -115,10 +102,6 @@ describe('fxPresets: гитары (условие 13) и наборы бараб
   const amps = (p) => p.chain.filter((b) => b.type === 'amp')
   const ampPresets = fxPresets.filter((p) => amps(p).length > 0)
   const byInput = (db) => ampPresets.filter((p) => amps(p).some((b) => b.input_db === db))
-
-  it('пресета guitar-crunch больше нет', () => {
-    expect(fxPresets.map((p) => p.id)).not.toContain('guitar-crunch')
-  })
 
   it('три гитарных пресета с усилителем: вход −6, +12 и +6 — разные цепочки', () => {
     const picked = [-6, 12, 6].map((db) => {
@@ -185,12 +168,12 @@ describe('fxPresets: дорожки пресетов (stems)', () => {
     expect(byId(MASTER).stems).toBeUndefined()
   })
 
-  it.each(fxPresets.filter((p) => p.id !== MASTER).map((p) => [p.id, p]))(
-    'пресет %s: stems — непустой список известных дорожек', (_, p) => {
-      expect(Array.isArray(p.stems), `${p.id}: stems не список`).toBe(true)
-      expect(p.stems.length).toBeGreaterThan(0)
-      for (const s of p.stems) expect(KNOWN, `${p.id}: неизвестная дорожка ${s}`).toContain(s)
-    })
+  it('у каждого пресета, кроме мастер-склейки, stems — непустой список известных дорожек', () => {
+    expect(violations(fxPresets.filter((p) => p.id !== MASTER), (p) => {
+      if (!Array.isArray(p.stems) || p.stems.length === 0) return ['stems пуст или не список']
+      return p.stems.filter((s) => !KNOWN.includes(s)).map((s) => `неизвестная дорожка ${s}`)
+    })).toEqual([])
+  })
 
   it.each(['guitar', 'vocals', 'drums', 'kick', 'snare', 'hh', 'bass'])(
     'для дорожки %s есть хотя бы один свой пресет', (stem) => {
@@ -240,15 +223,12 @@ describe('fxPresets: готовые синты (ТК52)', () => {
     for (const n of NAMES) expect(synths.map((p) => p.name.ru)).toContain(n)
   })
 
-  it.each(synths.map((p) => [p.id, p]))('%s: style и octave', (_, p) => {
-    expect(['pad', 'pulse', 'arp', 'drone']).toContain(p.style)
-    expect(Number.isInteger(p.octave), `${p.id}: octave ${p.octave}`).toBe(true)
-    expect(p.octave).toBeGreaterThanOrEqual(-2)
-    expect(p.octave).toBeLessThanOrEqual(2)
-  })
-
-  it.each(synths.map((p) => [p.id, p]))('%s: цепочка начинается с synth', (_, p) => {
-    expect(p.chain[0].type).toBe('synth')
+  it('у каждого синта style из pad/pulse/arp/drone, octave — целое −2…+2, цепочка начинается с synth', () => {
+    expect(violations(synths, (p) => [
+      ...(['pad', 'pulse', 'arp', 'drone'].includes(p.style) ? [] : [`style ${p.style}`]),
+      ...(Number.isInteger(p.octave) && p.octave >= -2 && p.octave <= 2 ? [] : [`octave ${p.octave}`]),
+      ...(p.chain[0]?.type === 'synth' ? [] : [`первый блок ${p.chain[0]?.type}`]),
+    ])).toEqual([])
   })
 
   it('синты не подсовываются обычным дорожкам: у прочих пресетов нет synth в цепочке', () => {

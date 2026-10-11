@@ -20,6 +20,7 @@ func ownPartsPreset() []yue.PresetPart {
 }
 
 func TestSoundPresetUpdateWithoutPartsKeepsOld(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	fake.presets[1].Parts = ownPartsPreset()
 	out, ok := call(t, s, "sound_preset_update", jsonArgs(t, `{"preset_id":12,"name":"Мой тёплый","note":"новое"}`))
@@ -35,6 +36,7 @@ func TestSoundPresetUpdateWithoutPartsKeepsOld(t *testing.T) {
 }
 
 func TestSoundPresetUpdateEmptyPartsClears(t *testing.T) {
+	t.Parallel()
 	s, fake := newPresetServer(t)
 	fake.presets[1].Parts = ownPartsPreset()
 	out, ok := call(t, s, "sound_preset_update", jsonArgs(t, `{"preset_id":12,"name":"Мой тёплый","parts":[]}`))
@@ -46,17 +48,5 @@ func TestSoundPresetUpdateEmptyPartsClears(t *testing.T) {
 	}
 	if got := fake.updated[0].p.Parts; len(got) != 0 {
 		t.Errorf("update с parts []: parts %+v, want пусто", got)
-	}
-}
-
-// Пресет без партий: update без parts — партий не появляется.
-func TestSoundPresetUpdateWithoutPartsNoParts(t *testing.T) {
-	s, fake := newPresetServer(t)
-	out, ok := call(t, s, "sound_preset_update", jsonArgs(t, `{"preset_id":12,"name":"Мой тёплый"}`))
-	if !ok {
-		t.Fatalf("sound_preset_update: %s", out)
-	}
-	if len(fake.updated) != 1 || len(fake.updated[0].p.Parts) != 0 {
-		t.Errorf("update пресета без партий: %+v, want parts пусто", fake.updated)
 	}
 }

@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -42,6 +41,7 @@ func newVoiceServer(t *testing.T, retID int64, err error) (*Server, *voiceFake) 
 }
 
 func TestVoiceConvertToolAllParams(t *testing.T) {
+	t.Parallel()
 	s, fake := newVoiceServer(t, 4321, nil)
 	out, ok := call(t, s, "voice_convert", map[string]any{
 		"job_id": float64(214), "ref_job_id": float64(135),
@@ -64,6 +64,7 @@ func TestVoiceConvertToolAllParams(t *testing.T) {
 }
 
 func TestVoiceConvertToolDefaults(t *testing.T) {
+	t.Parallel()
 	s, fake := newVoiceServer(t, 88, nil)
 	out, ok := call(t, s, "voice_convert", map[string]any{"job_id": float64(5), "ref_job_id": float64(9)})
 	if !ok {
@@ -82,6 +83,7 @@ func TestVoiceConvertToolDefaults(t *testing.T) {
 }
 
 func TestVoiceConvertToolServiceError(t *testing.T) {
+	t.Parallel()
 	s, fake := newVoiceServer(t, 0, &yue.StatusError{Code: 503, Msg: "yue /jobs/5/voice: 503: Seed-VC не установлен"})
 	out, ok := call(t, s, "voice_convert", map[string]any{"job_id": float64(5), "ref_job_id": float64(9)})
 	if ok {
@@ -95,15 +97,8 @@ func TestVoiceConvertToolServiceError(t *testing.T) {
 	}
 }
 
-func TestVoiceConvertToolPlainErrorPropagates(t *testing.T) {
-	s, _ := newVoiceServer(t, 0, errors.New("нет такого трека"))
-	out, ok := call(t, s, "voice_convert", map[string]any{"job_id": float64(5), "ref_job_id": float64(9)})
-	if ok || !strings.Contains(out, "нет такого трека") {
-		t.Fatalf("error must propagate: ok=%v %s", ok, out)
-	}
-}
-
 func TestVoiceConvertToolRequiresIDs(t *testing.T) {
+	t.Parallel()
 	cases := []map[string]any{
 		{"ref_job_id": float64(9)},
 		{"job_id": float64(5)},

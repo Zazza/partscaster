@@ -76,6 +76,7 @@ func assertDetailRemovedInWindow(t *testing.T, out, base []float32, what string)
 // G1: заглушка дорожки guitar в окне — итог = база минус дорожка гитары в окне;
 // остальные дорожки не трогаются; файл есть — MakeStems не нужен.
 func TestDetailRebuildMuteGuitar(t *testing.T) {
+	t.Parallel()
 	f, base := detailSetup(t, "guitar")
 	run(t, f, muteDetail("guitar"))
 	assertDetailRemovedInWindow(t, uploadedOnly(t, f), base, "guitar −100 дБ")
@@ -89,6 +90,7 @@ func TestDetailRebuildMuteGuitar(t *testing.T) {
 
 // G1 (симметрично для клавиш): заглушка piano.
 func TestDetailRebuildMutePiano(t *testing.T) {
+	t.Parallel()
 	f, base := detailSetup(t, "piano")
 	run(t, f, muteDetail("piano"))
 	assertDetailRemovedInWindow(t, uploadedOnly(t, f), base, "piano −100 дБ")
@@ -98,6 +100,7 @@ func TestDetailRebuildMutePiano(t *testing.T) {
 // применяется в окне — результат в окне отличается от базы (3000 ослаблен), 500 Гц
 // не тронут; вне окна — база.
 func TestDetailRebuildChainOnPiano(t *testing.T) {
+	t.Parallel()
 	f, base := detailSetup(t, "piano")
 	run(t, f, SectionSpec{ChildID: 0, From: 2, To: 4, Stems: []string{"piano"},
 		Chain: "dewhistle", Params: notch3000()})
@@ -122,6 +125,7 @@ func TestDetailRebuildChainOnPiano(t *testing.T) {
 // G3: stem-guitar.flac нет, основные стемы есть → MakeStems(id) ровно один раз,
 // затем дорожка скачивается и применяется.
 func TestDetailRebuildMakesStemsForMissingGuitar(t *testing.T) {
+	t.Parallel()
 	pf, guitar := detailFiles(t, "guitar", false)
 	f := newSecFake()
 	put(f, parentID, pf)
@@ -138,11 +142,13 @@ func TestDetailRebuildMakesStemsForMissingGuitar(t *testing.T) {
 // (называет дорожку), ничего не загружено; не молчаливый пропуск. MakeStems упал —
 // тоже ошибка без загрузки.
 func TestDetailRebuildGuitarUnavailableIsError(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		failed bool
 	}{{"MakeStems без гитары", false}, {"MakeStems ошибка", true}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			pf, _ := detailFiles(t, "guitar", false)
 			f := newSecFake()
 			f.stemsFailed = tc.failed
@@ -169,6 +175,7 @@ func TestDetailRebuildGuitarUnavailableIsError(t *testing.T) {
 
 // G4: VolumeEnvelope принимает дорожку guitar: её тон идёт по огибающей, 500 Гц не меняется.
 func TestDetailVolumeEnvelopeGuitar(t *testing.T) {
+	t.Parallel()
 	f, _ := detailSetup(t, "guitar")
 	v, err := VolumeEnvelope(context.Background(), f, parentID, "guitar", rampPts)
 	if err != nil {
@@ -193,6 +200,7 @@ func TestDetailVolumeEnvelopeGuitar(t *testing.T) {
 
 // G4 (симметрично): piano тоже допустимая дорожка линии громкости.
 func TestDetailVolumeEnvelopePiano(t *testing.T) {
+	t.Parallel()
 	f, _ := detailSetup(t, "piano")
 	if _, err := VolumeEnvelope(context.Background(), f, parentID, "piano", rampPts); err != nil {
 		t.Fatalf("VolumeEnvelope piano: %v (want: дорожка допустима)", err)
@@ -204,6 +212,7 @@ func TestDetailVolumeEnvelopePiano(t *testing.T) {
 
 // G4: неизвестная дорожка — ошибка, ничего не загружено, MakeStems не зовётся.
 func TestDetailVolumeEnvelopeUnknownStem(t *testing.T) {
+	t.Parallel()
 	f, _ := detailSetup(t, "guitar")
 	for _, stem := range []string{"flute", "../x", "Guitar"} {
 		if _, err := VolumeEnvelope(context.Background(), f, parentID, stem, rampPts); err == nil {
@@ -221,6 +230,7 @@ func TestDetailVolumeEnvelopeUnknownStem(t *testing.T) {
 // G5: подпись пересборки называет дорожку по-русски: guitar → «гитара»
 // (не общее «гитары/синты» дорожки other), piano → «клавиши».
 func TestDetailRebuildLabel(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		detail, want string
 		spec         SectionSpec
@@ -231,6 +241,7 @@ func TestDetailRebuildLabel(t *testing.T) {
 			Chain: "dewhistle", Params: notch3000()}},
 	} {
 		t.Run(tc.detail+"/"+tc.spec.Chain, func(t *testing.T) {
+			t.Parallel()
 			f, _ := detailSetup(t, tc.detail)
 			got := mixLabel(t, f, tc.spec)
 			if !strings.Contains(got, tc.want) {

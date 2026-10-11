@@ -41,6 +41,7 @@ func engineChainOf(t *testing.T) []map[string]any {
 // ТК8: engine записи → SectionSpec.Engine как есть (вложенные bands тоже);
 // запись без engine — Engine пустой, остальное как раньше.
 func TestParseSectionSpecsEngine(t *testing.T) {
+	t.Parallel()
 	var raw any
 	if err := json.Unmarshal([]byte(engineSpecsJSON), &raw); err != nil {
 		t.Fatal(err)
@@ -66,6 +67,7 @@ func TestParseSectionSpecsEngine(t *testing.T) {
 
 // Краевой: engine не массив объектов — ошибка разбора (не молча без эффекта).
 func TestParseSectionSpecsEngineNotArrayIsError(t *testing.T) {
+	t.Parallel()
 	for _, bad := range []string{
 		`[{"from":1,"to":2,"stems":["other"],"engine":"amp"}]`,
 		`[{"from":1,"to":2,"stems":["other"],"engine":{"type":"amp"}}]`,
@@ -81,24 +83,10 @@ func TestParseSectionSpecsEngineNotArrayIsError(t *testing.T) {
 	}
 }
 
-// Описание rebuild_sections называет поле engine.
-func TestRebuildSectionsDescribesEngine(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool := s.tools["rebuild_sections"]
-	s.mu.RUnlock()
-	b, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(tool.Description+string(b), "engine") {
-		t.Errorf("в описании rebuild_sections нет поля engine: %s / %s", tool.Description, b)
-	}
-}
-
 // Сквозной: rebuild_sections с engine доходит до воркера — ApplyFx у трека с
 // цепочкой как есть, на дорожку записи, solo + preview; вариант загружен.
 func TestRebuildSectionsEngineCallsWorker(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newFxServer(t)
 	fake.jobs = []yue.Job{{ID: 466, Status: "done", AudioFile: "audio.flac"}}
@@ -140,6 +128,7 @@ func TestRebuildSectionsEngineCallsWorker(t *testing.T) {
 // Условие 8 через MCP: воркер отказал (движок выключен) — инструмент падает с
 // причиной, ничего не загружено.
 func TestRebuildSectionsEngineWorkerErrorIsError(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newFxServer(t)
 	fake.applyErr = errors.New("fx engine disabled")
@@ -166,6 +155,7 @@ func TestRebuildSectionsEngineWorkerErrorIsError(t *testing.T) {
 // rebuild_sections падает с текстом про обновление воркера, ApplyFx не вызван,
 // ничего не загружено.
 func TestRebuildSectionsEngineOldWorkerIsError(t *testing.T) {
+	t.Parallel()
 	needFF(t)
 	s, fake := newFxServer(t)
 	fake.cfg = map[string]any{"ollama_url": "http://llm:11434"}

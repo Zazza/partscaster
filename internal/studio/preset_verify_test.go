@@ -253,6 +253,7 @@ func vfRun(t *testing.T, id int64, errs map[int64]float64, fail ...int64) (*vfFa
 
 // ТК126: гитара +3,6, после исправления у цели → 2 прохода, гитара −3,6, удалена V1, ответ V2.
 func TestPresetVerifySecondPass(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 51, map[int64]float64{vfFirst: 3.6})
 	if !vfAsked(f.splitAsks, vfFirst+1) {
 		t.Errorf("вторая версия не сверена (разделение не запрошено): %v", f.splitAsks)
@@ -262,24 +263,28 @@ func TestPresetVerifySecondPass(t *testing.T) {
 
 // ТК126/86: ошибка 9 → поправка прохода зажата 6; после неё у цели → 2 прохода.
 func TestPresetVerifyClamp(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 52, map[int64]float64{vfFirst: 9})
 	vfCheck(t, f, orig, res, []float64{-6}, []int64{vfFirst}, vfFirst+1)
 }
 
 // ТК126а: +3,6 → +1,6 → третий проход: гитара = первый − 5,2; удалены V1 и V2; ответ V3.
 func TestPresetVerifyThirdPass(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 55, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6})
 	vfCheck(t, f, orig, res, []float64{-3.6, -5.2}, []int64{vfFirst, vfFirst + 1}, vfFirst+2)
 }
 
 // ТК126а: +9 и +9 (и +9 у третьей) → 2-й проход −6, 3-й — сумма зажата −9; четвёртого прохода нет.
 func TestPresetVerifySumClamp(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 56, map[int64]float64{vfFirst: 9, vfFirst + 1: 9, vfFirst + 2: 9})
 	vfCheck(t, f, orig, res, []float64{-6, -9}, []int64{vfFirst, vfFirst + 1}, vfFirst+2)
 }
 
 // ТК126а: промах остаётся после двух исправлений → всё равно ≤ 3 пересборок.
 func TestPresetVerifyNoFourthPass(t *testing.T) {
+	t.Parallel()
 	f, _, _ := vfRun(t, 57, map[int64]float64{vfFirst: 3, vfFirst + 1: 3, vfFirst + 2: 3, vfFirst + 3: 3})
 	if n := f.guitarRuns(); n > 3 {
 		t.Errorf("проходов %d, want ≤ 3 (не больше двух исправлений)", n)
@@ -291,18 +296,21 @@ func TestPresetVerifyNoFourthPass(t *testing.T) {
 
 // ТК126: все у цели (гитара +0,5 ≤ 1 дБ) → одна пересборка, ничего не удалено, ответ — первая версия.
 func TestPresetVerifyAllOnTarget(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 53, map[int64]float64{vfFirst: 0.5})
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
 }
 
 // ТК126: сбой разделения первой версии → ответ первая версия, без ошибки, без второй пересборки.
 func TestPresetVerifySplitError(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 54, map[int64]float64{vfFirst: 3.6}, vfFirst)
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
 }
 
 // ТК126а: сбой разделения второй версии → ответ вторая версия без ошибки, удалена только первая.
 func TestPresetVerifySplitErrorSecond(t *testing.T) {
+	t.Parallel()
 	f, orig, res := vfRun(t, 58, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6}, vfFirst+1)
 	if !vfAsked(f.splitAsks, vfFirst+1) {
 		t.Errorf("разделение второй версии не запрошено: %v", f.splitAsks)
@@ -312,6 +320,7 @@ func TestPresetVerifySplitErrorSecond(t *testing.T) {
 
 // ТК127 / 86б: level_db −10 и db +3 — цель сверки −7. Гитара версии на −7 → у цели, второго прохода нет.
 func TestPresetVerifyRespectsDbOnTarget(t *testing.T) {
+	t.Parallel()
 	f, orig := vfSetup(t, map[int64]float64{vfFirst: 3}) // гитара −10 + 3 = −7
 	res := vfApply(t, f, vfPresetDb(61, 3))
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
@@ -319,6 +328,7 @@ func TestPresetVerifyRespectsDbOnTarget(t *testing.T) {
 
 // ТК127 / 86б: level_db −10 и db +3, гитара версии на −10 → промах −3 к цели −7 → поправка +3 (не 0).
 func TestPresetVerifyRespectsDbCorrects(t *testing.T) {
+	t.Parallel()
 	f, orig := vfSetup(t, map[int64]float64{vfFirst: 0, vfFirst + 1: 3}) // −10, после исправления −7
 	res := vfApply(t, f, vfPresetDb(62, 3))
 	vfCheck(t, f, orig, res, []float64{3}, []int64{vfFirst}, vfFirst+1)
@@ -327,8 +337,10 @@ func TestPresetVerifyRespectsDbCorrects(t *testing.T) {
 // ТК127 / 86в: нет замера у основной vocals (или у целевой гитары) при промахе гитары +3,6 →
 // без поправок: одна пересборка, ничего не удалено, ответ — первая версия.
 func TestPresetVerifyIncompleteMetrics(t *testing.T) {
+	t.Parallel()
 	for _, stem := range []string{"vocals", "guitar"} {
 		t.Run("нет замера "+stem, func(t *testing.T) {
+			t.Parallel()
 			f, orig := vfSetup(t, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 0})
 			f.noMetric[stem] = true
 			res := vfApply(t, f, vfPreset(63))

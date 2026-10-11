@@ -153,6 +153,8 @@ func cabGraph(p map[string]float64) string {
 	if p["mid"] != 0 {
 		mid = fmt.Sprintf(",equalizer=f=1500:t=q:w=1:g=%g", p["mid"])
 	}
-	return fmt.Sprintf("[0:a]highpass=f=%g,highpass=f=%g,firequalizer=gain='%s':zero_phase=on%s[out]",
-		p["low"], p["low"], g, mid)
+	// zero_phase сдвигает метки времени на половину фильтра (~10 мс): atrim+asetpts возвращают звук на место,
+	// иначе обработанная гитара опаздывает относительно остальных дорожек
+	return fmt.Sprintf("[0:a]highpass=f=%g,highpass=f=%g,firequalizer=gain='%s':zero_phase=on,"+
+		"atrim=start=0,asetpts=PTS-STARTPTS%s[out]", p["low"], p["low"], g, mid)
 }

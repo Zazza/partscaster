@@ -40,6 +40,7 @@ func newOverdubServer(t *testing.T) (*Server, *overdubFake) {
 }
 
 func TestOverdubGainCases(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		args string
@@ -51,6 +52,7 @@ func TestOverdubGainCases(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s, fake := newOverdubServer(t)
 			out, ok := call(t, s, "overdub", jsonArgs(t, tc.args))
 			if !ok {

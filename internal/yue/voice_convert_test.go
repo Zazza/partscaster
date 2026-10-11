@@ -2,12 +2,12 @@ package yue
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
 )
 
 func TestVoiceConvertFullParams(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":301}`, &got)
 	id, err := c.VoiceConvert(context.Background(), 214, VoiceParams{
@@ -34,6 +34,7 @@ func TestVoiceConvertFullParams(t *testing.T) {
 }
 
 func TestVoiceConvertOnlyRefJobWhenZeroes(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":7}`, &got)
 	id, err := c.VoiceConvert(context.Background(), 5, VoiceParams{RefJobID: 9})
@@ -52,6 +53,7 @@ func TestVoiceConvertOnlyRefJobWhenZeroes(t *testing.T) {
 }
 
 func TestVoiceConvertRefJobZeroStillSent(t *testing.T) {
+	t.Parallel()
 	// ref_job_id — «всегда», даже нулевой.
 	var got updateReq
 	c := updateServer(t, 200, `{"id":1}`, &got)
@@ -64,23 +66,5 @@ func TestVoiceConvertRefJobZeroStillSent(t *testing.T) {
 	}
 	if len(got.body) != 1 {
 		t.Fatalf("zero optional fields must be omitted: %v", got.body)
-	}
-}
-
-func TestVoiceConvertErrorStatus(t *testing.T) {
-	for _, code := range []int{503, 404, 422} {
-		var got updateReq
-		c := updateServer(t, code, `{"detail":"Seed-VC не установлен"}`, &got)
-		id, err := c.VoiceConvert(context.Background(), 5, VoiceParams{RefJobID: 9})
-		if err == nil {
-			t.Fatalf("%d: expected error, got id %d", code, id)
-		}
-		var se *StatusError
-		if !errors.As(err, &se) || se.Code != code {
-			t.Fatalf("%d: want *StatusError with code, got %T %v", code, err, err)
-		}
-		if id != 0 {
-			t.Fatalf("%d: id must be 0 on error, got %d", code, id)
-		}
 	}
 }

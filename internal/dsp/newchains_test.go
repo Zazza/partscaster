@@ -391,6 +391,7 @@ func ncRunAny(t *testing.T, c *Chain, in, key string, p map[string]float64) (str
 
 // Карточка 0.1: каждая новая цепочка в dsp.All(), ByID находит; Name/Note/Label — на русском.
 func TestNewChainsRegisteredRussian(t *testing.T) {
+	t.Parallel()
 	inAll := map[string]bool{}
 	for _, c := range All() {
 		inAll[c.ID] = true
@@ -425,11 +426,13 @@ func TestNewChainsRegisteredRussian(t *testing.T) {
 
 // Карточка 0.2: у цепочек без своего start есть общий from; до отметки from звук не тронут.
 func TestNewChainsFromKeepsAudioBefore(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.3*sin(2*PI*440*t)+0.1*sin(2*PI*3000*t)", 4, chSR)
 	src := decode(t, in)
 	for _, id := range ncNewIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			if hasParam(c, "start") {
 				if hasParam(c, "from") {
@@ -458,6 +461,7 @@ func TestNewChainsFromKeepsAudioBefore(t *testing.T) {
 // обработанный. dryWet линеен, поэтому отличие от сухого при mix 1 вдвое (6 дБ)
 // больше, чем при mix 0.5.
 func TestNewChainsMixDryWet(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.2*sin(2*PI*220*t)+0.2*sin(2*PI*1330*t)+0.1*sin(2*PI*3170*t)", 3, chSR)
 	srcL, srcR := ncDecode2(t, in, chSR)
@@ -469,6 +473,7 @@ func TestNewChainsMixDryWet(t *testing.T) {
 		}
 		tested++
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			run := func(mix float64) ([]float32, []float32) {
 				p := ncParamsForRun(c, 0)
 				p["mix"] = mix
@@ -510,10 +515,12 @@ func TestNewChainsMixDryWet(t *testing.T) {
 // Карточка 0.4: длина выхода = длине входа ±0.05 с у всех новых цепочек (хвост
 // реверба/дилея за концом трека отрезается).
 func TestNewChainsKeepLength(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.4*sin(2*PI*440*t)*lt(t\\,2)", 3, chSR)
 	for _, id := range ncNewIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			p := ncParamsForRun(c, 0.5)
 			// самый длинный хвост / самые длинные окна
@@ -536,10 +543,12 @@ func TestNewChainsKeepLength(t *testing.T) {
 
 // Карточка 0.4 (краевой): короткий вход (0.1 с) не роняет ffmpeg, длина та же.
 func TestNewChainsShortInput(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.3*sin(2*PI*440*t)", 0.1, chSR)
 	for _, id := range ncNewIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			c := ncChain(t, id)
 			out, err := ncRunAny(t, c, in, "", nil)
 			if err != nil {
@@ -552,19 +561,32 @@ func TestNewChainsShortInput(t *testing.T) {
 	}
 }
 
-// Карточка 0.4 (краевой): отметка (start/from) за концом входа не роняет ffmpeg, длина та же.
+// Карточка 0.4 (краевой), для всех цепочек: отметка (start/from) за концом входа не роняет
+// ffmpeg, длина та же; общий from за концом — выход равен входу.
 func TestNewChainsMarkBeyondEnd(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.3*sin(2*PI*440*t)", 2, chSR)
-	for _, id := range ncNewIDs {
-		t.Run(id, func(t *testing.T) {
-			c := ncChain(t, id)
-			out, err := ncRunAny(t, c, in, "", ncParamsForRun(c, 100))
+	src := decode(t, in)
+	for _, c := range All() {
+		if !hasParam(&c, "start") && !hasParam(&c, "from") {
+			continue // отметки нет — проверять нечего (такие ловит TestChainsFromParamOnlyWithoutStart)
+		}
+		t.Run(c.ID, func(t *testing.T) {
+			t.Parallel()
+			out, err := ncRunAny(t, &c, in, "", ncParamsForRun(&c, 100))
 			if err != nil {
 				t.Fatalf("отметка за концом: Run: %v", err)
 			}
-			if d := secs(decode(t, out)); math.Abs(d-2) > 0.05 {
+			got := decode(t, out)
+			if d := secs(got); math.Abs(d-2) > 0.05 {
 				t.Errorf("длина выхода %.3f с, want 2 ± 0.05", d)
+			}
+			// общий from за концом трека — эффект не начинается: выход = вход
+			if hasParam(&c, "from") {
+				if r := ncDiffDb(got, src, chSR, 0, 1.9); r > -40 {
+					t.Errorf("from за концом: выход отличается от входа на %.1f дБ, want ≤ −40", r)
+				}
 			}
 		})
 	}
@@ -572,13 +594,11 @@ func TestNewChainsMarkBeyondEnd(t *testing.T) {
 
 // --- 0.5 ---
 
-// Карточка 0.5: значения вне диапазона зажимаются — граф тот же, что на границе.
+// Карточка 0.5, для всех цепочек: значения вне диапазона зажимаются — граф тот же, что на границе.
 func TestNewChainsClampOutOfRange(t *testing.T) {
-	for _, id := range ncNewIDs {
-		c := ByID(id)
-		if c == nil {
-			continue // отсутствие ловит TestNewChainsRegisteredRussian
-		}
+	t.Parallel()
+	for _, c := range All() {
+		id := c.ID
 		over, atMax, under, atMin := map[string]float64{}, map[string]float64{}, map[string]float64{}, map[string]float64{}
 		for _, p := range c.Params {
 			over[p.ID], atMax[p.ID] = p.Max+1000, p.Max
@@ -597,10 +617,12 @@ func TestNewChainsClampOutOfRange(t *testing.T) {
 
 // Карточка 0.6: стерео-цепочки на моно-входе работают, выход стерео.
 func TestNewStereoChainsOnMonoInput(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in := ncGen(t, "0.3*sin(2*PI*440*t)", 2, chSR)
 	for _, id := range ncStereoIDs {
 		t.Run(id, func(t *testing.T) {
+			t.Parallel()
 			out := ncRun(t, id, in, nil)
 			if n := ncChannels(t, out); n != 2 {
 				t.Errorf("каналов на выходе %d, want 2 (стерео)", n)
@@ -613,6 +635,7 @@ func TestNewStereoChainsOnMonoInput(t *testing.T) {
 
 // Карточка 10.1: у цепочек без хвоста TailSec = 0 (и у старых цепочек).
 func TestTailSecZeroWithoutTail(t *testing.T) {
+	t.Parallel()
 	for _, id := range append(append([]string{}, ncNoTailIDs...), "wall") {
 		c := ByID(id)
 		if c == nil {
@@ -626,6 +649,7 @@ func TestTailSecZeroWithoutTail(t *testing.T) {
 
 // Карточка 10.1: Key — стем-ключ; у ducking — «drums», у остальных пусто; json key,omitempty.
 func TestChainKey(t *testing.T) {
+	t.Parallel()
 	d := ByID("ducking")
 	if d == nil {
 		t.Fatal("ducking не найден")

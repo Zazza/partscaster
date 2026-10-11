@@ -2,11 +2,13 @@
 // окно — запомненное from или cont_from джобы; начало раньше 4 с — с 0.
 //   - fragmentStart(fj, lead = 4) из results.js — секунда старта проигрывания;
 //   - сценарий слияния: строка списка джоб (без from) приходит поверх запомненного объекта куска —
-//     окно должно пережить обновление, поэтому watchJob в StudioPage.vue сливает объект, а не заменяет.
+//     окно должно пережить обновление, поэтому шаг опроса (jobWatchStep, его зовёт watchJob в StudioPage.vue)
+//     сливает объект, а не заменяет;
+//   - playFragment(api, fj, lead) из results.js — проигрывание готового куска (его зовёт StudioPage.vue).
 // Написаны по карточке, без чтения реализации.
-import { readFileSync } from 'node:fs'
-import { describe, it, expect } from 'vitest'
-import { fragmentStart } from './results.js'
+import { describe, it, expect, vi } from 'vitest'
+import { fragmentStart, playFragment } from './results.js'
+import { jobWatchStep } from './jobWatch.js'
 
 describe('fragmentStart — старт куска за lead секунд до правки (123а)', () => {
   it('from 30 → 26', () => {
@@ -65,24 +67,65 @@ describe('окно куска переживает обновление стро
   })
 })
 
-describe('StudioPage.vue: watchJob сливает строку джобы в запомненный объект', () => {
-  const SFC = readFileSync(new URL('./components/StudioPage.vue', import.meta.url), 'utf8')
-  const script = (SFC.match(/<script[^>]*>([\s\S]*?)<\/script>/) || [])[1] || ''
-  // тело watchJob: от объявления до следующего объявления верхнего уровня
-  const start = script.search(/function\s+watchJob\s*\(/)
-  const rest = start >= 0 ? script.slice(start) : ''
-  const next = rest.slice(1).search(/\n(?:async\s+)?function\s|\n(?:const|let)\s/)
-  const body = next >= 0 ? rest.slice(0, next + 1) : rest
+describe('jobWatchStep — шаг опроса джобы в студии: строка списка сливается с запомненным', () => {
+  const initial = () => ({ id: 7, status: 'queued', from: 30, to: 40 })
+  const row = () => ({ id: 7, status: 'done', audio_file: 'audio.flac' })
 
-  it('watchJob объявлена', () => {
-    expect(start).toBeGreaterThanOrEqual(0)
+  it('окно куска переживает строку списка: from/to на месте, поля строки поверх, fragmentStart → 26', () => {
+    const step = jobWatchStep(initial(), [{ id: 3, status: 'done' }, row()])
+    expect(step.next).toEqual({ id: 7, status: 'done', audio_file: 'audio.flac', from: 30, to: 40 })
+    expect(step.row).toEqual(row())
+    expect(fragmentStart(step.next)).toBe(26)
   })
 
-  it('refObj.value присваивается слиянием { ...refObj.value, ...j }', () => {
-    expect(body).toMatch(/refObj\.value\s*=\s*\{\s*\.\.\.refObj\.value\s*,\s*\.\.\.\s*\w+\s*\}/)
+  it('done — только на шаге, где джоба стала готовой', () => {
+    expect(jobWatchStep(initial(), [row()]).done).toBe(true)
+    expect(jobWatchStep({ ...initial(), status: 'done' }, [row()]).done).toBe(false)
+    expect(jobWatchStep(initial(), [{ id: 7, status: 'running' }]).done).toBe(false)
   })
 
-  it('нет прямой замены refObj.value = <строка джобы>', () => {
-    expect(body).not.toMatch(/refObj\.value\s*=\s*(?!\{|null\b|=)[A-Za-z_$][\w$]*\s*(?:[;\n]|$)/)
+  it('строки нет в списке, список пуст или объект без id → null (ничего не меняется)', () => {
+    expect(jobWatchStep(initial(), [{ id: 8, status: 'done' }])).toBeNull()
+    expect(jobWatchStep(initial(), null)).toBeNull()
+    expect(jobWatchStep(null, [row()])).toBeNull()
+    expect(jobWatchStep({ id: null, status: 'starting' }, [row()])).toBeNull()
+  })
+
+  it('вход не меняется', () => {
+    const tracked = Object.freeze(initial())
+    const jobs = Object.freeze([Object.freeze(row())])
+    expect(() => jobWatchStep(tracked, jobs)).not.toThrow()
+    expect(tracked).toEqual(initial())
+  })
+})
+
+describe('playFragment — готовый кусок играет за lead секунд до правки (123а)', () => {
+  const apiStub = () => {
+    const calls = []
+    return {
+      calls,
+      playAudio: vi.fn(async (id) => { calls.push(['play', id]) }),
+      seekAudio: vi.fn(async (at) => { calls.push(['seek', at]) }),
+    }
+  }
+
+  it('кусок from 30 → трек куска, потом перемотка на 26', async () => {
+    const api = apiStub()
+    await playFragment(api, { id: 7, from: 30 }, 4)
+    expect(api.calls).toEqual([['play', 7], ['seek', 26]])
+  })
+
+  it('окно из cont_from строки джобы', async () => {
+    const api = apiStub()
+    await playFragment(api, { id: 7, cont_from: 50 }, 4)
+    expect(api.calls).toEqual([['play', 7], ['seek', 46]])
+  })
+
+  it('начало раньше lead или окна нет — с начала, без перемотки', async () => {
+    for (const fj of [{ id: 7, from: 3 }, { id: 7 }]) {
+      const api = apiStub()
+      await playFragment(api, fj, 4)
+      expect(api.calls).toEqual([['play', 7]])
+    }
   })
 })

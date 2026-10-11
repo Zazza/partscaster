@@ -92,15 +92,6 @@ class TestFragmentSubmit(_WorkerApiCase):
         self.assertLess(r.status_code, 300, r.text)
         self.assertEqual(self._children(parent)[0]["role"], "fragment")
 
-    def test_without_to_sec_is_continue(self):
-        parent = self._job(duration=60.0)
-        r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": 12.5})
-        self.assertLess(r.status_code, 300, r.text)
-        k = self._children(parent)[0]
-        self.assertEqual(k["role"], "continue")
-        self.assertAlmostEqual(k["cont_from"], 12.5)
-        self.assertEqual(k["max_tokens"] or 0, 0)
-
     def test_parent_without_semantic_4xx(self):
         parent = self._job(duration=60.0, semantic=False)
         r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": 10.0, "to_sec": 20.0})

@@ -89,7 +89,7 @@ make test      # всё: Go + фронтенд + воркер
 make lint      # go vet + golangci-lint, eslint, ruff
 ```
 
-Или напрямую: `go test ./...` · `cd frontend && npm test` · `cd worker && python3 -m unittest test_pure`.
+Или напрямую: `go test ./...` · `cd frontend && npm test` · `cd worker && python3 -m unittest discover -p 'test_*.py'`.
 CI прогоняет то же самое на каждый push/PR.
 
 ## Безопасность

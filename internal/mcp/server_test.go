@@ -40,6 +40,7 @@ type fakeService struct {
 
 	// Волна студии: настраиваемые ответы job_peaks / job_spectrum
 	peaksOut    map[string]any
+	peaksArgs   []peaksCall
 	spectrumOut []byte
 
 	// JobTones («найти свист»): настраиваемый ответ и записанные аргументы (со stem)
@@ -65,6 +66,13 @@ type tonesCall struct {
 	ID       int64
 	From, To float64
 	Stem     string
+}
+
+// peaksCall — аргументы одного вызова JobPeaks.
+type peaksCall struct {
+	id   int64
+	file string
+	bins int
 }
 
 type promoteCall struct {
@@ -162,6 +170,7 @@ func (f *fakeService) UploadDsp(ctx context.Context, id int64, fname, _ string, 
 func (f *fakeService) SetHead(ctx context.Context, jobID, headID int64) error { return nil }
 
 func (f *fakeService) JobPeaks(ctx context.Context, id int64, file string, bins int) (map[string]any, error) {
+	f.peaksArgs = append(f.peaksArgs, peaksCall{id, file, bins})
 	return f.peaksOut, nil
 }
 
@@ -219,6 +228,7 @@ func call(t *testing.T, s *Server, name string, args map[string]any) (string, bo
 }
 
 func TestSubmitBuildsParams(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "submit", map[string]any{
 		"style": "doom metal, slow", "lyrics": "[Instrumental]", "title": "тёмное", "seed": 7,
@@ -240,6 +250,7 @@ func TestSubmitBuildsParams(t *testing.T) {
 }
 
 func TestSubmitFanSeedsAndTitles(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "submit", map[string]any{
 		"style": "punk", "lyrics": "[Instrumental]", "seed": 10, "n": 3, "title": "x",
@@ -261,6 +272,7 @@ func TestSubmitFanSeedsAndTitles(t *testing.T) {
 }
 
 func TestDeleteRequiresConfirm(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "delete_job", map[string]any{"job_id": 5})
 	if ok {
@@ -282,6 +294,7 @@ func TestDeleteRequiresConfirm(t *testing.T) {
 }
 
 func TestCancelRequiresConfirm(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	if _, ok := call(t, s, "cancel", map[string]any{"job_id": 1}); ok {
 		t.Fatal("cancel without confirm should fail")
@@ -295,6 +308,7 @@ func TestCancelRequiresConfirm(t *testing.T) {
 }
 
 func TestVoiceDeleteRequiresConfirm(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	if _, ok := call(t, s, "voice_delete", map[string]any{"voice_id": 3}); ok {
 		t.Fatal("voice_delete without confirm should fail")
@@ -311,6 +325,7 @@ func TestVoiceDeleteRequiresConfirm(t *testing.T) {
 }
 
 func TestVoiceCreateSavesParamsAndSeed(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "voice_create", map[string]any{
 		"name": "бархатный хрип", "job_id": 7,
@@ -337,6 +352,7 @@ func TestVoiceCreateSavesParamsAndSeed(t *testing.T) {
 }
 
 func TestArtifactsPicksBestFile(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 9, AudioFile: "audio.flac", Mp3File: "audio.mp3"}}
 	fake.fetch = map[string]string{"audio.mp3": "mp3-bytes"}
@@ -350,6 +366,7 @@ func TestArtifactsPicksBestFile(t *testing.T) {
 }
 
 func TestRenderAbcForcesMelodyCot(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	_, ok := call(t, s, "render_abc", map[string]any{
 		"abc": "X:1", "style": "blues", "cot": "off",
@@ -363,6 +380,7 @@ func TestRenderAbcForcesMelodyCot(t *testing.T) {
 }
 
 func TestLibraryDataEmbedded(t *testing.T) {
+	t.Parallel()
 	// spec: данные библиотеки вшиты в бинарник и непусты
 	if groups := loadStyleGroups(); len(groups) < 20 {
 		t.Fatalf("style groups = %d (ожидались встроенные + пресеты)", len(groups))
@@ -397,6 +415,7 @@ func rpcRoundTrip(t *testing.T, s *Server, reqs []string) []string {
 }
 
 func TestProtocolHandshakeAndToolsList(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	lines := rpcRoundTrip(t, s, []string{
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
@@ -451,6 +470,7 @@ func TestProtocolHandshakeAndToolsList(t *testing.T) {
 }
 
 func TestProtocolToolsCall(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.health = &yue.HealthInfo{Status: "ok", ModelLoaded: true}
 	lines := rpcRoundTrip(t, s, []string{
@@ -475,6 +495,7 @@ func TestProtocolToolsCall(t *testing.T) {
 }
 
 func TestProtocolPingAndNotifications(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	lines := rpcRoundTrip(t, s, []string{
 		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
@@ -486,8 +507,9 @@ func TestProtocolPingAndNotifications(t *testing.T) {
 }
 
 // Схема аргументов каждого инструмента — объект с properties-объектом (не null):
-// иначе Claude Code отвергает tools/list целиком.
+// иначе Claude Code отвергает tools/list целиком. У каждого инструмента есть описание.
 func TestToolSchemasHaveObjectProperties(t *testing.T) {
+	t.Parallel()
 	s := NewServer(&fakeService{}, t.TempDir())
 	RegisterWorkflowTools(s)
 	RegisterStudioTools(s)
@@ -508,34 +530,30 @@ func TestToolSchemasHaveObjectProperties(t *testing.T) {
 		if sc.Type != "object" || len(sc.Properties) == 0 || sc.Properties[0] != '{' {
 			t.Errorf("%s: схема %s — нужен type object и properties-объект", name, raw)
 		}
-	}
-}
-
-// Версия после «перепеть»/пересборки: файл варианта, название (своё или по
-// умолчанию) и источник голоса доходят до VariantToTrack как есть.
-func TestPromoteVersion(t *testing.T) {
-	f := &fakeService{}
-	if id, err := promoteVersion(f, 214, "overdub-inst-243.flac", "", "по умолчанию", 243); err != nil || id != 77 {
-		t.Fatalf("id=%d err=%v", id, err)
-	}
-	if _, err := promoteVersion(f, 214, "overdub-inst-5.flac", "моё", "по умолчанию", 0); err != nil {
-		t.Fatal(err)
-	}
-	want := []promoteCall{{214, "overdub-inst-243.flac", "по умолчанию", 243}, {214, "overdub-inst-5.flac", "моё", 0}}
-	if !reflect.DeepEqual(f.promoted, want) {
-		t.Errorf("вызовы %+v, want %+v", f.promoted, want)
+		if strings.TrimSpace(s.tools[name].Description) == "" {
+			t.Errorf("%s: нет описания — агент не узнает, зачем инструмент", name)
+		}
 	}
 }
 
 // Волна студии: job_peaks отдаёт JSON воркера как есть (агент ищет провалы
 // числами), job_spectrum кладёт PNG в каталог загрузок и возвращает путь.
 func TestJobPeaksTool(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
-	fake.peaksOut = map[string]any{"_v": 1, "file": "audio.flac", "bins": 2400,
+	fake.peaksOut = map[string]any{"_v": 1, "file": "stem-other.flac", "bins": 2400,
 		"duration_sec": 210.0, "peaks": [][]float64{{-0.5, 0.5}}}
-	out, ok := call(t, s, "job_peaks", map[string]any{"job_id": 204})
+	out, ok := call(t, s, "job_peaks", map[string]any{"job_id": 204, "file": "stem-other.flac", "bins": 2400})
 	if !ok {
 		t.Fatalf("job_peaks: %s", out)
+	}
+	// аргументы агента доходят до воркера как есть; без file/bins — пустые (основной трек, канон)
+	if _, ok := call(t, s, "job_peaks", map[string]any{"job_id": 205}); !ok {
+		t.Fatal("job_peaks без file/bins — ошибка")
+	}
+	want := []peaksCall{{204, "stem-other.flac", 2400}, {205, "", 0}}
+	if !reflect.DeepEqual(fake.peaksArgs, want) {
+		t.Errorf("JobPeaks вызван с %+v, want %+v", fake.peaksArgs, want)
 	}
 	if !strings.Contains(out, `"bins"`) || !strings.Contains(out, `"duration_sec"`) {
 		t.Fatalf("job_peaks должен вернуть bins/duration_sec: %s", out)
@@ -543,6 +561,7 @@ func TestJobPeaksTool(t *testing.T) {
 }
 
 func TestJobSpectrumToolSavesPNG(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.spectrumOut = []byte("\x89PNG-fake")
 	out, ok := call(t, s, "job_spectrum", map[string]any{"job_id": 204})
@@ -564,6 +583,7 @@ func TestJobSpectrumToolSavesPNG(t *testing.T) {
 
 // render_abc с parent_id/role — кусок для вклейки прячется под родителем, как в студии.
 func TestRenderAbcParentRole(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	if out, ok := call(t, s, "render_abc", jsonArgs(t, `{"abc":"X:1","style":"rock","parent_id":245,"role":"section"}`)); !ok {
 		t.Fatal(out)

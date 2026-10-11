@@ -26,6 +26,7 @@ func lyricsServer(t *testing.T, got *lyricsReq) *Client {
 }
 
 func TestJobLyricsWithLanguage(t *testing.T) {
+	t.Parallel()
 	var got lyricsReq
 	c := lyricsServer(t, &got)
 	res, err := c.JobLyrics(context.Background(), 17, "en")
@@ -44,6 +45,7 @@ func TestJobLyricsWithLanguage(t *testing.T) {
 }
 
 func TestJobLyricsWithoutLanguageHasNoQuery(t *testing.T) {
+	t.Parallel()
 	var got lyricsReq
 	c := lyricsServer(t, &got)
 	if _, err := c.JobLyrics(context.Background(), 5, ""); err != nil {
@@ -58,6 +60,7 @@ func TestJobLyricsWithoutLanguageHasNoQuery(t *testing.T) {
 }
 
 func TestJobLyricsLanguageEscaped(t *testing.T) {
+	t.Parallel()
 	var got lyricsReq
 	c := lyricsServer(t, &got)
 	lang := "zh&x=1 ?"

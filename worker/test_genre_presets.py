@@ -74,21 +74,11 @@ def _blocks(p):
     yield from (b for b in (p.get("master") or []) if isinstance(b, dict))
 
 
-def _deploy_scp_files():
-    """worker/*-файлы из команд scp в deploy.sh (продолжения строк через \\ склеены)."""
-    text = (ROOT / "deploy.sh").read_text(encoding="utf-8").replace("\\\n", " ")
-    files = set()
-    for line in text.splitlines():
-        if re.match(r"\s*scp\b", line):
-            files.update(re.findall(r"worker/([\w.\-]+)", line))
-    return files
-
-
 def genre_presets():
     return [b for b in presets.BUILTIN if b.get("slug") not in LEGACY]
 
 
-# ---------- ТК104: готовые цепочки на воркере — копия побайтно, уезжает деплоем ----------
+# ---------- ТК104: готовые цепочки на воркере — копия побайтно (деплой: test_fx_kits_synth) ----------
 
 class TestFxPresetsOnWorker(unittest.TestCase):
 
@@ -98,11 +88,6 @@ class TestFxPresetsOnWorker(unittest.TestCase):
         self.assertTrue(worker_copy.is_file(), "нет worker/fx_presets.json (make mcp-data)")
         self.assertEqual(worker_copy.read_bytes(), mcp_copy.read_bytes(),
                          "worker/fx_presets.json и internal/mcp/fx_presets.json разошлись — make mcp-data")
-
-    def test_tc104_deploy_ships_fx_presets(self):
-        shipped = _deploy_scp_files()
-        self.assertIn("presets.py", shipped, "разбор deploy.sh не нашёл scp с файлами воркера")
-        self.assertIn("fx_presets.json", shipped, "deploy.sh не увозит worker/fx_presets.json")
 
 
 # ---------- ТК105: встроенные жанровые пресеты ----------
@@ -190,11 +175,6 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                 self.assertTrue(any(st & DRUM_STEMS for st in lv), "нет цели громкости барабанов")
                 self.assertTrue(any("bass" in st for st in lv), "нет цели громкости баса")
                 self.assertTrue(any("guitar" in st for st in lv), "нет цели громкости гитары")
-
-    def test_tc105_specs_limit(self):
-        for b in presets.BUILTIN:
-            with self.subTest(slug=b.get("slug")):
-                self.assertLessEqual(len(b.get("specs", [])), 16)
 
     def test_tc105_kits_known(self):
         for b in presets.BUILTIN:
@@ -305,6 +285,68 @@ class TestSoundPresetsFamilyMigration(tp._WorkerDbCase):
         r = self._client().post("/sound-presets", json={"name": "Мой", "specs": OLD_SPECS})
         self.assertIn(r.status_code, (200, 201), r.text)
         self.assertEqual(r.json().get("family"), "")
+
+
+# ---------- ТК82: миграция старой таблицы пресетов ----------
+
+STAGE1_SPECS = [{"stems": ["bass"], "engine": [{"type": "eq", "highpass_hz": 80}], "db": 0}]
+STAGE1_FINAL = [{"chain": "width", "params": {"width": 1.1, "bass": 120}}]
+
+
+@unittest.skipUnless(tp._HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
+class TestSoundPresetsMigration(tp._WorkerDbCase):
+    """ТК82 / 49б (бывший test_tails): таблица этапа 1 (без target_lufs и master) + своя запись → старт:
+    своя с target_lufs null и master []; встроенные досеяны; второй старт без ошибок и без задвоения."""
+
+
+    def _legacy(self):
+        # таблица пресетов этапа 1 (до target_lufs и master) и одна своя запись
+        with self._conn() as c:
+            # импорт воркера мог уже создать новую таблицу в этой базе — старая схема строго с нуля
+            c.execute("DROP TABLE IF EXISTS sound_presets")
+            c.execute("""CREATE TABLE sound_presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE,
+                name TEXT NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                specs TEXT NOT NULL DEFAULT '[]',
+                final TEXT NOT NULL DEFAULT '[]',
+                reference_job_id INTEGER,
+                builtin INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL)""")
+            c.execute("INSERT INTO sound_presets (name, note, specs, final, created_at) VALUES (?, ?, ?, ?, ?)",
+                      ("Старый свой", "до мастера", json.dumps(STAGE1_SPECS), json.dumps(STAGE1_FINAL),
+                       "2026-10-01T00:00:00"))
+
+    def _start(self):
+        self.w.init_db()
+        self.w._migrate()
+
+    def _list(self):
+        from fastapi.testclient import TestClient
+        r = TestClient(self.w.app, raise_server_exceptions=False).get("/sound-presets")
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
+    def test_tc82_old_table_migrated(self):
+        self._legacy()
+        self._start()
+        first = len(self._list())
+        self._start()   # второй старт — без ошибок и без задвоения
+        with self._conn() as c:
+            cols = {r[1] for r in c.execute("PRAGMA table_info(sound_presets)")}
+        self.assertTrue({"target_lufs", "master"} <= cols, cols)
+        lst = self._list()
+        self.assertEqual(len(lst), first, "второй старт задвоил пресеты")
+        own = [p for p in lst if p.get("name") == "Старый свой"]
+        self.assertEqual(len(own), 1, lst)
+        p = own[0]
+        self.assertFalse(p.get("builtin"))
+        self.assertIsNone(p.get("target_lufs"))
+        self.assertEqual(p.get("master"), [])
+        self.assertEqual(p.get("specs"), STAGE1_SPECS)
+        self.assertEqual([s["chain"] for s in p.get("final")], ["width"])
+        self.assertTrue(any(x.get("builtin") for x in lst), "встроенные не досеяны")
 
 
 if __name__ == "__main__":

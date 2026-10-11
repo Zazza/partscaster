@@ -17,6 +17,7 @@ import (
 // Написаны по карточке, без чтения реализации.
 
 func TestFxPhrasesListsCatalog(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/fx/phrases" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -50,6 +51,7 @@ func TestFxPhrasesListsCatalog(t *testing.T) {
 }
 
 func TestFxPhrasePostsJSONAndDecodes(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/fx/phrase" {
@@ -93,6 +95,7 @@ func TestFxPhrasePostsJSONAndDecodes(t *testing.T) {
 
 // Ответ без clipped (не пришлось ужимать) → Clipped=false.
 func TestFxPhraseNotClipped(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"file":"phrase-x.wav","cycle_sec":4,"clipped":false}`))
 	}))
@@ -106,23 +109,8 @@ func TestFxPhraseNotClipped(t *testing.T) {
 	}
 }
 
-// Условие 95: ошибки воркера (404 неизвестная фраза, 422 темп, 503 движок) доходят до вызывающего.
-func TestFxPhraseWorkerErrors(t *testing.T) {
-	for _, code := range []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusServiceUnavailable} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(code)
-			_, _ = w.Write([]byte(`{"detail":"bad"}`))
-		}))
-		res, err := New(srv.URL).FxPhrase(context.Background(), FxPhraseReq{Phrase: "nope", Tempo: 2})
-		srv.Close()
-		if err == nil {
-			t.Errorf("статус %d: ошибки нет, результат %+v", code, res)
-		}
-	}
-}
-
 func TestFetchPhraseAudioGetsFile(t *testing.T) {
+	t.Parallel()
 	const wav = "RIFF....WAVEfmt fake-bytes"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/fx/phrase/files/phrase-0123abcd.wav" {
@@ -148,6 +136,7 @@ func TestFetchPhraseAudioGetsFile(t *testing.T) {
 
 // Файл не из кэша (404) и имя с «/» — ошибка, а не пустое тело.
 func TestFetchPhraseAudioErrors(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))

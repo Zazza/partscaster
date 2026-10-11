@@ -48,6 +48,7 @@ func lineWith(lines []string, subs ...string) int {
 // ---------- plan_check ----------
 
 func TestPlanCheckPassesArgs(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckOut = samplePlanCheck()
 	if out, ok := call(t, s, "plan_check", jsonArgs(t, `{"job_id":216,"abc":"X:1\nK:C\n","from":30.5}`)); !ok {
@@ -60,6 +61,7 @@ func TestPlanCheckPassesArgs(t *testing.T) {
 }
 
 func TestPlanCheckWithoutFromPassesZero(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	if out, ok := call(t, s, "plan_check", jsonArgs(t, `{"job_id":3,"abc":"X:1"}`)); !ok {
 		t.Fatalf("plan_check failed: %s", out)
@@ -70,6 +72,7 @@ func TestPlanCheckWithoutFromPassesZero(t *testing.T) {
 }
 
 func TestPlanCheckPrintsSummary(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckOut = samplePlanCheck()
 	out, ok := call(t, s, "plan_check", jsonArgs(t, `{"job_id":216,"abc":"X:1"}`))
@@ -99,6 +102,7 @@ func TestPlanCheckPrintsSummary(t *testing.T) {
 }
 
 func TestPlanCheckOneLinePerChangedBar(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	pc := samplePlanCheck()
 	pc.Changed = []yue.PlanChange{
@@ -119,6 +123,7 @@ func TestPlanCheckOneLinePerChangedBar(t *testing.T) {
 }
 
 func TestPlanCheckNoChangesNoWarnings(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckOut = &yue.PlanCheck{
 		Bars:     map[string][2]int{"Vocal": {16, 16}},
@@ -135,6 +140,7 @@ func TestPlanCheckNoChangesNoWarnings(t *testing.T) {
 }
 
 func TestPlanCheckPropagatesClientError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckErr = errors.New("HTTP 422: abc: пустой план")
 	out, ok := call(t, s, "plan_check", jsonArgs(t, `{"job_id":216,"abc":""}`))
@@ -149,6 +155,7 @@ func TestPlanCheckPropagatesClientError(t *testing.T) {
 // ---------- continue_job с abc ----------
 
 func TestContinueJobWithAbcChecksPlanAndPrintsWarnings(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckOut = samplePlanCheck()
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40,"abc":"X:1\nK:C"}`))
@@ -171,6 +178,7 @@ func TestContinueJobWithAbcChecksPlanAndPrintsWarnings(t *testing.T) {
 }
 
 func TestContinueJobPlanCheckErrorBlocksSubmit(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckErr = &yue.StatusError{Code: 422, Msg: "HTTP 422: abc: не разобран"}
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40,"abc":"мусор"}`))
@@ -186,6 +194,7 @@ func TestContinueJobPlanCheckErrorBlocksSubmit(t *testing.T) {
 }
 
 func TestContinueJobWithoutAbcSkipsPlanCheck(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40}`))
 	if !ok {
@@ -202,6 +211,7 @@ func TestContinueJobWithoutAbcSkipsPlanCheck(t *testing.T) {
 // ---------- revoice_start с abc ----------
 
 func TestRevoiceStartWithAbcChecksPlanOfVoiceSource(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	// версия 10 — вариант над треком 7: продолжение идёт от 7, проверяется план 7
 	fake.jobs = []yue.Job{
@@ -230,6 +240,7 @@ func TestRevoiceStartWithAbcChecksPlanOfVoiceSource(t *testing.T) {
 }
 
 func TestRevoiceStartPlanCheckErrorBlocksSubmit(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 7, Status: "done"}}
 	fake.planCheckErr = &yue.StatusError{Code: 422, Msg: "HTTP 422: abc: не разобран"}
@@ -246,6 +257,7 @@ func TestRevoiceStartPlanCheckErrorBlocksSubmit(t *testing.T) {
 }
 
 func TestRevoiceStartWithoutAbcSkipsPlanCheck(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 7, Status: "done"}}
 	if out, ok := call(t, s, "revoice_start", jsonArgs(t, `{"job_id":7,"from":4,"to":8,"takes":1}`)); !ok {
@@ -259,6 +271,7 @@ func TestRevoiceStartWithoutAbcSkipsPlanCheck(t *testing.T) {
 // ---------- тип yue.PlanCheck: JSON-контракт воркера ----------
 
 func TestPlanCheckJSONTags(t *testing.T) {
+	t.Parallel()
 	var c yue.PlanCheck
 	err := json.Unmarshal([]byte(`{"bars":{"Vocal":[16,14]},"duration":[64,56],
 		"changed":[{"voice":"Vocal","bar":5,"start":42.5,"end":45,"before":"a","after":"b"}],
@@ -284,6 +297,7 @@ func TestPlanCheckJSONTags(t *testing.T) {
 // Старый воркер без plan_check (404) не блокирует продолжение: джоба ставится,
 // в ответе — «проверка плана недоступна»; 422 (битый план) — блокирует.
 func TestContinueJobPlanCheckUnavailableStillSubmits(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckErr = &yue.StatusError{Code: 404, Msg: "yue /jobs/5/plan_check: 404 Not Found"}
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":5,"from_sec":10,"abc":"X:1"}`))
@@ -299,6 +313,7 @@ func TestContinueJobPlanCheckUnavailableStillSubmits(t *testing.T) {
 
 // Пустые поля сводки — «—»: у голоса нет нот, такта нет во времени нового плана.
 func TestPlanCheckDashesForEmpty(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.planCheckOut = &yue.PlanCheck{Bars: map[string][2]int{"Vocal": {4, 3}}, ChangedTotal: 1,
 		Changed: []yue.PlanChange{{Voice: "Vocal", Bar: 4, Before: "c4c4c4c4"}}}

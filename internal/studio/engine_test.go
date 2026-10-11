@@ -165,6 +165,7 @@ func near(a, b, tol float64) bool { return math.Abs(a-b) <= tol }
 // ТК1 (запрос): Engine на other в окне 2–6 → один ApplyFx у родителя с
 // source=other, output=solo, preview, from = From − f, to = To, fade = f, цепочка как есть.
 func TestRebuildSectionsEngineRequest(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	engRun(t, f, engSpec([]string{"other"}, 2, 6, 0))
 
@@ -204,6 +205,7 @@ func TestRebuildSectionsEngineRequest(t *testing.T) {
 // −1 — исходная дорожка в [From − f, To + f) с линейными фейдами f; вне окна и
 // хвоста — исходный трек; длина трека та же; чужая дорожка (vocals) не тронута.
 func TestRebuildSectionsEngineInserts(t *testing.T) {
+	t.Parallel()
 	f, base := engSetup(t)
 	out := engRun(t, f, engSpec([]string{"other"}, 2, 6, 0))
 	from := 2 - engFade
@@ -253,6 +255,7 @@ func TestRebuildSectionsEngineInserts(t *testing.T) {
 
 // Краевой: From = 0 — начало окна не уходит в минус: from = 0.
 func TestRebuildSectionsEngineFromZero(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	engRun(t, f, engSpec([]string{"other"}, 0, 4, 0))
 	if len(f.calls) != 1 || f.calls[0].req.From == nil {
@@ -266,8 +269,10 @@ func TestRebuildSectionsEngineFromZero(t *testing.T) {
 // --- ТК2: To ≤ 0 — до конца трека ---
 
 func TestRebuildSectionsEngineToZeroIsTrackEnd(t *testing.T) {
+	t.Parallel()
 	for _, to := range []float64{0, -1} {
 		t.Run(fmt.Sprintf("To=%g", to), func(t *testing.T) {
+			t.Parallel()
 			f, base := engSetup(t)
 			out := engRun(t, f, engSpec([]string{"other"}, 2, to, 0))
 			if len(f.calls) != 1 || f.calls[0].req.To == nil {
@@ -293,6 +298,7 @@ func TestRebuildSectionsEngineToZeroIsTrackEnd(t *testing.T) {
 // --- ТК3: несколько дорожек; неизменяемые и отсутствующие пропускаются ---
 
 func TestRebuildSectionsEngineTwoStemsSkipsImmutable(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	// xyz есть у родителя, но не в списке изменяемых — пропускается
 	out := engRun(t, f, engSpec([]string{"vocals", "other", "xyz"}, 2, 6, 0))
@@ -324,6 +330,7 @@ func TestRebuildSectionsEngineTwoStemsSkipsImmutable(t *testing.T) {
 // --- ТК4: ошибка воркера — ошибка пересборки с причиной, ничего не загружено ---
 
 func TestRebuildSectionsEngineWorkerErrorFails(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -333,6 +340,7 @@ func TestRebuildSectionsEngineWorkerErrorFails(t *testing.T) {
 		{"старый воркер", errors.New("404 not found: /jobs/1/fx")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f, _ := engSetup(t)
 			f.err = tc.err
 			_, err := RebuildSections(context.Background(), f, parentID,
@@ -352,6 +360,7 @@ func TestRebuildSectionsEngineWorkerErrorFails(t *testing.T) {
 
 // Краевой (контракт): кусок не скачался — ошибка, ничего не загружено.
 func TestRebuildSectionsEngineChunkNotFetchedFails(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	f.lost = true
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{engSpec([]string{"other"}, 2, 6, 0)})
@@ -366,6 +375,7 @@ func TestRebuildSectionsEngineChunkNotFetchedFails(t *testing.T) {
 // --- ТК5: смешанный список — вклейка рендера + ffmpeg-эффект + движок ---
 
 func TestRebuildSectionsEngineMixedWithInsertAndChain(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	sf := newSecFake()
@@ -416,6 +426,7 @@ func TestRebuildSectionsEngineMixedWithInsertAndChain(t *testing.T) {
 // --- ТК6: Db записи — гейн обработанного куска, вычитаемая дорожка −1 ---
 
 func TestRebuildSectionsEngineDbGainsChunkOnly(t *testing.T) {
+	t.Parallel()
 	level := map[float64]float64{}
 	for _, d := range []float64{0, 3, -6} {
 		f, _ := engSetup(t)
@@ -439,6 +450,7 @@ func TestRebuildSectionsEngineDbGainsChunkOnly(t *testing.T) {
 
 // Поле приходит из фронта/MCP по JSON под именем engine — как есть.
 func TestSectionSpecEngineJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	err := json.Unmarshal([]byte(`{"child_id":0,"from":20,"to":35,"stems":["other"],
 		"engine":[{"type":"amp","model":"JCM2000.nam","input_db":-6},{"type":"cab","cutoff_hz":7000}]}`), &sp)
@@ -452,6 +464,7 @@ func TestSectionSpecEngineJSON(t *testing.T) {
 
 // Контракт: подпись варианта для записи движка — «Движок: <типы блоков через →> · <дорожки>».
 func TestRebuildSectionsEngineLabel(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	engRun(t, f, engSpec([]string{"other"}, 2, 6, 0))
 	if len(f.labels) != 1 {
@@ -617,7 +630,6 @@ var idCases = []struct {
 	name          string
 	dur, from, to float64
 }{
-	{"круглые 20–35", 40, 20, 35},
 	{"некруглые 20.1234567–33.3333333", 40, 20.1234567, 33.3333333},
 	{"некруглые 123.45678–139.99", 145, 123.45678, 139.99},
 }
@@ -625,9 +637,11 @@ var idCases = []struct {
 // Условие 2: тождественная цепочка движка на некруглом окне — трек после пересборки
 // совпадает с исходным (остаток ≤ −60 дБ) целиком, в окне и на обоих краях.
 func TestRebuildSectionsEngineIdentityNoShift(t *testing.T) {
+	t.Parallel()
 	const maxDb = -60.0
 	for _, tc := range idCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f, base := idSetup(t, tc.dur)
 			if _, err := RebuildSections(context.Background(), f, parentID,
 				[]SectionSpec{engSpec([]string{"other"}, tc.from, tc.to, 0)}); err != nil {
@@ -703,45 +717,11 @@ func checkGrid(t *testing.T, r yue.FxRequest, specFrom, specTo float64) {
 	}
 }
 
-var gridCases = []struct {
-	name          string
-	dur, from, to float64
-}{
-	{"20.1234567–33.3333333", 40, 20.1234567, 33.3333333},
-	{"123.45678–139.99", 145, 123.45678, 139.99},
-	{"20.007–33.333", 40, 20.007, 33.333},
-	{"1.995–7.4567", 10, 1.995, 7.4567},
-	{"123.407–139.993", 145, 123.407, 139.993},
-	{"0.03–5.009 (from < f → 0)", 10, 0.03, 5.009},
-}
-
-func TestRebuildSectionsEngineWindowOn10msGrid(t *testing.T) {
-	for _, tc := range gridCases {
-		t.Run(tc.name, func(t *testing.T) {
-			f, _ := idSetup(t, tc.dur)
-			if _, err := RebuildSections(context.Background(), f, parentID,
-				[]SectionSpec{engSpec([]string{"other"}, tc.from, tc.to, 0)}); err != nil {
-				t.Fatalf("RebuildSections: %v", err)
-			}
-			if len(f.calls) != 1 {
-				t.Fatalf("ApplyFx вызван %d раз, want 1", len(f.calls))
-			}
-			checkGrid(t, f.calls[0], tc.from, tc.to)
-		})
-	}
-}
-
-// --- Условие 2, главный: вычитаемая −1 совпадает с базой по сэмплам ---
+// --- Условие 2, главный: кусок и вычитаемая −1 — на сэмплах базы ---
 //
-// Цепочка «заглушить»: воркер возвращает тишину нужной длины (b + F − a сэмплов).
-// Тогда +1 ничего не добавляет, и в окне [From, To] (кроме краёв-фейдов) от дорожки
-// other в треке не должно остаться ничего: out = base − other. Если −1 стоит хоть на
-// сэмпл мимо базы, остаток белого шума ≈ 0 дБ относительно other. Тождественная
-// цепочка этого не ловит: кусок и −1 сдвигаются вместе и взаимно гасятся. Место самого
-// куска (+1) этот тест не видит — его держит TestRebuildSectionsEngineChunkOnWorkerSamples.
-//
-// База 44,1 кГц = other (белый шум) + vocals (другой белый шум); остаток считается
-// относительно уровня other.
+// muteEngFake — фейк воркера с fx_preview: записывает запросы ApplyFx; сам кусок
+// отдаёт replaceEngFake (ниже). База 44,1 кГц = other (белый шум) + vocals (другой
+// белый шум).
 
 type muteEngFake struct {
 	*secFake
@@ -754,32 +734,16 @@ func (f *muteEngFake) WorkerConfig(context.Context) (map[string]any, error) {
 	return map[string]any{"fx_preview": true}, nil
 }
 
-func (f *muteEngFake) ApplyFx(_ context.Context, id int64, req yue.FxRequest) (*yue.DspVariant, error) {
-	f.t.Helper()
-	f.calls = append(f.calls, req)
-	if req.From == nil || req.To == nil {
-		f.t.Fatalf("ApplyFx без окна: from=%v to=%v", req.From, req.To)
-	}
-	src, ok := f.files[key(id, "stem-"+req.Source+".flac")]
-	if !ok {
-		f.t.Fatalf("ApplyFx: у джобы %d нет дорожки %s", id, req.Source)
-	}
-	n := len(decodeAt(f.t, src, idSR))
-	a := int(math.Round(*req.From * idSR))
-	stop := int(math.Round(*req.To*idSR)) + int(math.Round(req.Fade*idSR))
-	if stop > n {
-		stop = n
-	}
-	if a < 0 || a >= stop {
-		f.t.Fatalf("ApplyFx: пустое окно a=%d stop=%d", a, stop)
-	}
-	name := fmt.Sprintf("preview-fx-%08x.flac", len(f.calls))
-	return workerFile(f.t, f.files, f.dir, id, name, make([]float32, stop-a), *req.From, req.Pad, idSR), nil
+// muteData — файлы и сигналы родителя для muteFake: только читаются, поэтому
+// готовятся один раз на длину трека и делятся подтестами.
+type muteData struct {
+	files       map[string]string
+	base, other []float32
 }
 
-// muteSetup — родитель длиной dur: other и vocals — разные белые шумы 0,3 (44,1 кГц),
-// drums/bass — тишина, трек = other + vocals. Возвращает фейк, трек и дорожку other.
-func muteSetup(t *testing.T, dur float64) (*muteEngFake, []float32, []float32) {
+// muteFiles — родитель длиной dur: other и vocals — разные белые шумы 0,3 (44,1 кГц),
+// drums/bass — тишина, трек = other + vocals.
+func muteFiles(t *testing.T, dur float64) muteData {
 	t.Helper()
 	needFFmpeg(t)
 	dir := t.TempDir()
@@ -800,15 +764,31 @@ func muteSetup(t *testing.T, dur float64) (*muteEngFake, []float32, []float32) {
 	}
 	baseP := p("m-audio.flac")
 	writeFlac24(t, mix, idSR, baseP)
+	return muteData{
+		files: map[string]string{
+			"audio.flac":       baseP,
+			"stem-other.flac":  otherP,
+			"stem-vocals.flac": vocalsP,
+			"stem-drums.flac":  silent,
+			"stem-bass.flac":   silent,
+		},
+		base:  decodeAt(t, baseP, idSR),
+		other: other,
+	}
+}
+
+// muteFake — новый фейк над файлами d (свой на подтест: он записывает вызовы и загрузки).
+func muteFake(t *testing.T, d muteData) *muteEngFake {
 	sf := newSecFake()
-	put(sf, parentID, map[string]string{
-		"audio.flac":       baseP,
-		"stem-other.flac":  otherP,
-		"stem-vocals.flac": vocalsP,
-		"stem-drums.flac":  silent,
-		"stem-bass.flac":   silent,
-	})
-	return &muteEngFake{secFake: sf, t: t, dir: t.TempDir()}, decodeAt(t, baseP, idSR), other
+	put(sf, parentID, d.files)
+	return &muteEngFake{secFake: sf, t: t, dir: t.TempDir()}
+}
+
+// muteSetup — muteFiles + muteFake: фейк, трек и дорожка other.
+func muteSetup(t *testing.T, dur float64) (*muteEngFake, []float32, []float32) {
+	t.Helper()
+	d := muteFiles(t, dur)
+	return muteFake(t, d), d.base, d.other
 }
 
 // relResidualDb — энергия (out − (base − sub)) на [from, to] относительно энергии ref, дБ.
@@ -842,66 +822,12 @@ func relResidualDb(out, base, sub, ref []float32, from, to float64) float64 {
 	return 10 * math.Log10(e/er)
 }
 
-func TestRebuildSectionsEngineMuteChainRemovesStemExactly(t *testing.T) {
-	const maxDb = -60.0
-	for _, tc := range []struct {
-		name          string
-		dur, from, to float64
-	}{
-		{"20.007–33.333", 40, 20.007, 33.333},
-		{"1.995–7.4567", 10, 1.995, 7.4567},
-		{"123.407–139.993", 145, 123.407, 139.993},
-		{"20.1234567–33.3333333", 40, 20.1234567, 33.3333333},
-		// условие 10: окна, на которых ошибается adelay ffmpeg (123,2 с при 44,1 кГц →
-		// 5 433 119 сэмплов вместо 5 433 120): from = 123,2 / 123,25 / ≈123,41, to = 123,2 / 123,25
-		{"123.25–140 (from − f = 123.2)", 145, 123.25, 140},
-		{"123.3–140 (from − f = 123.25)", 145, 123.3, 140},
-		{"100–123.2", 130, 100, 123.2},
-		{"100–123.25", 130, 100, 123.25},
-		{"123.457–140 (from − f = 123.407)", 145, 123.457, 140},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f, base, other := muteSetup(t, tc.dur)
-			if _, err := RebuildSections(context.Background(), f, parentID,
-				[]SectionSpec{engSpec([]string{"other"}, tc.from, tc.to, 0)}); err != nil {
-				t.Fatalf("RebuildSections: %v", err)
-			}
-			if len(f.calls) != 1 {
-				t.Fatalf("ApplyFx вызван %d раз, want 1", len(f.calls))
-			}
-			checkGrid(t, f.calls[0], tc.from, tc.to)
-			if len(f.uploads) != 1 {
-				t.Fatalf("загрузок %d, want 1", len(f.uploads))
-			}
-			var out []float32
-			for _, data := range f.uploads {
-				out = decodeHi(t, data)
-			}
-			if d := float64(len(out)-len(base)) / idSR; math.Abs(d) > 0.05 {
-				t.Errorf("длина выхода отличается от трека на %.3f с", d)
-			}
-			// в окне (без краёв-фейдов: сетка сдвигает их до 10 мс) — base − other
-			in := [2]float64{tc.from + 0.01, tc.to - 0.01}
-			if r := relResidualDb(out, base, other, other, in[0], in[1]); r > maxDb {
-				t.Errorf("окно %.4f–%.4f с: остаток дорожки other %.1f дБ, want ≤ %.0f (вычитаемая −1 стоит мимо базы)",
-					in[0], in[1], r, maxDb)
-			}
-			// вне окна и фейдов — исходный трек
-			if r := relResidualDb(out, base, nil, base, 0, tc.from-engFade-0.02); r > maxDb {
-				t.Errorf("до окна: отличие от трека %.1f дБ, want ≤ %.0f", r, maxDb)
-			}
-			if r := relResidualDb(out, base, nil, base, tc.to+engFade+0.02, tc.dur); r > maxDb {
-				t.Errorf("после окна: отличие от трека %.1f дБ, want ≤ %.0f", r, maxDb)
-			}
-		})
-	}
-}
-
 // --- Условия 2/8: старый воркер — ошибка пересборки, а не молча без эффекта ---
 
 // /config без fx_preview: true (или /config недоступен) → ошибка до вызова ApplyFx,
 // текст — про обновление воркера; ничего не загружено.
 func TestRebuildSectionsEngineWorkerWithoutPreviewFails(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		cfg      map[string]any
@@ -914,6 +840,7 @@ func TestRebuildSectionsEngineWorkerWithoutPreviewFails(t *testing.T) {
 		{"/config недоступен", nil, errors.New("404 not found: /config"), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f, _ := engSetup(t)
 			f.cfg, f.cfgErr = tc.cfg, tc.cfgErr
 			_, err := RebuildSections(context.Background(), f, parentID,
@@ -940,6 +867,7 @@ func TestRebuildSectionsEngineWorkerWithoutPreviewFails(t *testing.T) {
 // Ответ ApplyFx — не превью (dsp-fx-*: воркер проигнорировал preview) → ошибка, ничего
 // не загружено (файл при этом скачать можно — дело не в скачивании).
 func TestRebuildSectionsEngineNonPreviewAnswerFails(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	f.variant = true
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{engSpec([]string{"other"}, 2, 6, 0)})
@@ -957,6 +885,7 @@ func TestRebuildSectionsEngineNonPreviewAnswerFails(t *testing.T) {
 // Пересборка без записей движка у старого воркера не ломается (проверка /config
 // нужна только перед движком).
 func TestRebuildSectionsNoEngineIgnoresWorkerPreview(t *testing.T) {
+	t.Parallel()
 	f, _ := engSetup(t)
 	f.cfg = map[string]any{}
 	if _, err := RebuildSections(context.Background(), f, parentID,
@@ -971,8 +900,10 @@ func TestRebuildSectionsNoEngineIgnoresWorkerPreview(t *testing.T) {
 // --- Условие 2 / ТК2: To ≤ 0 у импортированного трека (mp3, wav) — длина по декодированию ---
 
 func TestRebuildSectionsEngineToZeroImportedBase(t *testing.T) {
+	t.Parallel()
 	for _, ext := range []string{"mp3", "wav"} {
 		t.Run(ext, func(t *testing.T) {
+			t.Parallel()
 			f, _ := engSetup(t)
 			flac := f.files[key(parentID, "audio.flac")]
 			imp := filepath.Join(t.TempDir(), "base."+ext)
@@ -1041,8 +972,9 @@ func (f *replaceEngFake) ApplyFx(_ context.Context, id int64, req yue.FxRequest)
 }
 
 func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
+	t.Parallel()
 	const maxDb = -60.0
-	for _, tc := range []struct {
+	cases := []struct {
 		name          string
 		dur, from, to float64
 	}{
@@ -1058,17 +990,37 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 		{"100–123.2", 130, 100, 123.2},
 		{"100–123.25", 130, 100, 123.25},
 		{"123.457–140 (from − f = 123.407)", 145, 123.457, 140},
-	} {
+		// сетка 10 мс: from − f < 0 → from запроса 0
+		{"0.03–5.009 (from < f → 0)", 10, 0.03, 5.009},
+	}
+	// файлы родителя и сигнал замены Z — один раз на длину трека (только читаются)
+	type prep struct {
+		d muteData
+		z []float32
+	}
+	byDur := map[float64]prep{}
+	for _, tc := range cases {
+		if _, ok := byDur[tc.dur]; ok {
+			continue
+		}
+		zp := lavfiHi(t, fmt.Sprintf("anoisesrc=d=%g:c=white:r=%d:a=0.3:seed=23", tc.dur, idSR),
+			filepath.Join(t.TempDir(), "z.flac"))
+		byDur[tc.dur] = prep{muteFiles(t, tc.dur), decodeAt(t, zp, idSR)}
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mf, base, other := muteSetup(t, tc.dur)
-			zp := lavfiHi(t, fmt.Sprintf("anoisesrc=d=%g:c=white:r=%d:a=0.3:seed=23", tc.dur, idSR),
-				filepath.Join(t.TempDir(), "z.flac"))
-			z := decodeAt(t, zp, idSR)
-			f := &replaceEngFake{muteEngFake: mf, z: z}
+			t.Parallel()
+			pr := byDur[tc.dur]
+			base, other, z := pr.d.base, pr.d.other, pr.z
+			f := &replaceEngFake{muteEngFake: muteFake(t, pr.d), z: z}
 			if _, err := RebuildSections(context.Background(), f, parentID,
 				[]SectionSpec{engSpec([]string{"other"}, tc.from, tc.to, 0)}); err != nil {
 				t.Fatalf("RebuildSections: %v", err)
 			}
+			if len(f.calls) != 1 {
+				t.Fatalf("ApplyFx вызван %d раз, want 1", len(f.calls))
+			}
+			checkGrid(t, f.calls[0], tc.from, tc.to)
 			if len(f.uploads) != 1 {
 				t.Fatalf("загрузок %d, want 1", len(f.uploads))
 			}
@@ -1076,7 +1028,11 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 			for _, data := range f.uploads {
 				out = decodeHi(t, data)
 			}
-			// ожидание в окне: base − other + z
+			if d := float64(len(out)-len(base)) / idSR; math.Abs(d) > 0.05 {
+				t.Errorf("длина выхода отличается от трека на %.3f с", d)
+			}
+			// ожидание в окне: base − other + z (кусок не на сэмплах воркера → остаток Z;
+			// −1 мимо базы → остаток other — оба ≈ 0 дБ относительно Z)
 			want := make([]float32, len(base))
 			for i := range want {
 				want[i] = base[i] - other[i]
@@ -1084,10 +1040,21 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 					want[i] += z[i]
 				}
 			}
-			in := [2]float64{tc.from + 0.01, tc.to - 0.01}
+			// от начала трека фейд входа −1 идёт до f (фейк его не повторяет — как в
+			// TestRebuildSectionsEngineWorkerIgnoresPadFromZeroWorks)
+			in := [2]float64{math.Max(tc.from, engFade) + 0.01, tc.to - 0.01}
 			if r := relResidualDb(out, want, nil, z, in[0], in[1]); r > maxDb {
 				t.Errorf("окно %.4f–%.4f с: отличие от base − other + Z %.1f дБ (относительно Z), want ≤ %.0f (кусок не на сэмплах воркера или −1 мимо базы)",
 					in[0], in[1], r, maxDb)
+			}
+			// вне окна и фейдов — исходный трек
+			if a := tc.from - engFade - 0.02; a > 0 {
+				if r := relResidualDb(out, base, nil, base, 0, a); r > maxDb {
+					t.Errorf("до окна: отличие от трека %.1f дБ, want ≤ %.0f", r, maxDb)
+				}
+			}
+			if r := relResidualDb(out, base, nil, base, tc.to+engFade+0.02, tc.dur); r > maxDb {
+				t.Errorf("после окна: отличие от трека %.1f дБ, want ≤ %.0f", r, maxDb)
 			}
 		})
 	}
@@ -1119,6 +1086,7 @@ func noPadSetup(t *testing.T, dur float64) (*noPadFake, []float32, []float32, []
 }
 
 func TestRebuildSectionsEngineWorkerIgnoresPadFails(t *testing.T) {
+	t.Parallel()
 	f, _, _, _ := noPadSetup(t, 40)
 	_, err := RebuildSections(context.Background(), f, parentID,
 		[]SectionSpec{engSpec([]string{"other"}, 20, 35, 0)})
@@ -1141,6 +1109,7 @@ func TestRebuildSectionsEngineWorkerIgnoresPadFails(t *testing.T) {
 // проходит, в окне звучит обработанный кусок (base − other + Z). Первые f секунд —
 // фейд входа −1, его фейк не повторяет (как и в TestRebuildSectionsEngineChunkOnWorkerSamples).
 func TestRebuildSectionsEngineWorkerIgnoresPadFromZeroWorks(t *testing.T) {
+	t.Parallel()
 	f, base, other, z := noPadSetup(t, 20)
 	if _, err := RebuildSections(context.Background(), f, parentID,
 		[]SectionSpec{engSpec([]string{"other"}, 0, 15, 0)}); err != nil {
@@ -1215,9 +1184,11 @@ func drumSetup(t *testing.T, part string, dur float64) (*replaceEngFake, []float
 }
 
 func TestRebuildSectionsEngineDrumPartReplaced(t *testing.T) {
+	t.Parallel()
 	const dur, from, to = 10.0, 2.0, 6.5
 	for _, part := range drumPartNames {
 		t.Run(part, func(t *testing.T) {
+			t.Parallel()
 			f, base, sub, z := drumSetup(t, part, dur)
 			spec := SectionSpec{ChildID: 0, From: from, To: to, Stems: []string{part}, Engine: samplerChain(part)}
 			if _, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{spec}); err != nil {
@@ -1266,6 +1237,7 @@ func TestRebuildSectionsEngineDrumPartReplaced(t *testing.T) {
 // Часть не из списка (xyz) — пропуск, как у неизменяемых: на воркер не уходит, не
 // скачивается, трек на её месте не меняется; соседняя часть kick в той же записи — применяется.
 func TestRebuildSectionsEngineUnknownPartSkipped(t *testing.T) {
+	t.Parallel()
 	f, base, sub, z := drumSetup(t, "kick", 10)
 	f.files[key(parentID, "stem-xyz.flac")] = f.files[key(parentID, "stem-kick.flac")]
 	spec := SectionSpec{ChildID: 0, From: 2, To: 6.5, Stems: []string{"xyz", "kick"}, Engine: samplerChain("kick")}
@@ -1300,8 +1272,10 @@ func TestRebuildSectionsEngineUnknownPartSkipped(t *testing.T) {
 // её не дал (демиксер без частей барабанов, например Demucs) — пересборка падает с
 // подсказкой «нужен RoFormer», ничего не загружено, MakeStems вызван (ровно один раз).
 func TestRebuildSectionsEngineDrumPartMissingHintsRoFormer(t *testing.T) {
+	t.Parallel()
 	for _, part := range []string{"kick", "snare", "crash"} {
 		t.Run(part, func(t *testing.T) {
+			t.Parallel()
 			f, _, _, _ := drumSetup(t, part, 10)
 			delete(f.files, key(parentID, "stem-"+part+".flac"))
 			spec := SectionSpec{ChildID: 0, From: 2, To: 6.5, Stems: []string{part}, Engine: samplerChain(part)}

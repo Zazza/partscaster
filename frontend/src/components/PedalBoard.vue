@@ -3,14 +3,15 @@
 // превью места с «было / стало», сравнение до четырёх досок на одном куске,
 // применение к дорожке (реестр пересборки) или ко всему треку. Логика доски —
 // в pedals.js (vitest), окно превью — в fxPreview.js.
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
 import { useInserts } from '../composables/useInserts.js'
+import { usePedalBoardState } from '../composables/usePedalBoardState.js'
 import { previewWindow } from '../fxPreview.js'
 import {
-  addPedal, applyPreset, boardSteps, movePedal, pedalChains, removePedal, setParam, togglePedal,
+  PEDAL_STEMS, addPedal, applyPreset, boardSteps, movePedal, pedalChains, removePedal, setParam, togglePedal,
 } from '../pedals.js'
 import VSelect from '../VSelect.vue'
 
@@ -27,15 +28,14 @@ const { t } = useI18n()
 const { nowPlayingKey, playerState, refreshPlayer } = usePlayer()
 const inserts = useInserts()
 
-const STEMS = ['guitar', 'other', 'piano', 'vocals', 'bass', 'drums', '']   // drums — активная дорожка «барабаны» (и их части)
+const STEMS = PEDAL_STEMS
 const SLOTS = ['A', 'B', 'C', 'D']
 const SLOT = 'P'                    // свой слот превью: не путается с превью блока DSP
 const NO_STEM = 'не выделилась'     // ошибка Go: дорожки в треке нет (воркер без 6-стемной модели)
 const PLAY_KEY = 'pedals'           // «сейчас играет превью педалей» в общем плеере
-const STATE_KEY = 'yue_studio_state'
 
-const board = ref([])
-const stem = ref('guitar')
+// доска и дорожка — на трек, переживают перезапуск (как остальное в студии); активная дорожка студии → дорожка доски
+const { board, stem } = usePedalBoardState(() => props.job.id, () => props.active, STEMS)
 const selIdx = ref(-1)
 const presets = ref([])
 const presetSel = ref('')
@@ -54,27 +54,6 @@ const selChain = computed(() => (selPedal.value ? chainById(selPedal.value.chain
 const stemOptions = computed(() => STEMS.map((v) => ({ value: v, label: t('studio.dsp.target.' + (v || 'mix')) })))
 const hasOn = computed(() => board.value.some((p) => !p.off))
 
-// доска и дорожка — на трек, переживают перезапуск (как остальное в студии)
-function load() {
-  try {
-    const st = JSON.parse(localStorage.getItem(STATE_KEY) || '{}')
-    const per = (st.pedals && st.pedals[props.job.id]) || {}
-    if (Array.isArray(per.board)) board.value = per.board
-    if (typeof per.stem === 'string') stem.value = per.stem
-  } catch { /* битое состояние — начинаем с пустой доски */ }
-}
-function save() {
-  try {
-    const st = JSON.parse(localStorage.getItem(STATE_KEY) || '{}')
-    st.pedals = st.pedals || {}
-    st.pedals[props.job.id] = { board: board.value, stem: stem.value }
-    localStorage.setItem(STATE_KEY, JSON.stringify(st))
-  } catch { /* нет localStorage — доска живёт до закрытия студии */ }
-}
-load()   // сохранённая доска — до слежения: watch активной дорожки (immediate) иначе сохранил бы пустую доску поверх
-watch([board, stem], save, { deep: true })
-// активная дорожка студии → дорожка доски (если педали на неё ставятся); выбор здесь — активная дорожка студии
-watch(() => props.active, (a) => { if (a !== null && STEMS.includes(a) && a !== stem.value) stem.value = a }, { immediate: true })
 function pickStem(v) {
   stem.value = v
   emit('stem', v)

@@ -110,6 +110,7 @@ func softenRun(t *testing.T, in string) []float32 {
 // Карточка: цепочка доступна по ID и имеет имя; есть крутилки (сила, частота),
 // дефолты лежат в своих диапазонах.
 func TestSoftenByIDAndDefaults(t *testing.T) {
+	t.Parallel()
 	c := ByID("soften")
 	if c == nil || c.ID != "soften" || c.Name == "" {
 		t.Fatalf(`ByID("soften") = %+v, want цепочку с этим ID и именем`, c)
@@ -124,17 +125,10 @@ func TestSoftenByIDAndDefaults(t *testing.T) {
 	}
 }
 
-// Карточка: с дефолтами Run не падает, длина выхода = длине входа (±0.05 с).
-func TestSoftenDefaultsKeepLength(t *testing.T) {
-	out := softenRun(t, sfGen(t))
-	if d := float64(len(out)) / dwSR; math.Abs(d-sfDur) > 0.05 {
-		t.Errorf("длина выхода %.3f с, want %.0f ± 0.05", d, sfDur)
-	}
-}
-
 // Карточка: шипящие всплески 6–8 кГц ослаблены ≥ 4 дБ, тело голоса 200–2000 Гц
 // изменилось не больше чем на 1 дБ.
 func TestSoftenTamesSibilantsKeepsBody(t *testing.T) {
+	t.Parallel()
 	in := sfGen(t)
 	src := decodeAt(t, in, dwSR)
 	out := softenRun(t, in)

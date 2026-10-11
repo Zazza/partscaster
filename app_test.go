@@ -19,6 +19,7 @@ type fakeService struct {
 	submitted []yue.SubmitParams
 	fetchData map[string][]byte // file -> bytes
 	fetchErr  map[string]error
+	fetched   []string // имена файлов, запрошенных FetchAudio, по порядку
 }
 
 func (f *fakeService) Jobs(ctx context.Context) ([]yue.Job, error) { return f.jobs, nil }
@@ -29,6 +30,7 @@ func (f *fakeService) Submit(ctx context.Context, p yue.SubmitParams) (int64, er
 }
 
 func (f *fakeService) FetchAudio(ctx context.Context, id int64, file string) (io.ReadCloser, string, error) {
+	f.fetched = append(f.fetched, file)
 	if e := f.fetchErr[file]; e != nil {
 		return nil, "", e
 	}
@@ -62,6 +64,7 @@ func (p *fakePlayer) LastError() string                                  { retur
 func newTestApp(s yue.Service, p Player) *App { return &App{yue: s, player: p} }
 
 func TestSubmitFanClampsN(t *testing.T) {
+	t.Parallel()
 	// spec: n < 1 → 1 джоба, n > 10 → 10
 	s := &fakeService{}
 	a := newTestApp(s, &fakePlayer{})
@@ -77,6 +80,7 @@ func TestSubmitFanClampsN(t *testing.T) {
 }
 
 func TestSubmitFanSeeds(t *testing.T) {
+	t.Parallel()
 	// spec: сиды base+0..n-1; base берётся из параметров, если задан
 	s := &fakeService{}
 	a := newTestApp(s, &fakePlayer{})
@@ -93,6 +97,7 @@ func TestSubmitFanSeeds(t *testing.T) {
 }
 
 func TestSubmitFanTitles(t *testing.T) {
+	t.Parallel()
 	// spec: имя помечается [i/n]; без имени — остаётся пустым
 	s := &fakeService{}
 	a := newTestApp(s, &fakePlayer{})
@@ -112,6 +117,7 @@ func TestSubmitFanTitles(t *testing.T) {
 }
 
 func TestSubmitFanRandomSeedsPositive(t *testing.T) {
+	t.Parallel()
 	// spec: без сида base случайный, но сиды всё равно последовательные
 	s := &fakeService{}
 	a := newTestApp(s, &fakePlayer{})
@@ -130,6 +136,7 @@ func TestSubmitFanRandomSeedsPositive(t *testing.T) {
 }
 
 func TestApplyDspUnknownChain(t *testing.T) {
+	t.Parallel()
 	a := newTestApp(&fakeService{}, &fakePlayer{})
 	if _, err := a.YueApplyDsp(1, "no-such-chain", nil); err == nil || !strings.Contains(err.Error(), "no-such-chain") {
 		t.Fatalf("expected unknown chain error, got %v", err)
@@ -137,6 +144,7 @@ func TestApplyDspUnknownChain(t *testing.T) {
 }
 
 func TestApplyDspNoAudio(t *testing.T) {
+	t.Parallel()
 	s := &fakeService{jobs: []yue.Job{{ID: 1, Status: "done"}}} // без audio_file
 	a := newTestApp(s, &fakePlayer{})
 	if _, err := a.YueApplyDsp(1, "wall", nil); err == nil || !strings.Contains(err.Error(), "no audio") {
@@ -145,6 +153,7 @@ func TestApplyDspNoAudio(t *testing.T) {
 }
 
 func TestPlayAudioPrefersFlac(t *testing.T) {
+	t.Parallel()
 	// spec: flac → wav → mp3 (меньше трафика — первым)
 	s := &fakeService{
 		jobs: []yue.Job{{ID: 1, AudioFile: "audio.flac", WavFile: "audio.wav", Mp3File: "audio.mp3"}},
@@ -157,9 +166,13 @@ func TestPlayAudioPrefersFlac(t *testing.T) {
 	if len(pl.loaded) != 1 || pl.loaded[0] != 1 || pl.plays != 1 {
 		t.Fatalf("player calls: loaded=%v plays=%d", pl.loaded, pl.plays)
 	}
+	if len(s.fetched) != 1 || s.fetched[0] != "audio.flac" {
+		t.Fatalf("скачано %v, want только audio.flac (flac первым, при наличии wav и mp3)", s.fetched)
+	}
 }
 
 func TestPlayAudioFallsBackToMp3(t *testing.T) {
+	t.Parallel()
 	s := &fakeService{
 		jobs:      []yue.Job{{ID: 2, Mp3File: "audio.mp3"}},
 		fetchData: map[string][]byte{"audio.mp3": {1, 2, 3}},
@@ -175,6 +188,7 @@ func TestPlayAudioFallsBackToMp3(t *testing.T) {
 }
 
 func TestPlayAudioNoAudio(t *testing.T) {
+	t.Parallel()
 	s := &fakeService{jobs: []yue.Job{{ID: 3, Status: "done"}}}
 	a := newTestApp(s, &fakePlayer{})
 	if err := a.YuePlayAudio(3); err == nil {
@@ -183,6 +197,7 @@ func TestPlayAudioNoAudio(t *testing.T) {
 }
 
 func TestPlayAudioUnknownJob(t *testing.T) {
+	t.Parallel()
 	a := newTestApp(&fakeService{jobs: []yue.Job{{ID: 1}}}, &fakePlayer{})
 	if err := a.YuePlayAudio(999); err == nil {
 		t.Fatal("expected error for unknown job")
@@ -190,6 +205,7 @@ func TestPlayAudioUnknownJob(t *testing.T) {
 }
 
 func TestShutdownStopsPlayer(t *testing.T) {
+	t.Parallel()
 	pl := &fakePlayer{}
 	a := newTestApp(&fakeService{}, pl)
 	a.shutdown(context.Background())
@@ -199,6 +215,7 @@ func TestShutdownStopsPlayer(t *testing.T) {
 }
 
 func TestSeekAudioSecondsToDuration(t *testing.T) {
+	t.Parallel()
 	pl := &fakePlayer{}
 	a := newTestApp(&fakeService{}, pl)
 	if err := a.YueSeekAudio(1.5); err != nil {

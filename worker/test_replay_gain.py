@@ -145,12 +145,15 @@ class TestReplayGain(_ReplayRunCase):
         self.assertTrue((self.jobs_dir / str(parent) / f"overdub-{child}.flac").is_file())
         self.assertEqual(self._row(child)["status"], "done")
 
-    def test_gain_other_value_passed_as_is(self):
-        calls = self._spy_mix()
-        _, child = self._overdub_row(gain=0.3)
+    def test_gain_other_value_sets_layer_level(self):
+        # родитель — тон 220 Гц с амплитудой 0,2, слой — тот же тон 0,3 в фазе: в миксе 0,2 + gain·0,3
+        import numpy as np
+        import soundfile as sf
+        parent, child = self._overdub_row(gain=0.3)
         self.w._run_job(child)
-        self.assertEqual(len(calls), 1)
-        self.assertAlmostEqual(self._gain_of(calls[0]), 0.3)
+        y, sr = sf.read(str(self.jobs_dir / str(parent) / f"overdub-{child}.flac"), always_2d=True)
+        body = y[:int(0.4 * sr)]   # до кроссфейда в конце
+        self.assertAlmostEqual(float(np.abs(body).max()), 0.2 + 0.3 * 0.3, delta=0.01)
 
     def test_gain_null_mixes_with_half(self):
         calls = self._spy_mix()

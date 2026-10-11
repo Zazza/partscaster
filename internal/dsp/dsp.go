@@ -187,10 +187,11 @@ func dropGraph(p map[string]float64) string {
 		fmt.Fprintf(&b, ",asetnsamples=n=%d:p=0,volume='if(lt(t,%[2]g),pow(10,(%[3]g)*(1-t/%[2]g)/20),1)':eval=frame",
 			envFrame, rise, floor)
 	}
-	// пауза — задержкой хвоста, а не apad последнего куска: apad на пустом куске
-	// (отметка за концом трека) роняет весь граф ffmpeg
+	// пауза — сдвигом меток хвоста на gap и заполнением тишиной от нуля (aresample first_pts=0): тишина
+	// появляется, только если хвост есть. Отметка за концом трека — хвост пуст, паузы нет, трек не удлиняется
+	// (adelay дописывал тишину и к пустому хвосту; apad на пустом куске роняет граф ffmpeg)
 	if gap > 0 {
-		fmt.Fprintf(&b, ",adelay=delays=%g:all=1", gap*1000)
+		fmt.Fprintf(&b, ",asetpts=PTS+%g/TB,aresample=async=1:first_pts=0", gap)
 	}
 	b.WriteString("[t]")
 	// начало трека и куски торможения — перекрёстными переходами; хвост после

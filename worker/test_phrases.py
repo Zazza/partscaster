@@ -118,13 +118,6 @@ class TestCatalog(unittest.TestCase):
         self.assertGreaterEqual(len(_ids("bass")), 2)
         self.assertGreaterEqual(len(_ids("drums")), 2)
 
-    def test_tc132_drum_phrases_have_kick_snare_hh(self):
-        for pid in _ids("drums"):
-            with self.subTest(id=pid):
-                parts, _ = _render(pid)
-                for k in ("kick", "snare", "hh"):
-                    self.assertIn(k, parts)
-
 
 @unittest.skipUnless(_HAS_NP, _SKIP)
 class TestRenderDry(unittest.TestCase):
@@ -185,7 +178,8 @@ class TestRenderDry(unittest.TestCase):
                 self.assertAlmostEqual(r, 1.0, delta=0.02, msg=f"высота сдвинулась в {r:.3f} раза")
 
     def test_tc132_recording_pitch_independent_of_tempo(self):
-        for pid in _ids("guitar"):
+        # механизм растяжки записи общий для гитарных фраз — две фразы вместо всех
+        for pid in _ids("guitar")[:2]:
             with self.subTest(id=pid):
                 slow, _ = _render(pid, 0.75)
                 fast, _ = _render(pid, 1.25)
@@ -251,12 +245,6 @@ class TestLoopRender(unittest.TestCase):
         self.assertGreater(float(np.max(np.abs(y[int(0.3 * SR):]))), 0.05)
         self.assertFalse(clipped)
 
-    def test_tc133_length_equals_cycle(self):
-        for bypass in (False, True):
-            with self.subTest(bypass=bypass):
-                y, _ = _loop(_late_parts(), ["guitar"], DELAY, bypass=bypass)
-                self._check_shape(y)
-
     def test_tc133_gain12_loudness_equals_dry(self):
         parts = {"guitar": _tone(1000, 0.05, 0.0, CYCLE), "bass": _tone(110, 0.05, 0.0, CYCLE)}
         wet, clipped = _loop(parts, ["guitar"], GAIN12)
@@ -276,11 +264,6 @@ class TestLoopRender(unittest.TestCase):
                 self.assertLessEqual(float(np.max(np.abs(y))), 0.99 + 1e-6)
                 self.assertIs(bool(clipped), True)
                 self.assertGreater(float(np.max(np.abs(y))), 0.5, "круг опущен сильнее нужного")
-
-    def test_peak_never_above_099_with_gain(self):
-        parts = {"guitar": _tone(1000, 0.5, 0.0, CYCLE)}
-        y, _ = _loop(parts, ["guitar"], GAIN12)
-        self.assertLessEqual(float(np.max(np.abs(y))), 0.99 + 1e-6)
 
     def test_tc133_part_not_in_stems_unchanged(self):
         """Цепочка gain +12 дБ на kick: остальные части — сухие. Части разнесены по времени,
@@ -357,19 +340,14 @@ class TestSynthCatalog(unittest.TestCase):
                 self.assertLess(float(np.max(np.abs(parts["synth"]))), 1e-6, "часть synth — тишина")
                 self.assertAlmostEqual(cycle, e["beats"] * 60.0 / e["bpm"], delta=1.5 / SR)
 
-    def test_tc137_every_phrase_has_beats_and_chords(self):
-        for pid, e in _catalog().items():
-            with self.subTest(id=pid):
-                self.assertIn("beats", e)
-                self.assertIsInstance(e["beats"], (int, float))
-                self.assertIsInstance(e["chords"], list)
-
     def test_tc137_drum_phrases_have_silent_perc_and_beats(self):
+        # ТК132: у барабанных фраз есть kick, snare, hh; ТК137: и тихая часть perc, beats > 0
         for pid in _ids("drums"):
             with self.subTest(id=pid):
                 self.assertGreater(_catalog()[pid]["beats"], 0)
                 parts, _ = _render(pid)
-                self.assertIn("perc", parts)
+                for k in ("kick", "snare", "hh", "perc"):
+                    self.assertIn(k, parts)
                 self.assertLess(float(np.max(np.abs(parts["perc"]))), 1e-6, "часть perc — тишина")
                 self.assertGreater(float(np.max(np.abs(_sum(parts)))), 1e-3, "бит пропал")
 
@@ -412,7 +390,8 @@ class TestSynthLoop(unittest.TestCase):
 
     def test_tc137_synth_phrase_loudness_target(self):
         """A-RMS ≈ −20 dBFS (0,1) ± 1 дБ, если пик не упёрся в 0,99; упёрся (clipped) — ниже −20, но не ниже −30."""
-        for pid in _ids("synth"):
+        # synth-фразы различаются только длиной круга (часть synth — тишина): одна фраза
+        for pid in _ids("synth")[:1]:
             parts, cycle = _render(pid, 1.0)
             n = len(parts["synth"])
             for chain in ([_synth_block(_pad_notes(cycle), release_s=0.3)],

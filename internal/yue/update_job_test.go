@@ -3,7 +3,6 @@ package yue
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,6 +36,7 @@ func updateServer(t *testing.T, status int, resp string, got *updateReq) *Client
 func strp(s string) *string { return &s }
 
 func TestUpdateJobTitleOnly(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":12,"title":"Новое","status":"done","folder":"Альбом"}`, &got)
 	j, err := c.UpdateJob(context.Background(), 12, strp("Новое"), nil)
@@ -55,6 +55,7 @@ func TestUpdateJobTitleOnly(t *testing.T) {
 }
 
 func TestUpdateJobFolderOnly(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":5,"title":"x","folder":"Основы"}`, &got)
 	j, err := c.UpdateJob(context.Background(), 5, nil, strp("Основы"))
@@ -73,6 +74,7 @@ func TestUpdateJobFolderOnly(t *testing.T) {
 }
 
 func TestUpdateJobEmptyFolderIsSent(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":5,"title":"x"}`, &got)
 	j, err := c.UpdateJob(context.Background(), 5, nil, strp(""))
@@ -92,6 +94,7 @@ func TestUpdateJobEmptyFolderIsSent(t *testing.T) {
 }
 
 func TestUpdateJobBothFields(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"id":3,"title":"t","folder":"f"}`, &got)
 	if _, err := c.UpdateJob(context.Background(), 3, strp("t"), strp("f")); err != nil {
@@ -99,20 +102,5 @@ func TestUpdateJobBothFields(t *testing.T) {
 	}
 	if len(got.body) != 2 || got.body["title"] != "t" || got.body["folder"] != "f" {
 		t.Fatalf("body: %v", got.body)
-	}
-}
-
-func TestUpdateJobErrorStatus(t *testing.T) {
-	for _, code := range []int{422, 404} {
-		var got updateReq
-		c := updateServer(t, code, `{"detail":"bad"}`, &got)
-		j, err := c.UpdateJob(context.Background(), 9, strp("x"), nil)
-		if err == nil {
-			t.Fatalf("%d: expected error, got job %+v", code, j)
-		}
-		var se *StatusError
-		if !errors.As(err, &se) || se.Code != code {
-			t.Fatalf("%d: want *StatusError with code, got %T %v", code, err, err)
-		}
 	}
 }

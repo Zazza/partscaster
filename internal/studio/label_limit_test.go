@@ -48,6 +48,7 @@ func oneBlockSpec(typ string) SectionSpec {
 
 // ТК89: одна запись → подпись прежняя (побайтно).
 func TestRebuildLabelSingleUnchanged(t *testing.T) {
+	t.Parallel()
 	sp := SectionSpec{ChildID: 0, From: 80, To: 88, Stems: []string{"other"}, Engine: engChain()}
 	want := "Движок: amp → cab · гитары/синты 1:20–1:28"
 	if got := rebuildLabel([]SectionSpec{sp}); got != want {
@@ -57,6 +58,7 @@ func TestRebuildLabelSingleUnchanged(t *testing.T) {
 
 // Условие 55: несколько коротких записей, вместе короче предела, — прежний формат через « + ».
 func TestRebuildLabelFewShortUnchanged(t *testing.T) {
+	t.Parallel()
 	specs, parts := fortyEngine()
 	want := strings.Join(parts[:3], " + ")
 	if got := rebuildLabel(specs[:3]); got != want {
@@ -66,6 +68,7 @@ func TestRebuildLabelFewShortUnchanged(t *testing.T) {
 
 // Граница: подпись ровно 280 рун (кириллица — байтов больше 280) — не меняется.
 func TestRebuildLabelExactLimitUnchanged(t *testing.T) {
+	t.Parallel()
 	base := "Движок:  · гитары/синты"
 	typ := strings.Repeat("ж", labelLimit-utf8.RuneCountInString(base))
 	want := "Движок: " + typ + " · гитары/синты"
@@ -81,6 +84,7 @@ func TestRebuildLabelExactLimitUnchanged(t *testing.T) {
 // записи, кончается « + ещё N»; вошедшие части — целые, по порядку, через « + »;
 // N = 40 − число вошедших; следующая часть уже не влезла бы.
 func TestRebuildLabelFortyEngineTruncated(t *testing.T) {
+	t.Parallel()
 	specs, parts := fortyEngine()
 	got := rebuildLabel(specs)
 
@@ -117,6 +121,7 @@ func TestRebuildLabelFortyEngineTruncated(t *testing.T) {
 
 // Условие 55: две записи, вторая не влезает → «<первая> + ещё 1».
 func TestRebuildLabelSecondDoesNotFit(t *testing.T) {
+	t.Parallel()
 	first := oneBlockSpec(strings.Repeat("a", 200))
 	second := oneBlockSpec(strings.Repeat("b", 100))
 	wantFirst := "Движок: " + strings.Repeat("a", 200) + " · гитары/синты"
@@ -129,6 +134,7 @@ func TestRebuildLabelSecondDoesNotFit(t *testing.T) {
 // ТК89: одна запись с подписью 400 рун (движок из многих блоков) → ≤ 280 рун,
 // кончается «…», до «…» — начало исходной подписи.
 func TestRebuildLabelLongFirstEllipsis(t *testing.T) {
+	t.Parallel()
 	var chain []map[string]any
 	var names []string
 	full := ""
@@ -154,6 +160,7 @@ func TestRebuildLabelLongFirstEllipsis(t *testing.T) {
 
 // Граница: подпись 281 руна — уже обрезается (≤ 280, «…»).
 func TestRebuildLabelOverLimitByOne(t *testing.T) {
+	t.Parallel()
 	base := "Движок:  · гитары/синты"
 	typ := strings.Repeat("ж", labelLimit+1-utf8.RuneCountInString(base))
 	got := rebuildLabel([]SectionSpec{oneBlockSpec(typ)})
@@ -168,6 +175,7 @@ func TestRebuildLabelOverLimitByOne(t *testing.T) {
 // ТК89: rebuildSections с 40 записями — UploadDsp получает подпись ≤ 280 рун
 // (фейк сервиса secFake; записи — громкость дорожки, без воркера).
 func TestRebuildSectionsFortyLabelWithinLimit(t *testing.T) {
+	t.Parallel()
 	f := labelSetup(t, 12)
 	specs := make([]SectionSpec, 0, 40)
 	for i := 0; i < 40; i++ {

@@ -24,6 +24,7 @@ func jobsByID(jobs ...yue.Job) map[int64]yue.Job {
 }
 
 func TestVoiceSourceExplicitVoiceSrcWins(t *testing.T) {
+	t.Parallel()
 	// VoiceSrc задан — он, даже у сгенерированной роли и у варианта с родителем
 	root := yue.Job{ID: 1}
 	for _, role := range []string{"", "continue", "section", "rebuild", "fragment", "variant"} {
@@ -35,6 +36,7 @@ func TestVoiceSourceExplicitVoiceSrcWins(t *testing.T) {
 }
 
 func TestVoiceSourceGeneratedRolesAreOwnVoice(t *testing.T) {
+	t.Parallel()
 	// сгенерированная версия — голос свой, родитель не важен
 	root := yue.Job{ID: 1}
 	for _, role := range []string{"", "continue", "section", "rebuild", "fragment"} {
@@ -50,6 +52,7 @@ func TestVoiceSourceGeneratedRolesAreOwnVoice(t *testing.T) {
 }
 
 func TestVoiceSourceVariantInheritsFromParent(t *testing.T) {
+	t.Parallel()
 	root := yue.Job{ID: 1}
 	v := yue.Job{ID: 11, Role: "variant", ParentID: i64(1)}
 	if got := VoiceSource(v, jobsByID(root, v)); got != 1 {
@@ -58,6 +61,7 @@ func TestVoiceSourceVariantInheritsFromParent(t *testing.T) {
 }
 
 func TestVoiceSourceVariantChainRecursesThroughParents(t *testing.T) {
+	t.Parallel()
 	// variant → variant → rebuild(с VoiceSrc=3): источник — VoiceSrc пересборки
 	rb := yue.Job{ID: 30, Role: "rebuild", ParentID: i64(1), VoiceSrc: i64(3)}
 	v1 := yue.Job{ID: 31, Role: "variant", ParentID: i64(30)}
@@ -77,6 +81,7 @@ func TestVoiceSourceVariantChainRecursesThroughParents(t *testing.T) {
 }
 
 func TestVoiceSourceVariantWithoutParentIsZero(t *testing.T) {
+	t.Parallel()
 	v := yue.Job{ID: 12, Role: "variant"}
 	if got := VoiceSource(v, jobsByID(v)); got != 0 {
 		t.Fatalf("variant без ParentID: %d, want 0", got)
@@ -93,6 +98,7 @@ func TestVoiceSourceVariantWithoutParentIsZero(t *testing.T) {
 }
 
 func TestVoiceSourceParentCycleIsZeroAndTerminates(t *testing.T) {
+	t.Parallel()
 	a := yue.Job{ID: 50, Role: "variant", ParentID: i64(51)}
 	b := yue.Job{ID: 51, Role: "variant", ParentID: i64(50)}
 	self := yue.Job{ID: 52, Role: "variant", ParentID: i64(52)}
@@ -111,6 +117,7 @@ func TestVoiceSourceParentCycleIsZeroAndTerminates(t *testing.T) {
 }
 
 func TestRevoiceSpec(t *testing.T) {
+	t.Parallel()
 	got := RevoiceSpec(77, 12.5, 30, 0.5)
 	want := SectionSpec{
 		ChildID: 77, From: 12.5, To: 30, Lead: 12.5, BeatSec: 0.5,

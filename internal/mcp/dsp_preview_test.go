@@ -35,6 +35,7 @@ func pvServer(t *testing.T) (*Server, *fakeService) {
 
 // Карточка 1.8: dsp_preview со stem/from/to/steps принимается и отдаёт вариант.
 func TestDspPreviewStepsOnStem(t *testing.T) {
+	t.Parallel()
 	s, fake := pvServer(t)
 	out, ok := call(t, s, "dsp_preview", jsonArgs(t,
 		`{"job_id":5,"stem":"other","from":2.5,"to":4.5,"steps":[{"chain":"grit","params":{"drive":2}},{"chain":"reverb-room","off":true}]}`))
@@ -51,6 +52,7 @@ func TestDspPreviewStepsOnStem(t *testing.T) {
 
 // Карточка 1.8: steps без stem — превью на весь трек.
 func TestDspPreviewStepsWholeTrack(t *testing.T) {
+	t.Parallel()
 	s, fake := pvServer(t)
 	out, ok := call(t, s, "dsp_preview", jsonArgs(t,
 		`{"job_id":5,"from":1,"to":3,"steps":[{"chain":"eq","params":{"high":-12}}]}`))
@@ -64,6 +66,7 @@ func TestDspPreviewStepsWholeTrack(t *testing.T) {
 
 // Карточка 1.8: старый способ (chain/params) по-прежнему принимается.
 func TestDspPreviewChainStillWorks(t *testing.T) {
+	t.Parallel()
 	s, _ := pvServer(t)
 	out, ok := call(t, s, "dsp_preview", jsonArgs(t,
 		`{"job_id":5,"chain":"eq","params":{"high":-12},"from":1,"to":3}`))
@@ -74,12 +77,14 @@ func TestDspPreviewChainStillWorks(t *testing.T) {
 
 // Карточка 1.8: ни chain, ни steps — ошибка, ничего не загружено.
 func TestDspPreviewNoChainNoStepsIsError(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string]string{
 		"без chain и steps": `{"job_id":5,"from":1,"to":3}`,
 		"пустые steps":      `{"job_id":5,"from":1,"to":3,"steps":[]}`,
 		"все шаги выкл":     `{"job_id":5,"from":1,"to":3,"steps":[{"chain":"eq","off":true}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			s, fake := pvServer(t)
 			out, ok := call(t, s, "dsp_preview", jsonArgs(t, args))
 			if ok {
@@ -94,11 +99,13 @@ func TestDspPreviewNoChainNoStepsIsError(t *testing.T) {
 
 // Карточка 1.8 + 1.1: неизвестная или key-цепочка в steps — ошибка, ничего не загружено.
 func TestDspPreviewBadStepIsError(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string]string{
 		"неизвестная": `{"job_id":5,"stem":"other","from":1,"to":3,"steps":[{"chain":"no-such"}]}`,
 		"key-цепочка": `{"job_id":5,"stem":"other","from":1,"to":3,"steps":[{"chain":"ducking"}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			s, fake := pvServer(t)
 			out, ok := call(t, s, "dsp_preview", jsonArgs(t, args))
 			if ok {
@@ -111,18 +118,14 @@ func TestDspPreviewBadStepIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.8: схема инструмента описывает stem/from/to/steps.
-func TestDspPreviewSchemaHasNewArgs(t *testing.T) {
+// Карточка 1.8: chain не обязателен — достаточно одного из chain/steps (передачу
+// stem/from/to/steps/solo проверяют тесты вызова выше и ниже).
+func TestDspPreviewChainNotRequired(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	s.mu.RLock()
 	tool := s.tools["dsp_preview"]
 	s.mu.RUnlock()
-	schema, _ := tool.InputSchema["properties"].(map[string]any)
-	for _, p := range []string{"stem", "from", "to", "steps", "chain"} {
-		if _, ok := schema[p]; !ok {
-			t.Errorf("dsp_preview: в схеме нет параметра %q", p)
-		}
-	}
 	req, _ := tool.InputSchema["required"].([]string)
 	for _, r := range req {
 		if r == "chain" {
@@ -134,6 +137,7 @@ func TestDspPreviewSchemaHasNewArgs(t *testing.T) {
 // Карточка 1.10: dsp_preview solo: true без stem — ошибка, ничего не загружено
 // (у превью на весь трек соло нет).
 func TestDspPreviewSoloWithoutStemIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := pvServer(t)
 	out, ok := call(t, s, "dsp_preview", jsonArgs(t,
 		`{"job_id":5,"solo":true,"from":1,"to":3,"steps":[{"chain":"eq","params":{"high":-12}}]}`))
@@ -150,6 +154,7 @@ func TestDspPreviewSoloWithoutStemIsError(t *testing.T) {
 // тон other 440 Гц (eq режет только верх) — на месте. Без solo — тот же запрос
 // даёт микс (300 Гц есть): так проверяется, что solo что-то меняет.
 func TestDspPreviewSoloOnStemIsWetSolo(t *testing.T) {
+	t.Parallel()
 	args := func(solo bool) string {
 		return fmt.Sprintf(`{"job_id":5,"stem":"other","solo":%t,"from":2.5,"to":4.5,`+
 			`"steps":[{"chain":"eq","params":{"high":-12}}]}`, solo)
@@ -182,17 +187,5 @@ func TestDspPreviewSoloOnStemIsWetSolo(t *testing.T) {
 	mix := upload(t, false)
 	if a := fxTone(mix, 300, 0.2, 1.8); a < 0.1 {
 		t.Errorf("без solo: тон drums 300 Гц амплитудой %.3f, want ≈ 0.2 (вариант — микс)", a)
-	}
-}
-
-// Карточка 1.10: схема dsp_preview описывает solo.
-func TestDspPreviewSchemaHasSolo(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool := s.tools["dsp_preview"]
-	s.mu.RUnlock()
-	schema, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := schema["solo"]; !ok {
-		t.Errorf("dsp_preview: в схеме нет параметра solo")
 	}
 }

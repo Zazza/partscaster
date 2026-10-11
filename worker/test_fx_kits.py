@@ -28,8 +28,6 @@ import json
 import re
 import socket
 import tarfile
-import threading
-import time
 import unittest
 import urllib.error
 import urllib.parse
@@ -86,6 +84,9 @@ TREE = {
     "toms/large-tom1.wav": 0.17,
     "toms/large-tom3.wav": 0.18,
     "toms/large-tom-under-alt3.wav": 0.96,
+    # копии рядом с настоящими файлами: шаблон части берёт только *.wav своей части
+    "toms/small-tom1.wav.bak": 0.97,
+    "hihat/closed-hihat/chh1.wav.bak": 0.98,
 }
 KICK_PEAKS = {0.51, 0.52, 0.53}
 SNARE_PEAKS = {0.61, 0.62}
@@ -319,6 +320,12 @@ class _KitCase(fa._FxApiCase):
         p = mock.patch.object(socket, "create_connection", no_net)
         p.start()
         self.addCleanup(p.stop)
+        # паузы ретраев (1 + 2 с) — ноль: ретраи остаются, тест не ждёт по-настоящему;
+        # сами паузы проверяет test_kit_download.TestRetries
+        self.retry_pause_s = self.w.FX_KIT_RETRY_PAUSE_S
+        p = mock.patch.object(self.w, "FX_KIT_RETRY_PAUSE_S", 0)
+        p.start()
+        self.addCleanup(p.stop)
         self.kits = self.data / "fx" / "kits"
 
     def _install(self, name="osdk"):
@@ -368,31 +375,23 @@ class TestKitInstall(_KitCase):
         root = self.kits / "osdk"
         self.assertEqual(sorted(p.name for p in root.iterdir() if p.is_dir()), sorted(PART_PEAKS))
         # kick/* → kick (все три), snare-top<N>.wav → snare (только два), части хэта и
-        # тарелок — только свои файлы (ride-bell, ride-mid-out, crash-bell — нет), прочее не тянется
+        # тарелок — только свои файлы (ride-bell, ride-mid-out, crash-bell — нет), тамы по размеру
+        # (нижние микрофоны *-under* — нет; ТК36), копии *.wav.bak — нет, прочее не тянется
         for part, peaks in PART_PEAKS.items():
             with self.subTest(part=part):
                 got = self._peaks(root / part)
                 self.assertEqual(set(got), peaks)
                 self.assertEqual(len(got), len(peaks))
 
-    def test_repeat_without_network(self):
-        self.assertEqual(self._install().status_code, 200)
-        self.gh.calls.clear()
-        r = self._install()
-        self.assertEqual(r.status_code, 200, r.text)
-        body = r.json()
-        self.assertIs(body.get("downloaded"), False)
-        self.assertEqual(body.get("parts"), ALL_PARTS)
-        self.assertEqual(self.gh.calls, [], "повтор качает заново")
-        self.assertEqual(self.sockets, [])
-
     def test_unknown_name_422(self):
-        for name in ("nope", "", "../osdk", "OSDK2"):
+        # неизвестные имена — и для скачиваемых (osdk), и для генерируемых (tr808 и др.) наборов
+        for name in ("nope", "", "../osdk", "OSDK2", "tr808x", "TR808", "../tr808", "tr808/kick", "synthbass/moog"):
             with self.subTest(name=name):
                 r = self._install(name)
                 self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual(self.gh.calls, [], "неизвестное имя — без сети")
         self.assertFalse((self.kits / "nope").exists())
+        self.assertFalse((self.kits / "tr808x").exists())
         self.assertFalse((self.data / "fx" / "osdk").exists())
 
     def test_assets_list_kits_after_install(self):
@@ -432,47 +431,6 @@ class TestKitInstallRobust(_KitCase):
     def _no_part_files(self):
         left = [str(p.relative_to(self.data)) for p in self.data.rglob("*") if ".part" in p.name]
         self.assertEqual(left, [], "остались временные *.part")
-
-    def test_two_parallel_installs_of_same_kit(self):
-        lock = threading.Lock()
-        seen = set()
-        barrier = threading.Barrier(2)
-
-        def hook(url):
-            # первый запрос каждого потока ждёт второй — оба качают одновременно;
-            # если реализация ставит установки в очередь, второго не будет — ждём недолго
-            me = threading.get_ident()
-            with lock:
-                first = me not in seen
-                seen.add(me)
-            if first:
-                try:
-                    barrier.wait(timeout=2)
-                except threading.BrokenBarrierError:
-                    pass  # установка сериализована — допустимо
-            time.sleep(0.005)  # расширить окно гонки
-
-        self.gh.hook = hook
-        results = [None, None]
-
-        def run(i):
-            results[i] = self._install()
-
-        ts = [threading.Thread(target=run, args=(i,)) for i in range(2)]
-        for t in ts:
-            t.start()
-        for t in ts:
-            t.join(timeout=120)
-        for i, r in enumerate(results):
-            self.assertIsNotNone(r, f"установка {i} не завершилась")
-            self.assertEqual(r.status_code, 200, r.text)
-            self.assertEqual(r.json().get("parts"), ALL_PARTS)
-        flags = sorted(r.json().get("downloaded") for r in results)
-        self.assertIn(flags, ([False, True], [True, True]), f"downloaded: {flags}")
-        self._assert_full_kit()
-        self._no_part_files()
-        self.assertEqual(sorted((k["name"], k["samples"]) for k in self._assets()["kits"]), ALL_KITS)
-        self.assertEqual(self.sockets, [])
 
     def _check_failure_then_retry(self, fault):
         self.gh.fault = fault
@@ -564,17 +522,10 @@ class TestSamplerOverHttp(_KitCase):
         jid, d = self._audio_job()
         r = self._fx(jid, source="drums", chain=[{"type": "sampler", "kit": "mykit/kick"}], output="solo")
         self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.gh.calls, [], "применение набора не ходит в сеть")
         r = self._fx(jid, source="drums", chain=[{"type": "sampler", "kit": "nope/kick"}], output="solo")
         self.assertEqual(r.status_code, 422, r.text)
         self.assertIn("nope/kick", r.text)
-
-    def test_sampler_no_network(self):
-        self._put_kit("mykit", "kick", [0.5])
-        self._real_resources()
-        jid, _ = self._audio_job()
-        r = self._fx(jid, source="drums", chain=[{"type": "sampler", "kit": "mykit/kick"}], output="solo")
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(self.gh.calls, [], "применение набора не ходит в сеть")
 
 
 # ---------- Условие 15 (internal-studio-engine, этап 5б): набор growlybass, ТК14 ----------
@@ -589,11 +540,13 @@ class TestGrowlybassCatalog(_KitCase):
         super().setUp()
         self.kits = self.w.FX_KITS
 
-    def test_tc14_growlybass_pinned(self):
-        self.assertIn("growlybass", self.kits)
-        spec = self.kits["growlybass"]
-        self.assertEqual(spec["repo"], "sfzinstruments/karoryfer.growlybass")
-        self.assertRegex(spec["ref"], r"^[0-9a-f]{40}$", "версия набора не закреплена коммитом")
+    def test_tc14_tc30_tc97_all_downloaded_kits_pinned(self):
+        # ТК14 growlybass, ТК30 osdk, ТК97 salamander: версия каждого скачиваемого набора закреплена коммитом
+        pinned = {name: spec["ref"] for name, spec in self.kits.items() if "repo" in spec}
+        self.assertTrue({"growlybass", "osdk", "salamander"} <= set(pinned), pinned)
+        for name, ref in pinned.items():
+            with self.subTest(kit=name):
+                self.assertRegex(ref, r"^[0-9a-f]{40}$", "версия набора не закреплена коммитом")
 
     def test_tc14_part_bass_from_sustain_wavs(self):
         parts = self.kits["growlybass"]["parts"]
@@ -624,10 +577,6 @@ def _long_wav(path, dur=8, sr=KIT_SR):
 
 class TestKitMaxLength(_KitCase):
 
-    def test_tc22_max_s_in_kit_catalog(self):
-        self.assertEqual(self.w.FX_KITS["growlybass"].get("max_s"), 6)
-        self.assertNotIn("max_s", self.w.FX_KITS["osdk"], "у osdk предела длины быть не должно")
-
     def _read_len(self, name):
         import numpy as np
         samples, sr = self.real_fx_resources().kit(name)
@@ -646,60 +595,8 @@ class TestKitMaxLength(_KitCase):
         self.assertEqual(self._read_len("osdk/kick"), 8 * KIT_SR, "сэмпл osdk 8 с обрезан")
 
 
-# ---------- Условие 26 (этап 5в), ТК30: части хэта и тарелок в наборе osdk ----------
-#
-# Контракт: FX_KITS["osdk"] (та же версия c58808b) получает части hh-closed
-# (hihat/closed-hihat, chh*.wav), hh-half (hihat/half-closed-hihat, hchh*.wav),
-# hh-open (hihat/half-open-hihat, hohh*.wav), ride (ride, ride-mid-in*.wav),
-# crash (crash, crash<N>.wav); шаблон принимает только файлы своей части.
-
-OSDK_NEW_PARTS = {
-    "hh-closed": ("hihat/closed-hihat", ["chh1.wav", "chh12.wav"]),
-    "hh-half": ("hihat/half-closed-hihat", ["hchh1.wav", "hchh7.wav"]),
-    "hh-open": ("hihat/half-open-hihat", ["hohh1.wav", "hohh10.wav"]),
-    "ride": ("ride", ["ride-mid-in1.wav", "ride-mid-in12.wav"]),
-    "crash": ("crash", ["crash1.wav", "crash4.wav"]),
-}
-
-
-class TestOsdkCymbalParts(_KitCase):
-
-    def setUp(self):
-        super().setUp()
-        self.osdk = self.w.FX_KITS["osdk"]
-
-    def test_tc30_same_pinned_version(self):
-        self.assertTrue(self.osdk["ref"].startswith("c58808b"), "версия osdk сменилась")
-        self.assertRegex(self.osdk["ref"], r"^[0-9a-f]{40}$")
-
-    def test_tc30_parts_and_folders(self):
-        parts = self.osdk["parts"]
-        for part in ("kick", "snare"):
-            self.assertIn(part, parts, f"часть {part} этапа 5а пропала")
-        for part, (folder, _) in OSDK_NEW_PARTS.items():
-            with self.subTest(part=part):
-                self.assertIn(part, parts)
-                self.assertEqual(parts[part][0], folder)
-
-    def test_tc30_patterns_accept_only_own_files(self):
-        parts = self.osdk["parts"]
-        for part, (_, own) in OSDK_NEW_PARTS.items():
-            pattern = parts[part][1]
-            for name in own:
-                with self.subTest(part=part, file=name):
-                    self.assertTrue(re.fullmatch(pattern, name), f"{name} не попадает в часть {part}")
-            foreign = [f for p, (_, files) in OSDK_NEW_PARTS.items() if p != part for f in files]
-            foreign += ["kick1.wav", "snare-top1.wav", "readme.txt", f"{own[0]}.bak"]
-            for name in foreign:
-                with self.subTest(part=part, foreign=name):
-                    self.assertFalse(re.fullmatch(pattern, name), f"{name} попал в часть {part}")
-
-    def test_tc30_case_from_card_chh_vs_hchh(self):
-        # пример карточки: chh1.wav — да в hh-closed, hchh1.wav — нет
-        pattern = self.osdk["parts"]["hh-closed"][1]
-        self.assertTrue(re.fullmatch(pattern, "chh1.wav"))
-        self.assertFalse(re.fullmatch(pattern, "hchh1.wav"))
-
+# ТК30 (части хэта и тарелок) и ТК36 (тамы по размеру, без *-under*): раскладка проверяется
+# установкой по дереву TREE (TestKitInstall.test_install_osdk_layout, PART_PEAKS).
 
 # ---------- Условие 26 (этап 5в), ТК32: osdk поверх набора этапа 5а докачивает части ----------
 #
@@ -757,66 +654,6 @@ class TestOsdkUpgradeAddsParts(_KitCase):
         self.assertEqual(sorted((k["name"], k["samples"]) for k in self._assets()["kits"]),
                          sorted([(n, c) for n, c in ALL_KITS if n not in ("osdk/kick", "osdk/snare")]
                                 + [("osdk/kick", len(LOCAL_KICK)), ("osdk/snare", len(LOCAL_SNARE))]))
-
-
-
-# ---------- internal-own-track, этап 2, условие 15, ТК36: тамы в наборе osdk ----------
-#
-# Контракт (из карточки): FX_KITS["osdk"] получает части tom-small, tom-medium, tom-large —
-# папка toms, файлы small-tom<N>.wav / medium-tom<N>.wav / large-tom<N>.wav; нижние
-# микрофоны (*-under*) не берутся. Шаблон части — re.fullmatch по имени файла.
-
-OSDK_TOM_PARTS = {
-    "tom-small": ("toms", ["small-tom1.wav", "small-tom12.wav"]),
-    "tom-medium": ("toms", ["medium-tom1.wav", "medium-tom7.wav"]),
-    "tom-large": ("toms", ["large-tom1.wav", "large-tom3.wav"]),
-}
-TOM_UNDER = ["small-tom-under1.wav", "medium-tom-under2.wav", "large-tom-under-alt3.wav",
-             "large-tom-under3.wav"]
-
-
-class TestOsdkTomParts(_KitCase):
-
-    def setUp(self):
-        super().setUp()
-        self.parts = self.w.FX_KITS["osdk"]["parts"]
-
-    def test_tc36_parts_and_folder(self):
-        for part, (folder, _) in OSDK_TOM_PARTS.items():
-            with self.subTest(part=part):
-                self.assertIn(part, self.parts)
-                self.assertEqual(self.parts[part][0], folder)
-
-    def test_tc36_patterns_accept_only_own_files(self):
-        for part, (_, own) in OSDK_TOM_PARTS.items():
-            pattern = self.parts[part][1]
-            for name in own:
-                with self.subTest(part=part, file=name):
-                    self.assertTrue(re.fullmatch(pattern, name), f"{name} не попадает в часть {part}")
-            foreign = [f for p, (_, files) in OSDK_TOM_PARTS.items() if p != part for f in files]
-            foreign += TOM_UNDER + ["tom1.wav", "kick1.wav", f"{own[0]}.bak"]
-            for name in foreign:
-                with self.subTest(part=part, foreign=name):
-                    self.assertFalse(re.fullmatch(pattern, name), f"{name} попал в часть {part}")
-
-    def test_tc36_cases_from_card(self):
-        # примеры карточки: «small-tom-under1.wav», «large-tom-under-alt3.wav» — нет; «small-tom12.wav» — да
-        small = self.parts["tom-small"][1]
-        large = self.parts["tom-large"][1]
-        self.assertTrue(re.fullmatch(small, "small-tom12.wav"))
-        self.assertFalse(re.fullmatch(small, "small-tom-under1.wav"))
-        self.assertFalse(re.fullmatch(large, "large-tom-under-alt3.wav"))
-
-    def test_tc36_install_puts_toms_by_size(self):
-        r = self._install()
-        self.assertEqual(r.status_code, 200, r.text)
-        parts = r.json().get("parts") or {}
-        root = self.kits / "osdk"
-        for part in OSDK_TOM_PARTS:
-            with self.subTest(part=part):
-                self.assertEqual(parts.get(part), len(PART_PEAKS[part]))
-                got = self._peaks(root / part)
-                self.assertEqual(sorted(got), sorted(PART_PEAKS[part]), "в часть попали чужие файлы (under?)")
 
 
 if __name__ == "__main__":

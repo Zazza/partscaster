@@ -58,14 +58,8 @@ func listFixture() []yue.Job {
 	}
 }
 
-func TestListJobsAllWhenFolderEmpty(t *testing.T) {
-	rows := listRows(t, listJobs(listFixture(), "", 0, false))
-	if got := rowIDs(rows); !eqIDs(got, []int64{1, 2, 3, 4, 5, 6, 7}) {
-		t.Fatalf("ids %v", got)
-	}
-}
-
 func TestListJobsEmptyInput(t *testing.T) {
+	t.Parallel()
 	for _, brief := range []bool{false, true} {
 		rows := listRows(t, listJobs(nil, "Альбом", 10, brief))
 		if len(rows) != 0 {
@@ -75,6 +69,7 @@ func TestListJobsEmptyInput(t *testing.T) {
 }
 
 func TestListJobsFolderIncludesDerivedChainKeepsOrder(t *testing.T) {
+	t.Parallel()
 	rows := listRows(t, listJobs(listFixture(), "Альбом", 0, false))
 	// 6 — сирота с собственной папкой «Альбом»: сам себе корень, тоже попадает
 	if got := rowIDs(rows); !eqIDs(got, []int64{1, 2, 3, 6, 7}) {
@@ -83,6 +78,7 @@ func TestListJobsFolderIncludesDerivedChainKeepsOrder(t *testing.T) {
 }
 
 func TestListJobsFolderCaseAndSpaceInsensitive(t *testing.T) {
+	t.Parallel()
 	rows := listRows(t, listJobs(listFixture(), "  альбом ", 0, false))
 	if got := rowIDs(rows); !eqIDs(got, []int64{1, 2, 3, 6, 7}) {
 		t.Fatalf("ids %v", got)
@@ -94,6 +90,7 @@ func TestListJobsFolderCaseAndSpaceInsensitive(t *testing.T) {
 }
 
 func TestListJobsDashMeansNoFolder(t *testing.T) {
+	t.Parallel()
 	rows := listRows(t, listJobs(listFixture(), "-", 0, false))
 	if got := rowIDs(rows); !eqIDs(got, []int64{4}) {
 		t.Fatalf("ids %v", got)
@@ -101,6 +98,7 @@ func TestListJobsDashMeansNoFolder(t *testing.T) {
 }
 
 func TestListJobsDerivedFolderComesFromRootNotOwn(t *testing.T) {
+	t.Parallel()
 	jobs := []yue.Job{
 		{ID: 1, Title: "root", Folder: "A"},
 		{ID: 2, Title: "child", ParentID: idp(1), Folder: "B"},
@@ -114,12 +112,14 @@ func TestListJobsDerivedFolderComesFromRootNotOwn(t *testing.T) {
 }
 
 func TestListJobsUnknownFolderEmpty(t *testing.T) {
+	t.Parallel()
 	if rows := listRows(t, listJobs(listFixture(), "нет такой", 0, false)); len(rows) != 0 {
 		t.Fatalf("want empty, got %v", rowIDs(rows))
 	}
 }
 
 func TestListJobsLimitAfterFilter(t *testing.T) {
+	t.Parallel()
 	rows := listRows(t, listJobs(listFixture(), "Альбом", 2, false))
 	if got := rowIDs(rows); !eqIDs(got, []int64{1, 2}) {
 		t.Fatalf("ids %v", got)
@@ -128,13 +128,14 @@ func TestListJobsLimitAfterFilter(t *testing.T) {
 	if got := rowIDs(listRows(t, listJobs(listFixture(), "-", 5, false))); !eqIDs(got, []int64{4}) {
 		t.Fatalf("ids %v", got)
 	}
-	// limit 0 — без ограничения
-	if got := rowIDs(listRows(t, listJobs(listFixture(), "", 0, false))); len(got) != 7 {
+	// limit 0 и пустая папка — все джобы без ограничения, в исходном порядке
+	if got := rowIDs(listRows(t, listJobs(listFixture(), "", 0, false))); !eqIDs(got, []int64{1, 2, 3, 4, 5, 6, 7}) {
 		t.Fatalf("limit 0: %v", got)
 	}
 }
 
 func TestListJobsFullReturnsJobSlice(t *testing.T) {
+	t.Parallel()
 	v := listJobs(listFixture(), "Основы", 0, false)
 	jobs, ok := v.([]yue.Job)
 	if !ok {
@@ -150,6 +151,7 @@ func TestListJobsFullReturnsJobSlice(t *testing.T) {
 }
 
 func TestListJobsBriefFields(t *testing.T) {
+	t.Parallel()
 	rows := listRows(t, listJobs(listFixture(), "Альбом", 0, true))
 	if got := rowIDs(rows); !eqIDs(got, []int64{1, 2, 3, 6, 7}) {
 		t.Fatalf("ids %v", got)

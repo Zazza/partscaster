@@ -17,3 +17,13 @@ export function stemForTarget(target, stems, current = '') {
   if (current && targetFor(current) === target) return current
   return (stems || []).includes(target) ? target : ''
 }
+
+/** Ручной выбор цели правок («на что» у громкости, эффектов, педалей): stem — какую дорожку сделать активной
+ *  (null — активную не менять), target — цель правок. Трек ещё не разделён (дорожек нет) — цель держится как
+ *  выбрана, активной дорожки нет (дорожку на эффект Go отделит сам); иначе активной становится дорожка цели
+ *  (stemForTarget), цель — по ней (targetFor). */
+export function targetChoice(target, stems, current = '') {
+  if (!(stems || []).length) return { stem: null, target }
+  const stem = stemForTarget(target, stems, current)
+  return { stem: stem !== current ? stem : null, target: targetFor(stem) }
+}

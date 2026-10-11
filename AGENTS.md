@@ -134,7 +134,7 @@ make test        # все тесты
 make fmt         # gofmt
 make build       # wails build
 cd frontend && npm test && npx eslint src && npm run build
-cd worker && python3 -m unittest test_pure && ruff check .
+cd worker && python3 -m unittest discover -p 'test_*.py' && ruff check .
 go test ./... && go vet ./...
 ```
 

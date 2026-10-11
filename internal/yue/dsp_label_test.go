@@ -32,6 +32,7 @@ func dspServer(t *testing.T, resp string, got *dspReq) *Client {
 // Подпись с кириллицей, пробелами и «·» доходит до воркера как есть,
 // а label из ответа попадает в DspVariant.Label.
 func TestUploadDspSendsLabel(t *testing.T) {
+	t.Parallel()
 	var got dspReq
 	label := "Перегруз голоса · голос 1:20–1:28"
 	c := dspServer(t, `{"file":"overdub-inst-0.flac","created_at":"2026-01-01T00:00:00",`+
@@ -56,6 +57,7 @@ func TestUploadDspSendsLabel(t *testing.T) {
 
 // Без подписи параметр label не отправляется вовсе.
 func TestUploadDspNoLabel(t *testing.T) {
+	t.Parallel()
 	var got dspReq
 	c := dspServer(t, `{"file":"dsp-wall.flac","created_at":"","metrics":{},"label":""}`, &got)
 	v, err := c.UploadDsp(context.Background(), 9, "dsp-wall.flac", "", []byte("x"))
@@ -75,6 +77,7 @@ func TestUploadDspNoLabel(t *testing.T) {
 
 // Число миксов трека из списка джоб попадает в Job.Mixes; нет поля — 0.
 func TestJobsDecodeMixes(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[{"id":1,"status":"done","mixes":3},{"id":2,"status":"done"}]`))
 	}))

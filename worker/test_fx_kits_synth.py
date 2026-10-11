@@ -98,26 +98,25 @@ class TestMachineInstall(_SynthKitCase):
                 self.assertEqual((info.samplerate, info.channels, info.subtype), (KIT_SR, 1, "PCM_16"),
                                  f"{kit}/{part}/{f.name}")
 
-    def test_tr808_without_network(self):
-        body = self._ok("tr808")
-        self._check_layout("tr808", body)
-        self.assertEqual(self.net, [], "установка драм-машины ходила в сеть")
+    def _fast_render(self):
+        """Раскладка, формат и сеть не зависят от звука удара: drumsynth.render — короткая заглушка
+        (звук машин проверяет test_drumsynth, настоящий tr808 — TestSamplerTr808)."""
+        import drumsynth
+        import numpy as np
+        p = mock.patch.object(drumsynth, "render",
+                              lambda kit, part, layer, sr=KIT_SR: np.full(sr // 100, 0.1, dtype=np.float32))
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_all_machines_without_network(self):
+        self._fast_render()
         for kit in MACHINES:
             with self.subTest(kit=kit):
                 self._check_layout(kit, self._ok(kit))
         self.assertEqual(self.net, [])
 
-    def test_assets_list_generated_kit(self):
-        self._ok("tr808")
-        r = self.client.get("/fx/assets")
-        self.assertEqual(r.status_code, 200, r.text)
-        kits = {k["name"]: k["samples"] for k in r.json().get("kits", [])}
-        for part in DRUM_PARTS:
-            self.assertEqual(kits.get(f"tr808/{part}"), 8, part)
-
     def test_repeat_not_regenerated(self):
+        self._fast_render()
         self._ok("tr808")
         files = self._files("tr808")
         self.assertTrue(files)
@@ -130,13 +129,6 @@ class TestMachineInstall(_SynthKitCase):
         self.assertEqual(self._files("tr808"), files, "состав файлов изменился")
         for f in files:
             self.assertEqual(f.stat().st_mtime_ns, OLD_NS, f"{f.name} перезаписан")
-        self.assertEqual(self.net, [])
-
-    def test_unknown_kit_422(self):
-        for name in ("tr808x", "TR808", "../tr808", "tr808/kick", "synthbass/moog", ""):
-            with self.subTest(name=name):
-                self.assertEqual(self._install(name).status_code, 422)
-        self.assertFalse((self.kits / "tr808x").exists())
         self.assertEqual(self.net, [])
 
 
@@ -400,9 +392,21 @@ class TestDeployShipsImports(unittest.TestCase):
                 with self.subTest(src=src, module=mod):
                     self.assertIn(f"{mod}.py", shipped, f"{src} импортирует {mod}, а deploy.sh его не копирует")
 
-    def test_drumsynth_shipped(self):
-        """58а прямо: drumsynth.py — в списке deploy.sh."""
-        self.assertIn("drumsynth.py", _deploy_scp_files())
+    def test_data_files_of_shipped_modules_in_scp(self):
+        """Файлы данных worker/*.json, которые читают отправляемые модули (имя — строкой в коде),
+        тоже уезжают через deploy.sh: fx_blocks.json, fx_presets.json (ТК104), fx_kit_files.json (условие 115)."""
+        shipped = _deploy_scp_files()
+        missing = {}
+        for mod in sorted(f for f in shipped if f.endswith(".py") and (WORKER / f).is_file()):
+            for node in ast.walk(ast.parse((WORKER / mod).read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                        and re.fullmatch(r"[\w.\-]+\.json", node.value) and (WORKER / node.value).is_file() \
+                        and node.value not in shipped:
+                    missing.setdefault(node.value, set()).add(mod)
+        self.assertEqual(missing, {}, "deploy.sh не копирует файлы данных, которые читают модули")
+        for name in ("fx_blocks.json", "fx_presets.json", "fx_kit_files.json"):   # опора: правило их видит
+            self.assertIn(name, shipped)
+
 
 if __name__ == "__main__":
     unittest.main()

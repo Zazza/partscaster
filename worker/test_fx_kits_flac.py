@@ -50,12 +50,7 @@ class TestFlacKits(fa._FxApiCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tc97_assets_list_flac_part(self):
-        self._put("salamander", "piano", {"A0v10.flac": 0.3, "C1v10.flac": 0.4, "D#1v10.flac": 0.5})
-        kits = self._assets().get("kits")
-        self.assertEqual(sorted((k["name"], k["samples"]) for k in kits), [("salamander/piano", 3)])
-
-    def test_assets_count_flac_and_wav_together(self):
+    def test_tc97_assets_count_flac_and_wav_together(self):
         self._put("mykeys", "mixed", {"A3v10.flac": 0.3, "C4v10.flac": 0.4, "D#4v10.wav": 0.5})
         kits = self._assets().get("kits")
         self.assertEqual(sorted((k["name"], k["samples"]) for k in kits), [("mykeys/mixed", 3)])
@@ -82,11 +77,6 @@ class TestFlacKits(fa._FxApiCase):
         self.assertEqual(len(samples), 2)
         self.assertEqual(sorted(res.kit_names("mykeys/mixed")), ["A3v10", "D#4v10"])
 
-    def test_flac_kit_missing_still_key_error(self):
-        res = self.real_fx_resources()
-        with self.assertRaises(KeyError):
-            res.kit("salamander/piano")
-
 
 @unittest.skipUnless(fa._OK, fa._SKIP)
 class TestSalamanderCatalog(fa._FxApiCase):
@@ -96,10 +86,6 @@ class TestSalamanderCatalog(fa._FxApiCase):
         if "salamander" not in self.w.FX_KITS:
             self.fail("в FX_KITS нет набора salamander")
         self.spec = self.w.FX_KITS["salamander"]
-
-    def test_tc97_salamander_pinned(self):
-        self.assertEqual(self.spec["repo"], "sfzinstruments/SalamanderGrandPiano")
-        self.assertRegex(self.spec["ref"], r"^[0-9a-f]{40}$", "версия набора не закреплена коммитом")
 
     def test_tc97_parts(self):
         self.assertEqual(sorted(self.spec["parts"]), ["piano", "piano-soft"])

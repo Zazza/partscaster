@@ -2,11 +2,11 @@
 // два списка (группа → инструмент) вместо стены кнопок пресетов.
 // presetGroups.js: groupOptions(groups, firstLabel) → [{value, label}], itemOptions(group, locale) →
 // [{value, label, title}], groupOf(groups, id) → group. groups — выход groupPresets.
-// Страница проверяется по исходнику InstrumentsPage.vue. Написаны по карточке, без чтения реализации.
-import { readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { describe, it, expect } from 'vitest'
+// Страница: раскладка — деревом разбора шаблона InstrumentsPage.vue, поведение списков — скриптом страницы
+// (mountSetup, api подменён). Написаны по карточке, без чтения реализации.
+import { describe, it, expect, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { templateAst, findElements, dir, attr, mountSetup } from './testkit/sfc.js'
 import { PRESET_GROUPS, groupPresets, groupOptions, itemOptions, groupOf } from './presetGroups.js'
 import { fxPresets } from './fxPresets.js'
 
@@ -123,92 +123,48 @@ describe('groupOf (условие 90, ТК130)', () => {
 
 // ---- страница по исходнику (условие 91) ----
 
-const srcDir = dirname(fileURLToPath(import.meta.url))
-const page = readFileSync(join(srcDir, 'components', 'InstrumentsPage.vue'), 'utf8')
-const template = page.slice(page.indexOf('<template'), page.lastIndexOf('</template>'))
-const script = (page.match(/<script\b[^>]*>([\s\S]*?)<\/script>/g) || []).join('\n')
-
-// открывающие теги <Tag ...> целиком (атрибуты могут идти в несколько строк)
-// кавычки учитываются: внутри обработчика может быть стрелка =>
-const tags = (name) => template.match(new RegExp(`<${name}\\b(?:[^>"']|"[^"]*"|'[^']*')*>`, 'g')) || []
-const attr = (tag, name) => {
-  const m = tag.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`))
-  return m ? m[1] : null
-}
-// выражение опирается на fn: прямо или через computed/функцию скрипта, построенную на fn
-function builtOn(expr, fn) {
-  if (!expr) return false
-  if (expr.includes(`${fn}(`)) return true
-  const name = (expr.match(/^\s*([A-Za-z_$][\w$]*)/) || [])[1]
-  if (!name) return false
-  const def = script.match(new RegExp(`(?:const|let|function)\\s+${name}\\b[\\s\\S]*?(?=\\n(?:const|let|function|async function|watch|onMounted)\\b|$)`))
-  return !!def && def[0].includes(`${fn}(`)
-}
-// тело функции/watch из скрипта до следующего определения верхнего уровня
-const bodyAfter = (re) => {
-  const m = script.match(new RegExp(`${re.source}[\\s\\S]*?(?=\\n(?:const|let|function|async function|watch|onMounted)\\b|$)`))
-  return m ? m[0] : ''
-}
+vi.hoisted(() => {
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+  globalThis.window = { addEventListener() {}, removeEventListener() {} }   // клавиши страницы — в onMounted
+})
+// api: любой вызов — null; состояние плеера — «стоит» (плеер опрашивает его сам)
+vi.mock('./api.js', () => ({
+  api: new Proxy({ audioState: async () => ({ playing: false, position_sec: 0, duration_sec: 0, job_id: 0 }) }, { get: (o, k) => (k in o ? o[k] : (o[k] = vi.fn(async () => null))) }),
+}))
+const { default: InstrumentsPage } = await import('./components/InstrumentsPage.vue')
 
 describe('InstrumentsPage: два списка вместо кнопок (условие 91, ТК130)', () => {
-  it('нет кнопок пресетов: ни <button> с applyPreset, ни v-for кнопок small-btn', () => {
-    for (const b of tags('button')) {
-      expect(b, 'кнопка выбирает пресет').not.toMatch(/applyPreset/)
-      expect(b.includes('v-for') && b.includes('small-btn'), `v-for кнопок: ${b}`).toBe(false)
-    }
-  })
+  const root = templateAst('components/InstrumentsPage.vue')
+  const selects = findElements(root, (n) => n.tag === 'VSelect')
+  const byOptions = (name) => selects.filter((x) => dir(x.node, 'bind', 'options') === name)
 
-  it('импортирует groupOptions и itemOptions из presetGroups.js', () => {
-    expect(script).toMatch(/import\s*\{[^}]*\bgroupOptions\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/)
-    expect(script).toMatch(/import\s*\{[^}]*\bitemOptions\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/)
-  })
-
-  const selects = () => tags('VSelect')
-  const groupSel = () => selects().filter((s) => builtOn(attr(s, ':options'), 'groupOptions'))
-  const itemSel = () => selects().filter((s) => builtOn(attr(s, ':options'), 'itemOptions'))
-
-  it('есть VSelect групп (options из groupOptions), без поиска', () => {
-    expect(groupSel()).toHaveLength(1)
-    expect(groupSel()[0]).not.toMatch(/\ssearchable\b/)
-  })
-
-  it('есть VSelect инструментов (options из itemOptions), searchable', () => {
-    expect(itemSel()).toHaveLength(1)
-    expect(itemSel()[0]).toMatch(/\ssearchable\b/)
-  })
-
-  it('оба списка в одной строке: между ними нет других элементов', () => {
-    const [g] = groupSel()
-    const [i] = itemSel()
+  it('VSelect групп без поиска и VSelect инструментов с поиском — рядом, группа первой; выбор — applyPreset', () => {
+    const [g] = byOptions('groupOpts')
+    const [i] = byOptions('itemOpts')
     expect(g && i).toBeTruthy()
-    const gi = template.indexOf(g)
-    const ii = template.indexOf(i)
-    expect(gi).toBeLessThan(ii)
-    const between = template.slice(gi + g.length, ii)
-    expect(between, 'между списками другие VSelect/кнопки/ChainEditor').not.toMatch(/<(VSelect|button|ChainEditor)\b/)
+    expect(attr(g.node, 'searchable')).toBeNull()
+    expect(attr(i.node, 'searchable')).not.toBeNull()
+    expect(selects.indexOf(g) + 1).toBe(selects.indexOf(i))
+    expect(dir(i.node, 'on', 'update:model-value')).toBe('applyPreset')
   })
 
-  it('выбор инструмента вызывает applyPreset(id)', () => {
-    const [i] = itemSel()
-    expect(i).toBeTruthy()
-    const on = attr(i, '@update:model-value') ?? attr(i, '@update:modelValue') ?? attr(i, 'v-on:update:model-value')
-    const model = attr(i, 'v-model') ?? attr(i, ':model-value') ?? attr(i, ':modelValue')
-    let ok = false
-    if (on) {
-      ok = on.includes('applyPreset') ||
-        bodyAfter(new RegExp(`function\\s+${on.trim().split(/[\s(]/)[0]}\\b`)).includes('applyPreset')
-    }
-    if (!ok && model) {
-      const name = model.trim().split(/[\s.]/)[0]
-      ok = bodyAfter(new RegExp(`watch\\(\\s*(?:\\(\\)\\s*=>\\s*)?${name}\\b`)).includes('applyPreset')
-    }
-    expect(ok, `обработчик выбора: ${i}`).toBe(true)
+  it('списки строятся из групп пресетов: группы — groupOptions, инструменты — выбранной группы', async () => {
+    const { b } = await mountSetup(InstrumentsPage, {})
+    const groups = b.presetGroups.value
+    expect(groups.length).toBeGreaterThan(1)
+    expect(b.groupOpts.value).toEqual(groupOptions(groups, b.t('instr.group.other')))
+    b.groupId.value = groups[1].group
+    expect(b.itemOpts.value).toEqual(itemOptions(groups[1], 'ru'))
   })
 
-  it('подсказка пресета (note) под списками осталась', () => {
-    const [i] = itemSel()
-    expect(i).toBeTruthy()
-    const after = template.slice(template.indexOf(i))
-    expect(after).toMatch(/tr\(\s*preset\.note\s*\)/)
+  it('выбор инструмента ставит его цепочку и подсказку (note), группа — его', async () => {
+    const { b } = await mountSetup(InstrumentsPage, {})
+    const target = b.presetGroups.value[1].items[0]
+    b.applyPreset(target.id)
+    await nextTick()
+    expect(b.preset.value.id).toBe(target.id)
+    expect(b.chain.value.map((x) => x.type)).toEqual(target.chain.map((x) => x.type))
+    expect(b.groupId.value).toBe(groupOf(b.presetGroups.value, target.id))
+    expect(b.tr(b.preset.value.note)).not.toBe('')
   })
 })

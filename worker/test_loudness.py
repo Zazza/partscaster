@@ -34,6 +34,7 @@ class TestLoudness(unittest.TestCase):
     def test_reference_sine_48k_is_minus_23_lufs(self):
         r = self.loudness(_stereo_sine(_db(-23), 20, 48000), 48000)
         self.assertAlmostEqual(r["lufs"], -23.0, delta=0.1)
+        self.assertLess(r["lra"], 1.0, "ровный синус — диапазон громкости около нуля")
 
     def test_reference_sine_44100_is_minus_23_lufs(self):
         r = self.loudness(_stereo_sine(_db(-23), 20, 44100), 44100)
@@ -49,10 +50,6 @@ class TestLoudness(unittest.TestCase):
         x = np.concatenate([_stereo_sine(_db(-20), 20, sr), _stereo_sine(_db(-30), 20, sr)])
         r = self.loudness(x, sr)
         self.assertAlmostEqual(r["lra"], 10.0, delta=1.0)
-
-    def test_steady_sine_has_near_zero_lra(self):
-        r = self.loudness(_stereo_sine(_db(-23), 20, 48000), 48000)
-        self.assertLess(r["lra"], 1.0)
 
     def test_full_scale_sine_true_peak_near_0_dbtp(self):
         r = self.loudness(_stereo_sine(1.0, 5, 48000), 48000)

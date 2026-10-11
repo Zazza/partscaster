@@ -71,15 +71,17 @@ function suspiciousNames(text) {
   return found
 }
 
+// правило — один тест: список нарушителей «id: причина»
+const violations = (list, check) => list.flatMap((p) => check(p).map((why) => `${p.id ?? p}: ${why}`))
+
 describe('условие 113: группы оркестра (ТК143)', () => {
-  it.each(ORCH_GROUPS)('у группы %s есть подписи ru и en в PRESET_GROUPS', (g) => {
-    expect(PRESET_GROUPS[g]).toBeDefined()
-    expect(PRESET_GROUPS[g].ru?.trim()).toBeTruthy()
-    expect(PRESET_GROUPS[g].en?.trim()).toBeTruthy()
+  it('у каждой группы оркестра есть подписи ru и en в PRESET_GROUPS', () => {
+    expect(violations(ORCH_GROUPS, (g) => ['ru', 'en'].filter((l) => !PRESET_GROUPS[g]?.[l]?.trim()).map((l) => `нет ${l}`)))
+      .toEqual([])
   })
 
-  it.each(ORCH_GROUPS)('в группе %s не меньше трёх пресетов', (g) => {
-    expect(inGroup(g).length).toBeGreaterThanOrEqual(3)
+  it('в каждой группе оркестра не меньше трёх пресетов', () => {
+    expect(violations(ORCH_GROUPS, (g) => (inGroup(g).length >= 3 ? [] : [`пресетов ${inGroup(g).length}`]))).toEqual([])
   })
 
   it('groupPresets выводит все группы оркестра с подписью из PRESET_GROUPS', () => {
@@ -92,64 +94,54 @@ describe('условие 113: группы оркестра (ТК143)', () => {
   })
 })
 
-describe.each(ORCH_GROUPS)('условие 113: пресеты группы %s (ТК143)', (g) => {
-  const list = inGroup(g)
-
-  it.each(list.map((p) => [p.id, p]))('%s: блок synth/bass с kit vsco-<инструмент>/<часть> из условия 110', (_id, p) => {
-    const kb = kitBlocks(p)
-    expect(kb.length).toBeGreaterThanOrEqual(1)
-    for (const b of kb) {
-      expect(b.kit).toMatch(/^vsco-[a-z]+\/[a-z]+$/)
-      const [inst, part] = b.kit.split('/')
-      expect(Object.keys(KIT_PARTS)).toContain(inst)
-      expect(KIT_PARTS[inst]).toContain(part)
-      if (CHORD_GROUPS.includes(g)) expect(GROUP_KITS[g]).toContain(inst)
-    }
+// «имена ru/en непустые» у пресетов оркестра — правило fxPresets.test.js «name и note — ru и en, непустые» по всем пресетам
+describe('условие 113: пресеты групп оркестра (ТК143)', () => {
+  it('каждый: блок synth/bass с kit vsco-<инструмент>/<часть> из условия 110, инструмент — по смыслу группы', () => {
+    expect(violations(orch, (p) => {
+      const kb = kitBlocks(p)
+      if (kb.length === 0) return ['нет блока synth/bass с kit']
+      return kb.flatMap((b) => {
+        if (!/^vsco-[a-z]+\/[a-z]+$/.test(b.kit)) return [`kit ${b.kit}`]
+        const [inst, part] = b.kit.split('/')
+        if (!(inst in KIT_PARTS)) return [`инструмент ${inst}`]
+        const out = KIT_PARTS[inst].includes(part) ? [] : [`часть ${b.kit}`]
+        if (CHORD_GROUPS.includes(p.group) && !GROUP_KITS[p.group].includes(inst)) out.push(`${inst} не в ${p.group}`)
+        return out
+      })
+    })).toEqual([])
   })
 
-  it.each(list.map((p) => [p.id, p]))('%s: имена ru/en непустые', (_id, p) => {
-    expect(p.name?.ru?.trim()).toBeTruthy()
-    expect(p.name?.en?.trim()).toBeTruthy()
+  it('каждый: в названии и заметке нет имён исполнителей/групп', () => {
+    expect(violations(orch, (p) => [p.name?.ru, p.name?.en, p.note?.ru, p.note?.en].filter(Boolean)
+      .flatMap((t) => suspiciousNames(t)))).toEqual([])
   })
 
-  it.each(list.map((p) => [p.id, p]))('%s: в названии и заметке нет имён исполнителей/групп', (_id, p) => {
-    const texts = [p.name?.ru, p.name?.en, p.note?.ru, p.note?.en].filter(Boolean)
-    for (const t of texts) expect(suspiciousNames(t)).toEqual([])
+  it('партии по аккордам: stems [synth], блок synth с kit vsco-*, стиль и октава −2…+2', () => {
+    const chord = orch.filter((p) => CHORD_GROUPS.includes(p.group))
+    expect(violations(chord, (p) => [
+      ...(JSON.stringify(p.stems) === '["synth"]' ? [] : [`stems ${JSON.stringify(p.stems)}`]),
+      ...(p.chain.some((b) => b.type === 'synth' && /^vsco-/.test(b.kit || '')) ? [] : ['нет synth с kit vsco-*']),
+      ...(STYLES.includes(p.style) ? [] : [`style ${p.style}`]),
+      ...(Number.isInteger(p.octave) && p.octave >= -2 && p.octave <= 2 ? [] : [`octave ${p.octave}`]),
+    ])).toEqual([])
   })
-})
 
-describe.each(CHORD_GROUPS)('условие 113: партии по аккордам — %s (ТК143)', (g) => {
-  it.each(inGroup(g).map((p) => [p.id, p]))('%s: stems [synth], блок synth с kit, стиль и октава', (_id, p) => {
-    expect(p.stems).toEqual(['synth'])
-    expect(p.chain.some((b) => b.type === 'synth' && /^vsco-/.test(b.kit || ''))).toBe(true)
-    expect(STYLES).toContain(p.style)
-    expect(Number.isInteger(p.octave)).toBe(true)
-    expect(p.octave).toBeGreaterThanOrEqual(-2)
-    expect(p.octave).toBeLessThanOrEqual(2)
+  it('Бас → оркестр (orch-bass): stems [bass], блок bass с kit vsco-*', () => {
+    expect(violations(inGroup('orch-bass'), (p) => [
+      ...(JSON.stringify(p.stems) === '["bass"]' ? [] : [`stems ${JSON.stringify(p.stems)}`]),
+      ...(p.chain.some((b) => b.type === 'bass' && /^vsco-/.test(b.kit || '')) ? [] : ['нет bass с kit vsco-*']),
+    ])).toEqual([])
   })
-})
 
-describe('условие 113: Бас → оркестр (orch-bass, ТК143)', () => {
-  it.each(inGroup('orch-bass').map((p) => [p.id, p]))('%s: stems [bass], блок bass с kit vsco-*', (_id, p) => {
-    expect(p.stems).toEqual(['bass'])
-    expect(p.chain.some((b) => b.type === 'bass' && /^vsco-/.test(b.kit || ''))).toBe(true)
-  })
-})
-
-describe('условие 113: Мелодия → оркестр (orch-lead, ТК143)', () => {
-  it.each(inGroup('orch-lead').map((p) => [p.id, p]))('%s: stems guitar/other/vocals, блок bass с fmin_hz 80 / fmax_hz 1500', (_id, p) => {
-    expect([...p.stems].sort()).toEqual(['guitar', 'other', 'vocals'])
-    const b = p.chain.find((x) => x.type === 'bass' && /^vsco-/.test(x.kit || ''))
-    expect(b).toBeDefined()
-    // диапазоны условия 112: fmin 20…1000, fmax 100…2000, fmin < fmax
-    expect(b.fmin_hz).toBeGreaterThanOrEqual(20)
-    expect(b.fmin_hz).toBeLessThanOrEqual(1000)
-    expect(b.fmax_hz).toBeGreaterThanOrEqual(100)
-    expect(b.fmax_hz).toBeLessThanOrEqual(2000)
-    expect(b.fmin_hz).toBeLessThan(b.fmax_hz)
-    // значения, названные в условии 113
-    expect(b.fmin_hz).toBe(80)
-    expect(b.fmax_hz).toBe(1500)
+  // диапазоны условия 112 (fmin 20…1000, fmax 100…2000) покрывает значение из условия 113: 80 / 1500
+  it('Мелодия → оркестр (orch-lead): stems guitar/other/vocals, блок bass с fmin_hz 80 / fmax_hz 1500', () => {
+    expect(violations(inGroup('orch-lead'), (p) => {
+      const out = [...p.stems].sort().join() === 'guitar,other,vocals' ? [] : [`stems ${JSON.stringify(p.stems)}`]
+      const b = p.chain.find((x) => x.type === 'bass' && /^vsco-/.test(x.kit || ''))
+      if (!b) return [...out, 'нет bass с kit vsco-*']
+      if (b.fmin_hz !== 80 || b.fmax_hz !== 1500) out.push(`fmin_hz ${b.fmin_hz}, fmax_hz ${b.fmax_hz}`)
+      return out
+    })).toEqual([])
   })
 })
 

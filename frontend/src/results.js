@@ -70,3 +70,10 @@ export function fragmentStart(fj, lead = 4) {
   const from = Number((fj && (fj.from ?? fj.cont_from)) || 0)
   return from > lead ? from - lead : 0
 }
+
+/** Сыграть готовый кусок: его трек, затем перемотка на fragmentStart (за lead с до правки; раньше — с начала). */
+export async function playFragment(api, fj, lead = 4) {
+  await api.playAudio(fj.id)
+  const at = fragmentStart(fj, lead)
+  if (at > 0) await api.seekAudio(at)
+}

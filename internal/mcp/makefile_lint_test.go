@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -25,45 +24,6 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("нет Makefile в корне репо %s: %v", root, err)
 	}
 	return root
-}
-
-func lintWorkerRecipe(t *testing.T) string {
-	t.Helper()
-	src, err := os.ReadFile(filepath.Join(repoRoot(t), "Makefile"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var rec []string
-	in := false
-	for _, line := range strings.Split(string(src), "\n") {
-		if strings.HasPrefix(line, "lint-worker:") {
-			in = true
-			continue
-		}
-		if in {
-			if !strings.HasPrefix(line, "\t") {
-				break
-			}
-			rec = append(rec, line)
-		}
-	}
-	if len(rec) == 0 {
-		t.Fatal("в Makefile нет рецепта цели lint-worker")
-	}
-	return strings.Join(rec, "\n")
-}
-
-// По исходнику: «|| echo …» без exit 1 глушит отсутствие ruff кодом 0.
-func TestLintWorkerRecipeNoSilentEcho(t *testing.T) {
-	rec := lintWorkerRecipe(t)
-	silent := regexp.MustCompile(`\|\|\s*echo\s+'[^']*'\s*\)?\s*$`)
-	for _, line := range strings.Split(rec, "\n") {
-		if strings.Contains(line, "|| echo") && !strings.Contains(line, "exit 1") {
-			t.Errorf("lint-worker: «|| echo» без exit 1 — ложно-зелёный гейт: %q", line)
-		} else if silent.MatchString(line) {
-			t.Errorf("lint-worker: строка заканчивается echo без ошибки: %q", line)
-		}
-	}
 }
 
 // pathWithoutRuff — PATH из каталогов, где нет ruff, плюс временный каталог со ссылкой на make.
@@ -87,6 +47,7 @@ func pathWithoutRuff(t *testing.T, makeBin string) string {
 }
 
 func TestLintWorkerWithoutRuffFails(t *testing.T) {
+	t.Parallel()
 	makeBin, err := exec.LookPath("make")
 	if err != nil {
 		t.Skip("make недоступен")

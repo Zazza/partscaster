@@ -253,10 +253,4 @@ describe('по исходникам: список из useInstruments', () => {
   test('InstrumentsPage: удаление с подтверждением', () => {
     expect(src('components/InstrumentsPage.vue')).toMatch(/useConfirm|ConfirmModal/)
   })
-
-  test('в студии кнопок сохранения своих нет', () => {
-    for (const f of ['components/TrackDesk.vue', 'components/StudioSynth.vue', 'components/StudioPerc.vue']) {
-      expect(src(f), f).not.toMatch(/fxInstrument(Create|Update|Delete)/)
-    }
-  })
 })

@@ -47,3 +47,10 @@ export function partNotes(bars, { style = 'pad', octave = 0, sections = null } =
   flush()
   return out.map(({ chord: _c, ...n }) => n)
 }
+
+/** Громкость партии относительно трека — rel_db блока synth; нет блока — −8 (умолчание блока в fxBlocks.json). */
+export const SYNTH_REL_DB_DEFAULT = -8
+export function synthLevel(chain) {
+  const b = (chain || []).find((x) => x.type === 'synth')
+  return b ? b.params.rel_db : SYNTH_REL_DB_DEFAULT
+}

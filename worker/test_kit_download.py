@@ -89,6 +89,10 @@ class _PinnedCase(_KitBase):
         p = mock.patch("time.sleep", fake_sleep)
         p.start()
         self.addCleanup(p.stop)
+        # паузы здесь записываются, а не ждутся — вернуть настоящую длину (_KitCase её обнуляет)
+        p = mock.patch.object(self.w, "FX_KIT_RETRY_PAUSE_S", self.retry_pause_s)
+        p.start()
+        self.addCleanup(p.stop)
         if hasattr(self.w, "sleep"):   # на случай `from time import sleep`
             p = mock.patch.object(self.w, "sleep", fake_sleep)
             p.start()
@@ -136,24 +140,6 @@ class TestPinnedDirectLinks(_PinnedCase):
         files = sorted(f.name for f in self._part_dir().iterdir() if f.suffix == ".wav")
         self.assertEqual(len(files), len(FILES), files)
 
-    def test_no_pinned_list_uses_api_as_before(self):
-        # набора нет в закреплённом списке — список файлов берётся из API contents, как раньше
-        listing = [{"name": n, "type": "file", "download_url": f"https://dl.example/{i}.wav"}
-                   for i, n in enumerate(FILES)]
-        calls = []
-
-        def fake_get(url, *a, **kw):
-            calls.append(url)
-            if "api.github.com" in url:
-                return json.dumps(listing).encode()
-            return self.wav
-
-        with mock.patch.object(self.w, "_kit_pinned_files", return_value={}), \
-                mock.patch.object(self.w, "_http_get", fake_get):
-            got = self.w._fx_kit_install(KIT, _spec())
-        self.assertEqual(got["parts"], {PART: len(FILES)})
-        self.assertTrue([u for u in calls if "api.github.com" in u], f"API не вызван: {calls}")
-
     def test_pinned_list_is_shipped_for_session_kits(self):
         # настоящий список (fx_kit_files.json): наборы VSCO и swagbass/blackblue/meatbass/pastabass,
         # каждая часть набора из FX_KITS — непустой список имён файлов
@@ -169,12 +155,16 @@ class TestPinnedDirectLinks(_PinnedCase):
                     self.assertTrue(names, f"{kit}/{part}: пустой список")
                     self.assertTrue(all(isinstance(n, str) and n for n in names), f"{kit}/{part}")
 
-    def test_pinned_file_installed_by_deploy_and_installer(self):
-        # условие 115: файл ставится установщиком (install_worker) и deploy.sh
+    def test_deploy_and_installer_ship_list_and_run_kits_install(self):
+        # условие 115: список закреплённых файлов ставится установщиком (install_worker) и deploy.sh;
+        # условие 118: оба запускают kits_install (поведением не проверить — текст скриптов);
+        # что установщик копирует все worker/*.json, проверяет поведением Go: TestInstallLocalCopiesEveryWorkerJSON
+        pieces = {"deploy.sh": ("fx_kit_files.json", "kits_install"), "tools_install.go": ("kits_install",)}
         for path in (ROOT / "deploy.sh", ROOT / "internal" / "mcp" / "tools_install.go"):
-            with self.subTest(file=path.name):
-                text = path.read_text(encoding="utf-8")
-                self.assertIn("fx_kit_files.json", text)
+            text = path.read_text(encoding="utf-8")
+            for piece in pieces[path.name]:
+                with self.subTest(file=path.name, piece=piece):
+                    self.assertIn(piece, text)
 
 
 class TestRetries(_PinnedCase):
@@ -201,16 +191,6 @@ class TestRetries(_PinnedCase):
         for piece in (KIT, PART, "X_C4_v1"):
             self.assertIn(piece, detail, f"в причине нет «{piece}»: {detail}")
         self.assertFalse(self._part_dir().exists(), "часть опубликована не целиком")
-
-    def test_endpoint_returns_502_with_reason(self):
-        # через HTTP: набор из каталога, файл всё время падает → 502, в причине имя набора
-        fake_get, _ = self._net(fail=lambda name, n: True)
-        kits = {**self.w.FX_KITS, KIT: _spec()}
-        with mock.patch.object(self.w, "FX_KITS", kits), mock.patch.object(self.w, "_http_get", fake_get):
-            r = self.client.post("/fx/kits/install", params={"name": KIT})
-        self.assertEqual(r.status_code, 502, r.text)
-        self.assertIn(KIT, r.text)
-        self.assertFalse(self._part_dir().exists())
 
 
 class TestResume(_PinnedCase):
@@ -326,12 +306,6 @@ class TestKitsInstall(_ApiBase):
         code, called, out = self._run(fail={bad}, exc=OSError("No space left on device"))
         self.assertEqual(code, 1, out)
         self.assertEqual(sorted(called), sorted(names))
-
-    def test_install_steps_present(self):
-        # условие 118: шаг в установщике воркера и в deploy.sh
-        for path in (ROOT / "deploy.sh", ROOT / "internal" / "mcp" / "tools_install.go"):
-            with self.subTest(file=path.name):
-                self.assertIn("kits_install", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -77,22 +77,9 @@ func sameJSON(t *testing.T, got any, want string) bool {
 	return reflect.DeepEqual(g, w)
 }
 
-// ТК141: инструмент fx_instruments зарегистрирован и описан.
-func TestFxInstrumentsToolRegistered(t *testing.T) {
-	s, _ := newTestServer(t)
-	s.mu.RLock()
-	tool, ok := s.tools["fx_instruments"]
-	s.mu.RUnlock()
-	if !ok || tool.Name == "" {
-		t.Fatal("инструмент fx_instruments не зарегистрирован")
-	}
-	if strings.TrimSpace(tool.Description) == "" {
-		t.Error("у fx_instruments нет описания")
-	}
-}
-
 // ТК141: action list зовёт FxInstruments, id и имена видны в выводе.
 func TestFxInstrumentsToolList(t *testing.T) {
+	t.Parallel()
 	s, fake := newInstrServer(t)
 	out, ok := call(t, s, "fx_instruments", map[string]any{"action": "list"})
 	if !ok {
@@ -113,6 +100,7 @@ func TestFxInstrumentsToolList(t *testing.T) {
 
 // ТК141: create передаёт name/chain/stems (и base/group) воркеру; id созданного — в выводе.
 func TestFxInstrumentsToolCreate(t *testing.T) {
+	t.Parallel()
 	s, fake := newInstrServer(t)
 	chain := `[{"type":"eq","highpass_hz":80},{"type":"delay","time_ms":375,"wet":0.25}]`
 	out, ok := call(t, s, "fx_instruments", jsonArgs(t,
@@ -140,6 +128,7 @@ func TestFxInstrumentsToolCreate(t *testing.T) {
 
 // update по id: имя доходит до воркера с нужным id.
 func TestFxInstrumentsToolUpdate(t *testing.T) {
+	t.Parallel()
 	s, fake := newInstrServer(t)
 	out, ok := call(t, s, "fx_instruments", jsonArgs(t, `{"action":"update","id":5,"name":"Новое имя"}`))
 	if !ok {
@@ -155,6 +144,7 @@ func TestFxInstrumentsToolUpdate(t *testing.T) {
 
 // delete по id.
 func TestFxInstrumentsToolDelete(t *testing.T) {
+	t.Parallel()
 	s, fake := newInstrServer(t)
 	out, ok := call(t, s, "fx_instruments", jsonArgs(t, `{"action":"delete","id":5}`))
 	if !ok {
@@ -167,6 +157,7 @@ func TestFxInstrumentsToolDelete(t *testing.T) {
 
 // Неизвестное действие — ошибка, воркер не трогается.
 func TestFxInstrumentsToolUnknownAction(t *testing.T) {
+	t.Parallel()
 	s, fake := newInstrServer(t)
 	if out, ok := call(t, s, "fx_instruments", map[string]any{"action": "explode"}); ok {
 		t.Errorf("неизвестное действие прошло: %s", out)

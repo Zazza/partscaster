@@ -315,7 +315,7 @@ func RegisterStudioTools(s *Server) {
 		Description: "Удалить вариант эффекта/вклейки (файл + метрики). Деструктивное: требует confirm=true.",
 		InputSchema: props(map[string]any{
 			"job_id":  prop("ID джобы", "integer"),
-			"file":    prop("имя файла варианта (dsp-*.flac / overdub-*.flac)", "string"),
+			"file":    prop("имя файла варианта (dsp-*.flac / overdub-*.flac; дорожки stem-* не удаляются)", "string"),
 			"confirm": prop("явное подтверждение пользователя", "boolean"),
 		}, "job_id", "file", "confirm"),
 		Handler: func(s *Server, args map[string]any) (string, error) {

@@ -36,23 +36,28 @@ const (
 	pmDrumExpr = "0.05*sin(2*PI*100*t)"
 )
 
-// pmSetup — фейковый воркер: дорожка other — синус 220 Гц с RMS rmsDb дБFS.
-func pmSetup(t *testing.T, rmsDb float64) (*secFake, map[string]string) {
+// pmFiles — файлы фейкового воркера: дорожка other — синус 220 Гц с RMS rmsDb дБFS.
+// Файлы только читаются, поэтому готовятся один раз на уровень и делятся подтестами.
+func pmFiles(t *testing.T, rmsDb float64) map[string]string {
 	t.Helper()
 	needFFmpeg(t)
 	amp := math.Pow(10, rmsDb/20) * math.Sqrt2
 	gtr := fmt.Sprintf("%.6f*sin(2*PI*220*t)", amp)
 	dir := t.TempDir()
-	pf := map[string]string{
+	return map[string]string{
 		"audio.flac":       lavfi(t, aeval(gtr+"+"+pmDrumExpr, pmDur), filepath.Join(dir, "pm-audio.flac")),
 		"stem-other.flac":  lavfi(t, aeval(gtr, pmDur), filepath.Join(dir, "pm-other.flac")),
 		"stem-drums.flac":  lavfi(t, aeval(pmDrumExpr, pmDur), filepath.Join(dir, "pm-drums.flac")),
 		"stem-bass.flac":   lavfi(t, aeval("0", pmDur), filepath.Join(dir, "pm-bass.flac")),
 		"stem-vocals.flac": lavfi(t, aeval("0", pmDur), filepath.Join(dir, "pm-vocals.flac")),
 	}
+}
+
+// pmFake — новый фейковый воркер (свой на подтест: он записывает загрузки) над файлами pf.
+func pmFake(pf map[string]string) *secFake {
 	f := newSecFake()
 	put(f, parentID, pf)
-	return f, pf
+	return f
 }
 
 // pmMaxParams — все крутилки цепочки на максимум, кроме level (0 дБ): самый
@@ -133,46 +138,70 @@ type pmPath struct {
 
 var pmPaths = []pmPath{{"Preview", pmPreviewGain}, {"RebuildSections", pmRebuildGain}}
 
+// pmCase — проверка громкости: путь, уровень дорожки, цепочка, крутилки.
+type pmCase struct {
+	path   pmPath
+	lvl    float64
+	chain  string
+	pname  string
+	params map[string]float64
+}
+
 // Карточка 1.11: перегруз на тихой (−25 дБ) и громкой (−6 дБ) дорожке — громкость
 // обработанной дорожки в окне = исходной ± 1.5 дБ; и при крутилках по умолчанию,
 // и при всех крутилках на максимуме (level 0).
+//
+// Выравнивание одно для всех перегрузов и обоих путей (dsp.StepsMatch — правило на
+// всех четырёх проверяет dsp TestStepsMatchDrives), поэтому по звуку не весь перебор
+// 2 пути × 2 уровня × 4 цепочки × 2 набора, а покрытие каждого измерения: каждая
+// цепочка на максимуме — на обоих уровнях в пересборке и на тихом в превью; громкая
+// дорожка в превью и крутилки по умолчанию — на одной цепочке в каждом пути.
 func TestPedalDriveLoudnessMatched(t *testing.T) {
-	for _, path := range pmPaths {
-		for _, lvl := range []float64{pmQuietDb, pmLoudDb} {
-			for _, chain := range pmDrives {
-				for pname, params := range map[string]map[string]float64{
-					"по умолчанию": pmLevelParams(t, chain, 0),
-					"на максимуме": pmMaxParams(t, chain),
-				} {
-					name := fmt.Sprintf("%s/%+.0fдБ/%s/%s", path.name, lvl, chain, pname)
-					t.Run(name, func(t *testing.T) {
-						f, pf := pmSetup(t, lvl)
-						d := path.gain(t, f, pf, dsp.Step{Chain: chain, Params: params})
-						if math.Abs(d) > pmTolDb {
-							t.Errorf("громкость дорожки изменилась на %+.2f дБ, want 0 ± %.1f (выравнивание перегруза)", d, pmTolDb)
-						}
-					})
-				}
+	t.Parallel()
+	files := map[float64]map[string]string{pmQuietDb: pmFiles(t, pmQuietDb), pmLoudDb: pmFiles(t, pmLoudDb)}
+	prev, rb := pmPaths[0], pmPaths[1]
+	var cases []pmCase
+	for _, chain := range pmDrives {
+		mx := pmMaxParams(t, chain)
+		cases = append(cases,
+			pmCase{rb, pmQuietDb, chain, "на максимуме", mx},
+			pmCase{rb, pmLoudDb, chain, "на максимуме", mx},
+			pmCase{prev, pmQuietDb, chain, "на максимуме", mx})
+	}
+	cases = append(cases,
+		pmCase{prev, pmLoudDb, "fuzz-muff", "на максимуме", pmMaxParams(t, "fuzz-muff")},
+		pmCase{prev, pmQuietDb, "od-ts", "по умолчанию", pmLevelParams(t, "od-ts", 0)},
+		pmCase{rb, pmLoudDb, "od-ts", "по умолчанию", pmLevelParams(t, "od-ts", 0)})
+	for _, c := range cases {
+		name := fmt.Sprintf("%s/%+.0fдБ/%s/%s", c.path.name, c.lvl, c.chain, c.pname)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			pf := files[c.lvl]
+			d := c.path.gain(t, pmFake(pf), pf, dsp.Step{Chain: c.chain, Params: c.params})
+			if math.Abs(d) > pmTolDb {
+				t.Errorf("громкость дорожки изменилась на %+.2f дБ, want 0 ± %.1f (выравнивание перегруза)", d, pmTolDb)
 			}
-		}
+		})
 	}
 }
 
 // Карточка 1.11: крутилка level +6 дБ поверх выравнивания — дорожка громче исходной
 // на 6 ± 1.5 дБ. Только тихая дорожка: у громкой (−6 дБ RMS) +6 дБ — это синус с
 // пиком +3 дБFS, а пик перегруза ≤ 0 дБFS (карточка 3.2) — условие для неё
-// невыполнимо одновременно с 3.2.
+// невыполнимо одновременно с 3.2. Поправка level одна для всех перегрузов
+// (dsp TestStepsMatchDrives) — по звуку одна цепочка в обоих путях.
 func TestPedalDriveLevelKnobOverMatch(t *testing.T) {
+	t.Parallel()
+	pf := pmFiles(t, pmQuietDb)
+	const chain = "fuzz-muff"
 	for _, path := range pmPaths {
-		for _, chain := range pmDrives {
-			t.Run(path.name+"/"+chain, func(t *testing.T) {
-				f, pf := pmSetup(t, pmQuietDb)
-				d := path.gain(t, f, pf, dsp.Step{Chain: chain, Params: pmLevelParams(t, chain, 6)})
-				if math.Abs(d-6) > pmTolDb {
-					t.Errorf("level +6: дорожка громче на %+.2f дБ, want +6 ± %.1f", d, pmTolDb)
-				}
-			})
-		}
+		t.Run(path.name+"/"+chain, func(t *testing.T) {
+			t.Parallel()
+			d := path.gain(t, pmFake(pf), pf, dsp.Step{Chain: chain, Params: pmLevelParams(t, chain, 6)})
+			if math.Abs(d-6) > pmTolDb {
+				t.Errorf("level +6: дорожка громче на %+.2f дБ, want +6 ± %.1f", d, pmTolDb)
+			}
+		})
 	}
 }
 
@@ -180,11 +209,13 @@ func TestPedalDriveLevelKnobOverMatch(t *testing.T) {
 // частоте тона 220 Гц) делает дорожку громче на ~6 дБ (± 1.5), а не возвращает её
 // к исходной громкости.
 func TestPedalEqNotMatched(t *testing.T) {
+	t.Parallel()
 	eq := dsp.Step{Chain: "eq", Params: map[string]float64{"mid": 6, "midf": 220, "midq": 1}}
+	pf := pmFiles(t, pmQuietDb)
 	for _, path := range pmPaths {
 		t.Run(path.name, func(t *testing.T) {
-			f, pf := pmSetup(t, pmQuietDb)
-			d := path.gain(t, f, pf, eq)
+			t.Parallel()
+			d := path.gain(t, pmFake(pf), pf, eq)
 			if math.Abs(d-6) > pmTolDb {
 				t.Errorf("eq +6 дБ: дорожка громче на %+.2f дБ, want +6 ± %.1f (у eq выравнивания нет)", d, pmTolDb)
 			}

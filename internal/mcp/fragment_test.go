@@ -41,6 +41,7 @@ func newFragmentServer(t *testing.T) (*Server, *fragmentFake) {
 }
 
 func TestContinueJobWithToSecCallsFragmentJob(t *testing.T) {
+	t.Parallel()
 	s, fake := newFragmentServer(t)
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40,"to_sec":52.5}`))
 	if !ok {
@@ -62,6 +63,7 @@ func TestContinueJobWithToSecCallsFragmentJob(t *testing.T) {
 }
 
 func TestContinueJobWithToSecPassesSeedAndAbc(t *testing.T) {
+	t.Parallel()
 	s, fake := newFragmentServer(t)
 	fake.planCheckOut = samplePlanCheck()
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":7,"from_sec":10,"to_sec":20,"seed":31,"abc":"X:1\nK:C"}`))
@@ -74,6 +76,7 @@ func TestContinueJobWithToSecPassesSeedAndAbc(t *testing.T) {
 }
 
 func TestContinueJobWithoutToSecCallsContinueJob(t *testing.T) {
+	t.Parallel()
 	s, fake := newFragmentServer(t)
 	out, ok := call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40}`))
 	if !ok {
@@ -90,6 +93,7 @@ func TestContinueJobWithoutToSecCallsContinueJob(t *testing.T) {
 // Кросс-ревью s15 r1, условие 123е (ТК155): to_sec передан, даже 0, — это кусок (окно проверит воркер),
 // а не продолжение до конца песни.
 func TestContinueJobWithToSecZeroCallsFragmentJob(t *testing.T) {
+	t.Parallel()
 	s, fake := newFragmentServer(t)
 	call(t, s, "continue_job", jsonArgs(t, `{"job_id":216,"from_sec":40,"to_sec":0}`))
 	if len(fake.continued) != 0 {

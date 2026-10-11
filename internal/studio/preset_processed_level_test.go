@@ -123,6 +123,7 @@ func prlEngineSpec(level float64) yue.PresetSpec {
 // ТК123: кусок движка на +6 дБ громче исходной → гейн по куску: уровень куска + гейн − трек = цель ±0,5
 // (а не цель + 6, как при счёте по исходной дорожке).
 func TestPresetLevelDbByProcessedChunk(t *testing.T) {
+	t.Parallel()
 	f, _ := prlSetup(t)
 	const target = -10.0
 	out := prlRun(t, f, lvPreset(41, prlEngineSpec(target)))
@@ -140,6 +141,7 @@ func TestPresetLevelDbByProcessedChunk(t *testing.T) {
 // ТК123: подстройка по обработанной дорожке зажата ±12: level_db −19 → нужно −15,02 → гейн −12
 // (по исходной дорожке было бы −9).
 func TestPresetLevelDbProcessedClamp(t *testing.T) {
+	t.Parallel()
 	f, _ := prlSetup(t)
 	const target = -19.0
 	need := target - (prlSineDb(prlChunkAmp) - prlTrackSum())
@@ -154,6 +156,7 @@ func TestPresetLevelDbProcessedClamp(t *testing.T) {
 
 // ТК123 (прежнее поведение): запись level_db без цепочки — по замеру исходной дорожки, движок не зовётся.
 func TestPresetLevelDbNoEngineBySource(t *testing.T) {
+	t.Parallel()
 	f, orig := prlSetup(t)
 	const target = -14.0
 	out := prlRun(t, f, lvPreset(43, yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(target)}))

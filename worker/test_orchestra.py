@@ -22,7 +22,6 @@ import json
 import re
 import unittest
 import urllib.parse
-from pathlib import Path
 from unittest import mock
 
 try:
@@ -282,17 +281,6 @@ class TestBassRangeParams(unittest.TestCase):
                 with self.assertRaises(fx.ChainError):
                     fx.parse_chain([_bass(**bad)])
 
-    def test_block_description(self):
-        blocks = json.loads(Path(__file__).with_name("fx_blocks.json").read_text(encoding="utf-8"))
-        bass = blocks["bass"]
-        self.assertEqual(bass["label"]["ru"], "Замена партии (набор)")
-        params = {p["id"]: p for p in bass["params"]}
-        for pid, (default, lo, hi) in (("fmin_hz", (30, 20, 1000)), ("fmax_hz", (400, 100, 2000))):
-            with self.subTest(param=pid):
-                self.assertIn(pid, params)
-                self.assertEqual((params[pid]["default"], params[pid]["min"], params[pid]["max"]),
-                                 (default, lo, hi))
-
 
 # ---------- условие 110: наборы VSCO на воркере ----------
 
@@ -375,10 +363,8 @@ class TestVscoCatalog(_KitBase):
                         base = f"raw.githubusercontent.com/{spec['repo']}/{spec['ref']}/{urllib.parse.quote(folder)}/"
                         self.assertIn(base, url)
 
-if __name__ == "__main__":
-    unittest.main()
 
-
+@unittest.skipUnless(_KIT_OK, "нужно окружение воркера (fastapi/httpx/numpy/soundfile/librosa)")
 class TestVscoInstallRenamesToMidi(unittest.TestCase):
     """Условие 110 (уточнено): часть с поправкой октавы ставится под точной высотой m<MIDI>.wav."""
 
@@ -397,3 +383,7 @@ class TestVscoInstallRenamesToMidi(unittest.TestCase):
                 r = w._fx_kit_install("t", spec)
             self.assertEqual(r["parts"], {"p": 2})
             self.assertEqual(sorted(f.name for f in (Path(tmp) / "t" / "p").iterdir()), ["m69.wav", "m73.wav"])
+
+
+if __name__ == "__main__":
+    unittest.main()

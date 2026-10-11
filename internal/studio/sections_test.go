@@ -26,7 +26,7 @@ import (
 // overdub-inst-<ChildID последней спеки>.flac у родителя.
 //
 // Хелперы звука (lavfi, decodeBytes, slice, rms, needFFmpeg, key, keys, contains)
-// — из inserts_test.go того же пакета.
+// — из helpers_test.go того же пакета.
 
 var stemNames = []string{"drums", "bass", "other", "vocals"}
 
@@ -248,6 +248,7 @@ func secUploaded(t *testing.T, f *secFake, name string) []float32 {
 // Кейс 1: Stems ["other"] — в окне 440 заменён на 660, вне окна — база; drums не тронуты;
 // начало рендера в треке — From−Lead.
 func TestRebuildSectionsReplacesOnlyChosenStemInWindow(t *testing.T) {
+	t.Parallel()
 	f, pf := secSetup(t)
 	res := run(t, f, spec7([]string{"other"}, 0))
 	out := secUploaded(t, f, "overdub-inst-7.flac")
@@ -297,10 +298,12 @@ func TestRebuildSectionsReplacesOnlyChosenStemInWindow(t *testing.T) {
 
 // Кейс 2: громкость — стем ребёнка выравнивается по RMS стема родителя в окне, сверху Db.
 func TestRebuildSectionsLevelMatchAndDb(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		db, wantDb float64
 	}{{0, 0}, {6, 6}} {
 		t.Run(fmt.Sprintf("Db=%+g", tc.db), func(t *testing.T) {
+			t.Parallel()
 			f, _ := secSetup(t)
 			run(t, f, spec7([]string{"other"}, tc.db))
 			out := secUploaded(t, f, "overdub-inst-7.flac")
@@ -317,25 +320,9 @@ func TestRebuildSectionsLevelMatchAndDb(t *testing.T) {
 	}
 }
 
-// Кейс 3а: Stems ["vocals"] — голос всегда родной, выход = база.
-func TestRebuildSectionsVocalsIgnored(t *testing.T) {
-	f, pf := secSetup(t)
-	run(t, f, spec7([]string{"vocals"}, 0))
-	out := secUploaded(t, f, "overdub-inst-7.flac")
-	base := decodeFile(t, pf["audio.flac"])
-	if d := float64(len(out)) / sr; math.Abs(d-trackDur) > 0.05 {
-		t.Errorf("длина выхода %.3f с, want %.0f ± 0.05", d, trackDur)
-	}
-	if r := diffRMS(out, base, 0, trackDur); r > 0.01 {
-		t.Errorf("Stems [vocals]: выход отличается от базы, RMS разности %.4f", r)
-	}
-	if a := toneAmp(out, 660, 4.5, 7.5); a > 0.01 {
-		t.Errorf("Stems [vocals]: в окне 660 Гц %.4f — ребёнок попал в трек", a)
-	}
-}
-
 // Кейс 3б: Stems ["drums"], у ребёнка drums в окне тихие → в окне щелчков нет, 440 на месте.
 func TestRebuildSectionsDrumsReplacedBySilence(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	f := newSecFake()
@@ -360,6 +347,7 @@ func TestRebuildSectionsDrumsReplacedBySilence(t *testing.T) {
 
 // Кейс 4: у ребёнка нет стемов → MakeStems(ребёнок) ровно 1 раз, стемы скачиваются снова → успех.
 func TestRebuildSectionsMakesChildStemsOnce(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	f := newSecFake()
@@ -397,6 +385,7 @@ func TestRebuildSectionsMakesChildStemsOnce(t *testing.T) {
 
 // Кейс 4б: у родителя нет стемов → MakeStems(родитель) ровно 1 раз → успех.
 func TestRebuildSectionsMakesParentStemsOnce(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	f := newSecFake()
@@ -419,11 +408,13 @@ func TestRebuildSectionsMakesParentStemsOnce(t *testing.T) {
 
 // Кейс 5: стемов нет, MakeStems не помог (ошибка или стемы так и не появились) → ошибка, загрузки нет.
 func TestRebuildSectionsStemsUnavailable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		failed bool
 	}{{"MakeStems ошибка", true}, {"MakeStems без стемов", false}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			needFFmpeg(t)
 			dir := t.TempDir()
 			f := newSecFake()
@@ -449,6 +440,7 @@ func TestRebuildSectionsStemsUnavailable(t *testing.T) {
 // Кейс 6: имя результата — по ChildID последней спеки, загрузка одна и родителю,
 // отчёты — по одному на спеку в порядке спек; база — audio.flac родителя, не прошлый микс.
 func TestRebuildSectionsResultNamedByLastSpec(t *testing.T) {
+	t.Parallel()
 	f, _ := secSetup(t)
 	dir := t.TempDir()
 	// прошлый микс — громкий 1 кГц: взятый базой, он был бы слышен вне окон
@@ -503,6 +495,7 @@ func TestRebuildSectionsResultNamedByLastSpec(t *testing.T) {
 
 // Кейс 6б: пустой specs — ошибка, ничего не загружено.
 func TestRebuildSectionsEmptySpecs(t *testing.T) {
+	t.Parallel()
 	f := newSecFake()
 	for _, specs := range [][]SectionSpec{nil, {}} {
 		if _, err := RebuildSections(context.Background(), f, parentID, specs); err == nil {
@@ -601,6 +594,7 @@ func keepHighSetup(t *testing.T) *secFake {
 // KeepHighHz 6000: в окне низ старых drums (200) вычтен, верх (9000) остался, other на месте.
 // Новая тишина выравнивается гейном 0 — это нормально: добавлять нечего.
 func TestRebuildSectionsKeepHighHzKeepsHighs(t *testing.T) {
+	t.Parallel()
 	f := keepHighSetup(t)
 	sp := spec7([]string{"drums"}, 0)
 	sp.KeepHighHz = 6000
@@ -640,6 +634,7 @@ func TestRebuildSectionsKeepHighHzKeepsHighs(t *testing.T) {
 
 // KeepHighHz 0 — старая дорожка вычитается целиком: в окне нет ни 200, ни 9000.
 func TestRebuildSectionsNoKeepHighHzRemovesAll(t *testing.T) {
+	t.Parallel()
 	f := keepHighSetup(t)
 	run(t, f, spec7([]string{"drums"}, 0))
 	data, ok := f.uploads["overdub-inst-7.flac"]
@@ -659,6 +654,7 @@ func TestRebuildSectionsNoKeepHighHzRemovesAll(t *testing.T) {
 
 // Поле приходит из фронта по JSON под именем keep_high_hz.
 func TestSectionSpecKeepHighHzJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	if err := json.Unmarshal([]byte(`{"child_id":7,"keep_high_hz":6000}`), &sp); err != nil {
 		t.Fatal(err)
@@ -709,76 +705,35 @@ func driveVocals(from, to float64) SectionSpec {
 	return SectionSpec{ChildID: 0, From: from, To: to, Stems: []string{"vocals"}, Chain: "voice-drive"}
 }
 
-// Пример карточки: «Перегруз голоса» на голос по всему треку — окно не пишется.
-func TestRebuildSectionsLabelEffectWholeTrack(t *testing.T) {
-	f := labelSetup(t, 4)
-	if got := mixLabel(t, f, driveVocals(0, 0)); got != "Перегруз голоса · голос" {
-		t.Errorf("подпись %q, want %q", got, "Перегруз голоса · голос")
-	}
-}
-
-// Окно с концом — " M:SS–M:SS" (минуты без ведущего нуля, секунды двумя цифрами).
-func TestRebuildSectionsLabelEffectWindow(t *testing.T) {
-	f := labelSetup(t, 90)
-	want := "Перегруз голоса · голос 1:20–1:28"
-	if got := mixLabel(t, f, driveVocals(80, 88)); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
-	}
-}
-
-// To ≤ 0 при From > 0 — «с M:SS» (до конца трека).
-func TestRebuildSectionsLabelEffectFromTillEnd(t *testing.T) {
-	f := labelSetup(t, 70)
-	want := "Перегруз голоса · голос с 1:05"
-	if got := mixLabel(t, f, driveVocals(65, 0)); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
-	}
-}
-
-// Заглушка (Db ≤ −60) нескольких дорожек — «заглушить», дорожки через ", ".
-func TestRebuildSectionsLabelMute(t *testing.T) {
-	f := labelSetup(t, 6)
-	sp := SectionSpec{ChildID: 0, From: 2, To: 4, Stems: []string{"drums", "bass"}, Db: -100}
-	want := "заглушить · барабаны, бас 0:02–0:04"
-	if got := mixLabel(t, f, sp); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
-	}
-}
-
-// Ровно −60 дБ — тоже «заглушить» (граница включительно).
-func TestRebuildSectionsLabelMuteBoundary(t *testing.T) {
-	f := labelSetup(t, 6)
-	sp := SectionSpec{ChildID: 0, From: 2, To: 4, Stems: []string{"drums"}, Db: -60}
-	if got := mixLabel(t, f, sp); got != "заглушить · барабаны 0:02–0:04" {
-		t.Errorf("подпись %q", got)
-	}
-}
-
-// Другая громкость — «громкость +N дБ», знак плюса пишется всегда.
-func TestRebuildSectionsLabelGain(t *testing.T) {
-	f := labelSetup(t, 6)
-	sp := SectionSpec{ChildID: 0, From: 2, To: 4, Stems: []string{"other"}, Db: 6}
-	want := "громкость +6 дБ · гитары/синты 0:02–0:04"
-	if got := mixLabel(t, f, sp); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
-	}
-}
-
-// Несколько спек — через " + " в порядке спек: эффект на голос и заглушка барабанов.
-func TestRebuildSectionsLabelCombined(t *testing.T) {
-	f := labelSetup(t, 8)
+// Подпись пересборки (rebuildLabel) — по примерам карточки: эффект на весь трек —
+// без окна; окно с концом — « M:SS–M:SS» (минуты без ведущего нуля, секунды двумя
+// цифрами); To = 0 — «с M:SS»; заглушение (Db ≤ −60, граница включительно) —
+// «заглушить», стемы по-русски через запятую; громкость — «громкость +N дБ»;
+// несколько записей — через « + »; вклейка — «вклейка #N». Что подпись доходит до
+// загрузки, проверяет сквозной TestRebuildSectionsFortyLabelWithinLimit.
+func TestRebuildSectionsLabel(t *testing.T) {
+	t.Parallel()
 	mute := SectionSpec{ChildID: 0, From: 5, To: 7, Stems: []string{"drums"}, Db: -100}
-	want := "Перегруз голоса · голос 0:01–0:03 + заглушить · барабаны 0:05–0:07"
-	if got := mixLabel(t, f, driveVocals(1, 3), mute); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
-	}
-}
-
-// Вклейка отрендеренного куска (ChildID > 0) — «вклейка #<id>».
-func TestRebuildSectionsLabelInsert(t *testing.T) {
-	f, _ := secSetup(t)
-	want := "вклейка #7 · гитары/синты 0:04–0:08"
-	if got := mixLabel(t, f, spec7([]string{"other"}, 0)); got != want {
-		t.Errorf("подпись %q, want %q", got, want)
+	for _, c := range []struct {
+		name  string
+		specs []SectionSpec
+		want  string
+	}{
+		{"эффект на весь трек", []SectionSpec{driveVocals(0, 0)}, "Перегруз голоса · голос"},
+		{"эффект в окне", []SectionSpec{driveVocals(80, 88)}, "Перегруз голоса · голос 1:20–1:28"},
+		{"эффект до конца", []SectionSpec{driveVocals(65, 0)}, "Перегруз голоса · голос с 1:05"},
+		{"заглушить", []SectionSpec{{ChildID: 0, From: 2, To: 4, Stems: []string{"drums", "bass"}, Db: -100}},
+			"заглушить · барабаны, бас 0:02–0:04"},
+		{"заглушить на границе −60", []SectionSpec{{ChildID: 0, From: 2, To: 4, Stems: []string{"drums"}, Db: -60}},
+			"заглушить · барабаны 0:02–0:04"},
+		{"громкость", []SectionSpec{{ChildID: 0, From: 2, To: 4, Stems: []string{"other"}, Db: 6}},
+			"громкость +6 дБ · гитары/синты 0:02–0:04"},
+		{"две записи", []SectionSpec{driveVocals(1, 3), mute},
+			"Перегруз голоса · голос 0:01–0:03 + заглушить · барабаны 0:05–0:07"},
+		{"вклейка", []SectionSpec{spec7([]string{"other"}, 0)}, "вклейка #7 · гитары/синты 0:04–0:08"},
+	} {
+		if got := rebuildLabel(c.specs); got != c.want {
+			t.Errorf("%s: подпись %q, want %q", c.name, got, c.want)
+		}
 	}
 }

@@ -171,12 +171,15 @@ HAT8 = [_hit(0.5 + 0.25 * i, d=0.25) for i in range(8)]
 class TestPercLevel(_PercCase):
 
     def test_rms_on_cells_rel_db(self):
-        # ТК55: тон 100 Гц RMS −20 дБFS, rel_db −14 → RMS выхода на ячейках −34 ±1 дБFS
+        # ТК55: тон 100 Гц RMS −20 дБFS, rel_db −14 → RMS выхода на ячейках −34 ±1 дБFS;
+        # ТК117: без rel_db — то же (умолчание perc −14)
         x = _tone100(3.0)
-        y = self._run(x, [_perc(HAT8, voice=1, rel_db=-14)])
-        cells = y[int(0.5 * SR):int(2.5 * SR)]
-        got = _db(np.sqrt(np.mean(cells ** 2)))
-        self.assertAlmostEqual(got, -34, delta=1)
+        for extra in ({"rel_db": -14}, {}):
+            with self.subTest(**extra):
+                y = self._run(x, [_perc(HAT8, voice=1, **extra)])
+                cells = y[int(0.5 * SR):int(2.5 * SR)]
+                got = _db(np.sqrt(np.mean(cells ** 2)))
+                self.assertAlmostEqual(got, -34, delta=1)
 
     def test_output_db_adds(self):
         # условие 30: × 10^(output_db/20) поверх rel_db

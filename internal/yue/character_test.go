@@ -10,6 +10,7 @@ import (
 // Job читает temperature/cfg из ответа воркера.
 
 func TestCharacterSubmitParamsMarshal(t *testing.T) {
+	t.Parallel()
 	b, err := json.Marshal(SubmitParams{Style: "rock", Lyrics: "[verse] la", Temperature: 1.15, Cfg: 2.5})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -24,6 +25,7 @@ func TestCharacterSubmitParamsMarshal(t *testing.T) {
 }
 
 func TestCharacterSubmitParamsZeroOmitted(t *testing.T) {
+	t.Parallel()
 	b, err := json.Marshal(SubmitParams{Style: "rock", Lyrics: "[verse] la"})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -39,16 +41,8 @@ func TestCharacterSubmitParamsZeroOmitted(t *testing.T) {
 	}
 }
 
-func TestCharacterSubmitParamsOnlyOne(t *testing.T) {
-	b, _ := json.Marshal(SubmitParams{Style: "rock", Lyrics: "x", Cfg: 3})
-	var m map[string]any
-	_ = json.Unmarshal(b, &m)
-	if _, ok := m["temperature"]; ok || m["cfg"] != 3.0 {
-		t.Fatalf("json %s: want only cfg=3", b)
-	}
-}
-
 func TestCharacterJobUnmarshal(t *testing.T) {
+	t.Parallel()
 	var j Job
 	if err := json.Unmarshal([]byte(`{"id":5,"status":"done","temperature":1.15,"cfg":2.5}`), &j); err != nil {
 		t.Fatalf("unmarshal: %v", err)

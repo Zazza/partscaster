@@ -26,6 +26,7 @@ func (f *fetchCountService) FetchAudio(ctx context.Context, id int64, file strin
 }
 
 func TestApplyDspKeyChainWholeTrackIsError(t *testing.T) {
+	t.Parallel()
 	for name, apply := range map[string]func(a *App) error{
 		"YueApplyDsp": func(a *App) error {
 			_, err := a.YueApplyDsp(1, "ducking", nil)

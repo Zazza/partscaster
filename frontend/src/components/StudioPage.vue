@@ -7,9 +7,9 @@ import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useInserts } from '../composables/useInserts.js'
-import { applyTrick, beatSecAt, continuationPlan, pickTargets, planTimeline, vocalCeiling, sectionRequest, sectionWindows, sliceAbc, sliceLeadSec, TRICK_INSTRUMENTS, TRICK_MUTES, trickStyleSuffix } from '../abcEdit.js'
+import { applyTrick, beatSecAt, pickTargets, vocalCeiling, sectionRequest, sectionWindows, sliceAbc, sliceLeadSec, TRICK_INSTRUMENTS, TRICK_MUTES } from '../abcEdit.js'
 import { useRevoice } from '../composables/useRevoice.js'
-import { revoiceSpecKinds, vocalEndsQuiet, voiceSource } from '../vocalParts.js'
+import { vocalEndsQuiet, voiceSource } from '../vocalParts.js'
 import { INSERT_DEFAULT_DB, INSERT_MAX_DB, INSERT_MIN_DB } from '../insertMix.js'
 import { insertTitle, insertWindow, mixChildId, mixLabel } from '../insertLabels.js'
 import { isPlaceRecord, placeLabel } from '../mixDesk.js'
@@ -20,8 +20,11 @@ import { chainDefaults, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
-import { targetFor, stemForTarget } from '../activeTrack.js'
-import { resultTitle, resultsOrder, resultDate, fragmentStart } from '../results.js'
+import { targetFor, targetChoice } from '../activeTrack.js'
+import { continueRequest, fragmentRequest, fragmentWindow, instrumentalRequest, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
+import { resultTitle, resultsOrder, resultDate, playFragment as playFragmentJob } from '../results.js'
+import { jobWatchStep } from '../jobWatch.js'
+import { readFlag, writeFlag } from '../prefs.js'
 import VSelect from '../VSelect.vue'
 import WaveView from './WaveView.vue'
 import PedalBoard from './PedalBoard.vue'
@@ -148,11 +151,10 @@ function selectStem(stem) {
 }
 // цель правок выбрали вручную — активной становится её дорожка (или весь трек, если такой дорожки нет)
 function selectTarget(tgt) {
-  // трек ещё не разделён: дорожку на эффект Go отделит сам — цель держится, активной дорожки нет
-  if (!stemNames.value.length) { envTarget.value = tgt; dspTarget.value = tgt; return }
-  const stem = stemForTarget(tgt, stemNames.value, activeStem.value)
-  if (stem !== activeStem.value) selectStem(stem)
-  else { envTarget.value = targetFor(stem); dspTarget.value = targetFor(stem) }
+  // трек ещё не разделён — цель держится, активной дорожки нет (targetChoice); смена дорожки — цели ставит watch выше
+  const c = targetChoice(tgt, stemNames.value, activeStem.value)
+  if (c.stem !== null) selectStem(c.stem)
+  else { envTarget.value = c.target; dspTarget.value = c.target }
 }
 // плашка «Дорожка: …» в полосе шагов; волна прилипает под ней (выключается галочкой, запоминается)
 const WAVE_PIN_KEY = 'yue_wave_pin'
@@ -501,51 +503,21 @@ async function makePreview() {
   } finally { previewBusy.value = false }
 }
 
-// убрать голоса из текста ABC: строки V: <имя> и тела этих голосов выкидываются
-function dropVoices(abc, voiceNames) {
-  const removed = new Set(voiceNames)
-  const out = []
-  let curVoice = null
-  for (const line of abc.split('\n')) {
-    const t = line.trim()
-    const vm = t.match(/^V:\s*(\S+)/)
-    if (vm) {
-      curVoice = vm[1]
-      if (removed.has(curVoice)) continue
-      out.push(line)
-      continue
-    }
-    if (!t || /^[A-Za-z]:/.test(t)) { out.push(line); continue }   // заголовок/пустая
-    if (curVoice && removed.has(curVoice)) continue                // тело убранного голоса
-    out.push(line)
-  }
-  return out.join('\n')
-}
-
 // инструментал: та же музыка (план, в т.ч. с накопленными приёмами), но без
 // вокальной партии; стиль получает подсказку, лирика — [Instrumental]
 const hasVocals = computed(() =>
   ((rollData.value && rollData.value.voice_order) || []).some((v) => /vocal/i.test(v)))
 
 async function renderInstrumental() {
-  const vocalVoices = ((rollData.value && rollData.value.voice_order) || []).filter((v) => /vocal/i.test(v))
-  if (!vocalVoices.length) return
+  const vocals = vocalVoices(rollData.value && rollData.value.voice_order)
+  if (!vocals.length) return
   trickBusy.value = true
   rollErr.value = ''
   trickMsg.value = ''
   buildJob.value = { id: null, status: 'starting' }
   try {
     await ensureBaseAbc()
-    const abc = dropVoices(planDraft.value || baseAbc.value, vocalVoices)
-    const id = await api.submit({
-      title: (props.job.title || 'трек') + ' · инструментал',
-      style: trickStyle(props.job.style) + ', instrumental, no vocals',
-      lyrics: '[Instrumental]',
-      seed: props.job.seed || 0,   // 0 — воркер возьмёт сид родителя
-      cot: props.job.cot === 'off' ? 'melody' : props.job.cot,
-      abc,
-      parent_id: props.job.id, role: 'rebuild',
-    })
+    const id = await api.submit(instrumentalRequest(props.job, planDraft.value || baseAbc.value, vocals, pendingSpecs.value))
     trickMsg.value = t('studio.trick.done', { id })
     buildJob.value = { id, status: 'queued' }
     startJobPoll()
@@ -745,10 +717,7 @@ function unpickSelection() {
 // держит слабо — такие приёмы дублируются припиской в стиль (trickStyleSuffix,
 // тесты там же); тот же двойной ход, что у драматургии «взрыв»
 function trickStyle(base) {
-  const suffix = trickStyleSuffix(pendingSpecs.value)
-  if (!suffix) return base
-  const head = (base || '').trim().replace(/,$/, '')
-  return head ? head + ', ' + suffix : suffix
+  return trickStyleOf(base, pendingSpecs.value)
 }
 
 // пересборка: одна кнопка на все накопленные приёмы; тот же стиль/лирика/seed,
@@ -833,12 +802,12 @@ function watchJob(refObj, key, label, playFn = null, onDone = null) {
     if (!refObj.value || !refObj.value.id) return
     try {
       const jobs = await api.jobs()
-      const j = (jobs || []).find((x) => x.id === refObj.value.id)
-      if (!j) return
-      const was = refObj.value.status
-      // строка списка джоб — без того, что запомнили при запуске (окно куска from/to): сливаем, а не заменяем
-      refObj.value = { ...refObj.value, ...j }
-      if (j.status === 'done' && was !== 'done') {
+      // строка списка джоб — без того, что запомнили при запуске (окно куска from/to): сливается, а не заменяет
+      const step = jobWatchStep(refObj.value, jobs)
+      if (!step) return
+      const j = step.row
+      refObj.value = step.next
+      if (step.done) {
         if (onDone) await onDone(j)
         const play = playFn || (() => api.playAudio(j.id))
         await toggleArtifact(key + j.id, `${label} · #${j.id}`, play)
@@ -863,14 +832,7 @@ function maybeStopPoll() {
 const pollFragment = watchJob(fragJob, 'f', 'кусок', () => playFragment(fragJob.value))
 // готовый кусок — с FRAGMENT_LEAD_S до начала правки: слышно, как трек входит в изменённое место
 const FRAGMENT_LEAD_S = 4
-const FRAGMENT_MIN_FROM_S = 1     // кусок раньше — с начала трека (продолжать не с чего)
-const FRAGMENT_TAIL_S = 2         // как у воркера: после конца куска ещё 2 с
-const SEM_TOK_PER_SEC = 25        // шагов модели в секунду звука (воркер SEM_TOK_PER_SEC)
-async function playFragment(fj) {
-  await api.playAudio(fj.id)
-  const at = fragmentStart(fj, FRAGMENT_LEAD_S)
-  if (at > 0) await api.seekAudio(at)
-}
+const playFragment = (fj) => playFragmentJob(api, fj, FRAGMENT_LEAD_S)
 // новая версия трека: по готовности переносим все вклейки (с текущей
 // громкостью) вечному сервису useInserts — он микширует, даже если студия закрыта
 const pollBuild = watchJob(buildJob, 'b', 'новая версия', null, async (j) => {
@@ -1061,12 +1023,9 @@ async function continueFromSel() {
   trickBusy.value = true
   rollErr.value = ''
   try {
-    let abc = ''
-    if (pendingSpecs.value.length) {
-      await ensureBaseAbc()
-      abc = continuationPlan(baseAbc.value, pendingSpecs.value)   // приёмы — ровно по разу
-    }
-    const id = await api.continueJob(props.job.id, r.from, 0, abc, contStyle.value.trim())
+    if (pendingSpecs.value.length) await ensureBaseAbc()   // приёмы — ровно по разу поверх исходного плана
+    const q = continueRequest(props.job, r, baseAbc.value, pendingSpecs.value, contStyle.value)
+    const id = await api.continueJob(q.jobId, q.from, q.seed, q.abc, q.styleAdd)
     buildJob.value = { id, status: 'queued' }
     trickMsg.value = t('studio.cont.done', { id })
     startJobPoll()
@@ -1099,19 +1058,14 @@ async function revoiceFromSel() {
     await ensureBaseAbc()
     const srcAbc = srcId === props.job.id ? baseAbc.value : await api.jobAbcText(srcId, src.abc_file || 'score.abc')
     // адреса тактов приёмов — по плану этой версии; у источника план должен совпадать
-    const n = (abc) => Object.entries(planTimeline(abc)).filter(([v]) => /vocal/i.test(v)).map(([, l]) => l.length).join()
-    if (n(srcAbc) !== n(baseAbc.value)) { rollErr.value = t('studio.revoice.plan', { id: srcId }); return }
-    const specs = pendingSpecs.value.filter((s) => revoiceSpecKinds.has(s.kind))
-    const abc = continuationPlan(srcAbc, specs)
-    const beat = beatSecAt(baseAbc.value, r.from)
-    const what = specs.map((s) => s.label).join(', ') || t('studio.revoice.take')
+    if (vocalBars(srcAbc) !== vocalBars(baseAbc.value)) { rollErr.value = t('studio.revoice.plan', { id: srcId }); return }
+    const q = revoicePlan(srcAbc, baseAbc.value, pendingSpecs.value, r, t('studio.revoice.take'))
     const ids = []
     for (let k = 0; k < REVOICE_TAKES; k++) {
-      const id = await api.continueJob(srcId, r.from, 0, abc, '')
+      const id = await api.continueJob(srcId, r.from, 0, q.abc, '')
       ids.push(id)
       // источник голоса новой версии — этот дубль (его голос подставлен)
-      revoice.register([{ parent: props.job.id, child: id, from: r.from, to: r.to, beat, voiceSrc: id,
-        title: `${props.job.title || 'трек'} · голос: ${what} (дубль #${id})` }])
+      revoice.register([revoiceRecord(props.job, id, r, q.beat, q.what)])
     }
     const quiet = vocalEndsQuiet((rollData.value && rollData.value.bars) || [], r.to)
     trickMsg.value = t('studio.revoice.done', { ids: ids.map((i) => '#' + i).join(', ') }) +
@@ -1159,16 +1113,11 @@ function startJobPoll() {
 }
 
 async function renderFragment() {
-  let from, to
-  const r = selTimeRange()
-  if (r) {
-    from = r.from; to = r.to
-  } else if (pendingSpecs.value.length) {
-    const m = pendingSpecs.value[pendingSpecs.value.length - 1]
-    from = m.from; to = m.to
-  } else return
-  // импорт без шагов модели: ни продолжить, ни сыграть кусок по стилю-заглушке — понятная ошибка, как у «продолжить»
-  if (isImport.value) { rollErr.value = t('studio.import.noTokens'); return }
+  // окно — выделение или последний приём; импорт без шагов модели — понятная ошибка, как у «продолжить»
+  const w = fragmentWindow(selTimeRange(), pendingSpecs.value, isImport.value)
+  if (!w) return
+  if (w.noTokens) { rollErr.value = t('studio.import.noTokens'); return }
+  const { from, to } = w
   trickBusy.value = true
   rollErr.value = ''
   trickMsg.value = ''
@@ -1178,21 +1127,11 @@ async function renderFragment() {
     // кусок в контексте трека: звук трека до начала куска — как уже сыгранный, дальше модель играет по полному плану
     // с правками (текст и такты на своих местах) только до конца куска; раньше кусок генерировался с нуля по обрывку
     // плана с текстом всей песни — и звучал «бредом»
-    const abc = pendingSpecs.value.length ? continuationPlan(baseAbc.value, pendingSpecs.value) : ''
     // приёмы, которые план держит слабо (инструменты, голос ±октава), — припиской к стилю, как у пересборки
-    const styleAdd = trickStyleSuffix(pendingSpecs.value)
-    let id
-    if (from < FRAGMENT_MIN_FROM_S) {
-      // кусок с самого начала: продолжать не с чего — обычный рендер по полному плану, но только до конца куска
-      id = await api.submit({
-        title: (props.job.title || 'трек') + ' · кусок', style: trickStyle(props.job.style), lyrics: props.job.lyrics,
-        seed: props.job.seed || 0, cot: props.job.cot === 'off' ? 'melody' : props.job.cot,
-        abc: abc || baseAbc.value, max_tokens: Math.round((to + FRAGMENT_TAIL_S) * SEM_TOK_PER_SEC),
-        parent_id: props.job.id, role: 'fragment',
-      })
-    } else {
-      id = await api.fragmentJob(props.job.id, from, to, props.job.seed || 0, abc, styleAdd)
-    }
+    const req = fragmentRequest(props.job, from, to, baseAbc.value, pendingSpecs.value)
+    const f = req.fragment
+    const id = req.submit ? await api.submit(req.submit)
+      : await api.fragmentJob(f.jobId, f.from, f.to, f.seed, f.abc, f.styleAdd)
     fragJob.value = { id, status: 'queued', from, to }
     startJobPoll()
     pollFragment()
@@ -1254,8 +1193,8 @@ async function submitVoice() {
 // «Готово»: название версии — resultTitle (results.js); подробности (дельты метрик) — по галочке, запоминается
 const chainNameOf = (id) => (dspChains.value.find((x) => x.id === id) || {}).name
 const DELTAS_KEY = 'yue_done_deltas'
-const showDeltas = ref((() => { try { return localStorage.getItem(DELTAS_KEY) === '1' } catch { return false } })())
-watch(showDeltas, (v) => { try { localStorage.setItem(DELTAS_KEY, v ? '1' : '0') } catch { /* без localStorage — до закрытия */ } })
+const showDeltas = ref(readFlag(DELTAS_KEY, false))   // по умолчанию выкл.
+watch(showDeltas, (v) => writeFlag(DELTAS_KEY, v))
 
 // подпись версии для списка файла волны: микс — по реестру вклеек, остальное — resultTitle
 function variantLabel(v) {
@@ -1423,9 +1362,7 @@ async function applyDsp() {
   try {
     if (dspTarget.value) {
       // эффект на дорожку: в реестр пересборки (копится со вклейками), окно — выделение
-      const sel = selTimeRange()
-      const res = await inserts.addStemFx(props.job.id, { stem: dspTarget.value, chain: c.id,
-        params: { ...(dspParams.value || {}) }, from: sel ? sel.from : 0, to: sel ? sel.to : 0 })
+      const res = await inserts.addStemFx(props.job.id, stemFxRequest(dspTarget.value, c.id, dspParams.value, selTimeRange()))
       await reloadVariants()
       if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
       return

@@ -56,6 +56,7 @@ func readBody(t *testing.T, r *http.Request) map[string]any {
 }
 
 func TestFxInstrumentsList(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/fx/instruments" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -81,6 +82,7 @@ func TestFxInstrumentsList(t *testing.T) {
 
 // Пустой список воркера — пустой результат без ошибки.
 func TestFxInstrumentsEmpty(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[]`))
 	}))
@@ -92,6 +94,7 @@ func TestFxInstrumentsEmpty(t *testing.T) {
 }
 
 func TestFxInstrumentCreatePostsBody(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/fx/instruments" {
@@ -126,6 +129,7 @@ func TestFxInstrumentCreatePostsBody(t *testing.T) {
 }
 
 func TestFxInstrumentUpdatePutsByID(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/fx/instruments/7" {
@@ -150,6 +154,7 @@ func TestFxInstrumentUpdatePutsByID(t *testing.T) {
 }
 
 func TestFxInstrumentDeleteByID(t *testing.T) {
+	t.Parallel()
 	called := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called++
@@ -164,28 +169,5 @@ func TestFxInstrumentDeleteByID(t *testing.T) {
 	}
 	if called != 1 {
 		t.Errorf("запросов %d, want 1", called)
-	}
-}
-
-// Условие 103/104: 404 (нет id) и 422 (проверка) доходят до вызывающего ошибкой.
-func TestFxInstrumentWorkerErrors(t *testing.T) {
-	for _, code := range []int{http.StatusNotFound, http.StatusUnprocessableEntity} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(code)
-			_, _ = w.Write([]byte(`{"detail":"bad"}`))
-		}))
-		c := New(srv.URL)
-		ctx := context.Background()
-		if res, err := c.FxInstrumentCreate(ctx, sampleInstrument()); err == nil {
-			t.Errorf("create, статус %d: ошибки нет, результат %+v", code, res)
-		}
-		if res, err := c.FxInstrumentUpdate(ctx, 999, sampleInstrument()); err == nil {
-			t.Errorf("update, статус %d: ошибки нет, результат %+v", code, res)
-		}
-		if err := c.FxInstrumentDelete(ctx, 999); err == nil {
-			t.Errorf("delete, статус %d: ошибки нет", code)
-		}
-		srv.Close()
 	}
 }

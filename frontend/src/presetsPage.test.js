@@ -1,13 +1,10 @@
 // Тесты страницы «Пресеты звука» по исходникам: отдельная страница с пунктом в меню ⋮,
-// библиотека пресетов переехала туда со страницы «Инструменты», подписи меню в обоих
-// словарях и раздел в docs/ui-guide.md. Ловит «страницу сделали, а пункт меню забыли»
-// и «пресеты остались дублем на странице Инструменты».
+// библиотека пресетов переехала туда со страницы «Инструменты», раздел в docs/ui-guide.md.
+// Ловит «страницу сделали, а пункт меню забыли».
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
-import RU from './i18n/ru.js'
-import EN from './i18n/en.js'
 
 const srcDir = dirname(fileURLToPath(import.meta.url))
 const repoDir = join(srcDir, '..', '..')
@@ -38,7 +35,6 @@ function rendersComponent(src, name) {
 
 const APP = join(srcDir, 'App.vue')
 const PRESETS_PAGE = join(srcDir, 'components', 'PresetsPage.vue')
-const INSTRUMENTS_PAGE = join(srcDir, 'components', 'InstrumentsPage.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
 
 // --- Условие 89: страница и пункт меню ---
@@ -63,23 +59,7 @@ test('App.vue импортирует и рендерит PresetsPage', () => {
   expect(rendersComponent(src, 'PresetsPage'), 'App.vue не рендерит <PresetsPage>').toBe(true)
 })
 
-test('на странице «Инструменты» раздела пресетов нет: PresetLibrary не импортируется и не рендерится', () => {
-  const src = read(INSTRUMENTS_PAGE)
-  expect(importsComponent(src, 'PresetLibrary'), 'InstrumentsPage всё ещё импортирует PresetLibrary').toBe(false)
-  expect(rendersComponent(src, 'PresetLibrary'), 'InstrumentsPage всё ещё рендерит <PresetLibrary>').toBe(false)
-})
-
-// --- ТК129: подписи и документация ---
-
-test.each([
-  ['ru', RU],
-  ['en', EN],
-])('словарь %s: есть непустые nav.presets и nav.presets.tip', (_lang, dict) => {
-  for (const key of ['nav.presets', 'nav.presets.tip']) {
-    expect(typeof dict[key], `нет ключа ${key}`).toBe('string')
-    expect(dict[key].trim().length, `пустой ${key}`).toBeGreaterThan(0)
-  }
-})
+// --- ТК129: документация (подписи nav.presets* — общий тест i18n.test.js) ---
 
 // разделы markdown уровня ##: [{ title, body }]
 function h2Sections(md) {
@@ -96,11 +76,4 @@ function h2Sections(md) {
 test('docs/ui-guide.md: есть раздел «## Пресеты звука»', () => {
   const sections = h2Sections(read(UI_GUIDE))
   expect(sections.some((s) => s.title.startsWith('Пресеты звука'))).toBe(true)
-})
-
-test('docs/ui-guide.md: в разделе «## Инструменты» слов «Пресеты звука» нет', () => {
-  const sections = h2Sections(read(UI_GUIDE))
-  const instr = sections.filter((s) => s.title.startsWith('Инструменты'))
-  expect(instr.length, 'нет раздела «## Инструменты»').toBeGreaterThan(0)
-  for (const s of instr) expect(s.body).not.toMatch(/Пресеты звука/i)
 })

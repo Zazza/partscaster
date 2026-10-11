@@ -31,6 +31,7 @@ func jsonArgs(t *testing.T, s string) map[string]any {
 // ---------- revoice_start ----------
 
 func TestRevoiceStartUsesVoiceSourceOfVariant(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	// версия 10 — вариант эффекта над треком 5: голос — от 5
 	fake.jobs = []yue.Job{
@@ -59,6 +60,7 @@ func TestRevoiceStartUsesVoiceSourceOfVariant(t *testing.T) {
 }
 
 func TestRevoiceStartUsesExplicitVoiceSrc(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{
 		{ID: 1, Status: "done"},
@@ -78,6 +80,7 @@ func TestRevoiceStartUsesExplicitVoiceSrc(t *testing.T) {
 }
 
 func TestRevoiceStartGeneratedVersionIsOwnSource(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{
 		{ID: 1, Status: "done"},
@@ -97,6 +100,7 @@ func TestRevoiceStartGeneratedVersionIsOwnSource(t *testing.T) {
 }
 
 func TestRevoiceStartSourceNotFound(t *testing.T) {
+	t.Parallel()
 	cases := map[string][]yue.Job{
 		// версии нет в библиотеке
 		"нет версии": {{ID: 1, Status: "done"}},
@@ -112,6 +116,7 @@ func TestRevoiceStartSourceNotFound(t *testing.T) {
 	}
 	for name, jobs := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			s, fake := newTestServer(t)
 			fake.jobs = jobs
 			if out, ok := call(t, s, "revoice_start", jsonArgs(t, `{"job_id":10,"from":1,"to":5}`)); ok {
@@ -125,6 +130,7 @@ func TestRevoiceStartSourceNotFound(t *testing.T) {
 }
 
 func TestRevoiceStartTakesOutOfRange(t *testing.T) {
+	t.Parallel()
 	for _, takes := range []int{5, 10, -1} {
 		s, fake := newTestServer(t)
 		fake.jobs = []yue.Job{{ID: 5, Status: "done"}}
@@ -141,8 +147,10 @@ func TestRevoiceStartTakesOutOfRange(t *testing.T) {
 // ---------- revoice_apply ----------
 
 func TestRevoiceApplyRejectsTakeNotDone(t *testing.T) {
+	t.Parallel()
 	for _, status := range []string{"queued", "running", "error", "canceled"} {
 		t.Run(status, func(t *testing.T) {
+			t.Parallel()
 			s, fake := newTestServer(t)
 			fake.jobs = []yue.Job{
 				{ID: 5, Status: "done"},
@@ -161,6 +169,7 @@ func TestRevoiceApplyRejectsTakeNotDone(t *testing.T) {
 }
 
 func TestRevoiceApplyRejectsMissingTake(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done"}}
 	if out, ok := call(t, s, "revoice_apply", jsonArgs(t, `{"job_id":5,"take_id":777,"from":10,"to":20}`)); ok {
@@ -174,6 +183,7 @@ func TestRevoiceApplyRejectsMissingTake(t *testing.T) {
 // ---------- rebuild_sections / parseSectionSpecs ----------
 
 func TestParseSectionSpecsFromJSON(t *testing.T) {
+	t.Parallel()
 	var raw any
 	if err := json.Unmarshal([]byte(`[
 		{"child_id":12,"from":10.5,"to":20,"lead":2,"beat_sec":0.5,"stems":["drums","bass"],
@@ -198,6 +208,7 @@ func TestParseSectionSpecsFromJSON(t *testing.T) {
 }
 
 func TestParseSectionSpecsVolumeOnlySpec(t *testing.T) {
+	t.Parallel()
 	// child_id не задан → 0 («громкость дорожек»); db −100 — заглушить
 	var raw any
 	_ = json.Unmarshal([]byte(`[{"from":1,"to":2,"stems":["vocals"],"db":-100}]`), &raw)
@@ -212,6 +223,7 @@ func TestParseSectionSpecsVolumeOnlySpec(t *testing.T) {
 }
 
 func TestParseSectionSpecsRejectsNonArray(t *testing.T) {
+	t.Parallel()
 	for name, raw := range map[string]any{
 		"nil":    nil,
 		"string": "[]",
@@ -225,6 +237,7 @@ func TestParseSectionSpecsRejectsNonArray(t *testing.T) {
 }
 
 func TestRebuildSectionsEmptySpecsIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done"}}
 	for name, args := range map[string]string{
@@ -244,6 +257,7 @@ func TestRebuildSectionsEmptySpecsIsError(t *testing.T) {
 // ---------- vocal_contour ----------
 
 func TestVocalContourPrintsSummaryAndBars(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.contour = &yue.VocalContour{
 		MedianHz: 146.8, LowHz: 98, HighHz: 220,
@@ -285,6 +299,7 @@ func TestVocalContourPrintsSummaryAndBars(t *testing.T) {
 }
 
 func TestVocalContourWholeTrackPassesZeros(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.contour = &yue.VocalContour{}
 	if out, ok := call(t, s, "vocal_contour", jsonArgs(t, `{"job_id":3}`)); !ok {
@@ -296,6 +311,7 @@ func TestVocalContourWholeTrackPassesZeros(t *testing.T) {
 }
 
 func TestVocalContourPropagatesClientError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.contourErr = errors.New("no vocals stem")
 	out, ok := call(t, s, "vocal_contour", jsonArgs(t, `{"job_id":3}`))
@@ -310,6 +326,7 @@ func TestVocalContourPropagatesClientError(t *testing.T) {
 // ---------- тип yue.VocalContour: JSON-контракт воркера ----------
 
 func TestVocalContourJSONTags(t *testing.T) {
+	t.Parallel()
 	var c yue.VocalContour
 	err := json.Unmarshal([]byte(`{"median_hz":150,"low_hz":100,"high_hz":200,
 		"bars":[{"index":2,"start":4.5,"end":6.5,"notes":["C3","E3"]}]}`), &c)

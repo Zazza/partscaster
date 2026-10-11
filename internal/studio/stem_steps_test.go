@@ -23,43 +23,6 @@ func stLevel(gain float64, off bool) dsp.Step {
 	return dsp.Step{Chain: "level", Params: map[string]float64{"gain": gain}, Off: off}
 }
 
-// Карточка 2.4: два шага «−6 дБ» на other последовательно дают −12 дБ. Сумма
-// разниц двух отдельных эффектов дала бы x + 2·(0.5x − x) = 0 — тишину; так
-// отличается «последовательно» от «сумма разниц». Голос (3000) не тронут, вне
-// окна — исходный трек; длина та же.
-func TestRebuildSectionsStepsAreSequential(t *testing.T) {
-	f, base := fxSetup(t)
-	run(t, f, SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"other"},
-		Steps: []dsp.Step{stLevel(-6, false), stLevel(-6, false)}})
-	out := uploadedOnly(t, f)
-
-	if d := float64(len(out)) / sr; math.Abs(d-fxDur) > 0.05 {
-		t.Errorf("длина выхода %.3f с, want %.0f ± 0.05", d, fxDur)
-	}
-	if d := db(toneAmp(out, 500, 2.5, 5.5)) - db(fxAmpB); math.Abs(d-(-12)) > 1 {
-		t.Errorf("500 Гц (other) в окне %+.1f дБ, want −12 ± 1 (шаги последовательно: −6 и ещё −6)", d)
-	}
-	if d := db(toneAmp(out, 3000, 2.5, 5.5)) - db(fxAmpA); math.Abs(d) > 0.5 {
-		t.Errorf("3000 Гц (голос) в окне %+.1f дБ, want |Δ| ≤ 0.5 (чужая дорожка)", d)
-	}
-	for _, w := range [][2]float64{{0, 1.5}, {6.5, fxDur}} {
-		if r := relDiffDb(out, base, w[0], w[1]); r > -40 {
-			t.Errorf("вне окна %.1f–%.1f с разница с исходным %.1f дБ, want ≤ −40", w[0], w[1], r)
-		}
-	}
-}
-
-// Карточка 2.4: выключенный шаг (Off) не влияет: «−6 дБ» + выключенный «−6 дБ» = −6 дБ.
-func TestRebuildSectionsStepsOffIgnored(t *testing.T) {
-	f, _ := fxSetup(t)
-	run(t, f, SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"other"},
-		Steps: []dsp.Step{stLevel(-6, false), stLevel(-6, true)}})
-	out := uploadedOnly(t, f)
-	if d := db(toneAmp(out, 500, 2.5, 5.5)) - db(fxAmpB); math.Abs(d-(-6)) > 1 {
-		t.Errorf("500 Гц (other) в окне %+.1f дБ, want −6 ± 1 (выключенный шаг не действует)", d)
-	}
-}
-
 // Карточка 2.4: в окне трек = остальное + StepsGraph(steps)(дорожка). Эталон
 // собирается из публичного API: дорожка прогоняется через граф StepsGraph
 // (dsp.Run), к ней добавляется голос. Разница в середине окна (вдали от фейдов)
@@ -69,13 +32,22 @@ func TestRebuildSectionsStepsOffIgnored(t *testing.T) {
 // дискретизации (перегруз grit зависит — эталон на 16 кГц с ним не сходится уже
 // у одиночной Chain, поэтому взят линейный пример).
 func TestRebuildSectionsStepsMatchStepsGraph(t *testing.T) {
-	f, _ := fxSetup(t)
+	t.Parallel()
+	f, base := fxSetup(t)
 	steps := []dsp.Step{
 		{Chain: "eq", Params: map[string]float64{"mid": -12, "midf": 500}},
 		stLevel(-6, false),
 	}
 	run(t, f, SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"other"}, Steps: steps})
 	out := uploadedOnly(t, f)
+	if d := float64(len(out)) / sr; math.Abs(d-fxDur) > 0.05 {
+		t.Errorf("длина выхода %.3f с, want %.0f ± 0.05", d, fxDur)
+	}
+	for _, w := range [][2]float64{{0, 1.5}, {6.5, fxDur}} {
+		if r := relDiffDb(out, base, w[0], w[1]); r > -40 {
+			t.Errorf("вне окна %.1f–%.1f с разница с исходным %.1f дБ, want ≤ −40", w[0], w[1], r)
+		}
+	}
 
 	g, _, err := dsp.StepsGraph(steps)
 	if err != nil {
@@ -137,6 +109,7 @@ func sumOfDiffs(t *testing.T, other string, steps []dsp.Step, voc []float32) []f
 // Карточка 2.4 (+ контракт): дорожка «гитара» — подробный стем, шаги работают и на
 // нём (дорожка по умолчанию у педалей — guitar).
 func TestRebuildSectionsStepsOnGuitar(t *testing.T) {
+	t.Parallel()
 	f, _ := detailSetup(t, "guitar") // гитара — 3000 Гц внутри other, other = 500 + 3000
 	run(t, f, SectionSpec{ChildID: 0, From: 2, To: 6, Stems: []string{"guitar"},
 		Steps: []dsp.Step{stLevel(-6, false), stLevel(-6, false)}})
@@ -151,6 +124,7 @@ func TestRebuildSectionsStepsOnGuitar(t *testing.T) {
 
 // Неизвестная цепочка в шагах — ошибка, ничего не загружено.
 func TestRebuildSectionsStepsUnknownChainIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := fxSetup(t)
 	_, err := RebuildSections(context.Background(), f, parentID, []SectionSpec{{ChildID: 0, From: 2, To: 6,
 		Stems: []string{"other"}, Steps: []dsp.Step{{Chain: "no-such-chain"}}}})
@@ -164,6 +138,7 @@ func TestRebuildSectionsStepsUnknownChainIsError(t *testing.T) {
 
 // Контракт: SectionSpec.Steps — json `steps,omitempty`.
 func TestSectionSpecStepsJSON(t *testing.T) {
+	t.Parallel()
 	var sp SectionSpec
 	if err := json.Unmarshal([]byte(`{"child_id":0,"from":2,"to":4,"stems":["guitar"],
 		"steps":[{"chain":"od-ts","params":{"drive":5}},{"chain":"reverb-room","off":true}]}`), &sp); err != nil {

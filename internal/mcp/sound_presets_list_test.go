@@ -33,6 +33,7 @@ func newListPresetServer(t *testing.T) *Server {
 }
 
 func TestSoundPresetsListIsShort(t *testing.T) {
+	t.Parallel()
 	s := newListPresetServer(t)
 	out, ok := call(t, s, "sound_presets", map[string]any{})
 	if !ok {
@@ -84,6 +85,7 @@ func TestSoundPresetsListIsShort(t *testing.T) {
 }
 
 func TestSoundPresetsByIDIsFull(t *testing.T) {
+	t.Parallel()
 	s := newListPresetServer(t)
 	out, ok := call(t, s, "sound_presets", map[string]any{"id": 7})
 	if !ok {
@@ -110,6 +112,7 @@ func TestSoundPresetsByIDIsFull(t *testing.T) {
 }
 
 func TestSoundPresetsByUnknownIDIsError(t *testing.T) {
+	t.Parallel()
 	s := newListPresetServer(t)
 	if out, ok := call(t, s, "sound_presets", map[string]any{"id": 999}); ok {
 		t.Fatalf("sound_presets с несуществующим id прошёл: %s", out)

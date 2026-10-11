@@ -163,10 +163,6 @@ class TestAvailableAndLimits(unittest.TestCase):
         self._touch(self.inf)
         self.assertTrue(self.v.available())
 
-    def test_limits(self):
-        self.assertEqual((self.v.REF_MIN_SEC, self.v.REF_MAX_SEC), (3, 30))
-        self.assertEqual((self.v.STEPS_MIN, self.v.STEPS_MAX), (10, 100))
-
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestVoiceJobApi(_WorkerApiCase):

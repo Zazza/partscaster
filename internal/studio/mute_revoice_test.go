@@ -19,6 +19,7 @@ func muteSpec(stems []string, db float64) SectionSpec {
 
 // Гейн = 10^(Db/20) − 1 — добавка к уже звучащему стему; Db ≤ −60 → ровно −1.
 func TestMuteInsertsGain(t *testing.T) {
+	t.Parallel()
 	parent := stemSet{"drums": "/p/drums.flac"}
 	for _, tc := range []struct {
 		db, want, tol float64
@@ -44,6 +45,7 @@ func TestMuteInsertsGain(t *testing.T) {
 // По вставке на каждый стем спеки, которого есть у родителя, в порядке Stems;
 // пути стемов родителя дописываются в inputs (уже лежащее там не трогается).
 func TestMuteInsertsStemsAndInputs(t *testing.T) {
+	t.Parallel()
 	parent := stemSet{"drums": "/p/drums.flac", "other": "/p/other.flac", "vocals": "/p/vocals.flac"}
 	inputs := []string{"/p/audio.flac"}
 	ins := muteInserts(muteSpec([]string{"other", "bass", "vocals", "drums"}, -100), parent, &inputs)
@@ -69,6 +71,7 @@ func TestMuteInsertsStemsAndInputs(t *testing.T) {
 
 // Вставка — сам стем родителя на его же месте в треке и покрывает окно From..To.
 func TestMuteInsertsCoverWindow(t *testing.T) {
+	t.Parallel()
 	var inputs []string
 	ins := muteInserts(muteSpec([]string{"drums"}, -100), stemSet{"drums": "/p/d.flac"}, &inputs)
 	if len(ins) != 1 {
@@ -93,6 +96,7 @@ func TestMuteInsertsCoverWindow(t *testing.T) {
 // To = 0 — до конца трека (как у эффекта на дорожку и у dsp_apply): раньше
 // окно выходило отрицательным, и пересборка молча ничего не меняла (#459).
 func TestMuteInsertsToZeroMeansEnd(t *testing.T) {
+	t.Parallel()
 	var inputs []string
 	spec := SectionSpec{ChildID: 0, From: 0, To: 0, Stems: []string{"vocals"}, Db: -100}
 	ins := muteInserts(spec, stemSet{"vocals": "/p/v.flac"}, &inputs)
@@ -109,6 +113,7 @@ func TestMuteInsertsToZeroMeansEnd(t *testing.T) {
 
 // Краевые: пустой Stems, стемов у родителя нет — вставок нет, inputs не растут.
 func TestMuteInsertsNothingToDo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		stems  []string
@@ -139,6 +144,7 @@ func uploadedOnly(t *testing.T, f *secFake) []float32 {
 
 // Сквозной: ChildID 0, drums Db −100 — в окне щелчков нет, other на месте, вне окна база.
 func TestRebuildSectionsMuteDrums(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	f := newSecFake()
 	pf := parentFiles(t, t.TempDir())
@@ -162,6 +168,7 @@ func TestRebuildSectionsMuteDrums(t *testing.T) {
 
 // Сквозной: other +6 дБ — в окне 440 вдвое громче, вне окна как был; Db 0 — выход = база.
 func TestRebuildSectionsMuteLouderAndZero(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	pf := parentFiles(t, dir)
@@ -213,6 +220,7 @@ func gainOf(t *testing.T, oldP, newP string, s SectionSpec, accent bool) float64
 
 // Окно без провала: новая дорожка выравнивается по старой в окне (0.25 → 0.5: ×2), сверху Db.
 func TestStemGainMatchesWindow(t *testing.T) {
+	t.Parallel()
 	oldP, newP := dipFiles(t, "0.5")
 	for _, tc := range []struct{ db, want float64 }{{0, 2}, {6, 2 * math.Pow(10, 6.0/20)}, {-6, 2 * math.Pow(10, -6.0/20)}} {
 		s := dipSpec
@@ -226,6 +234,7 @@ func TestStemGainMatchesWindow(t *testing.T) {
 // Карточка: в окне старой дорожки тишина → опора — уровень перед окном: gain не ~0,
 // новая дорожка выходит примерно на уровень до окна (0.25 × gain ≈ 0.5).
 func TestStemGainSilentWindowUsesLevelBefore(t *testing.T) {
+	t.Parallel()
 	oldP, newP := dipFiles(t, "0")
 	for _, accent := range []bool{false, true} {
 		g := gainOf(t, oldP, newP, dipSpec, accent)
@@ -240,6 +249,7 @@ func TestStemGainSilentWindowUsesLevelBefore(t *testing.T) {
 
 // Провал ≥ 12 дБ (−20 дБ) — тоже «молчит»: опора до окна.
 func TestStemGainDeepDipUsesLevelBefore(t *testing.T) {
+	t.Parallel()
 	oldP, newP := dipFiles(t, "0.05")
 	g := gainOf(t, oldP, newP, dipSpec, false)
 	if d := db(0.25*g) - db(0.5); math.Abs(d) > 2 {
@@ -249,6 +259,7 @@ func TestStemGainDeepDipUsesLevelBefore(t *testing.T) {
 
 // Провал меньше 12 дБ (−6 дБ) без accent — опора остаётся окно: новая на уровне окна.
 func TestStemGainShallowDipKeepsWindow(t *testing.T) {
+	t.Parallel()
 	oldP, newP := dipFiles(t, "0.25")
 	g := gainOf(t, oldP, newP, dipSpec, false)
 	if d := db(0.25*g) - db(0.25); math.Abs(d) > 1.5 {
@@ -258,6 +269,7 @@ func TestStemGainShallowDipKeepsWindow(t *testing.T) {
 
 // accent: опора не тише бита перед окном — при провале −6 дБ новая на уровне до окна.
 func TestStemGainAccentNotQuieterThanBefore(t *testing.T) {
+	t.Parallel()
 	oldP, newP := dipFiles(t, "0.25")
 	g := gainOf(t, oldP, newP, dipSpec, true)
 	if d := db(0.25*g) - db(0.5); math.Abs(d) > 1.5 {
@@ -296,6 +308,7 @@ func voxSetup(t *testing.T) (*secFake, map[string]string) {
 
 // Revoice: голос трека в окне заменён голосом рендера (ChildID > 0), остальное нетронуто.
 func TestRebuildSectionsRevoiceReplacesVocals(t *testing.T) {
+	t.Parallel()
 	f, _ := voxSetup(t)
 	sp := spec7([]string{"vocals"}, 0)
 	sp.Revoice = true
@@ -323,6 +336,7 @@ func TestRebuildSectionsRevoiceReplacesVocals(t *testing.T) {
 
 // Без Revoice голос не заменяется: выход = база, нового голоса нет.
 func TestRebuildSectionsNoRevoiceKeepsVocals(t *testing.T) {
+	t.Parallel()
 	f, pf := voxSetup(t)
 	run(t, f, spec7([]string{"vocals"}, 0))
 	out := secUploaded(t, f, "overdub-inst-7.flac")
@@ -338,6 +352,7 @@ func TestRebuildSectionsNoRevoiceKeepsVocals(t *testing.T) {
 // Громкость дорожки с KeepHighHz меняет только низ: заглушить речь в голосе и
 // оставить тарелки, которые demucs отнёс к голосу (#258: «дыры» на месте речи).
 func TestRebuildSectionsMuteKeepHigh(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	pf := parentFiles(t, dir)
@@ -361,6 +376,7 @@ func TestRebuildSectionsMuteKeepHigh(t *testing.T) {
 // Импортированный трек: звук лежит как audio.mp3 (#257) — пересборка берёт его,
 // а не падает на отсутствующем audio.flac.
 func TestRebuildSectionsImportedMp3Base(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	pf := parentFiles(t, dir)

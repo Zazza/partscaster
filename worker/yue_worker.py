@@ -17,6 +17,7 @@
   GET  /audio/{id}/{f}   — артефакты задачи (audio.flac, score.abc, request.abc, ...)
 """
 import contextlib
+import html
 import json
 import math
 import shutil
@@ -740,7 +741,11 @@ def queue_loop():
                 "UPDATE jobs SET status='running' WHERE id=? AND status='queued'", (row["id"],))
             claimed = cur.rowcount > 0
         if claimed:
-            _run_job(row["id"])
+            try:
+                _run_job(row["id"])
+            except Exception as e:  # noqa: BLE001 - сбой одной джобы (в т. ч. загрузки модели) не должен останавливать очередь
+                log.exception("job %s failed outside its handler", row["id"])
+                _mark_failed(row["id"], e)
 
 
 @app.on_event("startup")
@@ -2755,6 +2760,9 @@ def dsp_variant_delete(job_id: int, fname: str):
     """Удалить вариант (dsp-*/overdub-*): сам файл и его метрики."""
     if "/" in fname or ".." in fname or not DSP_NAME_RE.match(fname):
         raise HTTPException(422, "bad variant name")
+    if fname.startswith("stem-"):
+        # дорожка трека — не вариант: удалённая не пересоздаётся сама (только новым разделением)
+        raise HTTPException(422, "дорожки трека этим путём не удаляются — только варианты обработки")
     d = JOBS_DIR / str(job_id)
     f = d / fname
     if not f.is_file():
@@ -4115,6 +4123,7 @@ def listen(job_id: int, f: str | None = None):
     title = row["title"] or f"Job #{job_id}"
     if fname != row["audio_file"]:
         title = f"{title} · {fname}"
+    title = html.escape(title)   # название задаёт пользователь — в страницу только текстом
     return HTMLResponse(f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{title} — Yue Studio</title>
 <style>

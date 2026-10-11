@@ -16,6 +16,8 @@ import { PRESET_GROUPS } from './presetGroups.js'
 const has = (p, type) => p.chain.some((b) => b.type === type)
 const blocksOf = (p, type) => p.chain.filter((b) => b.type === type)
 const grouped = fxPresets.filter((p) => p.group !== undefined)
+// правило — один тест: список нарушителей «id: причина»
+const violations = (list, check) => list.flatMap((p) => check(p).map((why) => `${p.id}: ${why}`))
 
 // «работает на голом воркере»: ни одной ссылки на загружаемый файл (захват, IR, набор)
 function needsFiles(p) {
@@ -39,9 +41,11 @@ describe('ТК86: готовые гитары без захвата (услов�
     expect(guitars.length).toBeGreaterThanOrEqual(10)
   })
 
-  it.each(guitars.map((p) => [p.id, p]))('%s: stems — guitar/other, работает без загруженных файлов', (_, p) => {
-    for (const s of p.stems) expect(['guitar', 'other'], `${p.id}: дорожка ${s}`).toContain(s)
-    expect(needsFiles(p), `${p.id}: цепочка требует файл (захват/IR/набор)`).toBe(false)
+  it('каждая: stems — guitar/other, работает без загруженных файлов', () => {
+    expect(violations(guitars, (p) => [
+      ...p.stems.filter((s) => !['guitar', 'other'].includes(s)).map((s) => `дорожка ${s}`),
+      ...(needsFiles(p) ? ['цепочка требует файл (захват/IR/набор)'] : []),
+    ])).toEqual([])
   })
 
   // характерные приёмы из списка условия 51 — каждый есть хотя бы у одной готовой гитары
@@ -63,9 +67,8 @@ describe('ТК86: готовые басы (условие 51)', () => {
     expect(basses.length).toBeGreaterThanOrEqual(4)
   })
 
-  it.each(basses.map((p) => [p.id, p]))('%s: только звук — без sampler/bass (ноты не меняет)', (_, p) => {
-    expect(has(p, 'sampler'), p.id).toBe(false)
-    expect(has(p, 'bass'), p.id).toBe(false)
+  it('каждый: только звук — без sampler/bass (ноты не меняет)', () => {
+    expect(violations(basses, (p) => ['sampler', 'bass'].filter((t) => has(p, t)).map((t) => `блок ${t}`))).toEqual([])
   })
 
   it.each([
@@ -83,15 +86,10 @@ describe('ТК86: group и названия (условия 51, 53, 53а)', () =
     expect(grouped.length).toBeGreaterThanOrEqual(14)
   })
 
-  it.each(grouped.map((p) => [p.id, p]))('%s: group — id из PRESET_GROUPS', (_, p) => {
-    expect(typeof p.group).toBe('string')
-    expect(Object.keys(PRESET_GROUPS), `${p.id}: группа ${p.group}`).toContain(p.group)
-  })
-
-  // этап 7: «название в списке — по звуку/модели, без имён групп»; в note «в духе …» можно
-  it.each(grouped.map((p) => [p.id, p]))('%s: в названии нет имён групп', (_, p) => {
-    const bands = /rammstein|nightwish|placebo|radiohead|new order|joy division|hook|хук/i
-    for (const lang of ['ru', 'en']) expect(p.name[lang], `${p.id}: name.${lang}`).not.toMatch(bands)
+  // «в названии нет имён групп» — проверяет genrePresets.test.js (ТК106) по всем пресетам и полному списку
+  it('у каждого group — id из PRESET_GROUPS', () => {
+    expect(violations(grouped, (p) => (typeof p.group === 'string' && p.group in PRESET_GROUPS ? [] : [`группа ${p.group}`])))
+      .toEqual([])
   })
 })
 
@@ -102,13 +100,10 @@ describe('ТК86: amp_hint у пресетов с усилителем (усло
     expect(withAmp.length).toBeGreaterThan(0)
   })
 
-  it.each(withAmp.map((p) => [p.id, p]))('%s: amp_hint — непустой массив непустых строк', (_, p) => {
-    expect(Array.isArray(p.amp_hint), `${p.id}: amp_hint`).toBe(true)
-    expect(p.amp_hint.length).toBeGreaterThan(0)
-    for (const h of p.amp_hint) {
-      expect(typeof h).toBe('string')
-      expect(h.trim()).not.toBe('')
-    }
+  it('у каждого amp_hint — непустой массив непустых строк', () => {
+    const ok = (p) => Array.isArray(p.amp_hint) && p.amp_hint.length > 0
+      && p.amp_hint.every((h) => typeof h === 'string' && h.trim() !== '')
+    expect(violations(withAmp, (p) => (ok(p) ? [] : [`amp_hint ${JSON.stringify(p.amp_hint)}`]))).toEqual([])
   })
 
   it.each([
@@ -206,11 +201,16 @@ describe('ТК87: fillAmp(chain, amps, hints) (условие 52)', () => {
 // fillAmp берётся из fxChain.js, группировка — из presetGroups.js.
 describe('экраны используют общие fillAmp и groupPresets (условия 52, 53)', () => {
   const src = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
-  it.each(['./components/TrackDesk.vue', './components/InstrumentsPage.vue'])('%s', (rel) => {
-    const s = src(rel)
-    expect(s, 'своя копия fillAmp').not.toMatch(/function\s+fillAmp\s*\(/)
-    expect(s).toMatch(/import\s*\{[^}]*\bfillAmp\b[^}]*\}\s*from\s*['"]\.\.\/fxChain\.js['"]/)
-    expect(s, 'подсказки пресета не передаются').toMatch(/amp_hint/)
-    expect(s).toMatch(/import\s*\{[^}]*\bgroupPresets\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/)
+  it('TrackDesk и InstrumentsPage: fillAmp и groupPresets — из общих модулей, подсказки передаются', () => {
+    const bad = ['./components/TrackDesk.vue', './components/InstrumentsPage.vue'].flatMap((rel) => {
+      const s = src(rel)
+      return [
+        [/function\s+fillAmp\s*\(/.test(s), 'своя копия fillAmp'],
+        [!/import\s*\{[^}]*\bfillAmp\b[^}]*\}\s*from\s*['"]\.\.\/fxChain\.js['"]/.test(s), 'fillAmp не из fxChain.js'],
+        [!/amp_hint/.test(s), 'подсказки пресета не передаются'],
+        [!/import\s*\{[^}]*\bgroupPresets\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/.test(s), 'groupPresets не из presetGroups.js'],
+      ].filter(([hit]) => hit).map(([, why]) => `${rel}: ${why}`)
+    })
+    expect(bad).toEqual([])
   })
 })

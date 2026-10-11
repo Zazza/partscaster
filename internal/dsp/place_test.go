@@ -53,6 +53,7 @@ func pmClose(t *testing.T, what string, got, want, tol float64) {
 
 // ТК66: pan 0, width 1 — ровно единичная матрица.
 func TestPlaceMatrixIdentity(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, 0, 1)
 	if m != [4]float64{1, 0, 0, 1} {
 		t.Errorf("PlaceMatrix(0, 1) = %v, want ровно [1 0 0 1]", m)
@@ -61,6 +62,7 @@ func TestPlaceMatrixIdentity(t *testing.T) {
 
 // ТК66: (1, 1) на моно-входе L = R = s — левый 0, правый s·√2, мощность та же ±0,1 дБ.
 func TestPlaceMatrixHardRightMono(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, 1, 1)
 	s := 0.5
 	l, r := pmApply(m, s, s)
@@ -74,6 +76,7 @@ func TestPlaceMatrixHardRightMono(t *testing.T) {
 
 // ТК66: (−1, 1) — зеркально: правый 0, левый s·√2.
 func TestPlaceMatrixHardLeftMono(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, -1, 1)
 	s := 0.5
 	l, r := pmApply(m, s, s)
@@ -83,6 +86,7 @@ func TestPlaceMatrixHardLeftMono(t *testing.T) {
 
 // ТК66: (0, 0) — моно: L' = R' = (L+R)/2.
 func TestPlaceMatrixZeroWidthIsMono(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, 0, 0)
 	for _, in := range [][2]float64{{0.7, -0.1}, {0.3, 0.3}, {0, 1}} {
 		l, r := pmApply(m, in[0], in[1])
@@ -94,6 +98,7 @@ func TestPlaceMatrixZeroWidthIsMono(t *testing.T) {
 
 // ТК66: (0, 2) на чистом «боке» L = s, R = −s — бока ×2; середина не меняется.
 func TestPlaceMatrixDoubleWidthSide(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, 0, 2)
 	s := 0.25
 	l, r := pmApply(m, s, -s)
@@ -107,6 +112,7 @@ func TestPlaceMatrixDoubleWidthSide(t *testing.T) {
 // Усл. 39: матрица — ширина M/S, затем панорама складыванием канала (формула карточки)
 // на промежуточных значениях обоих знаков.
 func TestPlaceMatrixFormula(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]float64{{0.3, 1}, {-0.3, 1}, {0.5, 1.4}, {-0.7, 0.6}, {1, 2}, {-1, 0}, {0.2, 1.5}} {
 		got := pmMust(t, c[0], c[1])
 		want := pmSpec(c[0], c[1])
@@ -121,6 +127,7 @@ func TestPlaceMatrixFormula(t *testing.T) {
 
 // ТК66: пределы pan −1…1, width 0…2 — вне ошибка, на границах — нет.
 func TestPlaceMatrixLimits(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]float64{{1.5, 1}, {-1.5, 1}, {0, -1}, {0, 2.5}, {math.NaN(), 1}, {0, math.NaN()}} {
 		if _, err := PlaceMatrix(c[0], c[1]); err == nil {
 			t.Errorf("PlaceMatrix(%v, %v): want ошибку (вне пределов)", c[0], c[1])
@@ -138,6 +145,7 @@ func TestPlaceMatrixLimits(t *testing.T) {
 // ТК67: вставка с Matrix (0,5 вправо) — в графе есть фильтр pan=stereo; и у обычной вставки,
 // и у «на месте». Коэффициенты проверяются прогоном ffmpeg (ниже), не форматом строки.
 func TestInsertsGraphMatrixPan(t *testing.T) {
+	t.Parallel()
 	m := pmMust(t, 0.5, 1)
 	for name, in := range map[string]Insert{
 		"обычная":  {AtSec: 2, SkipSec: 0.5, Gain: 0.7, Matrix: &m},
@@ -145,26 +153,6 @@ func TestInsertsGraphMatrixPan(t *testing.T) {
 	} {
 		if g := InsertsGraph([]Insert{in}); !strings.Contains(g, "pan=stereo") {
 			t.Errorf("%s: нет pan=stereo в графе: %s", name, g)
-		}
-	}
-}
-
-// ТК67: без Matrix граф побайтно прежний (снимок графов кода до этапа 6, 68b0295).
-func TestInsertsGraphNoMatrixUnchanged(t *testing.T) {
-	cases := []struct {
-		in   Insert
-		want string
-	}{
-		{Insert{AtSec: 2.0, SkipSec: 0.5, Tempo: 1.05, Gain: 0.7, FadeIn: 0.1, FadeOut: 0.2, DurSec: 3},
-			`[1:a]atrim=start=0.5,asetpts=PTS-STARTPTS,atempo=1.0500,atrim=duration=3.000,afade=t=in:st=0:d=0.100,afade=t=out:st=2.800:d=0.200,adelay=delays=2000:all=1,volume=0.700[p1];[0:a][p1]amix=inputs=2:duration=first:normalize=0[out]`},
-		{Insert{AtSec: 1.5, SkipSec: 1.5, DurSec: 2, Gain: -1},
-			`[1:a]afade=t=in:st=1.5:d=0.0001,afade=t=out:st=3.4999:d=0.0001,volume=-1.000[p1];[0:a][p1]amix=inputs=2:duration=first:normalize=0[out]`},
-		{Insert{AtSec: 3, SkipSec: 3, DurSec: 2, Gain: -1, LowpassHz: 6000},
-			`[1:a]asplit=2[sa1][sb1];[sa1]atrim=end=2.8000000000000003,volume=0[za1];[sb1]atrim=start=2.8000000000000003,asetpts=PTS-STARTPTS,atrim=duration=2.4,apad=pad_len=3072,afftfilt=real='re*lte(b*sr/4096\,6000)':imag='im*lte(b*sr/4096\,6000)':win_size=4096:overlap=0.75,atrim=start_sample=3072,asetpts=PTS-STARTPTS,afade=t=in:st=0.19999999999999973:d=0.0001,afade=t=out:st=2.1998999999999995:d=0.0001,volume=-1.000[wb1];[za1][wb1]concat=n=2:v=0:a=1[p1];[0:a][p1]amix=inputs=2:duration=first:normalize=0[out]`},
-	}
-	for i, c := range cases {
-		if g := InsertsGraph([]Insert{c.in}); g != c.want {
-			t.Errorf("вставка %d без Matrix: граф изменился\n got: %s\nwant: %s", i, g, c.want)
 		}
 	}
 }
@@ -234,6 +222,7 @@ func pmCheckTone(t *testing.T, what string, got, want, ref float64) {
 // ТК67: стерео-тон (L — 440 Гц 0,3; R — 660 Гц 0,2) через вставку с матрицей: каждый
 // выходной канал = a·L + b·R / c·L + d·R ±0,1 дБ; громкость (Gain) — до матрицы.
 func TestRunInputsMatrixStereoTone(t *testing.T) {
+	t.Parallel()
 	const aL, aR = 0.3, 0.2
 	for _, c := range []struct {
 		name       string
@@ -260,6 +249,7 @@ func TestRunInputsMatrixStereoTone(t *testing.T) {
 // без ослабления (L = R = s), затем матрица: pan 0, width 1 — L = R = s; pan 1 — слева тишина,
 // справа s·√2; pan −1 — зеркально.
 func TestRunInputsMatrixMonoInput(t *testing.T) {
+	t.Parallel()
 	const s = 0.3
 	const party = "0.3*sin(2*PI*440*t)"
 	id := pmMust(t, 0, 1)

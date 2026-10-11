@@ -48,6 +48,7 @@ func hallParams() map[string]float64 {
 // Карточка 10.2: после To звучит хвост, сухая дорожка не удвоена; после
 // To + TailSec (+ фейд) — исходный трек.
 func TestRebuildSectionsStemChainTail(t *testing.T) {
+	t.Parallel()
 	c := dsp.ByID("reverb-hall")
 	if c == nil {
 		t.Fatal("reverb-hall не найден")
@@ -86,6 +87,7 @@ func TestRebuildSectionsStemChainTail(t *testing.T) {
 // Карточка 10.3: цепочка с Key (ducking, ключ drums) получает вторым входом стем
 // drums родителя: тон other в окне приседает после щелчков барабанов.
 func TestRebuildSectionsKeyChainUsesParentStem(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	c := dsp.ByID("ducking")
 	if c == nil || c.Key != "drums" {
@@ -121,6 +123,7 @@ func TestRebuildSectionsKeyChainUsesParentStem(t *testing.T) {
 
 // Карточка 6.5: у трека нет стема-ключа — ошибка, ничего не загружено.
 func TestRebuildSectionsKeyChainNoKeyStemIsError(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	dir := t.TempDir()
 	f := newSecFake()

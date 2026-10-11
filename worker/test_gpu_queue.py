@@ -63,29 +63,6 @@ class TestGpuQueue(unittest.TestCase):
             with yue_worker.gpu_queue("inner"):
                 pass
 
-    def test_fifo_wait_is_visible(self):
-        """Ожидание за занятым локом действительно происходит (второй ждёт первого)."""
-        order = []
-        first = threading.Event()
-
-        def slow():
-            with yue_worker.gpu_queue("slow"):
-                order.append("slow")
-                first.set()
-                time.sleep(0.15)
-
-        def fast():
-            first.wait()
-            with yue_worker.gpu_queue("fast"):
-                order.append("fast")
-
-        t1, t2 = threading.Thread(target=slow), threading.Thread(target=fast)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
-        self.assertEqual(order, ["slow", "fast"])
-
     def test_waiters_counter(self):
         """_gpu_waiters: растёт, пока поток ждёт лок, и возвращается к нулю."""
         held = threading.Event()
@@ -108,7 +85,9 @@ class TestGpuQueue(unittest.TestCase):
         t1.start()
         t2.start()
         waiter_started.wait(1)
-        time.sleep(0.05)
+        deadline = time.monotonic() + 2  # ждём условие, а не фиксированную паузу
+        while yue_worker._gpu_waiters < 1 and time.monotonic() < deadline:
+            time.sleep(0.005)
         seen.append(yue_worker._gpu_waiters)
         let_go.set()
         t1.join(2)

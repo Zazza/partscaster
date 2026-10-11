@@ -8,6 +8,12 @@ export const PREVIEW_SEC = 10 // проверка цепочки перед за
 
 const copy = (v) => JSON.parse(JSON.stringify(v)) // цепочка — данные JSON: копия без общих объектов
 
+/** Блоки, чьи наборы нужны для расчёта: с обработкой — вся цепочка; без неё (bypass) воркер играет только блоки,
+ *  которые сами дают ноты (synth, perc), — наборы эффектов не нужны и не качаются. */
+export function kitChain(chain, bypass) {
+  return bypass ? chain.filter((b) => b.type === 'synth' || b.type === 'perc') : chain
+}
+
 /** Наборы цепочки (kit/kit_open/kit_mid/kit_low у sampler, kit у bass и perc), которых нет среди kits воркера, — ставятся
  *  по одному, в порядке цепочки; onKit(имя) — перед установкой (подпись «качаю набор…»). */
 export async function ensureKits(api, chain, kits, onKit) {

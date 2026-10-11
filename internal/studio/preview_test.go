@@ -146,6 +146,7 @@ func pvDecode(t *testing.T, path string) []float32 {
 // Карточка 1.2: первый Fetch качает с воркера, повторный для того же (job, name) —
 // без обращения к воркеру и тот же путь; файл — копия файла воркера.
 func TestCacheFetchOnceSamePath(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	dir := t.TempDir()
 	c := NewCache(dir)
@@ -185,6 +186,7 @@ func TestCacheFetchOnceSamePath(t *testing.T) {
 
 // Карточка 1.2: разные имена и разные джобы — разные записи кэша.
 func TestCacheFetchDistinctKeys(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	put(f, 2, map[string]string{"audio.flac": pf["stem-drums.flac"]})
 	c := NewCache(t.TempDir())
@@ -211,6 +213,7 @@ func TestCacheFetchDistinctKeys(t *testing.T) {
 
 // Карточка 1.2: Invalidate(job) — следующий Fetch качает заново; чужая джоба не тронута.
 func TestCacheInvalidate(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	put(f, 2, map[string]string{"audio.flac": pf["stem-drums.flac"]})
 	c := NewCache(t.TempDir())
@@ -237,6 +240,7 @@ func TestCacheInvalidate(t *testing.T) {
 
 // Краевой случай: файла на воркере нет — ошибка; Invalidate джобы без записей — не паника.
 func TestCacheFetchMissingIsError(t *testing.T) {
+	t.Parallel()
 	f := newSecFake()
 	c := NewCache(t.TempDir())
 	c.Invalidate(99)
@@ -250,6 +254,7 @@ func TestCacheFetchMissingIsError(t *testing.T) {
 // Карточка 1.3: Dry — кусок трека [From, To] (сдвиг ≤ 5 мс, разница ≤ −50 дБ);
 // длины Wet и Dry равны (±10 мс) и = To − From (хвоста нет) ± 0.05 с.
 func TestPreviewWholeTrackDry(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	res := pvPreview(t, f, NewCache(t.TempDir()), pvSpec("", dsp.Step{Chain: "eq",
 		Params: map[string]float64{"high": -12}}))
@@ -279,11 +284,13 @@ func TestPreviewWholeTrackDry(t *testing.T) {
 // Карточка 1.3: Wet — тот же кусок через шаги. Шаги без изменений (eq с нулями) —
 // Wet = Dry (≤ −50 дБ); шаги с изменениями — Wet ≈ StepsGraph по Dry и ≠ Dry.
 func TestPreviewWholeTrackWetIsStepsOverDry(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	n := int((pvTo - pvFrom) * sr)
 
 	t.Run("eq с нулями", func(t *testing.T) {
+		t.Parallel()
 		res := pvPreview(t, f, cache, pvSpec("", dsp.Step{Chain: "eq"}))
 		dry, wet := pvDecode(t, res.Dry), pvDecode(t, res.Wet)
 		if d := pvRelDb(wet, dry, 0, n); d > -50 {
@@ -292,6 +299,7 @@ func TestPreviewWholeTrackWetIsStepsOverDry(t *testing.T) {
 	})
 
 	t.Run("тёмный eq + перегруз", func(t *testing.T) {
+		t.Parallel()
 		steps := []dsp.Step{{Chain: "eq", Params: map[string]float64{"high": -12, "low": 6}},
 			{Chain: "grit", Params: map[string]float64{"drive": 2}}}
 		res := pvPreview(t, f, cache, pvSpec("", steps...))
@@ -319,6 +327,7 @@ func TestPreviewWholeTrackWetIsStepsOverDry(t *testing.T) {
 // Карточка 1.3: хвост — длины Wet и Dry = To − From + min(хвост, 3) ± 0.05 с, между
 // собой ±10 мс; хвост — сумма TailSec включённых шагов.
 func TestPreviewWholeTrackTailLength(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	cases := []struct {
@@ -334,6 +343,7 @@ func TestPreviewWholeTrackTailLength(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			_, tail, err := dsp.StepsGraph(c.steps)
 			if err != nil {
 				t.Fatal(err)
@@ -356,6 +366,7 @@ func TestPreviewWholeTrackTailLength(t *testing.T) {
 
 // Контракт: To ≤ From — ошибка; пустые шаги — ошибка (StepsGraph: ни одного включённого).
 func TestPreviewBadSpecIsError(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	eq := []dsp.Step{{Chain: "eq"}}
@@ -371,6 +382,7 @@ func TestPreviewBadSpecIsError(t *testing.T) {
 	}
 	for name, spec := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if res, err := Preview(context.Background(), f, cache, spec, t.TempDir()); err == nil {
 				t.Errorf("Preview(%+v): want ошибку, got %+v", spec, res)
 			}
@@ -383,6 +395,7 @@ func TestPreviewBadSpecIsError(t *testing.T) {
 // Карточка 1.4: шаг без изменений (громкость 0 дБ / eq с нулями) на дорожке —
 // вычитание без остатка: Wet = Dry ≤ −50 дБ; Dry — кусок трека.
 func TestPreviewStemNeutralStepNulls(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	n := int((pvTo - pvFrom) * sr)
@@ -392,6 +405,7 @@ func TestPreviewStemNeutralStepNulls(t *testing.T) {
 		"громкость 0 дБ": {Chain: "level", Params: map[string]float64{"gain": 0}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			res := pvPreview(t, f, cache, pvSpec("other", step))
 			dry, wet := pvDecode(t, res.Dry), pvDecode(t, res.Wet)
 			if d := pvRelDb(wet, dry, 0, n); d > -50 {
@@ -406,6 +420,7 @@ func TestPreviewStemNeutralStepNulls(t *testing.T) {
 
 // Карточка 1.4: Wet − Dry ≈ обработанная − исходная дорожка (меняется только она).
 func TestPreviewStemChangesOnlyThisStem(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	params := map[string]float64{"high": -12, "highf": 2000, "low": 6}
 	res := pvPreview(t, f, NewCache(t.TempDir()), pvSpec("other", dsp.Step{Chain: "eq", Params: params}))
@@ -436,6 +451,7 @@ func TestPreviewStemChangesOnlyThisStem(t *testing.T) {
 // нет провала громкости в начале окна: уровень эффекта (Wet − Dry) в первые
 // 0.2 с не ниже уровня в середине окна больше чем на 1.5 дБ.
 func TestPreviewStemEffectIsWarm(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	step := dsp.Step{Chain: "reverb-hall", Params: map[string]float64{"size": 2, "predelay": 0, "wet": 1, "width": 0}}
 	res := pvPreview(t, f, NewCache(t.TempDir()), pvSpec("other", step))
@@ -451,6 +467,7 @@ func TestPreviewStemEffectIsWarm(t *testing.T) {
 
 // Карточка 1.4: стемов нет — один раз MakeStems, затем превью по появившимся стемам.
 func TestPreviewStemMakesStemsOnce(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	f := newSecFake()
 	pf := pvFiles(t)
@@ -472,8 +489,10 @@ func TestPreviewStemMakesStemsOnce(t *testing.T) {
 
 // Карточка 1.4: стемов нет и MakeStems их не дал — ошибка, MakeStems ровно один раз.
 func TestPreviewStemNoStemsIsError(t *testing.T) {
+	t.Parallel()
 	for name, failed := range map[string]bool{"стемы не появились": false, "MakeStems с ошибкой": true} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			needFFmpeg(t)
 			f := newSecFake()
 			f.stemsFailed = failed
@@ -493,6 +512,7 @@ func TestPreviewStemNoStemsIsError(t *testing.T) {
 // Карточка 1.2 в превью: повторное превью того же трека (тёплый кэш) не качает
 // файлы с воркера заново.
 func TestPreviewUsesCache(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	pvPreview(t, f, cache, pvSpec("other", dsp.Step{Chain: "eq"}))
@@ -513,6 +533,7 @@ func pvOtherEq() map[string]float64 {
 // Карточка 1.10: превью на дорожку отдаёт ещё WetSolo/DrySolo; DrySolo — кусок
 // исходной дорожки [From, …] (≤ −50 дБ), без микса (тона drums 300 Гц нет).
 func TestPreviewStemSoloDryIsStemSlice(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	res := pvPreview(t, f, NewCache(t.TempDir()), pvSpec("other", dsp.Step{Chain: "eq", Params: pvOtherEq()}))
 	if res.WetSolo == "" || res.DrySolo == "" {
@@ -532,6 +553,7 @@ func TestPreviewStemSoloDryIsStemSlice(t *testing.T) {
 // Карточка 1.10: WetSolo − DrySolo ≈ обработанная − исходная дорожка (≤ −30 дБ);
 // в WetSolo нет микса (drums 300 Гц).
 func TestPreviewStemSoloWetIsProcessedStem(t *testing.T) {
+	t.Parallel()
 	f, pf := pvSetup(t)
 	params := pvOtherEq()
 	res := pvPreview(t, f, NewCache(t.TempDir()), pvSpec("other", dsp.Step{Chain: "eq", Params: params}))
@@ -557,6 +579,7 @@ func TestPreviewStemSoloWetIsProcessedStem(t *testing.T) {
 
 // Карточка 1.10: соло той же длины, что Wet/Dry (±10 мс) — и без хвоста, и с хвостом.
 func TestPreviewStemSoloSameLength(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	for name, step := range map[string]dsp.Step{
@@ -564,6 +587,7 @@ func TestPreviewStemSoloSameLength(t *testing.T) {
 		"зал 1.5 с":      {Chain: "reverb-hall", Params: map[string]float64{"size": 1.5, "predelay": 0}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			res := pvPreview(t, f, cache, pvSpec("other", step))
 			wet, dry := pvSecs(pvDecode(t, res.Wet)), pvSecs(pvDecode(t, res.Dry))
 			ws, ds := pvSecs(pvDecode(t, res.WetSolo)), pvSecs(pvDecode(t, res.DrySolo))
@@ -582,6 +606,7 @@ func TestPreviewStemSoloSameLength(t *testing.T) {
 // Карточка 1.10: у превью на весь трек соло нет — поля пустые и в JSON не выходят;
 // у превью на дорожку — ключи wet_solo/dry_solo.
 func TestPreviewSoloOnlyForStem(t *testing.T) {
+	t.Parallel()
 	f, _ := pvSetup(t)
 	cache := NewCache(t.TempDir())
 	whole := pvPreview(t, f, cache, pvSpec("", dsp.Step{Chain: "eq", Params: pvOtherEq()}))

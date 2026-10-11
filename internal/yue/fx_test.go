@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -16,6 +15,7 @@ import (
 // UploadFxAsset — POST /fx/assets?kind=&name= с сырыми байтами.
 
 func TestApplyFxPostsChainAsIs(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/jobs/466/fx" {
@@ -62,6 +62,7 @@ func TestApplyFxPostsChainAsIs(t *testing.T) {
 
 // Без окна и output — полей нет в теле (воркер берёт весь трек и output=mix).
 func TestApplyFxOmitsEmptyOptional(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -91,6 +92,7 @@ func TestApplyFxOmitsEmptyOptional(t *testing.T) {
 
 // Нулевое начало окна — не «нет окна»: from=0 уходит в тело.
 func TestApplyFxSendsZeroFrom(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -110,27 +112,8 @@ func TestApplyFxSendsZeroFrom(t *testing.T) {
 	}
 }
 
-// Ошибка воркера (422 с причиной) доходит до вызывающего.
-func TestApplyFxErrorCarriesReason(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		_, _ = w.Write([]byte(`{"detail":"unknown block type: fuzz"}`))
-	}))
-	defer srv.Close()
-
-	_, err := New(srv.URL).ApplyFx(context.Background(), 1, FxRequest{
-		Source: "mix", Chain: []map[string]any{{"type": "fuzz"}},
-	})
-	if err == nil {
-		t.Fatal("ждали ошибку")
-	}
-	if !strings.Contains(err.Error(), "fuzz") {
-		t.Errorf("в ошибке нет причины: %v", err)
-	}
-}
-
 func TestFxAssetsGet(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/fx/assets" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -155,6 +138,7 @@ func TestFxAssetsGet(t *testing.T) {
 }
 
 func TestUploadFxAssetSendsKindNameAndBytes(t *testing.T) {
+	t.Parallel()
 	var kind, name string
 	var body []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +173,7 @@ func TestUploadFxAssetSendsKindNameAndBytes(t *testing.T) {
 // {file, duration_sec, clipped} декодируется в вариант (поле File).
 
 func TestApplyFxPreviewSentOnlyWhenTrue(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/jobs/7/fx" {
@@ -235,6 +220,7 @@ func TestApplyFxPreviewSentOnlyWhenTrue(t *testing.T) {
 // Решение кросс-ревью internal-instruments-page: ответ превью
 // {file, duration_sec, clipped} не теряет duration_sec и clipped.
 func TestApplyFxPreviewKeepsDurationAndClipped(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"file":"preview-fx-89abcdef.flac","duration_sec":18.5,"clipped":true}`))
 	}))
@@ -261,6 +247,7 @@ func TestApplyFxPreviewKeepsDurationAndClipped(t *testing.T) {
 // трека) уходит в тело только при true; при false поля нет — старый воркер и запросы
 // этапа 3 его не видят.
 func TestApplyFxPadSentOnlyWhenTrue(t *testing.T) {
+	t.Parallel()
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = nil

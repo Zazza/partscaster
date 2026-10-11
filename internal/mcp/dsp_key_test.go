@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,6 +15,7 @@ import (
 // Карточка 6.5: dsp_apply ducking без stem — ошибка «только эффект на дорожку», до
 // ffmpeg (ничего не скачано и не загружено).
 func TestDspApplyKeyChainWholeTrackIsError(t *testing.T) {
+	t.Parallel()
 	s, fake := newTestServer(t)
 	fake.jobs = []yue.Job{{ID: 5, Status: "done", AudioFile: "audio.flac"}}
 	fake.fetch = map[string]string{"audio.flac": "not-audio"}
@@ -36,6 +36,7 @@ func TestDspApplyKeyChainWholeTrackIsError(t *testing.T) {
 
 // Карточка 10.5: dsp_chains отдаёт новые цепочки (dsp.All) и key у ducking.
 func TestDspChainsListsNewChainsAndKey(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestServer(t)
 	out, ok := call(t, s, "dsp_chains", map[string]any{})
 	if !ok {
@@ -48,19 +49,5 @@ func TestDspChainsListsNewChainsAndKey(t *testing.T) {
 	}
 	if !regexp.MustCompile(`"key":\s*"drums"`).MatchString(out) {
 		t.Errorf("dsp_chains: у ducking нет \"key\":\"drums\"")
-	}
-}
-
-// Карточка 10.5: описания dsp_chains и dsp_apply упоминают key-цепочки.
-func TestDspToolsDescribeKeyChains(t *testing.T) {
-	s, _ := newTestServer(t)
-	for _, name := range []string{"dsp_chains", "dsp_apply"} {
-		s.mu.RLock()
-		tool := s.tools[name]
-		s.mu.RUnlock()
-		// описание инструмента или его параметров (stem у dsp_apply)
-		if text := tool.Description + fmt.Sprint(tool.InputSchema); !strings.Contains(text, "key") {
-			t.Errorf("%s: описание не упоминает key-цепочки: %s", name, tool.Description)
-		}
 	}
 }

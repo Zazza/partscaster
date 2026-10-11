@@ -1,20 +1,17 @@
 // Карточка internal-own-track, этап 15, условия 119–121, тест-кейс 147.
 // 119: чистая логика активной дорожки — targetFor (цель правок по дорожке)
 // и stemForTarget (какую дорожку сделать активной при ручном выборе цели).
-// 120: одна активная дорожка в студии — по исходнику StudioPage/PedalBoard:
-// сброс целей правок при «весь трек» (без раннего return), PedalBoard
-// принимает активную дорожку и сообщает свой выбор.
-// 121: галочка «волна сверху» — подпись в обоих словарях.
-import { readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { describe, expect, test } from 'vitest'
-import { targetFor, stemForTarget } from './activeTrack.js'
+// 120: одна активная дорожка в студии — targetChoice (ручной выбор цели: какую дорожку сделать активной и
+// какую цель поставить; «весь трек» сбрасывает цели), PedalBoard принимает активную дорожку и сообщает свой выбор.
+// Подпись галочки «волна сверху» (121) — общий тест i18n.test.js.
+import { describe, expect, test, vi } from 'vitest'
+import { renderHtml } from './testkit/sfc.js'
+import { targetFor, stemForTarget, targetChoice } from './activeTrack.js'
 import RU from './i18n/ru.js'
-import EN from './i18n/en.js'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const src = (rel) => readFileSync(join(here, rel), 'utf8')
+vi.hoisted(() => { globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } })
+vi.mock('./api.js', () => ({ api: {} }))
+const { default: PedalBoard } = await import('./components/PedalBoard.vue')
 
 const DRUM_PARTS = ['kick', 'snare', 'toms', 'hh', 'ride', 'crash']
 const MAIN_STEMS = ['vocals', 'drums', 'bass', 'other', 'guitar', 'piano']
@@ -70,115 +67,44 @@ describe('stemForTarget — активная дорожка по выбранн�
   })
 })
 
-// Тело вызова fn(...) начиная с позиции открывающей скобки: до парной скобки.
-function callBody(text, openIdx) {
-  let depth = 0
-  for (let i = openIdx; i < text.length; i++) {
-    if (text[i] === '(') depth++
-    else if (text[i] === ')') {
-      depth--
-      if (depth === 0) return text.slice(openIdx, i + 1)
-    }
-  }
-  return text.slice(openIdx)
-}
+describe('targetChoice — ручной выбор цели правок («на что») (условия 119–120, 120б)', () => {
+  const stems = ['vocals', 'drums', 'bass', 'other', 'kick', 'snare']
 
-function watchBlocks(text) {
-  const out = []
-  const re = /\bwatch\s*\(/g
-  let m
-  while ((m = re.exec(text))) out.push(callBody(text, m.index + m[0].length - 1))
-  return out
-}
-
-// Определение функции name: function name(...) {...} или const name = (...) => ...
-function functionDef(text, name) {
-  const re = new RegExp(`(?:function\\s+${name}\\s*\\(|(?:const|let)\\s+${name}\\s*=)`)
-  const m = re.exec(text)
-  if (!m) return ''
-  const start = text.indexOf('{', m.index)
-  if (start < 0) return ''
-  let depth = 0
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++
-    else if (text[i] === '}') {
-      depth--
-      if (depth === 0) return text.slice(m.index, i + 1)
-    }
-  }
-  return text.slice(m.index)
-}
-
-const RESET_ENV = /envTarget\.value\s*=\s*(?:''|""|targetFor\s*\()/
-const RESET_DSP = /dspTarget\.value\s*=\s*(?:''|""|targetFor\s*\()/
-
-// Тело watch ставит обе цели сам или через общую функцию, которая
-// ставит обе цели из targetFor.
-function setsBothTargets(body, text) {
-  if (RESET_ENV.test(body) && RESET_DSP.test(body)) return true
-  const calls = [...body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)].map((c) => c[1])
-  return calls.some((name) => {
-    const def = functionDef(text, name)
-    return (
-      def &&
-      /targetFor\s*\(/.test(def) &&
-      /envTarget\.value\s*=/.test(def) &&
-      /dspTarget\.value\s*=/.test(def)
-    )
-  })
-}
-
-describe('StudioPage — одна активная дорожка (условие 120)', () => {
-  const studio = src('components/StudioPage.vue')
-  // watch активной дорожки — тот, что трогает цели правок (напрямую или через функцию).
-  const targetWatches = watchBlocks(studio).filter((b) => setsBothTargets(b, studio))
-
-  test('есть watch, который ставит envTarget и dspTarget по активной дорожке', () => {
-    expect(targetWatches.length).toBeGreaterThan(0)
+  test('трек без дорожек: цель держится как выбрана, активная дорожка не меняется', () => {
+    expect(targetChoice('bass', [], '')).toEqual({ stem: null, target: 'bass' })
+    expect(targetChoice('guitar', null, '')).toEqual({ stem: null, target: 'guitar' })
   })
 
-  test('в watch активной дорожки нет раннего return без сброса целей', () => {
-    for (const b of targetWatches) {
-      expect(b, 'ранний return при пустой дорожке оставит старые цели').not.toMatch(
-        /if\s*\(\s*!\s*[\w$.]+\s*\)\s*return\b/,
-      )
-    }
+  test('есть дорожка цели — она становится активной, цель по ней', () => {
+    expect(targetChoice('bass', stems, 'vocals')).toEqual({ stem: 'bass', target: 'bass' })
   })
 
-  test('пустая дорожка сбрасывает цели в пустые (через присваивание или targetFor)', () => {
-    const ok = targetWatches.some(
-      (b) =>
-        (/envTarget\.value\s*=\s*(?:''|"")/.test(b) && /dspTarget\.value\s*=\s*(?:''|"")/.test(b)) ||
-        setsBothTargets(b, studio),
-    )
-    expect(ok).toBe(true)
+  test('активная уже даёт цель (kick при drums) — дорожка та же, цель drums', () => {
+    expect(targetChoice('drums', stems, 'kick')).toEqual({ stem: null, target: 'drums' })
+  })
+
+  test('«весь трек» — активной дорожки нет и цели правок пустые (без раннего выхода со старыми целями)', () => {
+    expect(targetChoice('', stems, 'bass')).toEqual({ stem: '', target: '' })
+    expect(targetChoice('', stems, '')).toEqual({ stem: null, target: '' })
+  })
+
+  test('дорожки цели нет — весь трек', () => {
+    expect(targetChoice('guitar', stems, 'bass')).toEqual({ stem: '', target: '' })
   })
 })
 
+// PedalBoard: активная дорожка — входом (prop active), выбор на доске — наружу (emit stem). Контракт компонента
+// берётся из собранного SFC, видимая дорожка — серверной отрисовкой при данном active.
 describe('PedalBoard — активная дорожка общая (условие 120)', () => {
-  const pedal = src('components/PedalBoard.vue')
-
-  test('принимает активную дорожку через prop', () => {
-    const m = /defineProps\s*(?:<[^>]*>)?\s*\(/.exec(pedal)
-    expect(m, 'нет defineProps').not.toBeNull()
-    const props = callBody(pedal, m.index + m[0].length - 1)
-    expect(props).toMatch(/\b(?:active|activeStem)\b/)
+  test('принимает prop active и объявляет событие stem', () => {
+    expect(Object.keys(PedalBoard.props)).toContain('active')
+    expect(PedalBoard.emits).toContain('stem')
   })
 
-  test('сообщает выбор дорожки через emit', () => {
-    const m = /defineEmits\s*(?:<[^>]*>)?\s*\(/.exec(pedal)
-    expect(m, 'нет defineEmits').not.toBeNull()
-    const emits = callBody(pedal, m.index + m[0].length - 1)
-    expect(emits).toMatch(/['"](?:stem|update:stem)['"]/)
-  })
-})
-
-describe('Волна сверху (условие 121)', () => {
-  test.each([
-    ['ru', RU],
-    ['en', EN],
-  ])('%s: есть подпись галочки studio.wave.pin', (lang, dict) => {
-    expect(typeof dict['studio.wave.pin'], `${lang}: нет studio.wave.pin`).toBe('string')
-    expect(dict['studio.wave.pin'].trim()).not.toBe('')
+  test('active задаёт дорожку доски: показана выбранная дорожка, без active — гитара', async () => {
+    const job = { id: 5, title: 't', duration_sec: 60 }
+    const pick = (html) => (html.match(/class="vselect-label"[^>]*>([^<]*)</) || [])[1]
+    expect(pick(await renderHtml(PedalBoard, { job, active: 'bass' }))).toBe(RU['studio.dsp.target.bass'])
+    expect(pick(await renderHtml(PedalBoard, { job, active: null }))).toBe(RU['studio.dsp.target.guitar'])
   })
 })

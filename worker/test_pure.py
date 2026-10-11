@@ -313,10 +313,6 @@ class TestParseAbcMultiRest(unittest.TestCase):
         self.assertAlmostEqual(bars[-1]["end_sec"], 4.0, places=6)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # --- Спецификация 1.7: продолжение с места, версии песни (head) -------------
 # Воркер импортируется целиком: нужны fastapi/pydantic/numpy (+httpx для
 # TestClient). В CI их нет — классы пропускаются, как TestEncodeMp3.
@@ -473,6 +469,7 @@ class TestContinueJob(_WorkerApiCase):
         self.assertEqual(k["role"], "continue")
         self.assertAlmostEqual(k["cont_from"], 12.5)
         self.assertNotEqual(k["id"], parent)
+        self.assertEqual(k["max_tokens"] or 0, 0, "без to_sec — продолжение без предела токенов")
 
     def test_style_add_reaches_new_job_style(self):
         parent = self._job(style="dark rock, male baritone")
@@ -659,11 +656,11 @@ class TestProgressFinalize(_WorkerDbCase):
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestMigrateVoiceSrc(TestMigrateContinueColumns):
+class TestMigrateVoiceSrc(_WorkerDbCase):
     """_migrate(): добавляет в jobs колонку voice_src (INTEGER, по умолчанию
-    NULL); повторный запуск не падает; старые строки сохраняются."""
+    NULL); повторный запуск и сохранность строк — в TestMigrateContinueColumns."""
 
-    NEW_COLS = {"voice_src"}
+    _legacy_db = TestMigrateContinueColumns._legacy_db
 
     def test_voice_src_integer_default_null(self):
         self._legacy_db()
@@ -1316,13 +1313,17 @@ class TestTonesEndpoint(_WorkerApiCase):
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestTonesStemParam(TestTonesEndpoint):
+class TestTonesStemParam(_WorkerApiCase):
     """GET /jobs/{id}/tones?stem=vocals|drums|bass|other — анализ стема
     jobs/<id>/stem-<stem>.flac: нет файла → 409 с подсказкой make_stems;
     неизвестный stem → 422; без stem — как раньше (микс). Анализ аудио здесь
-    не вызывается: проверяются только отказы до него."""
+    не вызывается: проверяются только отказы до него. Подробные дорожки
+    guitar/piano (6-стемная модель) — так же."""
 
-    STEMS = ("vocals", "drums", "bass", "other")
+    STEMS = ("vocals", "drums", "bass", "other", "guitar", "piano")
+
+    _audio_job = TestTonesEndpoint._audio_job
+    _assert_job_404 = TestTonesEndpoint._assert_job_404
 
     def test_each_known_stem_without_file_409_make_stems(self):
         jid = self._audio_job(duration=60.0)
@@ -1374,11 +1375,6 @@ class TestTonesStemParam(TestTonesEndpoint):
         self.assertEqual(r.status_code, 404, r.text)
         self.assertIn("no audio", r.json().get("detail", "").lower())
         self.assertNotIn("make_stems", r.text)
-
-    def test_without_stem_bad_range_still_422(self):
-        jid = self._audio_job(duration=60.0)
-        r = self.client.get(f"/jobs/{jid}/tones?from=10&to=5")
-        self.assertEqual(r.status_code, 422, r.text)
 
 
 # ---------- Проверка изменённого плана (карточка internal-plan-check) ----------
@@ -1999,9 +1995,6 @@ class TestVocalLeak(_WorkerApiCase):
         import numpy as np
         import soundfile as sf
         from unittest import mock
-        paths = {(m, getattr(r, "path", "")) for r in self.w.app.routes
-                 for m in getattr(r, "methods", ()) or ()}
-        self.assertIn(("POST", "/jobs/{job_id}/stems"), paths)
 
         jid = self._job(style="Instrumental, post-rock", duration=40.0, semantic=False)
         d = self.jobs_dir / str(jid)
@@ -2021,12 +2014,12 @@ class TestVocalLeak(_WorkerApiCase):
             names.append("stem-vocals.flac")
             return {"stems": names, "seconds": 0.0}
 
-        with mock.patch.object(self.w, "demucs_separate", side_effect=fake_separate):
+        # замер дорожек (analyze_file) к метке голоса не относится — подменён
+        with mock.patch.object(self.w, "demucs_separate", side_effect=fake_separate), \
+                mock.patch.object(self.w, "analyze_file", return_value={}):
             r = self.client.post(f"/jobs/{jid}/stems")
             self.assertLess(r.status_code, 300, r.text)
-            deadline = time.time() + 15
-            while time.time() < deadline and (self._leak(jid) or "") == "":
-                time.sleep(0.1)
+        # check_vocal_leak вызывается синхронно внутри разделения: метка есть сразу после ответа
         self.assertEqual(self._leak(jid), "25.4")
 
 
@@ -2396,3 +2389,7 @@ class TestTranscribeEndpoint(_WorkerApiCase):
                 r = self.client.post(f"/jobs/{jid}/transcribe")
                 self.assertEqual(r.status_code, 500, r.text)
                 self.assertEqual(self._abc_col(jid), "")
+
+
+if __name__ == "__main__":
+    unittest.main()

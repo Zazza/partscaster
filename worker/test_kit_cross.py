@@ -3,7 +3,8 @@
 
 - 117 при нескольких установках: GET /fx/kits/progress отдаёт прогресс ИДУЩЕЙ установки. Две
   установки разных наборов идут одновременно; одна закончилась — прогресс не пустой и относится
-  ко второй (общий на все установки слот, который первая очищает, — ошибка).
+  ко второй (общий на все установки слот, который первая очищает, — ошибка). Проверяется в
+  TestProgressLatestInstall (после конца A прогресс — B: name, part, total).
 - 116 между процессами: один набор ставят два процесса сразу (приложение и kits_install.py из
   deploy.sh). Внутрипроцессный замок здесь не помогает, поэтому он подменён новым замком на каждый
   вызов (_fx_kits_guard_for) — как будто вызовы из разных процессов. Оба вызова должны пройти,
@@ -123,56 +124,6 @@ class _CrossCase(_KitBase):
         return sorted(f.name for f in d.iterdir() if f.suffix == ".wav") if d.is_dir() else []
 
 
-class TestProgressTwoInstalls(_CrossCase):
-    """Условие 117: две одновременные установки — прогресс отдаёт идущую, а не пустоту."""
-
-    def test_progress_follows_remaining_install(self):
-        entered = {k: threading.Event() for k in self.folders}
-        gate = {k: threading.Event() for k in self.folders}
-        self.gates += list(gate.values())
-
-        def fake_get(url, *a, **kw):
-            kit, name = self._whose(url)
-            with self.lock:
-                self.calls.append((kit, name))
-            if name == self.files[0]:      # первый файл набора ждёт своего разрешения
-                entered[kit].set()
-                gate[kit].wait(WAIT)
-            return self.wav
-
-        p = mock.patch.object(self.w, "_http_get", fake_get)
-        p.start()
-        self.addCleanup(p.stop)
-
-        ta, box_a = self._spawn("kit-a")
-        tb, box_b = self._spawn("kit-b")
-        for k, e in entered.items():
-            self.assertTrue(e.wait(WAIT), f"установка {k} не дошла до скачивания — "
-                                          "две установки разных наборов не идут одновременно")
-
-        both = self._progress()
-        self.assertTrue(both, "во время двух установок прогресс пустой")
-        self.assertIn(both.get("name"), self.folders, both)
-
-        gate["kit-a"].set()                # первая доходит до конца, вторая ещё ждёт
-        ta.join(WAIT)
-        self.assertFalse(ta.is_alive(), "установка kit-a не закончилась")
-        self.assertNotIn("error", box_a, box_a.get("error"))
-        self.assertTrue(tb.is_alive())
-
-        rest = self._progress()
-        self.assertTrue(rest, "одна установка закончилась, вторая идёт — а прогресс пустой")
-        self.assertEqual(rest.get("name"), "kit-b", rest)
-        self.assertEqual(rest.get("part"), "main", rest)
-        self.assertEqual(rest.get("total"), len(self.files), rest)
-
-        gate["kit-b"].set()
-        tb.join(WAIT)
-        self.assertFalse(tb.is_alive(), "установка kit-b не закончилась")
-        self.assertNotIn("error", box_b, box_b.get("error"))
-        self.assertEqual(self._progress(), {}, "обе установки закончились — прогресс не сброшен")
-
-
 class TestInstallAcrossProcesses(_CrossCase):
     """Условие 116: один набор ставят два «процесса» сразу — оба успешны, каждый файл один раз."""
 
@@ -238,8 +189,10 @@ class TestProgressSynthKit(_KitBase):
         seen = []
 
         def spy(*a, **kw):
+            # звук удара прогрессу не важен — короткий массив вместо настоящего рендера
+            import numpy as np
             seen.append(self._progress())
-            return real(*a, **kw)
+            return np.full(480, 0.1, dtype=np.float32)
 
         p = mock.patch.object(drumsynth, "render", spy)
         p.start()
@@ -355,6 +308,8 @@ class TestProgressLatestInstall(_CrossCase):
 
         rest = self._progress()
         self.assertEqual(rest.get("name"), "kit-b", f"kit-a закончилась, kit-b идёт: {rest}")
+        self.assertEqual(rest.get("part"), "main", rest)
+        self.assertEqual(rest.get("total"), len(self.files), rest)
         gate_b.set()
         tb.join(WAIT)
         self.assertFalse(tb.is_alive(), "установка kit-b не закончилась")
@@ -371,10 +326,15 @@ class TestKitsInstallProgress(_ApiBase):
         entry = {"x": {"name": "x", "part": "p", "done": 3, "total": 7, "bytes": 5_000_000}}
         progress = self.w._kit_progress
 
+        out = io.StringIO()
+
         def fake_install(name="", *a, **kw):
             progress.update(entry)
             try:
-                time.sleep(2.2)
+                # установка «идёт», пока сторож не напечатал строку (он опрашивает раз в 1 с)
+                deadline = time.monotonic() + WAIT
+                while "3/7" not in out.getvalue() and time.monotonic() < deadline:
+                    time.sleep(0.02)
             finally:
                 progress.pop("x", None)
             return {"name": name, "parts": {"p": 7}, "downloaded": True}
@@ -385,7 +345,6 @@ class TestKitsInstallProgress(_ApiBase):
         for attr, val in (("fx_kit_install", fake_install), ("FX_KITS", kits)):
             if hasattr(kits_install, attr):
                 patches.append(mock.patch.object(kits_install, attr, val))
-        out = io.StringIO()
         with contextlib.ExitStack() as st:
             for p in patches:
                 st.enter_context(p)

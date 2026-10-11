@@ -18,7 +18,12 @@ const mcpPreviewFrom, mcpPreviewTo = 20.0, 35.0
 // fxCache — кэш трека/стемов MCP-сервера для превью (живёт с процессом).
 func (s *Server) fxCache() *studio.Cache {
 	s.fxOnce.Do(func() {
-		s.fxDir = filepath.Join(os.TempDir(), fmt.Sprintf("yue-mcp-fx-%d", os.Getpid()))
+		// свой каталог у каждого сервера: два сервера одного процесса (тесты) не пишут в одни файлы превью
+		dir, err := os.MkdirTemp("", "yue-mcp-fx-*")
+		if err != nil {
+			dir = filepath.Join(os.TempDir(), fmt.Sprintf("yue-mcp-fx-%d", os.Getpid()))
+		}
+		s.fxDir = dir
 		s.fx = studio.NewCache(filepath.Join(s.fxDir, "files"))
 	})
 	return s.fx

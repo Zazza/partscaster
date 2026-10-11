@@ -18,7 +18,7 @@ import { useInstruments } from '../composables/useInstruments.js'
 import { fromWorkerChain, toWorkerChain } from '../fxChain.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { groupPresets } from '../presetGroups.js'
-import { partNotes } from '../synthPart.js'
+import { partNotes, synthLevel } from '../synthPart.js'
 import { previewWindow, applyWindow } from '../trackDesk.js'
 import { normPlace } from '../mixDesk.js'
 
@@ -64,7 +64,7 @@ const notes = computed(() => (grid.value ? partNotes(grid.value.bars, { style: s
 // громкость партии относительно трека — это rel_db блока synth: верхний ползунок и крутилка в редакторе цепочки —
 // один параметр, а не два (кросс-ревью: второй ничего не делал)
 const db = computed({
-  get: () => { const b = chain.value.find((x) => x.type === 'synth'); return b ? b.params.rel_db : -8 },
+  get: () => synthLevel(chain.value),
   set: (v) => { chain.value = chain.value.map((b) => (b.type === 'synth' ? { ...b, params: { ...b.params, rel_db: Number(v) } } : b)) },
 })
 const listenWin = computed(() => previewWindow(props.sel, props.cursor, props.job.duration_sec))

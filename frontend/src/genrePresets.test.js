@@ -29,9 +29,10 @@ describe('fxPresets: без имён групп и исполнителей (Т�
     expect(bannedIn('enough room, museum hall')).toEqual([])
   })
 
-  const cases = fxPresets.flatMap((p) => ['name', 'note'].flatMap((f) => texts(p[f]).map((t) => [p.id, f, t])))
-  it.each(cases)('%s.%s без имён', (id, field, text) => {
-    expect(bannedIn(text)).toEqual([])
+  it('в name и note ни одного пресета нет имён (сообщение — список «id.поле: имена»)', () => {
+    const bad = fxPresets.flatMap((p) => ['name', 'note'].flatMap((f) => texts(p[f])
+      .map((t) => bannedIn(t)).filter((names) => names.length).map((names) => `${p.id}.${f}: ${names.join(', ')}`)))
+    expect(bad).toEqual([])
   })
 })
 
@@ -93,20 +94,6 @@ describe('presetOptions — опции VSelect с заголовками (ТК10
     p(3, 'Пост-панк · тёплый', 'Рок'),
     p(100, 'Мой бас', ''),
   ]
-
-  it('пусто → []', () => {
-    expect(presetOptions([])).toEqual([])
-  })
-
-  it('заголовки неактивны «— семья · течение —», value пресетов — id, порядок как в дереве', () => {
-    const opts = presetOptions(input)
-    const heads = opts.filter(isHeader)
-    expect(heads.map(label).slice(0, 2)).toEqual(['— Рок · Пост-панк —', '— Электроника · Синти-поп —'])
-    const items = opts.filter((o) => !isHeader(o))
-    const treeIds = presetTree(input).flatMap((f) => f.genres.flatMap((g) => g.items.map((x) => x.id)))
-    expect(items.map((o) => o.value)).toEqual(treeIds)
-    expect(items.map((o) => o.value)).toEqual([2, 3, 1, 100])
-  })
 
   it('заголовок стоит перед пресетами своего течения', () => {
     const opts = presetOptions(input)

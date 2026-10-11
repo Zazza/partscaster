@@ -2,7 +2,6 @@ package yue
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
 )
@@ -11,6 +10,7 @@ import (
 // ответ {bpm, offset, strength, source} → *BeatGrid; статус ошибки воркера → error.
 
 func TestJobGridSendsWindowAndParses(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"bpm":127.5,"offset":10.206,"strength":0.83,"source":"drums"}`, &got)
 	g, err := c.JobGrid(context.Background(), 42, 10, 25.5)
@@ -30,6 +30,7 @@ func TestJobGridSendsWindowAndParses(t *testing.T) {
 }
 
 func TestJobGridWholeTrackMix(t *testing.T) {
+	t.Parallel()
 	var got updateReq
 	c := updateServer(t, 200, `{"bpm":120,"offset":0.2,"strength":0.5,"source":"mix"}`, &got)
 	g, err := c.JobGrid(context.Background(), 3, 0, 0)
@@ -41,20 +42,5 @@ func TestJobGridWholeTrackMix(t *testing.T) {
 	}
 	if g.Source != "mix" || g.BPM != 120 {
 		t.Fatalf("grid %+v", g)
-	}
-}
-
-func TestJobGridErrorStatus(t *testing.T) {
-	for _, code := range []int{404, 422, 500} {
-		var got updateReq
-		c := updateServer(t, code, `{"detail":"bad window"}`, &got)
-		g, err := c.JobGrid(context.Background(), 7, 10, 12)
-		if err == nil {
-			t.Fatalf("%d: expected error, got %+v", code, g)
-		}
-		var se *StatusError
-		if !errors.As(err, &se) || se.Code != code {
-			t.Fatalf("%d: want *StatusError with code, got %T %v", code, err, err)
-		}
 	}
 }

@@ -8,7 +8,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
-import { ensureKits as ensureKitsOn } from '../engineRun.js'
+import { ensureKits as ensureKitsOn, kitChain } from '../engineRun.js'
 import { usePlayer } from '../composables/usePlayer.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useInstruments } from '../composables/useInstruments.js'
@@ -229,7 +229,7 @@ async function render() {
   try {
     // без обработки воркер оставляет только блоки, которые сами играют ноты (synth, perc), — качать их наборы, но не
     // наборы эффектов: сухая фраза не должна ждать (или падать без сети) из-за набора, который не прозвучит
-    await ensureKits(req.bypass ? req.chain.filter((b) => b.type === 'synth' || b.type === 'perc') : req.chain)
+    await ensureKits(kitChain(req.chain, req.bypass))
     if (my !== seq || !playing.value) return   // остановили или покрутили, пока качался набор
     busy.value = 'loop'
     const r = await api.fxPhrase(req)

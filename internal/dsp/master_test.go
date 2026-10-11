@@ -22,6 +22,7 @@ func maxAbs(s []float32) float64 {
 // Карточка: master есть в реестре, не голосовая (применяется на весь микс),
 // без своей отметки start — значит получает общий from.
 func TestMasterChainCard(t *testing.T) {
+	t.Parallel()
 	c := ByID("master")
 	if c == nil || c.Name == "" {
 		t.Fatalf("ByID(master) = %+v, want цепочку с именем", c)
@@ -50,6 +51,7 @@ const masterExpr = "if(lt(t\\,3)\\,0.5\\,0.05)*(random(0)*2-1)"
 
 // Карточка: мастеринг поднимает RMS и держит пик (лимитер 0.94).
 func TestMasterRaisesRmsAndCapsPeak(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.3*(random(0)*2-1)", 4)
 	out := runChain(t, "master", in, nil)
@@ -64,6 +66,7 @@ func TestMasterRaisesRmsAndCapsPeak(t *testing.T) {
 
 // Карточка: разжатие внутри мастеринга — разброс громкое/тихое шире, чем на входе.
 func TestMasterWidensDynamics(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, masterExpr, 6)
 	out := runChain(t, "master", in, nil)
@@ -77,6 +80,7 @@ func TestMasterWidensDynamics(t *testing.T) {
 
 // Краевой: breath=0 — экспандер выключен, но громкость от перегруза остаётся.
 func TestMasterBreathZeroStillLoud(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.3*(random(0)*2-1)", 4)
 	out := runChain(t, "master", in, map[string]float64{"breath": 0})

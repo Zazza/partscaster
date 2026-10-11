@@ -45,12 +45,14 @@ func llSineDb(a float64) float64 { return 20 * math.Log10(a/math.Sqrt2) }
 
 // ТК124: синус постоянной амплитуды A → 20·lg(A/√2) ± 0,3 дБ (разные частоты дискретизации и амплитуды).
 func TestLoudLevelDbSine(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	for _, c := range []struct {
 		a    float64
 		rate int
 	}{{0.5, 44100}, {0.1, 48000}, {0.02, 16000}} {
 		t.Run(fmt.Sprintf("A=%g@%d", c.a, c.rate), func(t *testing.T) {
+			t.Parallel()
 			p := llGen(t, "sine.flac", fmt.Sprintf("%g*sin(2*PI*440*t)", c.a), 5, c.rate)
 			got, want := llLevel(t, p), llSineDb(c.a)
 			if math.Abs(got-want) > 0.3 {
@@ -62,6 +64,7 @@ func TestLoudLevelDbSine(t *testing.T) {
 
 // ТК124 (моно): стерео с одинаковыми каналами — тот же уровень, что у одного канала.
 func TestLoudLevelDbStereoSameAsMono(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	e := "0.2*sin(2*PI*330*t)"
 	p := llGen(t, "stereo.wav", e+"|"+e, 4, 44100)
@@ -73,6 +76,7 @@ func TestLoudLevelDbStereoSameAsMono(t *testing.T) {
 
 // ТК124: 5 % громко (A), 95 % тихо (A/100) → около уровня громкого (95-й перцентиль, не среднее).
 func TestLoudLevelDbLoudFivePercent(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const a = 0.5
 	// 20 с, громко 1 с (10–11 с)
@@ -86,6 +90,7 @@ func TestLoudLevelDbLoudFivePercent(t *testing.T) {
 
 // Условие 83 (95-й перцентиль, а не максимум): громко лишь 2 % → уровень заметно ниже громкого.
 func TestLoudLevelDbNotPeak(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	const a = 0.5
 	// 20 с, громко 0,4 с (10–10,4 с)
@@ -99,6 +104,7 @@ func TestLoudLevelDbNotPeak(t *testing.T) {
 
 // ТК124: тишина → очень низкое конечное значение, без NaN, паники и ошибки.
 func TestLoudLevelDbSilence(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	p := llGen(t, "silence.flac", "0", 3, 44100)
 	if got := llLevel(t, p); got > -80 {
@@ -108,6 +114,7 @@ func TestLoudLevelDbSilence(t *testing.T) {
 
 // Краевой случай: файла нет → ошибка.
 func TestLoudLevelDbMissingFile(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	if _, err := LoudLevelDb(filepath.Join(t.TempDir(), "nope.flac")); err == nil {
 		t.Error("LoudLevelDb несуществующего файла: ошибки нет, want ошибка")

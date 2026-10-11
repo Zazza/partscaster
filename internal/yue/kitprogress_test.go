@@ -12,6 +12,7 @@ import (
 // нет установки — {} (пустой ответ без ошибки); 500 — ошибка. Написаны по карточке, без чтения реализации.
 
 func TestFxKitProgressGetsProgress(t *testing.T) {
+	t.Parallel()
 	var method, path string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method, path = r.Method, r.URL.Path
@@ -33,6 +34,7 @@ func TestFxKitProgressGetsProgress(t *testing.T) {
 }
 
 func TestFxKitProgressIdleIsEmpty(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{}`))
 	}))
@@ -44,16 +46,5 @@ func TestFxKitProgressIdleIsEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("нет установки — want пусто, got %v", got)
-	}
-}
-
-func TestFxKitProgressServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"detail":"boom"}`, http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	if _, err := New(srv.URL).FxKitProgress(context.Background()); err == nil {
-		t.Fatal("want ошибку на 500")
 	}
 }

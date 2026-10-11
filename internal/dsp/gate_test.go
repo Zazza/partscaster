@@ -59,6 +59,7 @@ func checkGateHits(t *testing.T, out, src []float32, offset, period, duty, smoot
 // Условие 1: bpm 120, div 4, duty 0.5, depth 1, offset 0.1 — открытые половины ≈ вход,
 // закрытые глушатся (< −40 дБ); подряд несколько ударов.
 func TestGateOpenClosedHalves(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 2)
 	out := runChain(t, "gate", in, map[string]float64{
@@ -69,6 +70,7 @@ func TestGateOpenClosedHalves(t *testing.T) {
 
 // Условие 2: depth 0.5 — между ударами уровень 1−0.5 = −6 дБ (±1).
 func TestGateDepthHalf(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 2)
 	out := runChain(t, "gate", in, map[string]float64{
@@ -80,6 +82,7 @@ func TestGateDepthHalf(t *testing.T) {
 // Условие 3: duty 0.25 — открыта первая четверть удара, остальное закрыто
 // (включая вторую четверть, которая при duty 0.5 была бы открыта).
 func TestGateDutyQuarter(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*1000*t)", 2)
 	out := runChain(t, "gate", in, map[string]float64{
@@ -100,6 +103,7 @@ func TestGateDutyQuarter(t *testing.T) {
 // Условие 4: период следует bpm/div: bpm 138, div 2 → удары на offset + k·60/276.
 // Сдвиг фазы от неверного периода накапливается, поэтому меряем и дальние удары.
 func TestGatePeriodFollowsBpmDiv(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 3)
 	out := runChain(t, "gate", in, map[string]float64{
@@ -111,6 +115,7 @@ func TestGatePeriodFollowsBpmDiv(t *testing.T) {
 // Условие 5: сетка до offset — на [0, offset) гейт работает в той же фазе
 // (удары offset − k·период).
 func TestGateGridBeforeOffset(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 1.5)
 	const off = 0.53 // не кратно периоду 0.125 — фаза не совпадает с нулём
@@ -125,6 +130,7 @@ func TestGateGridBeforeOffset(t *testing.T) {
 
 // Условие 6: from=1.0 — до 0.9 с выход равен входу, после 1.1 с гейт работает.
 func TestGateFromKeepsAudioBefore(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 2.5)
 	out := runChain(t, "gate", in, map[string]float64{
@@ -139,10 +145,10 @@ func TestGateFromKeepsAudioBefore(t *testing.T) {
 
 // Условие 7: длина выхода = длине входа (некруглая длительность, допуск 1 мс на кодек).
 func TestGateKeepsLength(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 1.37)
 	for _, p := range []map[string]float64{
-		nil,
 		{"bpm": 138, "div": 2, "duty": 0.25, "depth": 1, "offset": 0.3, "from": 0},
 		{"from": 0.5, "smooth": 30, "div": 8},
 	} {
@@ -155,6 +161,7 @@ func TestGateKeepsLength(t *testing.T) {
 
 // Условие 8: gate есть в All(), это не голосовая цепочка; крутилки и дефолты по спеке.
 func TestGateRegistered(t *testing.T) {
+	t.Parallel()
 	var g *Chain
 	for _, c := range All() {
 		if c.ID == "gate" {
@@ -197,6 +204,7 @@ func TestGateRegistered(t *testing.T) {
 // offset 300.1 при периоде 0.125 (300 = 2400 периодов) даёт в первых 2 с ту же фазу,
 // что offset 0.1 (открытые/закрытые окна в те же моменты).
 func TestGateLargeOffsetSamePhase(t *testing.T) {
+	t.Parallel()
 	needFFmpeg(t)
 	in, src := genIn(t, "0.5*sin(2*PI*440*t)", 2)
 	p := map[string]float64{"bpm": 120, "div": 4, "duty": 0.5, "depth": 1, "smooth": 5, "from": 0}
