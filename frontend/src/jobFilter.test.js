@@ -1,6 +1,6 @@
 // Тесты фильтров и пейджера списка треков — по спецификации отбора.
 import { describe, it, expect } from 'vitest'
-import { defaultJobFilter, filterJobs, pageJobs, pageCount, QUEUE_PAGE_SIZE, groupJobs, folderNames, DEFAULT_FOLDERS, FOLDER_NONE } from './jobFilter.js'
+import { defaultJobFilter, filterJobs, pageJobs, pageCount, QUEUE_PAGE_SIZE, groupJobs, folderNames, DEFAULT_FOLDERS, FOLDER_NONE, DEMO_FOLDER } from './jobFilter.js'
 
 const NOW = Date.parse('2026-09-28T12:00:00Z')
 const j = (over = {}) => ({
@@ -326,5 +326,36 @@ describe('поиск: номер песни и версии (filterJobs, f.q)', 
     const children = { 1: [{ id: 10, title: 'в', style: 'rock' }] }
     expect(ids(jobs, '')).toEqual([1, 2, 3])
     expect(ids(jobs, '   ', children)).toEqual([1, 2, 3])
+  })
+})
+
+describe('демо-эталоны пресетов (папка «Демо»)', () => {
+  const jobs = () => [j({ id: 1 }), j({ id: 2, folder: 'Альбом' }), j({ id: 3, folder: 'Демо' })]
+  const ids = (f) => filterJobs(jobs(), { ...defaultJobFilter(), ...f }).map((x) => x.id)
+
+  it('DEMO_FOLDER — «Демо»', () => {
+    expect(DEMO_FOLDER).toBe('Демо')
+  })
+
+  it('по умолчанию и при all демо скрыты — служебные треки не засоряют список', () => {
+    expect(ids({})).toEqual([1, 2])
+    expect(ids({ folder: 'all' })).toEqual([1, 2])
+  })
+
+  it('выбор папки «Демо» показывает только демо; другие папки их не видят', () => {
+    expect(ids({ folder: 'Демо' })).toEqual([3])
+    expect(ids({ folder: 'демо' })).toEqual([3])
+    expect(ids({ folder: 'Альбом' })).toEqual([2])
+  })
+
+  it('«без папки» демо не считаются (папка есть), folderNames их отдаёт', () => {
+    expect(ids({ folder: FOLDER_NONE })).toEqual([1])
+    expect(folderNames(jobs())).toEqual(expect.arrayContaining(['Демо']))
+  })
+
+  it('обычные треки с папкой «демо» в другом регистре тоже служебные — демо едино', () => {
+    const list = [j({ id: 5 }), j({ id: 6, folder: ' ДЕМО ' })]
+    expect(filterJobs(list, defaultJobFilter()).map((x) => x.id)).toEqual([5])
+    expect(filterJobs(list, { ...defaultJobFilter(), folder: 'Демо' }).map((x) => x.id)).toEqual([6])
   })
 })

@@ -12,6 +12,8 @@ export function defaultJobFilter() {
 export const DEFAULT_FOLDERS = ['Альбом', 'Основы', 'Эксперименты']
 // значение фильтра «только песни без папки»
 export const FOLDER_NONE = '-'
+// папка демо-эталонов пресетов звука: служебные треки, в списке видны только при выборе этой папки
+export const DEMO_FOLDER = 'Демо'
 
 const folderKey = (s) => String(s || '').trim().toLowerCase()
 
@@ -66,6 +68,8 @@ export function filterJobs(jobs, f, now = Date.now(), children = {}) {
     if (f.dur !== 'all' && !DUR_BUCKETS[f.dur](j.duration_sec || 0)) return false
     if (f.draft === 'only' && !j.draft) return false
     if (f.draft === 'hide' && j.draft) return false
+    // демо-эталоны — служебные: видны, только когда в фильтре выбрана сама папка «Демо»
+    if (folderKey(j.folder) === folderKey(DEMO_FOLDER) && folderKey(f.folder) !== folderKey(DEMO_FOLDER)) return false
     if (f.folder === FOLDER_NONE && folderKey(j.folder)) return false
     if (f.folder && f.folder !== 'all' && f.folder !== FOLDER_NONE && folderKey(j.folder) !== folderKey(f.folder)) return false
     if (q && !matchesQuery(j, q) && !(children[j.id] || []).some((k) => matchesQuery(k, q))) return false
