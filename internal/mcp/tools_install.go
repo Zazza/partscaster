@@ -225,6 +225,15 @@ func (s *Server) workerArchive() (string, error) {
 	return found[len(found)-1], nil
 }
 
+// workerGet — команда: GET локального воркера (на машине с GPU) с выводом тела. curl там может не быть
+// (поставили только драйвер и uv) — тогда python из venv воркера, он есть после установки всегда.
+func workerGet(path string, timeoutSec int) string {
+	url := "http://localhost:8091" + path
+	return fmt.Sprintf(`{ curl -sf --max-time %[1]d %[2]s || ~/yue/.venv/bin/python -c `+
+		`'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("%[2]s", timeout=%[1]d).read().decode())'; }`,
+		timeoutSec, url)
+}
+
 // workerAddress — строка в конец отчёта: по какому адресу MCP ходит к воркеру.
 func workerAddress(s *Server) string {
 	return fmt.Sprintf("\nадрес воркера сейчас: %s (сменить: config_set)", s.client.GetURL())
@@ -273,7 +282,7 @@ func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool,
 	if stemsModel == "roformer" {
 		// действующая модель, а не «установлен»: выбор мог лечь не туда (YUE_DATA_DIR) или его
 		// перекрывает YUE_STEMS_MODEL=demucs — тогда «доступен» был бы неправдой
-		steps = append(steps, step{name: "проверка: дорожки делает RoFormer", cmd: "sleep 2 && curl -sf --max-time 10 http://localhost:8091/config | " +
+		steps = append(steps, step{name: "проверка: дорожки делает RoFormer", cmd: "sleep 2 && " + workerGet("/config", 10) + " | " +
 			`grep -q '"stems_model": *"bs-roformer-sw"' && echo 'дорожки делает RoFormer' || ` +
 			`{ echo 'ВНИМАНИЕ: RoFormer выбран по умолчанию, но воркер делает дорожки demucs. ` +
 			`Проверьте шаг установки RoFormer, YUE_SEP_PY, YUE_DATA_DIR и YUE_STEMS_MODEL в ~/yue-studio/worker.env'; exit 1; }`})
@@ -360,7 +369,7 @@ func installSteps(host, archive string, whisper, seedvc, roformer bool, need flo
 			// restart, а не только enable --now: при переустановке работающий воркер должен взять новую версию
 			"systemctl --user daemon-reload && systemctl --user enable yue-worker && systemctl --user restart yue-worker || " +
 			"echo 'юнит пропущен (запуск вручную: cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --port 8091)'"},
-		step{name: "health", cmd: "sleep 3 && curl -sf --max-time 10 http://localhost:8091/health"},
+		step{name: "health", cmd: "sleep 3 && " + workerGet("/health", 10)},
 	)
 }
 

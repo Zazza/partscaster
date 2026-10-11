@@ -55,13 +55,24 @@ switch_current() {
   mv -T "$YUE_HOME/current.new" "$YUE_HOME/current"
 }
 
+# health_ok — воркер отвечает на /health; curl есть не везде (на GPU-машине его может не быть) —
+# тогда python из venv воркера, он там есть всегда
+health_ok() {
+  if command -v curl >/dev/null; then
+    curl -sf --max-time 5 http://localhost:8091/health >/dev/null
+  else
+    "$YUE_VENV/bin/python" -c 'import urllib.request; urllib.request.urlopen("http://localhost:8091/health", timeout=5)' \
+      >/dev/null 2>&1
+  fi
+}
+
 start_worker() {
   systemctl --user daemon-reload
   systemctl --user enable yue-worker
   systemctl --user restart yue-worker
   # модель грузится после старта, но API отвечает сразу; ждём до ~30 с
   for _ in $(seq 1 15); do
-    if curl -sf --max-time 5 http://localhost:8091/health >/dev/null; then
+    if health_ok; then
       echo "воркер запущен: $(readlink "$YUE_HOME/current")"
       return 0
     fi

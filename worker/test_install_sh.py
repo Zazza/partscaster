@@ -341,6 +341,55 @@ class TestInstallPathsAndFailures(_InstallCase):
         self.assertEqual([n for n in left if n.startswith(".")], [], left)
 
 
+# python venv без curl: пишет аргументы и код со stdin (python - / без аргументов); вызов, где
+# упомянут localhost:8091/health, падает при файле fail-health.
+VENV_PY_HEALTH = r"""#!/bin/sh
+{ echo "== venv-python"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
+code="$*"
+if [ $# -eq 0 ] || [ "$1" = - ]; then code=$(cat); printf '%s\n' "$code" >> "$STUB_LOG"; fi
+case "$code" in *localhost:8091/health*) [ -f "$STUB_DIR/fail-health" ] && exit 1;; esac
+exit 0
+"""
+
+TOOLS = ("bash", "sh", "env", "sed", "date", "cp", "mv", "ln", "mkdir", "rm", "rmdir", "tr", "sha256sum",
+         "cut", "ls", "sort", "awk", "tail", "head", "cat", "readlink", "basename", "dirname", "id", "seq",
+         "printf", "echo", "touch", "chmod", "grep", "mktemp", "test", "true", "false", "wc", "tee")
+
+
+class TestInstallHealthWithoutCurl(_InstallCase):
+    """143ж/ТК178: curl нет — /health проверяется python-ом venv воркера."""
+
+    def setUp(self):
+        super().setUp()
+        (self.stubs / "curl").unlink()
+        (self.stubs / "venv-python").write_text(VENV_PY_HEALTH)
+        self.tools = Path(self._td.name) / "tools"
+        self.tools.mkdir()
+        for name in TOOLS:
+            p = shutil.which(name)
+            if p:
+                (self.tools / name).symlink_to(p)
+
+    def run_install(self):
+        self.log.write_text("")
+        bash = str(self.tools / "bash")
+        return subprocess.run([bash, str(self.make_version("1.0.0") / "install.sh")], cwd=self.home,
+                              env=self.env(PATH=f"{self.stubs}:{self.tools}"), stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=120)
+
+    def test_health_via_venv_python(self):
+        p = self.run_install()
+        self.assertEqual(p.returncode, 0, f"{p.stdout}\n{p.stderr}")
+        self.assertIn("localhost:8091/health", self.log.read_text().split("== venv-python", 1)[-1],
+                      self.log.read_text())
+        self.assertEqual(self.called("curl"), [])
+
+    def test_health_failure_via_venv_python(self):
+        (self.stubs / "fail-health").touch()
+        p = self.run_install()
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+
+
 class TestInstallRequirements(_InstallCase):
     """I3: пакеты ставятся только при новом venv или изменённом requirements.txt."""
 

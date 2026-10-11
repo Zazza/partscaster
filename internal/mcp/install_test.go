@@ -1654,3 +1654,57 @@ func TestInstallStemsModelNoRoformerCheckForHtdemucs(t *testing.T) {
 		}
 	}
 }
+
+// noCurlPath — каталог со ссылками на обычные утилиты, но без curl (на машине теста curl
+// может быть в /usr/bin — весь /usr/bin в PATH не кладётся).
+func noCurlPath(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range []string{"bash", "sh", "env", "cat", "printf", "echo", "test", "true", "false",
+		"sed", "grep", "awk", "tr", "cut", "head", "tail", "ls", "mkdir", "rm", "cp", "mv", "ln",
+		"readlink", "dirname", "basename", "id", "seq", "date", "touch", "chmod", "mktemp", "wc", "sort"} {
+		if p, err := exec.LookPath(name); err == nil {
+			if err := os.Symlink(p, filepath.Join(dir, name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return dir
+}
+
+// ТК178 (условие 143ж): на машине без curl шаг health проверяет /health python-ом из venv
+// воркера (~/yue/.venv/bin/python).
+func TestInstallHealthStepWithoutCurlUsesVenvPython(t *testing.T) {
+	sb := newInstallSandbox(t)
+	steps := sb.plan(false, false, false, "", "", "", "")
+	st, ok := findNamed(steps, "health")
+	if !ok {
+		t.Fatalf("no health step in plan: %+v", steps)
+	}
+	stubs := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stubs, "sleep"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mark := filepath.Join(t.TempDir(), "venv-python.called")
+	pyDir := filepath.Join(sb.home, "yue", ".venv", "bin")
+	if err := os.MkdirAll(pyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	py := "#!/bin/sh\necho called >> " + shellQuoteTest(mark) + "\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(pyDir, "python"), []byte(py), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := stubs + ":" + noCurlPath(t)
+	bash := filepath.Join(strings.Split(path, ":")[1], "bash")
+	cmd := exec.Command(bash, "-c", st.cmd)
+	cmd.Dir = sb.home
+	cmd.Stdin = strings.NewReader("")
+	cmd.Env = []string{"HOME=" + sb.home, "PATH=" + path}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("health step without curl failed: %v\n%s\ncmd: %s", err, out, st.cmd)
+	}
+	if !fileExists(mark) {
+		t.Fatalf("~/yue/.venv/bin/python not called by health step without curl\n%s\ncmd: %s", out, st.cmd)
+	}
+}
