@@ -11,6 +11,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"yue-studio/internal/studio"
 	"yue-studio/internal/yue"
@@ -33,7 +34,9 @@ type Server struct {
 	tools       map[string]Tool
 	toolOrder   []string
 	mu          sync.RWMutex
-	stale       *staleChecker // MCP собран раньше, чем менялись исходники (SetBuildInfo)
+	stale       *staleChecker  // MCP собран раньше, чем менялись исходники (SetBuildInfo)
+	compat      *compatChecker // воркер и MCP разных версий API
+	version     string         // версия сборки (SetVersion), serverInfo.version
 
 	fxOnce sync.Once
 	fx     *studio.Cache // трек и стемы на ПК для превью эффектов (fx_preview.go)
@@ -41,7 +44,8 @@ type Server struct {
 }
 
 func NewServer(client yue.Service, downloadDir string) *Server {
-	return &Server{client: client, downloadDir: downloadDir, tools: map[string]Tool{}}
+	return &Server{client: client, downloadDir: downloadDir, tools: map[string]Tool{}, version: "dev",
+		compat: &compatChecker{client: client, now: time.Now}}
 }
 
 func (s *Server) Register(t Tool) {
@@ -160,7 +164,7 @@ func (s *Server) dispatch(req rpcRequest) rpcResponse {
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "yue-studio", "version": "0.1.0"},
+			"serverInfo":      map[string]any{"name": "yue-studio", "version": s.version},
 		}}
 	case "ping":
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{}}
@@ -201,7 +205,7 @@ func (s *Server) dispatch(req rpcRequest) rpcResponse {
 			}
 		}
 		text, err := t.Handler(s, args)
-		warn := s.stale.warning()
+		warn := s.stale.warning() + s.compat.text()
 		if err != nil {
 			return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: callToolResult{
 				Content: []toolContent{{Type: "text", Text: warn + err.Error()}}, IsError: true}}

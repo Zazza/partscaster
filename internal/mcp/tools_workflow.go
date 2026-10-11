@@ -23,7 +23,9 @@ func RegisterWorkflowTools(s *Server) {
 			if err != nil {
 				return "", fmt.Errorf("воркер недоступен (%s): %w — проверь адрес через config_get, установка: install_worker", s.client.GetURL(), err)
 			}
-			return toJSON(h), nil
+			// версия — справочно: старый воркер без /version не мешает статусу
+			v, verr := s.client.Version(context.Background())
+			return toJSON(map[string]any{"health": h, "version": v, "compat": yue.CompatWarning(v, verr)}), nil
 		},
 	})
 

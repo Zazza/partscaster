@@ -1,0 +1,53 @@
+name: Release
+
+# Релиз по тегу v*: приложение + yue-mcp + архив воркера под Linux/Windows/macOS,
+# всё выкладывается в GitHub Release этого тега. Тег ставит и пушит человек.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # действия закреплены по коммиту (у job право contents: write); тег — в комментарии
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0  # git describe нужна история и теги
+          persist-credentials: false  # токен не остаётся в .git/config на время сборки (npm-зависимости)
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Linux deps (GTK/WebKit для Wails)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Wails CLI (версия — как в go.mod)
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
+      - name: Пакет
+        run: |
+          # Linux: Wails под webkit2gtk-4.1 (на ubuntu-24.04 нет 4.0, без тега cgo ищет 4.0)
+          if [[ "$RUNNER_OS" == "Linux" ]]; then export GOFLAGS="-tags=webkit2_41"; fi
+          WAILS="$(go env GOPATH)/bin/wails" tools/release.sh "${GITHUB_REF_NAME}"
+      - name: Выложить в релиз
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          # архив воркера одинаков на всех ОС — отдельным файлом выкладывается один раз (Linux)
+          files: |
+            dist/yue-studio-*.tar.gz
+            dist/yue-studio-*.zip
+            ${{ runner.os == 'Linux' && 'dist/worker-*.tar.gz' || '' }}

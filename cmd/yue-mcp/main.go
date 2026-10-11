@@ -20,6 +20,7 @@ import (
 var (
 	buildHash string
 	srcDir    string
+	version   string // git describe (make mcp/release)
 )
 
 func main() {
@@ -40,6 +41,7 @@ func main() {
 
 	srv := mcp.NewServer(yue.New(cfg.YueURL), dir)
 	srv.SetBuildInfo(buildHash, srcDir)
+	srv.SetVersion(version)
 	mcp.RegisterWorkflowTools(srv)
 	mcp.RegisterStudioTools(srv)
 	mcp.RegisterLibraryTools(srv)

@@ -36,7 +36,7 @@
 | `frontend/src/App.vue` | весь UI (один компонент) |
 | `frontend/src/presets.js` | библиотека пресетов стилей |
 | `frontend/src/rack.js` | инструментальная стойка |
-| `deploy.sh` | `worker` = scp+рестарт на GPU-машине; `build` = сборка приложения |
+| `deploy.sh` | `worker` = архив воркера (`tools/worker-tar.sh`) на GPU-машину и его `install.sh` (версии в `~/yue-studio/releases`, ссылка `current`); `build` = сборка приложения |
 
 ## Сторона GPU-машины (воркер)
 

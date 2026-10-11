@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -39,7 +41,7 @@ func RegisterInstallTools(s *Server) {
 				{name: "место на диске (домашний каталог)", cmd: "df -h ~ | tail -1"},
 				{name: "HF-токен (веса YuE2, gated)", cmd: "test -f ~/.cache/huggingface/token && echo токен есть || echo 'нет (нужен huggingface-cli login)'"},
 			}, true)
-			return out + "\n" + gpu + workerAddress(s), nil
+			return workerVersionLine(s) + out + "\n" + gpu + workerAddress(s), nil
 		},
 	})
 
@@ -68,6 +70,8 @@ func RegisterInstallTools(s *Server) {
 			"sep_dir":    prop("каталог RoFormer: окружение <dir>/venv и веса <dir>/models, можно на другом диске (пусто — ~/sep-venv и ~/sep-models)", "string"),
 			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/yue-studio/seedvc; можно на другом диске)", "string"),
 			"hf_home":    prop("каталог кеша весов HF (по умолчанию ~/yue/hf-cache)", "string"),
+			"archive": prop("архив воркера worker-<версия>.tar.gz (пусто — собрать из исходников make worker-tar, "+
+				"либо взять лежащий рядом с yue-mcp из релизного пакета)", "string"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			dryRun := true
@@ -112,7 +116,19 @@ func RegisterInstallTools(s *Server) {
 					return "", fmt.Errorf("%s: путь не может содержать перевод строки или нулевой байт (получено %q)", name, v)
 				}
 			}
-			plan, steps := workerInstallPlanFull(argString(args, "host") == "", whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
+			archive := argString(args, "archive")
+			if archive == "" {
+				if dryRun {
+					archive = "<архив воркера: соберётся make worker-tar или возьмётся рядом с yue-mcp>"
+				} else {
+					a, err := s.workerArchive()
+					if err != nil {
+						return "", err
+					}
+					archive = a
+				}
+			}
+			plan, steps := workerInstallPlanFull(argString(args, "host"), archive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
 			out, err := runSteps(argString(args, "host"), steps, !dryRun)
 			out = plan + "\n" + out + workerAddress(s)
 			if dryRun {
@@ -186,6 +202,29 @@ func shellQuote(p string) string {
 	return q(p)
 }
 
+// workerArchive — архив воркера для установки: из исходников (MCP собран make mcp — знает каталог
+// репозитория) собирается make worker-tar; релизный MCP берёт worker-*.tar.gz из своего каталога.
+func (s *Server) workerArchive() (string, error) {
+	if s.stale != nil && s.stale.srcDir != "" {
+		out, err := exec.Command("make", "-s", "-C", s.stale.srcDir, "worker-tar").CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("сборка архива воркера (make worker-tar): %w\n%s", err, out)
+		}
+		// последняя строка целиком: путь репозитория может содержать пробелы
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		return strings.TrimSpace(lines[len(lines)-1]), nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	found, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "worker-*.tar.gz"))
+	if len(found) == 0 {
+		return "", fmt.Errorf("архив воркера не найден рядом с %s — передайте его в archive", exe)
+	}
+	return found[len(found)-1], nil
+}
+
 // workerAddress — строка в конец отчёта: по какому адресу MCP ходит к воркеру.
 func workerAddress(s *Server) string {
 	return fmt.Sprintf("\nадрес воркера сейчас: %s (сменить: config_set)", s.client.GetURL())
@@ -206,33 +245,20 @@ func diskNeedGB(whisper, seedvc, roformer bool) float64 {
 	return need
 }
 
-// workerInstallPlan — текст для пользователя (компоненты, место) и шаги установки.
-func workerInstallPlan(local, whisper, seedvc bool, hfHome, seedvcDir string) (string, []step) {
-	return workerInstallPlanRF(local, whisper, seedvc, false, hfHome, seedvcDir)
-}
-
-// workerInstallPlanRF — то же с выбором RoFormer (чистое разделение дорожек, необязательно).
-func workerInstallPlanRF(local, whisper, seedvc, roformer bool, hfHome, seedvcDir string) (string, []step) {
-	return workerInstallPlanSep(local, whisper, seedvc, roformer, hfHome, seedvcDir, "")
-}
-
-// workerInstallPlanSep — с каталогом RoFormer sepDir: "" — ~/sep-venv и веса ~/sep-models
-// (пути по умолчанию воркера); иначе <sepDir>/venv и <sepDir>/models, пути — в worker.env,
-// а место RoFormer на домашнем диске не считается (он на другом).
-func workerInstallPlanSep(local, whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir string) (string, []step) {
-	return workerInstallPlanFull(local, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, "")
-}
-
-// workerInstallPlanFull — то же с моделью дорожек по умолчанию stemsModel (htdemucs | roformer;
-// "" — не задавать, остаётся прежняя настройка воркера): записывается в настройки воркера,
-// при roformer — после установки проверяется, что RoFormer доступен (иначе молча был бы demucs)
-func workerInstallPlanFull(local, whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir, stemsModel string) (string, []step) {
+// workerInstallPlanFull — текст для пользователя (компоненты, место) и шаги установки.
+// sepDir — каталог RoFormer: "" — ~/sep-venv и веса ~/sep-models, иначе <sepDir>/venv и
+// <sepDir>/models (пути — в worker.env, место RoFormer на домашнем диске не считается).
+// stemsModel — модель дорожек по умолчанию (htdemucs | roformer; "" — прежняя настройка):
+// записывается в настройки воркера, при roformer после установки проверяется, что он доступен.
+// workerInstallPlanFull — план установки: host "" — на этом ПК, иначе на машине по ssh;
+// archive — архив воркера (make worker-tar), его install.sh ставит базу воркера.
+func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir, stemsModel string) (string, []step) {
 	need := diskNeedGB(whisper, seedvc, roformer && sepDir == "")
 	plan := planText(whisper, seedvc, roformer, need, hfHome, seedvcDir)
 	if stemsModel != "" {
 		plan += fmt.Sprintf("Дорожки по умолчанию: %s (меняется в настройках приложения).\n", stemsLabel[stemsModel])
 	}
-	steps := installSteps(local, whisper, seedvc, roformer, need, hfHome, seedvcDir, sepDir)
+	steps := installSteps(host, archive, whisper, seedvc, roformer, need, hfHome, seedvcDir, sepDir)
 	if stemsModel == "" {
 		return plan, steps
 	}
@@ -284,27 +310,26 @@ const (
 		`[ "$free" -ge %[1]d ] || { echo 'мало места: освободите диск или поставьте веса/Seed-VC на другой (hf_home, seedvc_dir)'; exit 1; }`
 )
 
-func installSteps(local, whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir, sepDir string) []step {
+func installSteps(host, archive string, whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir, sepDir string) []step {
 	steps := []step{
 		{name: "проверка: видеокарта NVIDIA и драйвер", cmd: checkGPUCmd, must: true},
 		{name: "проверка: место на диске", cmd: fmt.Sprintf(checkDiskCmd, int(math.Ceil(need))), must: true},
 	}
-	if local {
-		steps = append(steps, step{name: "скопировать файлы воркера", must: true, cmd: "test -f worker/yue_worker.py || " +
-			"{ echo 'запусти из корня репозитория Yue Studio'; exit 1; }; mkdir -p ~/yue-studio && " +
-			"cp worker/*.py worker/*.json worker/requirements.txt worker/requirements-seedvc.txt worker/seedvc_install.sh ~/yue-studio/ && " +
-			"mkdir -p ~/yue-studio/phrases && cp worker/phrases/*.flac worker/phrases/README.md ~/yue-studio/phrases/"})
+	// база воркера — install.sh из архива: версия в ~/yue-studio/releases, ссылка current, venv и пакеты,
+	// наборы сэмплов, юнит, worker.env (HF_HOME); запуск — позже, после компонентов
+	src, cleanup := shellQuote(archive), `rm -rf "$d"`
+	if host != "" {
+		// в домашний каталог (он точно есть); после распаковки архив удаляется
+		name := filepath.Base(archive)
+		steps = append(steps, step{name: "копировать архив воркера на " + host, must: true, local: true,
+			cmd: fmt.Sprintf("scp -q %s %s:%s", src, shellQuote(host), shellQuote(name))})
+		src = shellQuote("~/" + name)
+		cleanup += " " + src
 	}
 	steps = append(steps,
-		step{name: "каталоги", cmd: "mkdir -p ~/yue-studio/data ~/yue-studio/units"},
-		step{name: "venv воркера (python 3.12)", must: true, cmd: "uv venv ~/yue/.venv --python 3.12 || python3 -m venv ~/yue/.venv"},
-		step{name: "пакеты (torch cu128 + API)", must: true, cmd: "uv pip install --python ~/yue/.venv/bin/python -r ~/yue-studio/requirements.txt " +
-			"--index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple || " +
-			"~/yue/.venv/bin/pip install -r ~/yue-studio/requirements.txt"},
-		// наборы сэмплов заранее (барабаны, басы, оркестр ~1 ГБ): приложение не ждёт скачивания; не must — без них
-		// воркер работает, недостающий набор приложение докачает при первом выборе
-		step{name: "наборы сэмплов (барабаны, басы, оркестр; ~1 ГБ)", cmd: "cd ~/yue-studio && set -a && " +
-			"{ [ -f worker.env ] && . ./worker.env || true; } && set +a && ~/yue/.venv/bin/python kits_install.py"},
+		step{name: "воркер из архива (install.sh: код, окружение, пакеты, наборы сэмплов)", must: true, cmd: fmt.Sprintf(
+			`d=$(mktemp -d) && trap '%s' EXIT && tar xzf %s -C "$d" && bash "$d"/worker-*/install.sh --no-start --hf-home %s`,
+			strings.ReplaceAll(cleanup, "'", `'\''`), src, shellQuote(hfHome))},
 	)
 	if roformer { // не must: без него разделение идёт прежним demucs
 		venv, py := "~/sep-venv", "~/sep-venv/bin/python"
@@ -318,8 +343,6 @@ func installSteps(local, whisper, seedvc, roformer bool, need float64, hfHome, s
 		steps = append(steps, step{name: "whisper (тексты треков)", cmd: "uv venv ~/whisper-venv && " +
 			"uv pip install --python ~/whisper-venv/bin/python faster-whisper"})
 	}
-	steps = append(steps, step{name: "worker.env", cmd: fmt.Sprintf(
-		`test -f ~/yue-studio/worker.env || printf 'HF_HOME=%%s\n' %s > ~/yue-studio/worker.env`, shellQuote(hfHome))})
 	if roformer && sepDir != "" { // нестандартный каталог — воркер узнаёт его из worker.env
 		steps = append(steps, step{name: "worker.env: пути RoFormer", cmd: fmt.Sprintf(
 			`(grep -q '^YUE_SEP_PY=' ~/yue-studio/worker.env || printf 'YUE_SEP_PY=%%s\n' %s >> ~/yue-studio/worker.env) && `+
@@ -329,13 +352,14 @@ func installSteps(local, whisper, seedvc, roformer bool, need float64, hfHome, s
 	if seedvc {
 		dir := shellQuote(seedvcDir)
 		steps = append(steps, step{name: "Seed-VC («голос альбома», эксперимент)", cmd: fmt.Sprintf(
-			`~/yue-studio/seedvc_install.sh %[1]s && (grep -q '^YUE_SEEDVC_DIR=' ~/yue-studio/worker.env || `+
+			`~/yue-studio/current/seedvc_install.sh %[1]s && (grep -q '^YUE_SEEDVC_DIR=' ~/yue-studio/worker.env || `+
 				`printf 'YUE_SEEDVC_DIR=%%s\n' %[1]s >> ~/yue-studio/worker.env)`, dir)})
 	}
 	return append(steps,
 		step{name: "systemd-юнит", cmd: "cp ~/yue-studio/units/yue-worker.service ~/.config/systemd/user/ 2>/dev/null && " +
-			"systemctl --user daemon-reload && systemctl --user enable --now yue-worker || " +
-			"echo 'юнит пропущен (запуск вручную: ~/yue/.venv/bin/python ~/yue-studio/yue_worker.py)'"},
+			// restart, а не только enable --now: при переустановке работающий воркер должен взять новую версию
+			"systemctl --user daemon-reload && systemctl --user enable yue-worker && systemctl --user restart yue-worker || " +
+			"echo 'юнит пропущен (запуск вручную: cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --port 8091)'"},
 		step{name: "health", cmd: "sleep 3 && curl -sf --max-time 10 http://localhost:8091/health"},
 	)
 }
@@ -346,6 +370,8 @@ type step struct {
 	// must — без этого шага дальше нельзя (проверка GPU/места, venv): провал
 	// останавливает установку, остальные шаги не выполняются
 	must bool
+	// local — выполнить на этом ПК даже при host (копирование архива на машину с GPU)
+	local bool
 }
 
 // runSteps выполняет команды локально (host="") или через ssh; run=false —
@@ -359,7 +385,7 @@ func runSteps(host string, steps []step, run bool) (string, error) {
 			continue
 		}
 		cmd := exec.Command("bash", "-c", st.cmd)
-		if host != "" {
+		if host != "" && !st.local {
 			cmd = exec.Command("ssh", host, "bash", "-s")
 			cmd.Stdin = strings.NewReader(st.cmd)
 		}

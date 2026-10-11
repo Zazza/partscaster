@@ -9,6 +9,8 @@ import (
 // Service — API воркера Yue Studio. Интерфейс нужен app-слою для тестирования.
 type Service interface {
 	Health(ctx context.Context) (*HealthInfo, error)
+	// Version — сборка воркера и версия API (сверка совместимости приложения/MCP с воркером)
+	Version(ctx context.Context) (*VersionInfo, error)
 	Stats(ctx context.Context) (*StatsInfo, error)
 	Jobs(ctx context.Context) ([]Job, error)
 	Submit(ctx context.Context, p SubmitParams) (int64, error)

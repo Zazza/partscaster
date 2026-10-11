@@ -428,6 +428,10 @@ func (a *App) YueGetServerURL() string {
 }
 
 func (a *App) YueSetServerURL(url string) {
+	// «192.168.1.5» → «http://192.168.1.5:8091»: тот же адрес, что показала кнопка «Проверить»
+	if u, err := config.NormalizeURL(url); err == nil {
+		url = u
+	}
 	a.yue.SetURL(url)
 	config.SaveSettings(config.Settings{ServerURL: url})
 }

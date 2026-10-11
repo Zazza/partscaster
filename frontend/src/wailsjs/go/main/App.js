@@ -10,8 +10,16 @@ export function YueAddReference() {
   return window['go']['main']['App']['YueAddReference']();
 }
 
+export function YueAgentSetup() {
+  return window['go']['main']['App']['YueAgentSetup']();
+}
+
 export function YueAnalyzeJob(arg1) {
   return window['go']['main']['App']['YueAnalyzeJob'](arg1);
+}
+
+export function YueAppVersion() {
+  return window['go']['main']['App']['YueAppVersion']();
 }
 
 export function YueApplyDsp(arg1, arg2, arg3) {
@@ -46,8 +54,16 @@ export function YueCancelJob(arg1) {
   return window['go']['main']['App']['YueCancelJob'](arg1);
 }
 
+export function YueCheckWorker(arg1) {
+  return window['go']['main']['App']['YueCheckWorker'](arg1);
+}
+
 export function YueChordGrid(arg1) {
   return window['go']['main']['App']['YueChordGrid'](arg1);
+}
+
+export function YueConnectClaudeCode() {
+  return window['go']['main']['App']['YueConnectClaudeCode']();
 }
 
 export function YueContinueJob(arg1, arg2, arg3, arg4, arg5) {
@@ -360,6 +376,10 @@ export function YueUploadFxAsset(arg1) {
 
 export function YueVariantToTrack(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['YueVariantToTrack'](arg1, arg2, arg3, arg4);
+}
+
+export function YueVersion() {
+  return window['go']['main']['App']['YueVersion']();
 }
 
 export function YueVocalContour(arg1, arg2, arg3) {

@@ -80,7 +80,7 @@ export function dropVoices(abc, voiceNames) {
       out.push(line)
       continue
     }
-    if (!t || /^[A-Za-z]:/.test(t)) { out.push(line); continue }   // заголовок/пустая
+    if (!t || t.startsWith('%') || /^[A-Za-z]:/.test(t)) { out.push(line); continue }   // заголовок/метка секции/пустая
     if (curVoice && removed.has(curVoice)) continue                // тело убранного голоса
     out.push(line)
   }

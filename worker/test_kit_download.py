@@ -156,11 +156,11 @@ class TestPinnedDirectLinks(_PinnedCase):
                     self.assertTrue(all(isinstance(n, str) and n for n in names), f"{kit}/{part}")
 
     def test_deploy_and_installer_ship_list_and_run_kits_install(self):
-        # условие 115: список закреплённых файлов ставится установщиком (install_worker) и deploy.sh;
-        # условие 118: оба запускают kits_install (поведением не проверить — текст скриптов);
-        # что установщик копирует все worker/*.json, проверяет поведением Go: TestInstallLocalCopiesEveryWorkerJSON
-        pieces = {"deploy.sh": ("fx_kit_files.json", "kits_install"), "tools_install.go": ("kits_install",)}
-        for path in (ROOT / "deploy.sh", ROOT / "internal" / "mcp" / "tools_install.go"):
+        # условие 115: список закреплённых файлов уезжает в архиве воркера (все worker/*.json — правилом,
+        # проверка поведением: test_fx_kits_synth.TestDeployShipsImports, test_worker_archive);
+        # условие 118 (143): kits_install запускает install.sh архива — им ставят и deploy.sh, и install_worker
+        pieces = {"install.sh": ("kits_install",)}
+        for path in (ROOT / "worker" / "install.sh",):
             text = path.read_text(encoding="utf-8")
             for piece in pieces[path.name]:
                 with self.subTest(file=path.name, piece=piece):

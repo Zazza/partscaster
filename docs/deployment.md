@@ -1,7 +1,23 @@
 # Развёртывание
 
 Три части: GPU-машина с воркером, опционально Ollama, desktop-приложение на ПК.
-Адрес воркера задаётся переменной `YUE_URL` или меняется в шапке приложения.
+Адрес воркера задаётся в «Настройках» приложения (кнопка «Проверить» — без сохранения; можно ввести
+просто IP, порт 8091 подставится) или переменной `YUE_URL`. Тот же адрес берёт MCP-сервер `yue-mcp`.
+
+## Релизный пакет: скачал, поставил, работает
+
+Релиз (GitHub Release тега `vX.Y.Z`, собирается `.github/workflows/release.yml`; локально — `make release`):
+
+- `yue-studio-<версия>-<ОС>-<арх>.tar.gz` (Windows — `.zip`): приложение, `yue-mcp` рядом с ним,
+  архив воркера и `INSTALL.txt`;
+- `worker-<версия>.tar.gz` — воркер для машины с GPU.
+
+Воркер: `tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh`. Приложение: запустить,
+в «Настройках» ввести адрес воркера, «Проверить». AI-агенты: «Настройки» → «Для AI-агентов».
+
+**Версии.** Воркер отвечает `GET /version` (сборка, версия API, отпечаток кода, модель, что
+установлено). Приложение и MCP сверяют версию API: воркер старее — плашка «обновите воркер»,
+новее — «обновите приложение». Порядок обновления — по-прежнему сначала воркер.
 
 ## Установка: компоненты и где что стоит
 
@@ -30,31 +46,33 @@
 
 ## Воркер (Python) на GPU-машине
 
-Воркер — обычные Python-файлы из `worker/` + окружение на GPU-машине (Ubuntu + CUDA).
-Требования — `worker/requirements.txt`; машинные настройки — `worker.env.example`
-(скопировать в `~/yue-studio/worker.env`, подхватывается systemd-юнитом).
+Воркер едет **архивом с версией** (`make worker-tar` → `dist/worker-<версия>.tar.gz`: код без тестов,
+данные `*.json`, фразы, юнит systemd, `install.sh`). Его `install.sh` — установка и обновление базы:
 
-Вручную:
+- проверяет видеокарту (`nvidia-smi`) до любых изменений;
+- кладёт код в `~/yue-studio/releases/<время>-<версия>/` и атомарно переключает ссылку
+  `~/yue-studio/current` (юнит запускает воркер из неё); хранит 3 прежние версии;
+- создаёт venv `~/yue/.venv` (если нет) и ставит пакеты — только при новом venv или изменённом
+  `requirements.txt` (отпечаток — `~/yue-studio/.requirements.sha256`); venv, поставленный до архивов,
+  не трогается;
+- ставит наборы сэмплов, юнит, `worker.env` (если нет; `--hf-home DIR` — кеш весов);
+- перезапускает воркер и проверяет `/health` (`--no-start` — без запуска).
 
-1. Скопировать `worker/*.py` и `worker/fx_blocks.json` (описание блоков звукового движка — без него
-   движок не загрузится) в `~/yue-studio/` на GPU-машину (scp / WinSCP / флешка), папку `worker/phrases/`
-   (фразы страницы «Инструменты» — записи гитары) — в `~/yue-studio/phrases/`, `worker/fx_kit_files.json` (закреплённые
-   списки файлов наборов — без него оркестр качается через API GitHub и упирается в его лимит) — в `~/yue-studio/`.
-2. Окружение (один раз):
-   ```bash
-   uv venv ~/yue/.venv --python 3.12
-   uv pip install --python ~/yue/.venv/bin/python -r worker/requirements.txt \
-       --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple
-   ```
+Данные (`~/yue-studio/data`) и `worker.env` общие для всех версий и не трогаются.
+Откат: `~/yue-studio/current/install.sh --rollback` — на предыдущую версию.
+Переменные `YUE_HOME` (по умолчанию `~/yue-studio`) и `YUE_VENV` (`~/yue/.venv`) меняют пути.
+
+Вручную (без агента):
+
+1. `tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh` на GPU-машине (Ubuntu + CUDA,
+   нужен `uv`). Машинные настройки — `worker.env.example` → `~/yue-studio/worker.env`.
+2. Веса: `HF_HOME` — каталог кеша Hugging Face (YuE2, SheetSage2, demucs качаются при
+   первом вызове; нужен интернет; YuE2 — gated-репо, нужен HF-токен).
 3. Отдельный venv для Whisper (тексты треков корпусов):
    `uv venv ~/whisper-venv && uv pip install --python ~/whisper-venv/bin/python faster-whisper`
    (воркер вызывает его сам, путь — `YUE_WHISPER_PY`).
-4. Веса: `HF_HOME` — каталог кеша Hugging Face (YuE2, SheetSage2, demucs качаются при
-   первом вызове; нужен интернет; YuE2 — gated-репо, нужен HF-токен).
-5. Запуск: `~/yue/.venv/bin/python ~/yue-studio/yue_worker.py` (порт 8091);
-   для автозапуска — systemd-юнит из `deploy/units/` или другой способ
-   (Task Scheduler, launchd, окно терминала).
-6. Опционально: `ffmpeg` в PATH — только для спектрограммы в студии
+4. Без systemd: `cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091`.
+5. Опционально: `ffmpeg` в PATH — только для спектрограммы в студии
    (`GET /jobs/{id}/spectrum.png`, готовой картинкой showspectrumpic).
    Нет бинарника — режим «спектр» честно откажет (503), волна громкости
    работает и без ffmpeg: `sudo apt install ffmpeg`.
@@ -64,9 +82,11 @@
 Порядок при обновлении: **сначала воркер, потом приложение** — новое приложение со старым воркером
 может работать без ошибок, но без новых возможностей (например, плавные края окна движка в студии).
 
-`make worker` (или `./deploy.sh worker`) — scp файлов воркера на GPU-машину и рестарт
-systemd-юнита `yue-worker`. Хост задаётся `YUE_DEPLOY_HOST=user@gpu-host`.
-`worker.env` на машине не перезаписывается.
+`make worker` (или `./deploy.sh worker`) — архив воркера на GPU-машину и его `install.sh` (новая версия,
+пакеты при изменении requirements, рестарт `yue-worker`). Хост задаётся `YUE_DEPLOY_HOST=user@gpu-host`.
+`worker.env` и данные на машине не перезаписываются. Первый деплой архивом на машину со старой раскладкой
+(файлы прямо в `~/yue-studio/`) переводит юнит на `~/yue-studio/current`; старые `*.py` в `~/yue-studio/`
+больше не используются (можно удалить вручную).
 
 ### Переменные воркера
 
@@ -106,8 +126,8 @@ systemd-юнита `yue-worker`. Хост задаётся `YUE_DEPLOY_HOST=user
 Установка на GPU-машине (после `make worker` файлы уже в `~/yue-studio/`):
 
 ```bash
-~/yue-studio/seedvc_install.sh                 # в ~/yue-studio/seedvc
-~/yue-studio/seedvc_install.sh /data/yue-seedvc  # или в свой каталог
+~/yue-studio/current/seedvc_install.sh                 # в ~/yue-studio/seedvc
+~/yue-studio/current/seedvc_install.sh /data/yue-seedvc  # или в свой каталог
 ```
 
 - Нужно: `git`, [`uv`](https://docs.astral.sh/uv/), CUDA-GPU, **~14 ГБ** на время установки,
@@ -241,7 +261,7 @@ export YUE_DATA_DIR=/mnt/d/yue-studio-data
 export YUE_OLLAMA_URL=http://$(ip route show default | awk '{print $3}'):11434/api/chat
 #    (в WSL с mirrored-сетью подойдёт и http://127.0.0.1:11434/api/chat)
 # 5. запуск:
-~/yue/.venv/bin/python ~/yue-studio/yue_worker.py
+cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
 ```
 
 Приложение на Windows подключается к `http://localhost:8091` (или к IP WSL —
@@ -256,7 +276,7 @@ export YUE_OLLAMA_URL=http://$(ip route show default | awk '{print $3}'):11434/a
 **Linux (основная, всё протестировано):**
 ```bash
 sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
-make build          # или: wails build
+make build          # wails build с версией из git (make release — пакет в dist/)
 # бинарник: build/bin/yue-studio
 make install-desktop   # ярлык в меню приложений (~/.local/share/applications)
 ```
@@ -272,8 +292,8 @@ make install-desktop   # ярлык в меню приложений (~/.local/s
 wails build          # webview2 (Edge) — ставится автоматически
 # бинарник: build\bin\yue-studio.exe
 ```
-Звук — через WPF MediaPlayer (PowerShell-обёртка). `deploy.sh` заменить на ручной
-scp/WinSCP или запуск из WSL/Git Bash. Воркер может оставаться на GPU-машине —
+Звук — через WPF MediaPlayer (PowerShell-обёртка). Воркер — архивом из релиза
+(или `make worker` из WSL/Git Bash). Воркер может оставаться на GPU-машине —
 приложению нужен только HTTP-доступ к нему.
 
 **macOS:** `wails build` (WKWebView). Те же нюансы, что и Windows: pw-play нет,

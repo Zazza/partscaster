@@ -13,6 +13,7 @@ import { defaultJobFilter, filterJobs, groupJobs, pageJobs, pageCount, folderNam
 import { styleRows } from './styleTags.js'
 import { isResultJob, mixChildId, mixLabel } from './insertLabels.js'
 import { useInserts } from './composables/useInserts.js'
+import { useWorkerCompat } from './composables/useWorkerCompat.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
 import { buildStyleLine, cleanLyrics } from './styleLogic.js'
@@ -288,6 +289,7 @@ function onLibExact() { if (currentItem.value) applyPreset(currentItem.value, 'l
 
 const jobs = ref([])
 const health = ref(null)
+const compat = useWorkerCompat()   // плашка «воркер/приложение разных версий»
 const stats = ref(null)
 let timer = null
 
@@ -461,6 +463,7 @@ async function refresh() {
   } catch {
     health.value = null
   }
+  compat.onHealth(health.value)
   // сводка статус-бара отдельно: старый воркер без /stats не должна ронять обновление
   api.stats().then(s => { stats.value = s }).catch(() => { stats.value = null })
   try { playerState.value = await api.audioState() } catch {}
@@ -829,6 +832,10 @@ function onWindowClick(e) {
 </script>
 
 <template>
+  <div v-if="compat.warning.value" class="compat-banner">
+    <AppIcon name="alert" /> {{ compat.warning.value }}
+    <button class="ghost icon" :title="t('common.close')" @click="compat.dismiss"><AppIcon name="x" /></button>
+  </div>
   <header>
     <h1 class="home-link" :title="t('nav.home.tip')" @click="goHome"><img class="app-logo" :src="logoUrl" alt="" width="26" height="26">{{ t('app.title') }}</h1>
     <span class="health-dot" :class="health ? 'up' : 'down'" :title="healthTitle"></span>
@@ -1329,6 +1336,11 @@ h2 {
   width: 30px; height: 26px; line-height: 22px; text-align: center;
 }
 .icon-btn:hover { color: var(--text); filter: none; transform: none; }
+.compat-banner {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  background: color-mix(in srgb, var(--warn, #c90) 18%, transparent); font-size: 13px;
+}
+.compat-banner button { margin-left: auto; }
 .health-dot {
   width: 10px; height: 10px; border-radius: 50%; flex: none;
   border: 1px solid var(--bevel-lo); cursor: help;

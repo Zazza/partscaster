@@ -13,6 +13,7 @@ import {
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueTranslate, YueDeleteJob,
+  YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
 } from './wailsjs/go/main/App'
 
 export const api = {
@@ -40,6 +41,13 @@ export const api = {
   saveAudio: (id, file) => YueSaveAudio(id, file),
   getServerURL: () => YueGetServerURL(),
   setServerURL: (url) => YueSetServerURL(url),
+  // версии и установка: сборка приложения, сборка воркера + совет о совместимости,
+  // проверка адреса без сохранения, раздел «Для AI-агентов»
+  appVersion: () => YueAppVersion(),
+  workerVersion: () => YueVersion(),
+  checkWorker: (url) => YueCheckWorker(url),
+  agentSetup: () => YueAgentSetup(),
+  connectClaudeCode: () => YueConnectClaudeCode(),
   workerConfig: () => YueWorkerConfig(),
   setWorkerConfig: (cfg) => YueSetWorkerConfig(cfg),
   ollamaModels: (url) => YueOllamaModels(url || ''),

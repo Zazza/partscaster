@@ -22,7 +22,20 @@ FastAPI-воркер с GPU — отдельно, по сети.
 ## Быстрый старт
 
 Нужно три части: GPU-машина с воркером, опционально Ollama, и desktop-приложение.
-Ставить можно руками (ниже) или попросить ИИ-агента — он сделает всё сам.
+Ставить можно из готового релиза, руками из исходников (ниже) или попросить ИИ-агента — он сделает всё сам.
+
+### Из релиза (скачал, поставил, работает)
+
+На странице [Releases](../../releases) — пакет под вашу ОС (`yue-studio-<версия>-<ОС>-<арх>`) и архив
+воркера `worker-<версия>.tar.gz`.
+
+1. **Воркер** на машине с видеокартой NVIDIA (Ubuntu + CUDA, нужен [uv](https://docs.astral.sh/uv/)):
+   `tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh` — окружение, пакеты, служба на порту 8091.
+   Обновление — то же с новым архивом; откат — `~/yue-studio/current/install.sh --rollback`.
+2. **Приложение**: распакуйте пакет и запустите `yue-studio`. В «Настройках» введите адрес воркера
+   (достаточно IP — порт 8091 подставится) и нажмите «Проверить».
+3. **AI-агенты** (по желанию): «Настройки» → «Для AI-агентов» — кнопка «Подключить к Claude Code» и
+   готовые фрагменты конфига для Claude Desktop и Codex.
 
 ### Через ИИ-агента (проще всего)
 
@@ -43,19 +56,19 @@ FastAPI-воркер с GPU — отдельно, по сети.
 
 ### Руками
 
-1. **Воркер** (Ubuntu + CUDA, NVIDIA ≥16 ГБ VRAM): окружение и запуск —
+1. **Воркер** (Ubuntu + CUDA, NVIDIA ≥16 ГБ VRAM): архив из исходников и его установщик —
    [docs/deployment.md](docs/deployment.md). Коротко:
    ```bash
-   uv venv ~/yue/.venv --python 3.12
-   uv pip install --python ~/yue/.venv/bin/python -r worker/requirements.txt \
-       --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple
-   ~/yue/.venv/bin/python worker/yue_worker.py   # :8091
+   make worker-tar                       # → dist/worker-<версия>.tar.gz
+   # на GPU-машине:
+   tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh   # :8091
    ```
+   С этой машины на отдельную GPU-машину — `YUE_DEPLOY_HOST=user@gpu-host make worker`.
 2. **Приложение** (Go 1.22+, Node.js 20+, [Wails CLI v2](https://wails.io)):
    ```bash
-   wails build && ./build/bin/yue-studio
+   make build && ./build/bin/yue-studio       # make release — пакет под эту ОС в dist/
    ```
-3. Адрес воркера — переменная `YUE_URL` или клик по адресу сервера в шапке приложения.
+3. Адрес воркера — в «Настройках» приложения (кнопка «Проверить») или переменная `YUE_URL`.
 
 Ollama (`qwen2.5`) не обязателен: без него работают генерация/стемы/эффекты,
 недоступны копайтер/автоперевод/профиль-стиль.

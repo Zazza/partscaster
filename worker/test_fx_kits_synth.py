@@ -370,17 +370,20 @@ def _imported_modules(path):
 
 
 def _deploy_scp_files():
-    """worker/*-файлы из команд scp в deploy.sh (продолжения строк через \\ склеены)."""
-    text = DEPLOY.read_text(encoding="utf-8").replace("\\\n", " ")
-    files = set()
-    for line in text.splitlines():
-        if re.match(r"\s*scp\b", line):
-            files.update(re.findall(r"worker/([\w.\-]+)", line))
-    return files
+    """Файлы верхнего уровня архива воркера (tools/worker-tar.sh) — то, что уезжает на GPU-машину
+    (deploy.sh и install_worker ставят воркер этим архивом)."""
+    import subprocess
+    import tarfile
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        p = subprocess.run(["bash", str(DEPLOY.parent / "tools" / "worker-tar.sh"), td, "0-test"],
+                           capture_output=True, text=True, timeout=120, check=True)
+        with tarfile.open(p.stdout.split()[-1], "r:gz") as tf:
+            return {Path(n).name for n in tf.getnames() if n.count("/") == 1}
 
 
 class TestDeployShipsImports(unittest.TestCase):
-    """Условие 58а: модули воркера, которые импортируют yue_worker.py и fx_engine.py, уезжают через deploy.sh."""
+    """Условие 58а (142): модули воркера, которые импортируют yue_worker.py и fx_engine.py, уезжают в архиве воркера."""
 
     def test_imported_worker_modules_in_scp(self):
         shipped = _deploy_scp_files()

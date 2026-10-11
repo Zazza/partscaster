@@ -5,6 +5,10 @@ import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
 import { api } from '../api.js'
 import VSelect from '../VSelect.vue'
+import { workerCheckText } from '../workerCheck.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useWorkerCompat } from '../composables/useWorkerCompat.js'
+const { askConfirm } = useConfirm()
 
 const serverURL = defineModel('serverURL')
 const emit = defineEmits(['close', 'saved'])
@@ -26,6 +30,49 @@ const ollamaProbe = ref('') // статус проверки Ollama
 const autoStems = ref(true)
 const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
 const roformerOk = ref(false)           // окружение RoFormer установлено на воркере
+const checkRes = ref(null)              // «Проверить»: { ok, text }
+const appVersion = ref('')
+const agents = ref(null)                // { mcp_path, mcp_found, url, snippets }
+const agentsMsg = ref('')
+const copied = ref('')
+
+// «Проверить» — воркер по адресу из поля, без сохранения настроек
+async function checkWorker() {
+  checkRes.value = null
+  const url = (serverURL.value || '').trim()
+  if (!url) { checkRes.value = { ok: false, text: t('settings.worker.empty') }; return }
+  try {
+    checkRes.value = workerCheckText(await api.checkWorker(url), null)
+  } catch (e) {
+    checkRes.value = workerCheckText({ URL: url }, String(e))
+  }
+}
+
+async function loadAgents() {
+  try { agents.value = await api.agentSetup() } catch { agents.value = null }
+}
+
+async function copySnippet(key) {
+  try {
+    await window.navigator.clipboard.writeText(agents.value.snippets[key])
+    copied.value = key
+  } catch (e) {
+    agentsMsg.value = String(e)
+  }
+}
+
+function connectClaude() {
+  askConfirm(t('settings.agents.connect.title'),
+    t('settings.agents.connect.body', { cmd: agents.value.snippets.claude_code }), async () => {
+      agentsMsg.value = ''
+      try {
+        await api.connectClaudeCode()
+        agentsMsg.value = t('settings.agents.connected')
+      } catch (e) {
+        agentsMsg.value = String(e)
+      }
+    })
+}
 
 const stemsOptions = computed(() => [
   { value: 'htdemucs', label: t('settings.stemsModel.fast') },
@@ -40,6 +87,8 @@ const modelOptions = computed(() => {
 })
 
 onMounted(async () => {
+  api.appVersion().then((v) => { appVersion.value = v }).catch(() => {})
+  loadAgents()
   try {
     const h = await api.status()
     workerProbe.value = h ? 'воркер: доступен' + (h.model_loaded ? ' (модель в памяти)' : '') : 'воркер: недоступен'
@@ -97,6 +146,8 @@ async function save() {
       err.value = 'Ollama-настройки не применены (воркер старой версии или недоступен): ' + e
     }
     saved.value = true
+    useWorkerCompat().recheck() // другой воркер — своя версия
+    loadAgents() // во фрагментах конфига — новый адрес
     emit('saved')
   } catch (e) {
     err.value = String(e)
@@ -117,8 +168,11 @@ async function save() {
       <div class="set-row">
         <span class="set-label">{{ t('settings.worker.url') }}</span>
         <input v-model="serverURL" placeholder="http://localhost:8091" @keyup.enter="save" />
+        <button class="ghost" @click="checkWorker">{{ t('common.check') }}</button>
       </div>
-      <div class="set-hint muted">{{ workerProbe }}</div>
+      <div v-if="checkRes" class="set-hint" :class="checkRes.ok ? 'ok' : 'error'">{{ checkRes.text }}</div>
+      <div v-else class="set-hint muted">{{ workerProbe }}</div>
+      <div class="set-hint muted">{{ t('settings.worker.hint') }}</div>
 
       <h3 class="set-h">{{ t('settings.ollama') }} <span class="muted">{{ t('settings.ollama.sub') }}</span></h3>
       <div class="set-row">
@@ -153,6 +207,26 @@ async function save() {
         <template v-if="info.stems_model">{{ t('settings.stemsModel') }}: {{ info.stems_model === 'bs-roformer-sw' ? 'BS-Roformer-SW' : t('settings.stemsModel.demucs') }}</template>
       </div>
       <div v-else class="set-info muted">воркер недоступен — Ollama и пути не показать</div>
+      <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
+
+      <h3 class="set-h">{{ t('settings.agents') }} <span class="muted">{{ t('settings.agents.sub') }}</span></h3>
+      <div class="set-hint muted">{{ t('settings.agents.hint') }}</div>
+      <template v-if="agents">
+        <div class="set-hint" :class="agents.mcp_found ? 'muted' : 'error'">
+          {{ agents.mcp_found ? t('settings.agents.path', { path: agents.mcp_path }) : t('settings.agents.missing', { path: agents.mcp_path }) }}
+        </div>
+        <div class="set-actions">
+          <button :disabled="!agents.mcp_found" @click="connectClaude">{{ t('settings.agents.connect') }}</button>
+        </div>
+        <div v-if="agentsMsg" class="set-hint">{{ agentsMsg }}</div>
+        <div v-for="k in ['claude_code', 'claude_desktop', 'codex']" :key="k" class="agent-snippet">
+          <div class="set-row">
+            <span class="muted">{{ t({ claude_code: 'settings.agents.claudeCode', claude_desktop: 'settings.agents.claudeDesktop', codex: 'settings.agents.codex' }[k]) }}</span>
+            <button class="ghost" @click="copySnippet(k)">{{ copied === k ? t('settings.agents.copied') : t('settings.agents.copy') }}</button>
+          </div>
+          <pre class="set-info" style="white-space: pre-wrap; word-break: break-all; user-select: text">{{ agents.snippets[k] }}</pre>
+        </div>
+      </template>
 
       <div v-if="err" class="error">{{ err }}</div>
       <div v-if="saved" class="ok">сохранено</div>

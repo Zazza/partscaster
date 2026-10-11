@@ -278,6 +278,12 @@ describe('инструментал: план без голоса (dropVoices, vo
     expect(planTimeline(out).Ins).toEqual(planTimeline(ABC).Ins)   // тайминг музыки тот же
   })
 
+  it('метка секции сразу после убранного голоса не теряется', () => {
+    const abc = 'X:1\nK:C\n% verse\nV: Ins\nCDEF|\nV: Vocal\ncdef|\n% chorus\nV: Ins\nGABc|\nV: Vocal\ngabc|'
+    const out = dropVoices(abc, ['Vocal'])
+    expect(out).toBe('X:1\nK:C\n% verse\nV: Ins\nCDEF|\n% chorus\nV: Ins\nGABc|')
+  })
+
   it('пустой список — план без изменений', () => {
     expect(dropVoices(ABC, [])).toBe(ABC)
   })

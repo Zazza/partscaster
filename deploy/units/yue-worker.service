@@ -4,10 +4,13 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=%h/yue-studio
+# код — текущая версия из архива (install.sh переключает ссылку current); данные и worker.env — в ~/yue-studio
+WorkingDirectory=%h/yue-studio/current
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# данные — рядом с кодом (install.sh подставляет свой YUE_HOME); worker.env главнее, его YUE_DATA_DIR побеждает
+Environment="YUE_DATA_DIR=%h/yue-studio/data"
 EnvironmentFile=%h/yue-studio/worker.env
-ExecStart=%h/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
+ExecStart="%h/yue/.venv/bin/python" -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
 Restart=on-failure
 RestartSec=5
 

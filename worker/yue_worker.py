@@ -17,6 +17,7 @@
   GET  /audio/{id}/{f}   — артефакты задачи (audio.flac, score.abc, request.abc, ...)
 """
 import contextlib
+import hashlib
 import html
 import json
 import math
@@ -293,7 +294,7 @@ def _get_pipe():
             try:
                 t0 = time.time()
                 _pipe = YuE2Pipeline.from_pretrained(
-                    "m-a-p/YuE2-3B", vae="m-a-p/YuE2-Vae", device="cuda",
+                    MODEL_ID, vae=MODEL_VAE, device="cuda",
                 ).__enter__()
                 log.info("pipeline loaded in %.1fs", time.time() - t0)
             except Exception as e:  # noqa: BLE001
@@ -998,6 +999,59 @@ def copilot(req: CopilotIn):
 @app.get("/health")
 def health():
     return {"status": "ok", "model_loaded": _pipe is not None, "load_error": _load_error}
+
+
+# Версия API воркера: растёт при НЕсовместимом изменении (клиент старше воркера перестаёт работать);
+# приложение и MCP сверяют её со своей и подсказывают, что обновить.
+WORKER_API = 1
+MODEL_ID = "m-a-p/YuE2-3B"
+MODEL_VAE = "m-a-p/YuE2-Vae"
+
+
+def _read_version(d: Path) -> str:
+    """Версия сборки из файла VERSION (кладёт архив воркера); без него — dev (запуск из репозитория)."""
+    try:
+        return (d / "VERSION").read_text().strip() or "dev"
+    except OSError:
+        return "dev"
+
+
+def _source_hash(d: Path) -> str:
+    """Отпечаток кода воркера: *.py без тестов и *.json каталога — по нему видно, какой код запущен."""
+    h = hashlib.sha256()
+    files = [p for p in d.iterdir() if p.is_file()
+             and (p.suffix == ".json" or (p.suffix == ".py" and not p.name.startswith("test_")))]
+    for p in sorted(files, key=lambda p: p.name):
+        h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
+    return h.hexdigest()[:12]
+
+
+_WORKER_DIR = Path(__file__).resolve().parent
+_VERSION = _read_version(_WORKER_DIR)
+_SOURCE_HASH = _source_hash(_WORKER_DIR)
+
+
+def _model_label() -> str:
+    """Модель генерации и версия пакета yue2 — от них зависит, как прозвучит тот же сид."""
+    try:
+        from importlib.metadata import version
+        return f"{MODEL_ID}@yue2-{version('yue2')}"
+    except Exception:  # noqa: BLE001 — пакета нет (тесты, машина без модели): только имя модели
+        return MODEL_ID
+
+
+@app.get("/version")
+def get_version():
+    cfg = get_config()
+    return {
+        "version": _VERSION,
+        "api": WORKER_API,
+        "source_hash": _SOURCE_HASH,
+        "model": _model_label(),
+        "components": {"whisper": cfg["whisper_available"], "seedvc": cfg["seedvc_available"],
+                       "roformer": cfg["roformer_available"]},
+        "stems_model": cfg["stems_model"],
+    }
 
 
 @app.get("/stats")
