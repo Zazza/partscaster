@@ -15,17 +15,19 @@ import {
 import VSelect from '../VSelect.vue'
 
 const props = defineProps({
+  // активная дорожка студии (цель правок: '' — весь трек): доска играет и применяется на неё
+  active: { type: String, default: null },
   job: { type: Object, required: true },
   chains: { type: Array, default: () => [] },
   sel: { type: Object, default: null },        // выделение на волне/ролле {from, to}
   cursor: { type: Number, default: 0 },        // курсор воспроизведения, с
 })
-const emit = defineEmits(['applied'])
+const emit = defineEmits(['applied', 'stem'])
 const { t } = useI18n()
 const { nowPlayingKey, playerState, refreshPlayer } = usePlayer()
 const inserts = useInserts()
 
-const STEMS = ['guitar', 'other', 'piano', 'vocals', 'bass', '']
+const STEMS = ['guitar', 'other', 'piano', 'vocals', 'bass', 'drums', '']   // drums — активная дорожка «барабаны» (и их части)
 const SLOTS = ['A', 'B', 'C', 'D']
 const SLOT = 'P'                    // свой слот превью: не путается с превью блока DSP
 const NO_STEM = 'не выделилась'     // ошибка Go: дорожки в треке нет (воркер без 6-стемной модели)
@@ -69,9 +71,15 @@ function save() {
     localStorage.setItem(STATE_KEY, JSON.stringify(st))
   } catch { /* нет localStorage — доска живёт до закрытия студии */ }
 }
+load()   // сохранённая доска — до слежения: watch активной дорожки (immediate) иначе сохранил бы пустую доску поверх
 watch([board, stem], save, { deep: true })
+// активная дорожка студии → дорожка доски (если педали на неё ставятся); выбор здесь — активная дорожка студии
+watch(() => props.active, (a) => { if (a !== null && STEMS.includes(a) && a !== stem.value) stem.value = a }, { immediate: true })
+function pickStem(v) {
+  stem.value = v
+  emit('stem', v)
+}
 onMounted(async () => {
-  load()
   try { presets.value = await api.dspPresets() } catch (e) { msg.value = String(e) }
 })
 
@@ -212,7 +220,8 @@ async function findGrid() {
 
 <template>
   <div class="dsp-row">
-    <VSelect v-model="stem" :options="stemOptions" :title="t('pedals.stem.tip')" style="max-width: 150px" />
+    <VSelect :model-value="stem" :options="stemOptions" :title="t('pedals.stem.tip')" style="max-width: 150px"
+             @update:model-value="pickStem" />
     <VSelect :model-value="presetSel" :options="presets.map((p) => ({ value: p.id, label: p.name }))"
              :placeholder="t('pedals.preset')" style="max-width: 200px" @update:model-value="choosePreset" />
     <VSelect :model-value="''" :options="palette.map((c) => ({ value: c.id, label: c.name }))"

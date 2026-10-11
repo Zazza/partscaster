@@ -7,7 +7,6 @@ import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useInserts } from '../composables/useInserts.js'
-import { odPartyChips } from '../slotOptions.js'
 import { applyTrick, beatSecAt, continuationPlan, pickTargets, planTimeline, vocalCeiling, sectionRequest, sectionWindows, sliceAbc, sliceLeadSec, TRICK_INSTRUMENTS, TRICK_MUTES, trickStyleSuffix } from '../abcEdit.js'
 import { useRevoice } from '../composables/useRevoice.js'
 import { revoiceSpecKinds, vocalEndsQuiet, voiceSource } from '../vocalParts.js'
@@ -21,7 +20,8 @@ import { chainDefaults, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
-import { envTargetFor } from '../trackDesk.js'
+import { targetFor, stemForTarget } from '../activeTrack.js'
+import { resultTitle, resultsOrder, resultDate, fragmentStart } from '../results.js'
 import VSelect from '../VSelect.vue'
 import WaveView from './WaveView.vue'
 import PedalBoard from './PedalBoard.vue'
@@ -52,12 +52,7 @@ const stemsList = ref([])
 const previewBusy = ref(false)
 let rollDrag = false
 
-// овердаб: чипы партий + ручной ввод
-const odChips = ref(new Set())
-const odStyle = ref('')
-const odLyrics = ref('')
-const odGain = ref(0.5)
-const odBusy = ref(false)
+// овердаб переехал в действие трека «переиграть в другом стиле» (ReplayModal, меню «⋯» карточки)
 
 // DSP-цепочки (ffmpeg на ПК)
 const dspChains = ref([])
@@ -138,18 +133,33 @@ const waveFiles = computed(() => {
 
 const waveKey = computed(() => `w${props.job.id}:${waveFile.value || 'main'}`)
 
-// выбранная дорожка: файл волны — стем → волна/спектр и правки громкости/эффектов идут по ней
+// активная дорожка — одна на всю студию: файл волны — стем этой дорожки, линия громкости, эффекты и педали — по ней
+// (часть барабанов — правки на «барабаны»). Выбор в любом из мест (имя в пульте, список волны, «на что» у громкости,
+// эффектов, педалей) меняет её везде; «весь трек» — тоже везде (раньше цели правок оставались на старой дорожке)
 const activeStem = computed(() => (stemsList.value.find((s) => s.file === waveFile.value) || {}).name || '')
+const stemNames = computed(() => stemsList.value.map((s) => s.name))
 watch(activeStem, (stem) => {
-  if (!stem) return
-  const tgt = envTargetFor(stem)
-  if (DSP_TARGETS.includes(tgt)) { envTarget.value = tgt; dspTarget.value = tgt }
+  envTarget.value = targetFor(stem)   // пустая дорожка → '' (весь трек) — и здесь, и в эффектах
+  dspTarget.value = targetFor(stem)
 })
 function selectStem(stem) {
   const s = stemsList.value.find((x) => x.name === stem)
   waveFile.value = s ? s.file : ''
 }
+// цель правок выбрали вручную — активной становится её дорожка (или весь трек, если такой дорожки нет)
+function selectTarget(tgt) {
+  // трек ещё не разделён: дорожку на эффект Go отделит сам — цель держится, активной дорожки нет
+  if (!stemNames.value.length) { envTarget.value = tgt; dspTarget.value = tgt; return }
+  const stem = stemForTarget(tgt, stemNames.value, activeStem.value)
+  if (stem !== activeStem.value) selectStem(stem)
+  else { envTarget.value = targetFor(stem); dspTarget.value = targetFor(stem) }
+}
+// плашка «Дорожка: …» в полосе шагов; волна прилипает под ней (выключается галочкой, запоминается)
+const WAVE_PIN_KEY = 'yue_wave_pin'
+const wavePin = ref((() => { try { return localStorage.getItem(WAVE_PIN_KEY) !== '0' } catch { return true } })())
+watch(wavePin, (v) => { try { localStorage.setItem(WAVE_PIN_KEY, v ? '1' : '0') } catch { /* без localStorage — до закрытия */ } })
 
+const showColors = ref(false)   // выбор цвета волны — по кнопке «цвет ▾», не на виду
 // цвет волны (амплитуда, выделение, курсор): янтарь/коралл — наши, плюс классика.
 // Выбор живёт между запусками; '' = акцент темы не входит в список — янтарь по умолчанию
 const waveColors = [
@@ -218,13 +228,9 @@ onMounted(async () => {
   try {
     const st = JSON.parse(localStorage.getItem('yue_studio_state') || '{}')
     const per = st.jobs && st.jobs[props.job.id] || {}
-    if (per.odStyle !== undefined) odStyle.value = per.odStyle
-    if (per.odLyrics !== undefined) odLyrics.value = per.odLyrics
-    if (per.odGain !== undefined) odGain.value = per.odGain
     if (per.stemMute) stemMute.value = per.stemMute
     if (per.dspSel) dspSel.value = per.dspSel
     if (per.dspParams) dspParams.value = per.dspParams
-    if (per.odChips) odChips.value = new Set(per.odChips)
     // trickV=2 — времена меток по per-voice таймлайну; всё, что сохранено
     // до него (раздутая вдвое шкала), молча выбрасываем как неверное
     if (per.trickV === 2) {
@@ -242,7 +248,6 @@ function saveStudioState() {
     const st = JSON.parse(localStorage.getItem(key) || '{}')
     st.jobs = st.jobs || {}
     st.jobs[props.job.id] = {
-      odStyle: odStyle.value, odLyrics: odLyrics.value, odGain: odGain.value, odChips: [...odChips.value],
       stemMute: stemMute.value,
       dspSel: dspSel.value, dspParams: dspParams.value,
       trickV: 2,
@@ -831,7 +836,8 @@ function watchJob(refObj, key, label, playFn = null, onDone = null) {
       const j = (jobs || []).find((x) => x.id === refObj.value.id)
       if (!j) return
       const was = refObj.value.status
-      refObj.value = j
+      // строка списка джоб — без того, что запомнили при запуске (окно куска from/to): сливаем, а не заменяем
+      refObj.value = { ...refObj.value, ...j }
       if (j.status === 'done' && was !== 'done') {
         if (onDone) await onDone(j)
         const play = playFn || (() => api.playAudio(j.id))
@@ -852,7 +858,19 @@ function maybeStopPoll() {
     r.value && r.value.id && ['queued', 'running'].includes(r.value.status))
   if (!active) stopFragPoll()
 }
-const pollFragment = watchJob(fragJob, 'f', 'кусок')
+// автоплей готового куска — тоже с FRAGMENT_LEAD_S до правки (watchJob заменяет fragJob строкой из списка джоб:
+// окно берётся из неё — cont_from — или из того, что запомнили при запуске)
+const pollFragment = watchJob(fragJob, 'f', 'кусок', () => playFragment(fragJob.value))
+// готовый кусок — с FRAGMENT_LEAD_S до начала правки: слышно, как трек входит в изменённое место
+const FRAGMENT_LEAD_S = 4
+const FRAGMENT_MIN_FROM_S = 1     // кусок раньше — с начала трека (продолжать не с чего)
+const FRAGMENT_TAIL_S = 2         // как у воркера: после конца куска ещё 2 с
+const SEM_TOK_PER_SEC = 25        // шагов модели в секунду звука (воркер SEM_TOK_PER_SEC)
+async function playFragment(fj) {
+  await api.playAudio(fj.id)
+  const at = fragmentStart(fj, FRAGMENT_LEAD_S)
+  if (at > 0) await api.seekAudio(at)
+}
 // новая версия трека: по готовности переносим все вклейки (с текущей
 // громкостью) вечному сервису useInserts — он микширует, даже если студия закрыта
 const pollBuild = watchJob(buildJob, 'b', 'новая версия', null, async (j) => {
@@ -951,22 +969,6 @@ function playMix() {
       reloadVariants()
     }
   })
-}
-// микса может ещё не быть (правки перенесены на новую версию, пересборки не было) — собрать сначала
-async function mixToTrack() {
-  if (!mixFile.value || dspBusy.value) return
-  dspBusy.value = true          // сразу: второй клик до ответа воркера сделал бы вторую версию
-  const vs = (await api.dspVariants(props.job.id).catch(() => [])) || []
-  if (vs.some((v) => v.file === mixFile.value)) { dspBusy.value = false; return variantToTrack({ file: mixFile.value }) }
-  try {
-    const r = await inserts.rebuild(props.job.id)
-    if (!r || !r.variant) throw new Error(t('studio.edits.none'))
-    reloadVariants()
-    dspBusy.value = false
-    await variantToTrack({ file: r.variant.file })
-  } catch (e) {
-    rollErr.value = String(e)
-  } finally { dspBusy.value = false }
 }
 async function reloadStems() {
   try { stemsList.value = (await api.jobStems(props.job.id)) || [] } catch { /* нет дорожек — пульт предложит сделать */ }
@@ -1165,28 +1167,33 @@ async function renderFragment() {
     const m = pendingSpecs.value[pendingSpecs.value.length - 1]
     from = m.from; to = m.to
   } else return
+  // импорт без шагов модели: ни продолжить, ни сыграть кусок по стилю-заглушке — понятная ошибка, как у «продолжить»
+  if (isImport.value) { rollErr.value = t('studio.import.noTokens'); return }
   trickBusy.value = true
   rollErr.value = ''
   trickMsg.value = ''
   fragJob.value = { id: null, status: 'starting' }   // отклик на клик — сразу
   try {
     await ensureBaseAbc()
-    const mini = sliceAbc(planDraft.value || baseAbc.value, from, to)
-    if (!mini.includes('|')) {
-      rollErr.value = t('studio.trick.fragment.empty')
-      return
+    // кусок в контексте трека: звук трека до начала куска — как уже сыгранный, дальше модель играет по полному плану
+    // с правками (текст и такты на своих местах) только до конца куска; раньше кусок генерировался с нуля по обрывку
+    // плана с текстом всей песни — и звучал «бредом»
+    const abc = pendingSpecs.value.length ? continuationPlan(baseAbc.value, pendingSpecs.value) : ''
+    // приёмы, которые план держит слабо (инструменты, голос ±октава), — припиской к стилю, как у пересборки
+    const styleAdd = trickStyleSuffix(pendingSpecs.value)
+    let id
+    if (from < FRAGMENT_MIN_FROM_S) {
+      // кусок с самого начала: продолжать не с чего — обычный рендер по полному плану, но только до конца куска
+      id = await api.submit({
+        title: (props.job.title || 'трек') + ' · кусок', style: trickStyle(props.job.style), lyrics: props.job.lyrics,
+        seed: props.job.seed || 0, cot: props.job.cot === 'off' ? 'melody' : props.job.cot,
+        abc: abc || baseAbc.value, max_tokens: Math.round((to + FRAGMENT_TAIL_S) * SEM_TOK_PER_SEC),
+        parent_id: props.job.id, role: 'fragment',
+      })
+    } else {
+      id = await api.fragmentJob(props.job.id, from, to, props.job.seed || 0, abc, styleAdd)
     }
-    const id = await api.submit({
-      title: (props.job.title || 'трек') + ' · кусок',
-      style: trickStyle(props.job.style),
-      lyrics: props.job.lyrics,
-      seed: props.job.seed || 0,   // 0 — воркер возьмёт сид родителя
-      cot: props.job.cot === 'off' ? 'melody' : props.job.cot,
-      abc: mini,
-      draft: true,
-      parent_id: props.job.id, role: 'fragment',
-    })
-    fragJob.value = { id, status: 'queued' }
+    fragJob.value = { id, status: 'queued', from, to }
     startJobPoll()
     pollFragment()
   } catch (e) {
@@ -1211,67 +1218,6 @@ async function makeMinus() {
   } catch (e) {
     rollErr.value = String(e)
   } finally { rollBusy.value = false }
-}
-
-// ---------- Овердаб ----------
-
-function odToggleChip(idx) {
-  const cur = new Set(odChips.value)
-  cur.has(idx) ? cur.delete(idx) : cur.add(idx)
-  odChips.value = cur
-}
-
-// строка партии: чипы + ручной ввод; русский ввод переводится в английский (как стили)
-async function odFinalStyle() {
-  const chips = [...odChips.value].map((i) => odPartyChips[i].en)
-  const manual = odStyle.value.trim()
-  let s = [...chips, manual].filter(Boolean).join(', ')
-  if (s && props.autoTranslate && /[а-яё]/i.test(s)) {
-    try { s = (await api.translate(s)).text } catch {}
-  }
-  return s
-}
-
-// лирика овердаба: распознавание из трека и адаптация-перевод
-const odLyrBusy = ref('')
-const odLyrErr = ref('')
-async function odRecognizeLyrics() {
-  odLyrErr.value = ''
-  odLyrBusy.value = 'rec'
-  try {
-    // текст из аудио самой джобы — без повторной загрузки файла
-    const r = await api.jobLyrics(props.job.id)
-    if (r && r.text) odLyrics.value = r.text
-  } catch (e) {
-    odLyrErr.value = String(e)
-  } finally {
-    odLyrBusy.value = ''
-  }
-}
-async function odAdaptLyrics() {
-  if (!odLyrics.value.trim()) return
-  odLyrErr.value = ''
-  odLyrBusy.value = 'adapt'
-  try {
-    const r = await api.adaptLyrics(odLyrics.value)
-    if (r && r.text) odLyrics.value = r.text
-  } catch (e) {
-    odLyrErr.value = String(e)
-  } finally {
-    odLyrBusy.value = ''
-  }
-}
-
-async function submitOverdub() {
-  const style = await odFinalStyle()
-  if (!style) return
-  odBusy.value = true
-  try {
-    await api.submitOverdub(props.job.id, style, odLyrics.value.trim(), odGain.value, '')
-    emit('close')
-  } catch (e) {
-    rollErr.value = String(e)
-  } finally { odBusy.value = false }
 }
 
 // импорт внешнего трека: у него нет токенов модели — продолжить и перепеть нельзя
@@ -1305,18 +1251,20 @@ async function submitVoice() {
 
 // подпись варианта: эффект целиком — по цепочке, микс — по реестру вклеек,
 // иначе подпись, сохранённая воркером (микс из MCP или с другого ПК)
+// «Готово»: название версии — resultTitle (results.js); подробности (дельты метрик) — по галочке, запоминается
+const chainNameOf = (id) => (dspChains.value.find((x) => x.id === id) || {}).name
+const DELTAS_KEY = 'yue_done_deltas'
+const showDeltas = ref((() => { try { return localStorage.getItem(DELTAS_KEY) === '1' } catch { return false } })())
+watch(showDeltas, (v) => { try { localStorage.setItem(DELTAS_KEY, v ? '1' : '0') } catch { /* без localStorage — до закрытия */ } })
+
+// подпись версии для списка файла волны: микс — по реестру вклеек, остальное — resultTitle
 function variantLabel(v) {
   const file = v.file
-  if (file.startsWith('overdub-inst-')) {
-    const label = mixLabel(file, { applied: inserts.appliedFor(props.job.id).filter((it) => !it.off), jobs: allJobs.value,
-      labelOf: (id) => t('studio.trick.inst.' + id), fmt: fmtDur })
-    if (label) return t('studio.trick.inst.mix', { what: label })
-    return v.label || t('studio.trick.inst.variant', { id: mixChildId(file) })
-  }
-  const isPrev = file.startsWith('dsp-preview-')
-  const id = String(file).replace(/^dsp-preview-/, '').replace(/^dsp-/, '').replace(/\.flac$/, '')
-  const c = dspChains.value.find((x) => x.id === id)
-  return (c ? c.name : id) + (isPrev ? ' (превью 15с)' : '')
+  if (!file.startsWith('overdub-inst-')) return resultTitle(v, chainNameOf).title
+  const label = mixLabel(file, { applied: inserts.appliedFor(props.job.id).filter((it) => !it.off), jobs: allJobs.value,
+    labelOf: (id) => t('studio.trick.inst.' + id), fmt: fmtDur })
+  if (label) return t('studio.trick.inst.mix', { what: label })
+  return v.label || t('studio.trick.inst.variant', { id: mixChildId(file) })
 }
 
 function selChain(chainId) {
@@ -1577,6 +1525,12 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
         <button v-for="(st, i) in STUDIO_STEPS" :key="st" class="ghost small-btn" :class="{ on: activeStep === st }"
                 @click="goStep(st)">{{ i + 1 }} · {{ t('studio.step.' + st) }}</button>
         <!-- качается набор сэмплов (пульт, синт, перкуссия) — прогресс в прилипшей полосе шагов, виден из любого раздела -->
+        <!-- активная дорожка: с ней работают волна, линия громкости, эффекты, педали; ✕ — весь трек -->
+        <span v-if="activeStem" class="active-stem" :title="t('studio.active.tip')">
+          {{ t('studio.active', { name: stemLabel(activeStem) || activeStem }) }}
+          <span v-if="targetFor(activeStem) !== activeStem" class="muted">· {{ t('studio.active.drums') }}</span>
+          <button class="ghost icon" :title="t('studio.active.clear')" @click="selectStem('')"><AppIcon name="x" /></button>
+        </span>
         <KitProgress />
       </nav>
       <div class="roll-block" @mouseup="barSelEnd" @mouseleave="barSelEnd">
@@ -1594,7 +1548,7 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
             <template v-if="selRange"> · выделено {{ selRange.from.toFixed(0) }}–{{ selRange.to.toFixed(0) }} с</template>
           </p>
           <h3 id="st-listen" class="studio-step">1 · {{ t('studio.step.listen') }} <span class="muted">{{ t('studio.step.listen.sub') }}</span></h3>
-          <div class="studio-box wave-panel">
+          <div class="studio-box wave-panel" :class="{ 'wave-pinned': wavePin }">
             <div class="studio-box-head">
               <span>{{ t('studio.wave.caption') }}</span>
               <span class="muted wave-hint">{{ t('studio.wave.hint') }}</span>
@@ -1609,10 +1563,13 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
               <label class="wave-snap" :title="t('studio.wave.snap.tip')">
                 <input type="checkbox" v-model="waveSnap">{{ t('studio.wave.snap') }}
               </label>
+              <label class="wave-snap" :title="t('studio.wave.pin.tip')">
+                <input type="checkbox" v-model="wavePin">{{ t('studio.wave.pin') }}
+              </label>
               <button class="ghost small-btn" :class="{ on: envOn }" :title="t('studio.wave.env.tip')"
                       @click="envOn = !envOn"><AppIcon name="pencil" /> {{ t('studio.wave.env') }}</button>
               <template v-if="envOn">
-                <VSelect v-model="envTarget" :options="dspTargetOptions" style="max-width: 150px" />
+                <VSelect :model-value="envTarget" :options="dspTargetOptions" style="max-width: 150px" @update:model-value="selectTarget" />
                 <button class="ghost small-btn" :disabled="envBusy || !envPts.length" @click="envPts = []">{{ t('studio.wave.env.reset') }}</button>
                 <template v-if="selRange">
                   <button class="ghost small-btn" :disabled="envBusy" :title="t('studio.wave.env.bump.tip')"
@@ -1627,8 +1584,8 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
               <span v-if="waveErr" class="error">{{ waveErr }}</span>
             </div>
             <span class="wave-colors" :title="t('studio.wave.color.tip')">
-              <span class="muted wave-colors-cap">{{ t('studio.wave.color') }}</span>
-              <button v-for="c in waveColors" :key="c.id" class="wave-swatch" :class="{ on: waveColor === c.hex }"
+              <button class="ghost small-btn" @click="showColors = !showColors">{{ t('studio.wave.color') }} ▾</button>
+              <button v-for="c in (showColors ? waveColors : [])" :key="c.id" class="wave-swatch" :class="{ on: waveColor === c.hex }"
                       :style="{ background: c.hex }" :aria-label="c.id"
                       @click="waveColor = c.hex"></button>
             </span>
@@ -1776,7 +1733,7 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
             <template v-else-if="fragJob.status === 'done'">
               <AppIcon name="music" /> {{ t('studio.trick.fragment.play') }}
               <button class="ghost small-btn" :title="t('studio.trick.fragment.replay')"
-                      @click="toggleArtifact('f' + fragJob.id, 'кусок · #' + fragJob.id, () => api.playAudio(fragJob.id))">
+                      @click="toggleArtifact('f' + fragJob.id, 'кусок · #' + fragJob.id, () => playFragment(fragJob))">
                 {{ playBtn('f' + fragJob.id) }}
               </button>
             </template>
@@ -1820,7 +1777,6 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
                 <button class="ghost small-btn" :class="{ stop: isPlaying('v' + job.id + ':' + mixFile) }"
                         :disabled="mixBuilding || playBusy['v' + job.id + ':' + mixFile]" :title="t('studio.edits.mix.tip')" @click="playMix">
                   {{ playBtn('v' + job.id + ':' + mixFile) }} {{ t('studio.edits.mix') }}</button>
-                <button class="primary small" :disabled="dspBusy || mixBuilding" :title="t('studio.dsp.totrack.tip')" @click="mixToTrack">→ в треки</button>
               </span>
             </div>
             <div class="studio-box-body insert-list">
@@ -1851,38 +1807,6 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
             </div>
             </div>
           </div>
-
-          <details class="studio-box">
-            <summary class="studio-box-head"><span>{{ t('studio.overdub') }}</span> <span class="muted studio-box-hint">{{ t('studio.overdub.sub') }}</span></summary>
-            <div class="studio-box-body">
-            <p class="muted">{{ t('studio.overdub.desc') }}</p>
-            <div class="od-chips">
-              <button v-for="(c, ci) in odPartyChips" :key="ci" class="toggle"
-                      :class="{ on: odChips.has(ci) }" @click="odToggleChip(ci)">{{ c.ru }}</button>
-            </div>
-            <div class="od-row">
-              <input v-model="odStyle" :placeholder="t('studio.overdub.style.ph')" class="od-style" />
-              <label class="od-gain">{{ t('studio.overdub.gain') }} <input type="range" min="0.1" max="1" step="0.05" v-model.number="odGain" /> {{ odGain }}</label>
-            </div>
-            <div class="od-row">
-              <textarea v-model="odLyrics" rows="4" class="od-lyrics"
-                        :placeholder="t('studio.overdub.lyrics.ph')"></textarea>
-            </div>
-            <div class="od-row">
-              <button class="ghost small-btn" :disabled="!!odLyrBusy || !whisperOk"
-                      :title="!whisperOk ? t('lyrics.job.noWhisper') : t('lyrics.job.tip')" @click="odRecognizeLyrics">
-                <template v-if="odLyrBusy === 'rec'">…</template><template v-else><AppIcon name="music" /> {{ t('lyrics.job') }}</template></button>
-              <button class="ghost small-btn" :disabled="!!odLyrBusy || !odLyrics.trim()" :title="t('lyrics.adapt.tip')" @click="odAdaptLyrics">
-                {{ odLyrBusy === 'adapt' ? '…' : t('lyrics.adapt') }}</button>
-              <span v-if="odLyrErr" class="error">{{ odLyrErr }}</span>
-            </div>
-            <div class="od-row">
-              <button class="primary small" :disabled="odBusy || (!odStyle.trim() && odChips.size === 0)" @click="submitOverdub">
-                {{ odBusy ? '…' : t('studio.overdub.generate') }}
-              </button>
-            </div>
-            </div>
-          </details>
 
           <details class="studio-box">
             <summary class="studio-box-head"><span><AppIcon name="flask" /> {{ t('studio.vc') }}</span> <span class="badge exp">{{ t('studio.vc.exp') }}</span> <span class="muted studio-box-hint">{{ t('studio.vc.sub') }}</span></summary>
@@ -1921,18 +1845,22 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
               </div>
             </div>
           </div>
-          <div class="studio-box">
-            <div class="studio-box-head"><span>{{ t('synth.title') }}</span> <span class="muted studio-box-hint">{{ t('synth.sub') }}</span></div>
+          <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
+          <details class="studio-box">
+            <summary class="studio-box-head"><span>{{ t('synth.title') }}</span> <span class="muted studio-box-hint">{{ t('synth.sub') }}</span></summary>
             <div class="studio-box-body">
               <StudioSynth :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
             </div>
-          </div>
-          <div class="studio-box">
-            <div class="studio-box-head"><span>{{ t('perc.title') }}</span> <span class="muted studio-box-hint">{{ t('perc.sub') }}</span></div>
+          </details>
+          <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
+          <details class="studio-box">
+            <summary class="studio-box-head"><span>{{ t('perc.title') }}</span> <span class="muted studio-box-hint">{{ t('perc.sub') }}</span></summary>
             <div class="studio-box-body">
               <StudioPerc :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
             </div>
-          </div>
+          </details>
+          <!-- старые эффекты ffmpeg и педали — другой инструмент: быстрые правки на трек или кусок (движок — пульт выше) -->
+          <p class="muted quick-fx-head"><strong>{{ t('studio.quickfx') }}</strong> — {{ t('studio.quickfx.sub') }}</p>
           <details ref="fxBox" class="studio-box">
             <summary class="studio-box-head"><span>{{ t('studio.dsp') }}</span> <span class="muted studio-box-hint">{{ t('studio.dsp.sub') }}</span></summary>
             <div class="studio-box-body">
@@ -1940,7 +1868,8 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
               <VSelect :model-value="dspSel" :options="dspChains.map((c) => ({ value: c.id, label: c.name }))"
                        :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
                        @update:model-value="(v) => selChain(v)" />
-              <VSelect v-model="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px" />
+              <VSelect :model-value="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px"
+                       @update:model-value="selectTarget" />
               <button class="primary small" :disabled="!dspSel || dspBusy || (needsStem(curChain) && !dspTarget)" @click="applyDsp">
                 {{ dspBusy ? t('studio.dsp.applying') : t('studio.dsp.apply') }}
               </button>
@@ -1982,7 +1911,8 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
           <details class="studio-box">
             <summary class="studio-box-head"><span><AppIcon name="pedal" /> {{ t('pedals') }}</span> <span class="muted studio-box-hint">{{ t('pedals.sub') }}</span></summary>
             <div class="studio-box-body">
-              <PedalBoard :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
+              <PedalBoard :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :active="dspTarget"
+                          @stem="selectTarget" @applied="reloadVariants" />
             </div>
           </details>
 
@@ -2015,18 +1945,24 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
               <button class="ghost" :title="t('studio.done.level.tip')" @click="goChain('level')">{{ t('studio.done.level') }}</button>
             </div>
             <p v-if="!dspVariants.length" class="muted">{{ t('studio.done.empty') }}</p>
-            <div v-for="v in dspVariants" :key="v.file" class="dsp-variant">
+            <label v-else class="muted done-details"><input v-model="showDeltas" type="checkbox" /> {{ t('studio.done.details') }}</label>
+            <!-- все версии трека — промежуточные тоже: новые сверху, понятное название, полная подпись — в подсказке -->
+            <div v-for="v in resultsOrder(dspVariants)" :key="v.file" class="dsp-variant">
               <button class="ghost play-mini" :class="{ stop: isPlaying('v' + job.id + ':' + v.file) }"
                       :disabled="playBusy['v' + job.id + ':' + v.file]" @click="playVariant(v)">
                 {{ playBtn('v' + job.id + ':' + v.file) }}
               </button>
-              <strong>{{ variantLabel(v) }}</strong>
-              <span v-if="v.metrics" class="muted deltas">
-                Δ крест {{ vDelta(v, 'crest_db') }} dB · Δ дин {{ vDelta(v, 'dyn_range_db') }} dB ·
-                Δ верх {{ vDelta(v, 'bands.high') }}% · Δ флэтнес {{ vDelta(v, 'flatness_median', 3) }}
-              </span>
-              <span v-else class="muted">без метрик</span>
-              <button class="ghost" @click="openVariantMetrics(v)">полная дельта</button>
+              <strong :title="resultTitle(v, chainNameOf).detail">{{ resultTitle(v, chainNameOf).title }}</strong>
+              <span class="muted">{{ resultDate(v.created_at) }}</span>
+              <template v-if="showDeltas">
+                <span v-if="v.metrics" class="muted deltas">
+                  Δ крест {{ vDelta(v, 'crest_db') }} dB · Δ дин {{ vDelta(v, 'dyn_range_db') }} dB ·
+                  Δ верх {{ vDelta(v, 'bands.high') }}% · Δ флэтнес {{ vDelta(v, 'flatness_median', 3) }}
+                </span>
+                <span v-else class="muted">без метрик</span>
+                <button class="ghost" @click="openVariantMetrics(v)">полная дельта</button>
+              </template>
+              <span class="spacer"></span>
               <button class="ghost" :title="t('studio.dsp.savefile.tip')"
                       @click="api.saveAudio(job.id, v.file)">⤓</button>
               <button class="primary small" :disabled="dspBusy" :title="t('studio.dsp.totrack.tip')"

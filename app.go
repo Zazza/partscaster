@@ -714,6 +714,11 @@ func (a *App) YueDspVariantDelete(id int64, fname string) (bool, error) {
 }
 
 // YueContinueJob — «продолжение с места»: трек до fromSec + продолжение моделью.
+// YueFragmentJob — «проверить кусок» в контексте трека (продолжение с fromSec до toSec).
+func (a *App) YueFragmentJob(jobID int64, fromSec, toSec float64, seed int64, abc, styleAdd string) (int64, error) {
+	return a.yue.FragmentJob(a.ctx, jobID, fromSec, toSec, seed, abc, styleAdd)
+}
+
 func (a *App) YueContinueJob(jobID int64, fromSec float64, seed int64, abc, styleAdd string) (int64, error) {
 	return a.yue.ContinueJob(a.ctx, jobID, fromSec, seed, abc, styleAdd)
 }

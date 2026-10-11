@@ -105,6 +105,29 @@ func (c *Client) PlanCheck(ctx context.Context, id int64, abc string, fromSec fl
 	return &out, nil
 }
 
+// FragmentJob — «проверить кусок» в контексте: звук трека до fromSec — как сыгранный, дальше модель играет
+// только до toSec (+ хвост воркера) по плану abc (полный план с правками) — POST /jobs/{id}/continue с to_sec.
+// styleAdd — приписка приёмов к стилю (как у пересборки); пусто — без неё.
+func (c *Client) FragmentJob(ctx context.Context, jobID int64, fromSec, toSec float64, seed int64, abc, styleAdd string) (int64, error) {
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	body := map[string]any{"from_sec": fromSec, "to_sec": toSec}
+	if seed > 0 {
+		body["seed"] = seed
+	}
+	if abc != "" {
+		body["abc"] = abc
+	}
+	if styleAdd != "" {
+		body["style_add"] = styleAdd
+	}
+	if err := c.postJSON(ctx, fmt.Sprintf("/jobs/%d/continue", jobID), body, requestTimeout, &out); err != nil {
+		return 0, err
+	}
+	return out.ID, nil
+}
+
 // ContinueJob — «продолжение с места» (POST /jobs/{id}/continue).
 func (c *Client) ContinueJob(ctx context.Context, jobID int64, fromSec float64, seed int64, abc, styleAdd string) (int64, error) {
 	var out struct {

@@ -18,7 +18,7 @@ import { fxPresets } from '../fxPresets.js'
 import { useInstruments } from '../composables/useInstruments.js'
 import { installKit as installKitOn } from '../kitProgress.js'
 import { fromWorkerChain, toWorkerChain, missingRequired, fillAmp } from '../fxChain.js'
-import { groupPresets } from '../presetGroups.js'
+import { groupPresets, groupOptions, itemOptions, groupOf } from '../presetGroups.js'
 import { DRUM_KITS, DRUM_TREATMENTS } from '../drumKits.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { insertTitle, insertWindow } from '../insertLabels.js'
@@ -44,6 +44,8 @@ const { all: instruments } = useInstruments()
 const before = useWindowPlay('desk-before', () => t('instr.before'))
 
 const open = ref('')             // раскрытая дорожка
+const fine = ref(false)          // «тонко настроить»: редактор блоков (по умолчанию — только выбор инструмента)
+const groupId = ref('')          // группа в выборе «группа → инструмент» (как на странице «Инструменты»)
 const editing = ref(null)        // запись движка на правке: {childId, from, to} | null
 const chain = ref([])
 const presetId = ref('')
@@ -82,6 +84,17 @@ function pickPreset(p) {
   presetId.value = p.id
   chain.value = withAmp(fromWorkerChain(p.chain, BLOCKS), p.amp_hint)
 }
+// выбор инструмента для раскрытой дорожки: готовые и свои — группа, затем инструмент (поиск внутри группы)
+// цепочки без дорожек (мастер-склейка «на весь трек») — не инструмент дорожки: в пульте их нет
+const rowGroups = computed(() => (open.value
+  ? groupPresets(presetsFor(open.value, instruments.value).filter((p) => (p.stems || []).length), locale.value) : []))
+const groupOpts = computed(() => groupOptions(rowGroups.value, t('instr.group.other')))
+const itemOpts = computed(() => itemOptions(rowGroups.value.find((g) => g.group === groupId.value), locale.value))
+const picked = computed(() => instruments.value.find((p) => p.id === presetId.value) || null)
+function pickById(id) {
+  const p = instruments.value.find((x) => x.id === id)
+  if (p) pickPreset(p)
+}
 
 function toggleRow(stem) {
   msg.value = ''
@@ -89,9 +102,11 @@ function toggleRow(stem) {
   editing.value = null
   if (open.value === stem) { open.value = ''; return }
   open.value = stem
-  const first = presetsFor(stem, fxPresets)[0]
-  if (first) pickPreset(first)
-  else { presetId.value = ''; chain.value = [] }
+  fine.value = false
+  // сразу ничего не выбрано: сначала — инструмент из списка (раньше подставлялся первый пресет и весь редактор)
+  presetId.value = ''
+  chain.value = []
+  groupId.value = groupOf(rowGroups.value, '')
 }
 
 // «изменить» из «Правок трека»: редактор дорожки записи с её цепочкой, кнопка — «заменить»
@@ -106,6 +121,7 @@ function editRecord(rec) {
   err.value = ''
   editing.value = { childId: rec.childId, from: rec.from || 0, to: rec.to || 0, label: rec.label || '' }
   chain.value = withAmp(fromWorkerChain(rec.engine, BLOCKS))
+  fine.value = true               // правка записи — сразу её блоки
 }
 defineExpose({ editRecord })
 
@@ -268,12 +284,20 @@ async function upload(kind) {
     </div>
     <div v-if="open === row.stem" class="desk-editor">
       <p v-if="editing" class="muted">{{ t('desk.editing') }}</p>
-      <div v-for="(g, gi) in groupPresets(presetsFor(row.stem, instruments), locale)" :key="g.group" class="voice-presets">
-        <span class="muted">{{ g.label || (gi === 0 ? t('instr.presets') : t('instr.presets.more')) }}</span>
-        <button v-for="p in g.items" :key="p.id" class="ghost small-btn" :class="{ on: p.id === presetId }"
-                :title="tr(p.note)" @click="pickPreset(p)">{{ tr(p.name) }}</button>
+      <div class="desk-pick">
+        <label>
+          <span class="muted">{{ t('instr.group') }}</span>
+          <VSelect v-model="groupId" :options="groupOpts" />
+        </label>
+        <label>
+          <span class="muted">{{ t('instr.item') }}</span>
+          <VSelect :model-value="presetId" :options="itemOpts" searchable :placeholder="t('desk.pick')" @update:model-value="pickById" />
+        </label>
+        <button class="ghost small-btn" :class="{ on: fine }" :disabled="!chain.length" :title="t('desk.fine.tip')"
+                @click="fine = !fine">{{ fine ? t('desk.fine.hide') : t('desk.fine') }}</button>
       </div>
-      <ChainEditor v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
+      <p v-if="picked" class="muted voice-hint">{{ tr(picked.note) }}</p>
+      <ChainEditor v-if="fine" v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
       <p v-if="missing.length" class="err">{{ t('instr.needAmp') }}</p>
       <div class="dsp-row">
         <label class="muted" :title="t('instr.solo.tip')"><input v-model="solo" type="checkbox" /> {{ t('instr.solo') }}</label>
@@ -307,4 +331,6 @@ async function upload(kind) {
 .desk-editor { padding: 6px 0 6px 34px; }
 .spacer { flex: 1; }
 .small-btn.on { border-color: var(--accent, #7aa2f7); }
+.desk-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 6px 0; }
+.desk-pick label { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
 </style>

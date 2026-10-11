@@ -360,6 +360,8 @@ func RegisterStudioTools(s *Server) {
 			"seed":      prop("сид продолжения; 0 — случайный", "integer"),
 			"abc":       prop("изменённый план (необязательно)", "string"),
 			"style_add": prop("что изменить в звучании с этого места, напр. electric guitar enters and builds", "string"),
+			"to_sec": prop("кусок вместо продолжения до конца: модель играет только до to_sec (+2 с хвоста), звук до from_sec — "+
+				"трека; так проверяется правка в контексте (abc — полный план с правками); role fragment", "number"),
 		}, "job_id", "from_sec"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			from, _ := args["from_sec"].(float64)
@@ -367,6 +369,16 @@ func RegisterStudioTools(s *Server) {
 			note, err := planNote(s, argInt(args, "job_id"), argString(args, "abc"), from)
 			if err != nil {
 				return "", err
+			}
+			// to_sec передан — кусок (неверное окно воркер отвергнет 422), а не продолжение до конца песни
+			if _, ok := args["to_sec"]; ok {
+				to := argFloat(args, "to_sec")
+				id, err := s.client.FragmentJob(context.Background(), argInt(args, "job_id"), from, to,
+					argInt(args, "seed"), argString(args, "abc"), argString(args, "style_add"))
+				if err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("кусок поставлен: #%d", id) + note, nil
 			}
 			id, err := s.client.ContinueJob(context.Background(), argInt(args, "job_id"), from,
 				argInt(args, "seed"), argString(args, "abc"), argString(args, "style_add"))
@@ -475,14 +487,15 @@ func RegisterStudioTools(s *Server) {
 			"job_id": prop("ID джобы", "integer"),
 			"style":  prop("строка стиля партии (англ. теги)", "string"),
 			"lyrics": prop("текст голосовой партии (пусто = вокализ; [Instrumental] = без голоса)", "string"),
-			"gain":   prop("гейн микса (0.1–1, по умолчанию 0.5)", "number"),
+			"gain":   prop("гейн микса 0.1–1 (не задан — 0.5); 0 — кавер новым треком без смешивания с оригиналом", "number"),
 			"abc":    prop("свой план партии (пусто = партитура джобы); инструмент-только-в-куске строит soloInstrumentPlan", "string"),
 			"seed":   prop("сид родителя = «та же интерпретация», ближе к оригиналу (0 = новая)", "integer"),
 		}, "job_id", "style"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
-			gain := argFloat(args, "gain")
-			if gain == 0 {
-				gain = 0.5
+			// не задан — 0,5; явный 0 — кавер новым треком без смешивания с оригиналом (как «переиграть» в приложении)
+			gain := 0.5
+			if _, ok := args["gain"]; ok {
+				gain = argFloat(args, "gain")
 			}
 			id, err := s.client.SubmitOverdub(context.Background(), argInt(args, "job_id"),
 				argString(args, "style"), argString(args, "lyrics"), gain, argString(args, "abc"),

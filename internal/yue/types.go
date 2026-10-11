@@ -81,6 +81,8 @@ type Service interface {
 	// fromSec + продолжение моделью (seed 0 — случайный, abc — изменённый план,
 	// styleAdd — что изменить в звучании с этого места)
 	ContinueJob(ctx context.Context, jobID int64, fromSec float64, seed int64, abc, styleAdd string) (int64, error)
+	// FragmentJob — «проверить кусок»: продолжение с fromSec только до toSec (звук трека до куска — как сыгранный)
+	FragmentJob(ctx context.Context, jobID int64, fromSec, toSec float64, seed int64, abc, styleAdd string) (int64, error)
 	// SetHead — основная версия песни jobID: сам трек (headID 0) или потомок
 	SetHead(ctx context.Context, jobID, headID int64) error
 	// UpdateJob — подпись и папка трека (nil — поле не менять, folder "" —

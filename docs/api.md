@@ -104,7 +104,8 @@ POST /jobs/{id}/variant_track  {file, title, voice_src?} — вариант DSP-
                        voice_src — рендер, чей голос подставлен в версию («перепеть с места»;
                        несуществующий → 422). В /jobs — поле voice_src (источник голоса версии;
                        пусто — голос свой у сгенерированного трека или от родителя у варианта)
-POST /jobs/{id}/continue {from_sec, seed?, abc?, style_add?} — «продолжение с места»: новая
+POST /jobs/{id}/continue {from_sec, seed?, abc?, style_add?, to_sec?} — с to_sec — кусок (role fragment): то же продолжение,
+                       но только до to_sec (не дальше конца трека) + 2 с хвоста — «кусок с правками» студии; иначе — «продолжение с места»: новая
                        джоба = шаги модели исходника (semantic.npy) до from_sec + продолжение
                        (другой сид; abc — изменённый план; style_add — приписка к стилю исходника
                        «что изменить в звучании»). parent_id = исходник, role = continue, cont_from.

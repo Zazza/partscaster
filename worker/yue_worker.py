@@ -18,6 +18,7 @@
 """
 import contextlib
 import json
+import math
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -401,6 +402,9 @@ def _progress_watcher(job_id: int, counters: dict, t0: float, budget: int = 0):
 SEM_TOK_PER_SEC = 25
 
 
+FRAGMENT_TAIL_S = 2.0   # кусок «проверить» — после выделения ещё столько звука (правка не обрывается на краю)
+
+
 def _cont_steps(cont_from, n_tokens: int) -> int:
     """Сколько шагов модели родителя подать как сыгранные: отметка × 25/с,
     не меньше 1 и не больше, чем есть."""
@@ -510,7 +514,10 @@ def _run_job(job_id: int):
     on_token, counters = _on_token_cb(job_id)
     budget = 450 if row["draft"] else MAX_SEM_TOKENS   # ~18 с превью
     if not row["draft"] and row["max_tokens"]:
-        budget = max(500, min(int(row["max_tokens"]), 30000))
+        # кусок — ровно до конца окна + хвост (минимум 200 шагов держит _continue_song); общий минимум 500 добавлял
+        # короткому куску лишние секунды генерации
+        floor = 200 if row["role"] == "fragment" else 500
+        budget = max(floor, min(int(row["max_tokens"]), 30000))
     if row["role"] == "voice":
         _run_voice_job(job_id, row, job_dir)
         return
@@ -559,7 +566,9 @@ def _run_job(job_id: int):
             failure = ""
             try:
                 try:
-                    song = (_continue_song(pipe, row, request) if row["role"] == "continue"
+                    # кусок с отметкой (cont_from) — продолжение трека, только короче; старый кусок — с нуля
+                    song = (_continue_song(pipe, row, request)
+                            if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
                             else pipe(**request))
                     # через counters: сторож прогресса раз в 2 с пишет стадию оттуда
                     # и затёр бы прямую запись в _progress
@@ -595,9 +604,10 @@ def _run_job(job_id: int):
                 truncated = any(truncated.values())
             audio = job_dir / "audio.flac"
             mp3, wav = _make_formats(job_dir)
-            if row["overdub_of"]:
-                _mix_overdub(int(row["overdub_of"]), job_id,
-                             float(row["overdub_gain"] or 0.5))
+            # «переиграть»: громкость 0 — кавер, новый трек без смешивания (раньше 0 подменялся на 0,5 через `or`)
+            od_gain = 0.5 if row["overdub_gain"] is None else float(row["overdub_gain"])
+            if row["overdub_of"] and od_gain > 0:
+                _mix_overdub(int(row["overdub_of"]), job_id, od_gain)
             with db_lock, db() as conn:
                 conn.execute(
                     "UPDATE jobs SET status='done', duration_sec=?, audio_file=?, mp3_file=?, wav_file=?, abc_file=?, finished_at=? WHERE id=?",  # noqa: E501
@@ -1092,6 +1102,8 @@ class ContinueIn(BaseModel):
     # что изменить в звучании с этого места: приписка к стилю родителя
     # («electric guitar enters and builds») — инструменты в плане не записать
     style_add: str = ""
+    # кусок вместо продолжения до конца: генерация только до to_sec (+ хвост) — «проверить кусок» студии в контексте
+    to_sec: float | None = None
 
 
 @app.post("/jobs/{job_id}/continue")
@@ -1110,12 +1122,22 @@ def continue_job(job_id: int, req: ContinueIn):
         if row["duration_sec"] and req.from_sec >= row["duration_sec"]:
             raise HTTPException(422, "from_sec must be inside the track")
         seed = req.seed if req.seed is not None else random.randrange(1, 2**31)
+        role, max_tokens, title = "continue", 0, req.title or f"{row['title']} · с {req.from_sec:.0f} с"
+        if req.to_sec is not None:
+            # кусок: звук трека до from — как сыгранный, дальше — только выделение и хвост (не вся песня)
+            if not math.isfinite(req.to_sec) or req.to_sec <= req.from_sec:
+                raise HTTPException(422, "to_sec must be a number after from_sec")
+            role = "fragment"
+            # конец куска — не дальше конца трека: иначе модель дописывала бы «после песни» лишние секунды
+            to_sec = min(req.to_sec, row["duration_sec"]) if row["duration_sec"] else req.to_sec
+            max_tokens = round((to_sec + FRAGMENT_TAIL_S) * SEM_TOK_PER_SEC)
+            title = req.title or f"{row['title']} · кусок {req.from_sec:.0f}–{to_sec:.0f} с"
         cur = conn.execute(
-            "INSERT INTO jobs(title,status,style,lyrics,seed,cot,parent_id,role,cont_from,"
-            "temperature,cfg,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-            (req.title or f"{row['title']} · с {req.from_sec:.0f} с", "queued",
+            "INSERT INTO jobs(title,status,style,lyrics,seed,cot,parent_id,role,cont_from,max_tokens,"
+            "temperature,cfg,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (title, "queued",
              row["style"].strip().rstrip(",") + (", " + req.style_add.strip() if req.style_add.strip() else ""),
-             row["lyrics"], seed, row["cot"], job_id, "continue", req.from_sec,
+             row["lyrics"], seed, row["cot"], job_id, role, req.from_sec, max_tokens,
              row["temperature"] or 0, row["cfg"] or 0,
              time.strftime("%Y-%m-%dT%H:%M:%S")))
         new_id = cur.lastrowid

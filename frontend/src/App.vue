@@ -26,6 +26,7 @@ import CorpusPage from './components/CorpusPage.vue'
 import VoicesPage from './components/VoicesPage.vue'
 import InstrumentsPage from './components/InstrumentsPage.vue'
 import PresetsPage from './components/PresetsPage.vue'
+import ReplayModal from './components/ReplayModal.vue'
 import PresetChips from './components/PresetChips.vue'
 import JobPresets from './components/JobPresets.vue'
 import StudioPage from './components/StudioPage.vue'
@@ -565,6 +566,7 @@ const corpusPage = ref(false)
 const voicesPage = ref(false)
 const instrumentsPage = ref(false)   // «Инструменты»: дорожка через цепочку звукового движка
 const presetsPage = ref(false)       // «Пресеты звука»: библиотека пресетов
+const replayJob = ref(null)          // «переиграть в другом стиле» (бывший овердаб студии): трек или null
 const studioJob = ref(null)
 // главная — список треков; форма нового трека — отдельная страница
 const newTrackPage = ref(false)
@@ -1008,6 +1010,7 @@ function onWindowClick(e) {
                 <li :title="t('queue.browser.tip')" @click="openListen(headOf(j))"><AppIcon class="nav-ico" name="globe" />{{ t('queue.browser') }}</li>
                 <li v-if="headOf(j).abc_file" :title="t('queue.notes.tip')" @click="loadJobAbc(headOf(j))"><AppIcon class="nav-ico" name="music" />{{ t('queue.notes') }}</li>
                 <li :title="t('queue.repeat.tip')" @click="reuseJob(j)"><AppIcon class="nav-ico" name="repeat" />{{ t('queue.repeat') }}</li>
+                <li v-if="headOf(j).status === 'done'" :title="t('replay.menu.tip')" @click="replayJob = headOf(j)"><AppIcon class="nav-ico" name="music" />{{ t('replay.menu') }}</li>
                 <li class="danger" :title="t('queue.delete.tip')" @click="deleteJob(j)"><AppIcon class="nav-ico" name="x" />{{ t('queue.delete') }}</li>
               </ul>
             </details>
@@ -1299,6 +1302,7 @@ function onWindowClick(e) {
 
   <InstrumentsPage v-if="instrumentsPage" @close="instrumentsPage = false; refresh()" />
   <PresetsPage v-if="presetsPage" @close="presetsPage = false; loadPresetNames()" />
+  <ReplayModal v-if="replayJob" :job="replayJob" :auto-translate="autoTranslate" @close="replayJob = null" @submitted="refresh()" />
 
   <LibraryPage v-if="libraryPage" @close="libraryPage = false" />
 
@@ -1848,7 +1852,9 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 /* контейнер секций студии (бывшая рамка-«форма» убрана: блоки на фоне страницы).
    min-width: 0 — иначе минимальная ширина ролл-сетки (сотни тактов) растягивает
    студию шире окна вместо прокрутки внутри roll-scroll */
-.roll-block { margin-top: 8px; padding: 0; min-width: 0; overflow-x: auto; }
+/* clip, а не auto: auto делал блок контейнером прокрутки, и «волна сверху» (sticky) прилипала к нему, а не к странице;
+   широкий ролл прокручивается своим .roll-scroll */
+.roll-block { margin-top: 8px; padding: 0; min-width: 0; overflow-x: clip; }
 .roll-voices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12px; }
 .studio-page { justify-content: stretch; }
 /* студия — без общей панели (секции-блоки лежат прямо на фоне страницы,
@@ -1864,6 +1870,12 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
   margin: 10px 0 4px; padding: 6px 0; background: var(--bg);
 }
 .studio-steps .on { color: var(--lcd-text); border-color: var(--lcd-text); }
+/* активная дорожка студии — плашка в полосе шагов */
+.active-stem { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 2px 8px;
+  border: 1px solid var(--lcd-text); border-radius: 12px; font-size: 12px; }
+[data-theme="light"] .active-stem { border-color: var(--accent); }
+/* волна прилипает под полосой шагов: видна из любого шага (галочка «волна сверху») */
+.wave-panel.wave-pinned { position: sticky; top: 44px; z-index: 3; background: var(--bg); }
 /* в светлой теме янтарь ЖК на светлом не читается — активный шаг акцентным цветом */
 [data-theme="light"] .studio-steps .on { color: var(--accent); border-color: var(--accent); }
 .studio-step { margin: 22px 2px 8px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; scroll-margin-top: 52px; }

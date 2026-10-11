@@ -10,7 +10,7 @@ import {
   YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YuePlayLoop, YueFxKitProgress,
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueCorpusCreate, YueCorpusAddTracks, YueCorpusBuild, YueCorpusList, YueCorpusGet, YueCorpusTracks,
-  YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
+  YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueTranslate, YueDeleteJob,
 } from './wailsjs/go/main/App'
@@ -119,6 +119,8 @@ export const api = {
   splice: (baseId, parts, crossfade = 0) => YueSplice(baseId, parts, crossfade),
   // трек до fromSec + продолжение моделью (seed 0 — случайный; abc — план; styleAdd — звучание)
   continueJob: (jobId, fromSec, seed, abc, styleAdd) => YueContinueJob(jobId, fromSec, seed || 0, abc || '', styleAdd || ''),
+  // «проверить кусок» в контексте трека: продолжение с from до to (+ хвост)
+  fragmentJob: (jobId, fromSec, toSec, seed, abc, styleAdd) => YueFragmentJob(jobId, fromSec, toSec, seed || 0, abc || '', styleAdd || ''),
   // основная версия песни: rootId — корень, headId — версия (0 — сам трек)
   setHead: (rootId, headId) => YueSetHead(rootId, headId || 0),
   renameJob: (id, title) => YueRenameJob(id, title),
