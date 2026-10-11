@@ -51,12 +51,14 @@ type App struct {
 }
 
 func NewApp(client *yue.Client, player Player) *App {
-	return &App{yue: client, player: player}
+	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха
+	return &App{yue: yue.Journaled(client), player: player}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	go a.presetLoop(ctx)
+	go a.recipeLoop(ctx)
 }
 
 // presetLoop — авто-применение пресетов звука: тик по одному (пересборка — минуты, тики не
@@ -248,14 +250,7 @@ func (a *App) YueDspChains() []dsp.Chain {
 // runDsp — общий конвейер DSP-варианта: скачать flac джобы, прогнать цепочку
 // локальным ffmpeg, залить обратно на воркер. Превью — YueFxPreview (app_preview.go).
 func (a *App) runDsp(jobID int64, chainID string, params map[string]float64) (*yue.DspVariant, error) {
-	chain := dsp.ByID(chainID)
-	if chain == nil {
-		return nil, fmt.Errorf("unknown chain %q", chainID)
-	}
-	if chain.Key != "" {
-		return nil, fmt.Errorf("эффект %q — только на дорожку (ключ — дорожка %s)", chain.Name, chain.Key)
-	}
-	return a.runGraph(jobID, chain.FilterGraph(params), fmt.Sprintf("dsp-%s.flac", chainID), "")
+	return studio.ApplyChain(a.ctx, a.yue, jobID, chainID, params)
 }
 
 // runGraph — граф ffmpeg на весь трек джобы: вариант fname с подписью label ("" — по имени файла).

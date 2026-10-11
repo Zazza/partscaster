@@ -14,6 +14,7 @@ import {
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueTranslate, YueDeleteJob,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
+  YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
 } from './wailsjs/go/main/App'
 
 export const api = {
@@ -48,6 +49,12 @@ export const api = {
   checkWorker: (url) => YueCheckWorker(url),
   agentSetup: () => YueAgentSetup(),
   connectClaudeCode: () => YueConnectClaudeCode(),
+  // рецепт трека: экспорт в файл (диалог), выбор файла, импорт (ведёт приложение), ход импортов
+  exportRecipe: (jobId) => YueExportRecipe(jobId),
+  pickRecipe: () => YuePickRecipe(),
+  importRecipe: (text, mode) => YueImportRecipe(text, mode),
+  recipeImports: () => YueRecipeImports(),
+  recipeImportAction: (id, action) => YueRecipeImportAction(id, action),
   workerConfig: () => YueWorkerConfig(),
   setWorkerConfig: (cfg) => YueSetWorkerConfig(cfg),
   ollamaModels: (url) => YueOllamaModels(url || ''),

@@ -6,6 +6,16 @@
 ```
 GET/POST /config       настройки: ollama_url, ollama_model (меняются на лету)
 GET  /health           статус, модель в памяти?
+POST /jobs/{id}/ops     {op, params, result, refs} — запись журнала правок (рецепт трека; пишет приложение/MCP после
+                       успешной правки; op: submit|continue|fragment|overdub|variant_track|fx|minus|update|set_head|
+                       rebuild_sections|envelope|splice|dsp_apply|pedals|sound_preset, иначе 422; нет трека — 404)
+GET  /jobs/{id}/ops     журнал трека по порядку [{id, op, params, result, refs, created_at}]
+GET  /jobs/{id}/recipe  рецепт песни трека (от корня) — docs/track-recipe.md; 422 — черновик, импорт чужого аудио,
+                       «голос альбома» (не переносятся рецептом)
+POST /recipes/import    {recipe, mode: seed|plan} → {id} — сессия импорта (ведёт приложение/MCP); чужой формат — 422
+GET  /recipes/imports[/{id}]  сессии импорта (с /{id} — ещё recipe и state ведущего)
+POST /recipes/imports/{id}/claim  {owner} — захват ведения на 10 мин; держит другой — 409
+PATCH /recipes/imports/{id}  {state?, progress?, status? (running|done|error), error?, root_job_id?}
 GET  /version          {version, api, source_hash, model, components:{whisper,seedvc,roformer}, stems_model} —
                        сборка воркера (файл VERSION архива, без него dev), версия API (WORKER_API; клиенты сверяют
                        со своей), отпечаток кода, модель генерации и что установлено

@@ -107,21 +107,11 @@ func (a *App) YuePlayPreview(jobID int64, slot, which string, startSec float64) 
 	return a.player.Play()
 }
 
-// pedalsFile — вариант «педали на весь трек»
-const pedalsFile = "dsp-pedals.flac"
-
 // YueApplySteps — цепочка эффектов по порядку (доска педалей) на весь трек:
 // вариант dsp-pedals.flac с подписью label ("" — названия педалей). На дорожку
 // доска применяется записью реестра пересборки (SectionSpec.Steps).
 func (a *App) YueApplySteps(jobID int64, steps []dsp.Step, label string) (*yue.DspVariant, error) {
-	graph, _, err := dsp.StepsGraph(steps)
-	if err != nil {
-		return nil, err
-	}
-	if label == "" {
-		label = studio.StepsLabel(steps)
-	}
-	return a.runGraph(jobID, graph, pedalsFile, label)
+	return studio.ApplySteps(a.ctx, a.yue, jobID, steps, label)
 }
 
 // YueDspPresets — готовые наборы педалей.

@@ -39,7 +39,8 @@ func main() {
 		dir = filepath.Join(home, "yue-mcp-downloads")
 	}
 
-	srv := mcp.NewServer(yue.New(cfg.YueURL), dir)
+	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха
+	srv := mcp.NewServer(yue.Journaled(yue.New(cfg.YueURL)), dir)
 	srv.SetBuildInfo(buildHash, srcDir)
 	srv.SetVersion(version)
 	mcp.RegisterWorkflowTools(srv)

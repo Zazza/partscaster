@@ -41,6 +41,7 @@ import llm
 import media
 import instruments as fx_instruments
 import presets as sound_presets
+import recipe
 import waveform
 from pathlib import Path
 
@@ -255,6 +256,36 @@ def _migrate():
                 (b["slug"], b["name"], b["note"], json.dumps(b["specs"]), json.dumps(b["final"]),
                  b["reference_job_id"], b.get("target_lufs"), json.dumps(b.get("master", [])),
                  json.dumps(b.get("parts", [])), b.get("family", ""), "2026-10-08T00:00:00"))
+        # журнал правок (рецепт трека): что сделано с треком — пишет приложение/MCP после успешной правки
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_ops (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL,
+            op TEXT NOT NULL,
+            params TEXT NOT NULL DEFAULT '{}',
+            result TEXT NOT NULL DEFAULT '',
+            refs TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        );
+        """)
+        # сессии импорта рецепта: ведёт приложение/MCP шаг за шагом, здесь — состояние и захват
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS recipe_imports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL,
+            progress TEXT NOT NULL DEFAULT '',
+            error TEXT NOT NULL DEFAULT '',
+            mode TEXT NOT NULL DEFAULT 'seed',
+            recipe TEXT NOT NULL,
+            state TEXT NOT NULL DEFAULT '{}',
+            root_job_id INTEGER,
+            owner TEXT NOT NULL DEFAULT '',
+            lease_until REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL DEFAULT ''
+        );
+        """)
         # свои инструменты страницы «Инструменты» (этап 13в): цепочка движка под своим именем
         conn.execute("""
         CREATE TABLE IF NOT EXISTS fx_instruments (
@@ -2385,7 +2416,9 @@ def submit_overdub(job_id: int, req: OverdubIn):
         cur = conn.execute(
             "INSERT INTO jobs(title,status,style,lyrics,seed,cot,req_abc,overdub_of,created_at)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
-            (f"overdub of #{job_id}", "queued", req.style, req.lyrics, req.seed, "full",
+            # сид без запроса выбирается здесь и записывается: иначе модель взяла бы случайный, которого нет
+            # в треке, и рецепт (журнал правок) не повторил бы исполнение
+            (f"overdub of #{job_id}", "queued", req.style, req.lyrics, req.seed or random.randrange(1, 2**31), "full",
              "", job_id, time.strftime("%Y-%m-%dT%H:%M:%S")))
         child_id = cur.lastrowid
         cdir = JOBS_DIR / str(child_id)
@@ -4202,3 +4235,194 @@ def audio(job_id: int, fname: str):
     if not path.is_file():
         raise HTTPException(404, "not found")
     return FileResponse(path)
+
+
+# ---------- журнал правок и рецепт трека (docs/track-recipe.md) ----------
+
+class JobOpIn(BaseModel):
+    op: str
+    params: dict = Field(default_factory=dict)
+    result: str = ""
+    refs: list[int] = Field(default_factory=list)
+
+
+@app.post("/jobs/{job_id}/ops")
+def add_job_op(job_id: int, req: JobOpIn):
+    """Запись журнала правок: что сделано с треком (пишет приложение/MCP после успешной правки)."""
+    if req.op not in recipe.OPS:
+        raise HTTPException(422, f"unknown op {req.op!r}")
+    with db_lock, db() as conn:
+        if conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone() is None:
+            raise HTTPException(404, "job not found")
+        cur = conn.execute(
+            "INSERT INTO job_ops(job_id,op,params,result,refs,created_at) VALUES(?,?,?,?,?,?)",
+            (job_id, req.op, json.dumps(req.params, ensure_ascii=False), req.result,
+             json.dumps(req.refs), time.strftime("%Y-%m-%dT%H:%M:%S")))
+        return {"id": cur.lastrowid}
+
+
+def _op_row(r) -> dict:
+    return {"id": r["id"], "job_id": r["job_id"], "op": r["op"], "params": json.loads(r["params"] or "{}"),
+            "result": r["result"] or "", "refs": json.loads(r["refs"] or "[]"), "created_at": r["created_at"]}
+
+
+@app.get("/jobs/{job_id}/ops")
+def list_job_ops(job_id: int):
+    with db_lock, db() as conn:
+        rows = conn.execute("SELECT * FROM job_ops WHERE job_id=? ORDER BY id", (job_id,)).fetchall()
+    return [_op_row(r) for r in rows]
+
+
+def _song_root(conn, job_id: int) -> int:
+    """Верх песни: по parent_id / overdub_of до трека без родителя. Цепочка оборвана удалённой версией — 422:
+    уцелевший потомок не генерация (вариант, продолжение), корнем рецепта он дал бы случайный трек."""
+    seen, cur = set(), job_id
+    while cur not in seen:
+        seen.add(cur)
+        row = conn.execute("SELECT parent_id, overdub_of FROM jobs WHERE id=?", (cur,)).fetchone()
+        if row is None:
+            raise HTTPException(422, f"версия #{cur} этой песни удалена — рецепт ветки после неё собрать нельзя; "
+                                     "экспортируйте трек, у которого цепочка версий цела")
+        up = row["parent_id"] or row["overdub_of"]
+        if not up:
+            return cur
+        cur = up
+    return cur
+
+
+def _read_text(job_id: int, name: str | None) -> str | None:
+    if not name:
+        return None
+    p = JOBS_DIR / str(job_id) / name
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+@app.get("/jobs/{job_id}/recipe")
+def job_recipe(job_id: int):
+    """Рецепт песни трека job_id (от её корня): генезис + журнал правок, без аудио."""
+    with db_lock, db() as conn:
+        if conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone() is None:
+            raise HTTPException(404, "job not found")
+        root_id = _song_root(conn, job_id)
+        jobs = {r["id"]: dict(r) for r in conn.execute("SELECT * FROM jobs").fetchall()}
+        ops = [_op_row(r) for r in conn.execute("SELECT * FROM job_ops ORDER BY id").fetchall()]
+    root = jobs.get(root_id)
+    if root is not None:
+        root["plan_abc"] = _read_text(root_id, root.get("abc_file") or "score.abc")
+        root["request_abc"] = _read_text(root_id, root.get("req_abc"))
+    ver = get_version()
+    try:
+        out = recipe.build_recipe(jobs, ops, root_id, ver["model"], ver["stems_model"],
+                                  time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+    except recipe.RecipeError as e:
+        raise HTTPException(422, str(e)) from e
+    return out
+
+
+class RecipeImportIn(BaseModel):
+    recipe: dict
+    mode: str = Field(default="seed", pattern="^(seed|plan)$")
+
+
+RECIPE_LEASE_S = 600  # захват шага импорта: ведущий пропал — через 10 мин шаг берёт другой
+
+
+def _import_row(r, full: bool = False) -> dict:
+    d = {k: r[k] for k in ("id", "title", "status", "progress", "error", "mode", "root_job_id",
+                           "created_at", "finished_at")}
+    if full:
+        d["recipe"] = json.loads(r["recipe"] or "{}")
+        d["state"] = json.loads(r["state"] or "{}")
+    return d
+
+
+@app.post("/recipes/import")
+def recipe_import(req: RecipeImportIn):
+    """Новая сессия импорта: ведёт её приложение (или MCP) шаг за шагом, здесь — только состояние."""
+    why = recipe.check_recipe(req.recipe)
+    if why:
+        raise HTTPException(422, why)
+    title = (req.recipe.get("track") or {}).get("title") or (req.recipe.get("root") or {}).get("title") or "трек"
+    with db_lock, db() as conn:
+        cur = conn.execute(
+            "INSERT INTO recipe_imports(title,status,mode,recipe,state,created_at) VALUES(?,?,?,?,?,?)",
+            (title, "running", req.mode, json.dumps(req.recipe, ensure_ascii=False), "{}",
+             time.strftime("%Y-%m-%dT%H:%M:%S")))
+        return {"id": cur.lastrowid}
+
+
+@app.get("/recipes/imports")
+def recipe_imports():
+    with db_lock, db() as conn:
+        rows = conn.execute("SELECT * FROM recipe_imports ORDER BY id").fetchall()
+    return [_import_row(r) for r in rows]
+
+
+def _import_or_404(conn, imp_id: int):
+    row = conn.execute("SELECT * FROM recipe_imports WHERE id=?", (imp_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "import not found")
+    return row
+
+
+@app.get("/recipes/imports/{imp_id}")
+def recipe_import_get(imp_id: int):
+    with db_lock, db() as conn:
+        return _import_row(_import_or_404(conn, imp_id), full=True)
+
+
+class RecipeClaimIn(BaseModel):
+    owner: str = Field(min_length=1)
+
+
+@app.post("/recipes/imports/{imp_id}/claim")
+def recipe_import_claim(imp_id: int, req: RecipeClaimIn):
+    """Захват ведения импорта: держит другой и лиза не истекла — 409 (приложение и MCP не делают шаг дважды)."""
+    now = time.time()
+    with db_lock, db() as conn:
+        row = _import_or_404(conn, imp_id)
+        if row["owner"] and row["owner"] != req.owner and (row["lease_until"] or 0) > now:
+            raise HTTPException(409, f"import is led by {row['owner']}")
+        conn.execute("UPDATE recipe_imports SET owner=?, lease_until=? WHERE id=?",
+                     (req.owner, now + RECIPE_LEASE_S, imp_id))
+    return {"id": imp_id}
+
+
+class RecipeImportPatch(BaseModel):
+    # ведущий шлёт своё имя: импорт уже ведёт другой (перехватил после истёкшей лизы) — 409, устаревшее состояние
+    # не затирает новое; без owner — действие человека («повторить», «убрать»)
+    owner: str = ""
+    state: dict | None = None
+    progress: str | None = None
+    # dismissed — человек убрал упавший импорт из списка над треками
+    status: str | None = Field(default=None, pattern="^(running|done|error|dismissed)$")
+    error: str | None = None
+    root_job_id: int | None = None
+
+
+@app.patch("/recipes/imports/{imp_id}")
+def recipe_import_patch(imp_id: int, req: RecipeImportPatch):
+    with db_lock, db() as conn:
+        row = _import_or_404(conn, imp_id)
+        if req.owner and row["owner"] and row["owner"] != req.owner:
+            raise HTTPException(409, f"import is led by {row['owner']}")
+        sets, vals = [], []
+        if req.state is not None:
+            sets.append("state=?")
+            vals.append(json.dumps(req.state, ensure_ascii=False))
+        for col in ("progress", "error", "root_job_id", "status"):
+            v = getattr(req, col)
+            if v is not None:
+                sets.append(f"{col}=?")
+                vals.append(v)
+        if req.status in ("done", "error", "dismissed"):
+            sets.append("finished_at=?")
+            vals.append(time.strftime("%Y-%m-%dT%H:%M:%S"))
+        if req.status == "running":
+            sets.append("finished_at=''")
+        if sets:
+            conn.execute(f"UPDATE recipe_imports SET {', '.join(sets)} WHERE id=?", (*vals, imp_id))
+        return _import_row(_import_or_404(conn, imp_id), full=True)

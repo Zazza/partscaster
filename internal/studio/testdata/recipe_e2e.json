@@ -1,0 +1,111 @@
+{
+  "format": "yue-track-recipe",
+  "version": 1,
+  "exported_at": "2026-10-11T12:00:00+03:00",
+  "worker_model": "yue2-test",
+  "stems_model": "roformer",
+  "track": {
+    "title": "Warm Wire",
+    "folder": "Альбом",
+    "head": "n5"
+  },
+  "root": {
+    "id": "n1",
+    "title": "Warm Wire",
+    "style": "dark rock, male baritone",
+    "lyrics": "[verse] warm wire",
+    "seed": 123,
+    "cot": "full",
+    "arc": "calm-build",
+    "max_tokens": 3000,
+    "temperature": 0.9,
+    "cfg": 1.5,
+    "abc": null,
+    "plan_abc": null
+  },
+  "ops": [
+    {
+      "op": "continue",
+      "node": "n1",
+      "params": {
+        "from_sec": 30.0,
+        "parent_id": "n1",
+        "seed": 77
+      },
+      "result": "job:n2",
+      "refs": []
+    },
+    {
+      "op": "fx",
+      "node": "n2",
+      "params": {
+        "source": "mix",
+        "label": "warm",
+        "chain": [
+          {
+            "type": "comp",
+            "threshold_db": -18,
+            "ratio": 3
+          },
+          {
+            "type": "reverb",
+            "wet": 0.2,
+            "decay_s": 1.8
+          }
+        ],
+        "from": 10.0,
+        "to": 40.0
+      },
+      "result": "dsp-fx-1.flac",
+      "refs": []
+    },
+    {
+      "op": "variant_track",
+      "node": "n2",
+      "params": {
+        "file": "dsp-fx-1.flac",
+        "title": "warm"
+      },
+      "result": "job:n3",
+      "refs": []
+    },
+    {
+      "op": "overdub",
+      "node": "n3",
+      "params": {
+        "style": "warm strings",
+        "seed": 88,
+        "gain": 0.5
+      },
+      "result": "job:n4",
+      "refs": []
+    },
+    {
+      "op": "variant_track",
+      "node": "n3",
+      "params": {
+        "file": "overdub-{n4}.flac",
+        "title": "with strings"
+      },
+      "result": "job:n5",
+      "refs": []
+    },
+    {
+      "op": "set_head",
+      "node": "n1",
+      "params": {
+        "head_id": "n5"
+      },
+      "result": "",
+      "refs": []
+    }
+  ],
+  "durations": {
+    "n1": 95.0,
+    "n2": 120.0,
+    "n3": 120.0,
+    "n4": 120.0,
+    "n5": 120.0
+  },
+  "warnings": []
+}

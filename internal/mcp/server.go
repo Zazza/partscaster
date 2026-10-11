@@ -38,6 +38,8 @@ type Server struct {
 	compat      *compatChecker // воркер и MCP разных версий API
 	version     string         // версия сборки (SetVersion), serverInfo.version
 
+	recipeOnce sync.Once // ведущий импорта рецептов (tools_recipe.go)
+
 	fxOnce sync.Once
 	fx     *studio.Cache // трек и стемы на ПК для превью эффектов (fx_preview.go)
 	fxDir  string

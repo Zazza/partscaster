@@ -19,6 +19,7 @@ func RegisterStudioTools(s *Server) {
 	registerRevoiceTools(s)
 	registerFxTools(s)
 	registerPresetTools(s)
+	registerRecipeTools(s)
 	s.Register(Tool{
 		Name:        "config_get",
 		Description: "Текущие настройки: адрес воркера, Ollama (url/модель), пути данных воркера.",
@@ -767,26 +768,10 @@ func RegisterStudioTools(s *Server) {
 
 // applyDsp — конвейер как в приложении (app.go): скачать flac → ffmpeg → залить вариант.
 func (s *Server) applyDsp(jobID int64, chainID string, params map[string]float64) (*yue.DspVariant, error) {
-	chain := dsp.ByID(chainID)
-	if chain == nil {
-		return nil, fmt.Errorf("unknown chain %q (см. dsp_chains)", chainID)
-	}
-	if chain.Key != "" {
-		return nil, fmt.Errorf("цепочка %s — только на дорожку: укажи stem (ключ — дорожка %s)", chainID, chain.Key)
-	}
-	return s.runGraph(jobID, chain.FilterGraph(params), fmt.Sprintf("dsp-%s.flac", chainID), "")
+	return studio.ApplyChain(context.Background(), s.client, jobID, chainID, params)
 }
 
 // applySteps — цепочка эффектов по порядку на весь трек: вариант dsp-pedals.flac.
 func (s *Server) applySteps(jobID int64, steps []dsp.Step) (*yue.DspVariant, error) {
-	graph, _, err := dsp.StepsGraph(steps)
-	if err != nil {
-		return nil, err
-	}
-	return s.runGraph(jobID, graph, "dsp-pedals.flac", studio.StepsLabel(steps))
-}
-
-// runGraph — граф ffmpeg на весь трек (общий конвейер с приложением): вариант fname с подписью label.
-func (s *Server) runGraph(jobID int64, graph, fname, label string) (*yue.DspVariant, error) {
-	return studio.RunGraph(context.Background(), s.client, jobID, "", graph, fname, label)
+	return studio.ApplySteps(context.Background(), s.client, jobID, steps, "")
 }

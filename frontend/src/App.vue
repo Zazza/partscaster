@@ -29,6 +29,8 @@ import VoicesPage from './components/VoicesPage.vue'
 import InstrumentsPage from './components/InstrumentsPage.vue'
 import PresetsPage from './components/PresetsPage.vue'
 import ReplayModal from './components/ReplayModal.vue'
+import RecipeImportModal from './components/RecipeImportModal.vue'
+import { activeImports } from './recipe.js'
 import PresetChips from './components/PresetChips.vue'
 import JobPresets from './components/JobPresets.vue'
 import StudioPage from './components/StudioPage.vue'
@@ -464,11 +466,32 @@ async function refresh() {
     health.value = null
   }
   compat.onHealth(health.value)
+  // ход импорта рецептов — отдельно: старый воркер без /recipes не должен ронять обновление
+  api.recipeImports().then((l) => { imports.value = activeImports(l) }).catch(() => { imports.value = [] })
   // сводка статус-бара отдельно: старый воркер без /stats не должна ронять обновление
   api.stats().then(s => { stats.value = s }).catch(() => { stats.value = null })
   try { playerState.value = await api.audioState() } catch {}
 }
 onRefresh(refresh)
+
+// экспорт рецепта песни трека: файл правил без аудио (диалог сохранения)
+async function exportRecipe(j) {
+  try {
+    const r = await api.exportRecipe(j.id)
+    if (!r?.path) return
+    // что в рецепт не вошло (версии до журнала, правки с чужими треками) — человек должен знать
+    const lost = (r.warnings || []).length ? '\n\n' + t('recipe.export.warnings') + '\n— ' + r.warnings.join('\n— ') : ''
+    alert(t('recipe.export.saved', { path: r.path }) + lost)
+  } catch (e) {
+    alert(String(e))
+  }
+}
+
+// у упавшего импорта рецепта: продолжить с того же шага или убрать строку
+async function importAction(imp, action) {
+  try { await api.recipeImportAction(imp.id, action) } catch (e) { alert(String(e)) }
+  refresh()
+}
 
 async function togglePlay(j) {
   await toggleArtifact(`m${j.id}`, `#${j.id} ${j.title}`, () => api.playAudio(j.id))
@@ -543,6 +566,8 @@ const corpusPage = ref(false)
 const voicesPage = ref(false)
 const instrumentsPage = ref(false)   // «Инструменты»: дорожка через цепочку звукового движка
 const presetsPage = ref(false)       // «Пресеты звука»: библиотека пресетов
+const recipeImport = ref(false)      // окно «Импорт рецепта»
+const imports = ref([])             // импорты рецептов: ход над списком треков
 const replayJob = ref(null)          // «переиграть в другом стиле» (бывший овердаб студии): трек или null
 const studioJob = ref(null)
 // главная — список треков; форма нового трека — отдельная страница
@@ -871,6 +896,7 @@ function onWindowClick(e) {
         <li :title="t('nav.voices.tip')" @click="navGo('voices')"><AppIcon class="nav-ico" name="mic" />{{ t('nav.voices') }}</li>
         <li :title="t('nav.instruments.tip')" @click="navGo('instruments')"><AppIcon class="nav-ico" name="pedal" />{{ t('nav.instruments') }}</li>
         <li :title="t('nav.presets.tip')" @click="navGo('presets')"><AppIcon class="nav-ico" name="disc" />{{ t('nav.presets') }}</li>
+        <li :title="t('recipe.importMenu.tip')" @click="navOpen = false; recipeImport = true"><AppIcon class="nav-ico" name="folder" />{{ t('recipe.importMenu') }}</li>
         <li :title="t('nav.settings.tip')" @click="navGo('settings')"><AppIcon class="nav-ico" name="sliders" />{{ t('nav.settings') }}</li>
         <li :title="t('nav.about.tip')" @click="navOpen = false; welcome = 'about'"><AppIcon class="nav-ico" name="info" />{{ t('nav.about') }}</li>
       </ul>
@@ -887,6 +913,14 @@ function onWindowClick(e) {
     <!-- страница треков: без панельной обёртки и заголовка «Треки» —
          страница и есть список; рамка у таблицы своя, двойная рамка не нужна -->
     <section class="track-list">
+      <div v-for="imp in imports" :key="imp.id" class="recipe-progress" :class="{ error: imp.status === 'error' }">
+        {{ imp.status === 'error' ? t('recipe.progress.error', { title: imp.title, error: imp.error })
+                                  : t('recipe.progress', { title: imp.title, progress: imp.progress || '…' }) }}
+        <template v-if="imp.status === 'error'">
+          <button class="ghost small-btn" @click="importAction(imp, 'retry')">{{ t('recipe.retry') }}</button>
+          <button class="ghost small-btn" @click="importAction(imp, 'dismiss')">{{ t('recipe.dismiss') }}</button>
+        </template>
+      </div>
       <p v-if="!jobs.length" class="muted">{{ t('common.empty') }}
         <button class="primary" @click="openNewTrack"><AppIcon name="plus" /> {{ t('nav.new') }}</button></p>
       <template v-else>
@@ -992,6 +1026,7 @@ function onWindowClick(e) {
                 <li v-if="headOf(j).abc_file" :title="t('queue.notes.tip')" @click="loadJobAbc(headOf(j))"><AppIcon class="nav-ico" name="music" />{{ t('queue.notes') }}</li>
                 <li :title="t('queue.repeat.tip')" @click="reuseJob(j)"><AppIcon class="nav-ico" name="repeat" />{{ t('queue.repeat') }}</li>
                 <li v-if="headOf(j).status === 'done'" :title="t('replay.menu.tip')" @click="replayJob = headOf(j)"><AppIcon class="nav-ico" name="music" />{{ t('replay.menu') }}</li>
+                <li v-if="j.status === 'done' && !j.draft" :title="t('recipe.export.tip')" @click="exportRecipe(j)"><AppIcon class="nav-ico" name="save" />{{ t('recipe.export') }}</li>
                 <li class="danger" :title="t('queue.delete.tip')" @click="deleteJob(j)"><AppIcon class="nav-ico" name="x" />{{ t('queue.delete') }}</li>
               </ul>
             </details>
@@ -1283,6 +1318,7 @@ function onWindowClick(e) {
 
   <InstrumentsPage v-if="instrumentsPage" @close="instrumentsPage = false; refresh()" />
   <PresetsPage v-if="presetsPage" @close="presetsPage = false; loadPresetNames()" />
+  <RecipeImportModal v-if="recipeImport" @close="recipeImport = false" @started="refresh()" />
   <ReplayModal v-if="replayJob" :job="replayJob" :auto-translate="autoTranslate" @close="replayJob = null" @submitted="refresh()" />
 
   <LibraryPage v-if="libraryPage" @close="libraryPage = false" />
@@ -1336,6 +1372,8 @@ h2 {
   width: 30px; height: 26px; line-height: 22px; text-align: center;
 }
 .icon-btn:hover { color: var(--text); filter: none; transform: none; }
+.recipe-progress { padding: 6px 12px; font-size: 13px; opacity: .85; }
+.recipe-progress.error { color: var(--err); }
 .compat-banner {
   display: flex; align-items: center; gap: 8px; padding: 6px 12px;
   background: color-mix(in srgb, var(--warn, #c90) 18%, transparent); font-size: 13px;

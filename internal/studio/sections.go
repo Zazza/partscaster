@@ -139,8 +139,25 @@ type stemSet map[string]string
 // RebuildSections — пересобрать трек со ВСЕМИ заменами с чистого оригинала:
 // повторная пересборка поверх прошлого микса наслаивала бы замены и не давала
 // менять громкость.
+// В журнал правок (рецепт) — одна запись rebuild_sections; внутренние вызовы сервиса не журналируются.
 func RebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs []SectionSpec) (*RebuildResult, error) {
-	return rebuildSections(ctx, svc, parentID, specs, "")
+	res, err := rebuildSections(yue.WithoutJournal(ctx), svc, parentID, specs, "")
+	if err != nil {
+		return nil, err
+	}
+	var refs []int64
+	for _, s := range specs {
+		if s.ChildID != 0 {
+			refs = append(refs, s.ChildID)
+		}
+	}
+	file := ""
+	if res.Variant != nil {
+		file = res.Variant.File
+	}
+	yue.Record(ctx, svc, parentID, yue.JobOp{Op: "rebuild_sections", Params: yue.Params(map[string]any{"specs": specs}),
+		Result: file, Refs: refs})
+	return res, nil
 }
 
 // rebuildSections — пересборка; fname "" — overdub-inst-<последняя вклейка>.flac (микс студии), иначе

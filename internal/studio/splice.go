@@ -29,6 +29,20 @@ const spliceXfade = 0.05
 // Результат — вариант трека baseID (dsp-splice-<n>.flac: такие имена
 // принимает загрузка воркера).
 func Splice(ctx context.Context, svc yue.Service, baseID int64, parts []SplicePart, crossfade float64) (*yue.DspVariant, error) {
+	v, err := splice(yue.WithoutJournal(ctx), svc, baseID, parts, crossfade)
+	if err != nil {
+		return nil, err
+	}
+	var refs []int64
+	for _, p := range parts {
+		refs = append(refs, p.JobID)
+	}
+	yue.Record(ctx, svc, baseID, yue.JobOp{Op: "splice", Params: yue.Params(map[string]any{"parts": parts, "crossfade": crossfade}),
+		Result: v.File, Refs: refs})
+	return v, nil
+}
+
+func splice(ctx context.Context, svc yue.Service, baseID int64, parts []SplicePart, crossfade float64) (*yue.DspVariant, error) {
 	if len(parts) == 0 {
 		return nil, errors.New("нет кусков для склейки")
 	}

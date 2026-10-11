@@ -15,6 +15,16 @@ import (
 // stem vocals/drums/bass/other/guitar/piano — только эта дорожка, через пересборку
 // (остальные дорожки не меняются), результат — вариант пересборки.
 func VolumeEnvelope(ctx context.Context, svc yue.Service, jobID int64, stem string, pts []dsp.EnvPoint) (*yue.DspVariant, error) {
+	v, err := volumeEnvelope(yue.WithoutJournal(ctx), svc, jobID, stem, pts)
+	if err != nil {
+		return nil, err
+	}
+	yue.Record(ctx, svc, jobID, yue.JobOp{Op: "envelope", Params: yue.Params(map[string]any{"stem": stem, "points": pts}),
+		Result: v.File})
+	return v, nil
+}
+
+func volumeEnvelope(ctx context.Context, svc yue.Service, jobID int64, stem string, pts []dsp.EnvPoint) (*yue.DspVariant, error) {
 	norm, err := dsp.NormalizeEnvelope(pts)
 	if err != nil {
 		return nil, err

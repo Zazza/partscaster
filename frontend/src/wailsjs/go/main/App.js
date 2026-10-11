@@ -122,6 +122,10 @@ export function YueEnsureMp3(arg1) {
   return window['go']['main']['App']['YueEnsureMp3'](arg1);
 }
 
+export function YueExportRecipe(arg1) {
+  return window['go']['main']['App']['YueExportRecipe'](arg1);
+}
+
 export function YueFragmentJob(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['YueFragmentJob'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -164,6 +168,10 @@ export function YueFxPreview(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function YueGetServerURL() {
   return window['go']['main']['App']['YueGetServerURL']();
+}
+
+export function YueImportRecipe(arg1, arg2) {
+  return window['go']['main']['App']['YueImportRecipe'](arg1, arg2);
 }
 
 export function YueImportTrack() {
@@ -234,6 +242,10 @@ export function YueOpenURL(arg1) {
   return window['go']['main']['App']['YueOpenURL'](arg1);
 }
 
+export function YuePickRecipe() {
+  return window['go']['main']['App']['YuePickRecipe']();
+}
+
 export function YuePlan(arg1) {
   return window['go']['main']['App']['YuePlan'](arg1);
 }
@@ -260,6 +272,14 @@ export function YuePlayPreview(arg1, arg2, arg3, arg4) {
 
 export function YueRebuildSections(arg1, arg2) {
   return window['go']['main']['App']['YueRebuildSections'](arg1, arg2);
+}
+
+export function YueRecipeImportAction(arg1, arg2) {
+  return window['go']['main']['App']['YueRecipeImportAction'](arg1, arg2);
+}
+
+export function YueRecipeImports() {
+  return window['go']['main']['App']['YueRecipeImports']();
 }
 
 export function YueRecognizeLyricsFile() {

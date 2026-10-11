@@ -11,6 +11,13 @@ type Service interface {
 	Health(ctx context.Context) (*HealthInfo, error)
 	// Version — сборка воркера и версия API (сверка совместимости приложения/MCP с воркером)
 	Version(ctx context.Context) (*VersionInfo, error)
+	// рецепт трека: экспорт правилами и сессии импорта (ведёт studio.RecipeRunner)
+	Recipe(ctx context.Context, id int64) (json.RawMessage, error)
+	ImportRecipe(ctx context.Context, recipe json.RawMessage, mode string) (int64, error)
+	RecipeImports(ctx context.Context) ([]RecipeImport, error)
+	RecipeImport(ctx context.Context, id int64) (*RecipeImport, error)
+	ClaimRecipeImport(ctx context.Context, id int64, owner string) error
+	SaveRecipeImport(ctx context.Context, id int64, u RecipeImportUpdate) (*RecipeImport, error)
 	Stats(ctx context.Context) (*StatsInfo, error)
 	Jobs(ctx context.Context) ([]Job, error)
 	Submit(ctx context.Context, p SubmitParams) (int64, error)

@@ -30,7 +30,18 @@ type PresetResult struct {
 // ApplySoundPreset — пресет на трек: дорожки (нет — разделение), наборы сэмплов, пересборка
 // с правками «весь трек», финал на РЕЗУЛЬТАТЕ пересборки, версия-трек. Ошибка любого шага —
 // ошибка с причиной; трек и прежние варианты не трогаются.
+// В журнал правок — одна запись sound_preset с пресетом ЦЕЛИКОМ (импорт не зависит от библиотеки пресетов).
 func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
+	res, err := applySoundPreset(yue.WithoutJournal(ctx), svc, jobID, p)
+	if err != nil {
+		return nil, err
+	}
+	yue.Record(ctx, svc, jobID, yue.JobOp{Op: "sound_preset", Params: yue.Params(map[string]any{"preset": p}),
+		Result: yue.JobResult(res.ChildID)})
+	return res, nil
+}
+
+func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
 	job, err := findJob(ctx, svc, jobID)
 	if err != nil {
 		return nil, err
