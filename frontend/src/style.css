@@ -7,6 +7,7 @@
   --panel2: #2b2b37;
   --panel3: #3a3a49;
   --border: #454556;
+  --line: #3a3a49;    /* тонкие разделители в студийных компонентах */
   --bevel-hi: #56566a;      /* светлая грань фаски */
   --btn-border: #34343f;    /* рамка ghost/toggle-кнопок: мягче --border разделителей */
   --btn-bevel-hi: #41414f;  /* их верхняя грань */
@@ -29,17 +30,21 @@
   --badge-fg: #9aa5ff;
 }
 [data-theme="light"] {
-  --bg: #eceef2;
+  /* тёплая бумага вместо серого: панели белые, контур — светлый,
+     а не тёмно-серый (тёмный --border красит рамки ВСЕХ кнопок,
+     включая круглые ▶ и ★, и читается как «чёрный бордер») */
+  --bg: #f7f7f5;
   --panel: #ffffff;
-  --panel2: #f5f6f9;
-  --panel3: #e8ebf1;
-  --border: #8f96a5;
-  --btn-border: #bcc0ca;
+  --panel2: #f4f4f2;
+  --panel3: #ececea;
+  --border: #dcdfd9;
+  --line: #e2e4de;   /* тонкие разделители — светлые, без фолбэка #2a2a35 */
+  --btn-border: #d3d6d0;
   --btn-bevel-hi: #ffffff;
   --bevel-hi: #ffffff;
-  --bevel-lo: #c6cad4;
-  --text: #101319;
-  --muted: #3c414c;
+  --bevel-lo: #d9dcd6;
+  --text: #191c17;
+  --muted: #464b44;
   --accent: #c2410c;
   --ok: #15803d;
   --err: #b91c1c;
@@ -209,9 +214,24 @@ input[type="range"]::-webkit-slider-thumb {
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 3px rgba(15,20,35,.14);
+  /* рамка целиком светлая: нижняя/правая грань фаска не затемняет контур */
+  border-color: #d3d6d0;
   border-top-color: rgba(255,255,255,.95);
   border-left-color: rgba(255,255,255,.95);
 }
+/* неактивные: не выцветать opacity, а читаемый серый текст */
+[data-theme="light"] button:disabled { opacity: 1; color: #6e7268; filter: none; }
+[data-theme="light"] button.ghost:disabled,
+[data-theme="light"] button.toggle:disabled { color: #7c8076; }
+/* цветные главные кнопки в неактиве притушить, но не делать серой кашей */
+[data-theme="light"] button.primary:disabled,
+[data-theme="light"] button.play-main:disabled { opacity: .55; color: var(--play-fg); }
+/* фаски в светлой — не чёрная тень, а лёгкая внешняя, панели читаются объёмом */
+[data-theme="light"] .wa-bevel {
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.85), 0 1px 3px rgba(25,28,23,.07);
+}
+/* заголовки-строки h2 наследуют тёмную тень текста — на белом грязь */
+[data-theme="light"] h2 { text-shadow: none; }
 [data-theme="light"] button:hover { filter: brightness(1.05) saturate(1.05); }
 [data-theme="light"] button:active:not(:disabled) {
   background: linear-gradient(180deg, rgba(244,245,248,.75), rgba(255,255,255,.45));
