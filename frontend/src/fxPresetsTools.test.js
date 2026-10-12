@@ -1,11 +1,4 @@
-// Тесты карточки internal-own-track, этап 7а «Гитары и бас»: условия 51–53 (тест-кейсы ТК86, ТК87).
-//   ТК86 — готовые гитары без захвата (≥ 10, stems guitar/other, без amp, без файлов) и басы
-//     (≥ 4, stems ['bass'], без sampler/bass); у пресетов с amp — непустой amp_hint; group — из
-//     PRESET_GROUPS (presetGroups.js). Диапазоны параметров всех пресетов проверяет fxPresets.test.js
-//     (describe.each по всему fxPresets) — новые пресеты попадают туда автоматически.
-//   ТК87 — fillAmp(chain, amps, hints) из fxChain.js: подстановка захвата по подсказкам.
-// Пресеты 7а опознаются по полю group и stems, а не по id (id заданы карточкой только у старых гитар).
-// Написаны по карточке, без чтения реализации.
+// Пресеты опознаются по полю group и stems, а не по id.
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import blocks from './fxBlocks.json'
@@ -31,12 +24,12 @@ function needsFiles(p) {
   return false
 }
 
-// оркестровая замена мелодии (этап 14, orch-lead: stems guitar/other/vocals, набор VSCO) — не «готовая гитара»
+// оркестровая замена мелодии (orch-lead) — не «готовая гитара»
 const guitars = grouped.filter((p) => (p.stems || []).includes('guitar') && !has(p, 'amp') && p.group !== 'orch-lead')
-// басы 7а — группа bass-tone (уточнение ТК86, условие 58: синт-басы набором — в группе bass-kit)
+// басы — группа bass-tone (синт-басы набором — в группе bass-kit)
 const basses = grouped.filter((p) => p.group === 'bass-tone' && JSON.stringify(p.stems) === JSON.stringify(['bass']))
 
-describe('ТК86: готовые гитары без захвата (условие 51)', () => {
+describe('готовые гитары без захвата', () => {
   it('не меньше 10 гитар с group, stems ⊇ guitar, без блока amp', () => {
     expect(guitars.length).toBeGreaterThanOrEqual(10)
   })
@@ -48,7 +41,7 @@ describe('ТК86: готовые гитары без захвата (услов�
     ])).toEqual([])
   })
 
-  // характерные приёмы из списка условия 51 — каждый есть хотя бы у одной готовой гитары
+  // характерные приёмы — каждый есть хотя бы у одной готовой гитары
   it.each([
     ['пост-панк: хорус и дилей', (p) => has(p, 'chorus') && has(p, 'delay')],
     ['сёрф: пружина и тремоло', (p) => has(p, 'spring') && has(p, 'tremolo')],
@@ -62,7 +55,7 @@ describe('ТК86: готовые гитары без захвата (услов�
   })
 })
 
-describe('ТК86: готовые басы (условие 51)', () => {
+describe('готовые басы', () => {
   it('не меньше 4 басов с group, stems [bass]', () => {
     expect(basses.length).toBeGreaterThanOrEqual(4)
   })
@@ -81,19 +74,18 @@ describe('ТК86: готовые басы (условие 51)', () => {
   })
 })
 
-describe('ТК86: group и названия (условия 51, 53, 53а)', () => {
-  it('готовых с group есть (гитары и басы 7а)', () => {
+describe('group и названия', () => {
+  it('готовых с group есть (гитары и басы)', () => {
     expect(grouped.length).toBeGreaterThanOrEqual(14)
   })
 
-  // «в названии нет имён групп» — проверяет genrePresets.test.js (ТК106) по всем пресетам и полному списку
   it('у каждого group — id из PRESET_GROUPS', () => {
     expect(violations(grouped, (p) => (typeof p.group === 'string' && p.group in PRESET_GROUPS ? [] : [`группа ${p.group}`])))
       .toEqual([])
   })
 })
 
-describe('ТК86: amp_hint у пресетов с усилителем (условие 52)', () => {
+describe('amp_hint у пресетов с усилителем', () => {
   const withAmp = fxPresets.filter((p) => has(p, 'amp'))
 
   it('пресеты с усилителем есть', () => {
@@ -122,7 +114,7 @@ describe('ТК86: amp_hint у пресетов с усилителем (усло
   })
 })
 
-describe('ТК87: fillAmp(chain, amps, hints) (условие 52)', () => {
+describe('fillAmp(chain, amps, hints)', () => {
   const BUG = 'Bug333 Clean.nam'
   const TWIN = 'Tim R Fender TwinVerb Norm Bright.nam'
   const JCM = 'Tim R JCM2000 Crunch.nam'
@@ -196,10 +188,9 @@ describe('ТК87: fillAmp(chain, amps, hints) (условие 52)', () => {
   })
 })
 
-// условие 52: «TrackDesk и InstrumentsPage зовут её (дубли fillAmp убираются)»; условие 53 — оба
-// экрана показывают готовые по группам. Проверка по исходникам: своих копий fillAmp нет,
+// Проверка по исходникам: своих копий fillAmp нет,
 // fillAmp берётся из fxChain.js, группировка — из presetGroups.js.
-describe('экраны используют общие fillAmp и groupPresets (условия 52, 53)', () => {
+describe('экраны используют общие fillAmp и groupPresets', () => {
   const src = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
   it('TrackDesk и InstrumentsPage: fillAmp и groupPresets — из общих модулей, подсказки передаются', () => {
     const bad = ['./components/TrackDesk.vue', './components/InstrumentsPage.vue'].flatMap((rel) => {

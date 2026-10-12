@@ -6,10 +6,7 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-dsp-space, разделы 4–5: модуляция (chorus, flanger,
-// phaser, tremolo) и фильтры (eq, sweep, autowah). Хелперы nc* — из newchains_test.go.
-
-// --- 4. Модуляция ---
+// Тесты модуляции (chorus, flanger, phaser, tremolo) и фильтров (eq, sweep, autowah).
 
 // ncGainProfile — АЧХ выхода к входу на [from,to] в полосах по 20 Гц до 7 кГц, дБ.
 // Шум входа сокращается: остаётся передаточная функция эффекта в этом окне.
@@ -32,7 +29,7 @@ func ncMeanAbsDiff(a, b []float64) float64 {
 	return s / float64(len(a))
 }
 
-// Карточка 4.1: chorus/flanger/phaser на белом шуме — спектр меняется во времени:
+// chorus/flanger/phaser на белом шуме — спектр меняется во времени:
 // АЧХ в окне 0–0.5 с отличается от окна, сдвинутого на полпериода LFO; mix 0 → сухой.
 func TestModulationSpectrumMoves(t *testing.T) {
 	t.Parallel()
@@ -67,7 +64,7 @@ func ncEnvelope5ms(s []float32, from, to float64) []float64 {
 	return e
 }
 
-// Карточка 4.2: tremolo на тоне — огибающая с периодом 1/rate (±10 %), минимум
+// tremolo на тоне — огибающая с периодом 1/rate (±10 %), минимум
 // ≈ 1−depth (±0.1), без ступенек (соседние окна 5 мс отличаются < 1.5 дБ при rate 5).
 func TestTremoloEnvelope(t *testing.T) {
 	t.Parallel()
@@ -102,8 +99,6 @@ func TestTremoloEnvelope(t *testing.T) {
 	}
 }
 
-// --- 5. Фильтры ---
-
 // ncEqTones — тоны 50, 250, 1000, 4000, 12000 Гц по 0.1 (44.1 кГц).
 const ncEqTones = "0.1*sin(2*PI*50*t)+0.1*sin(2*PI*250*t)+0.1*sin(2*PI*1000*t)+" +
 	"0.1*sin(2*PI*4000*t)+0.1*sin(2*PI*12000*t)"
@@ -112,7 +107,7 @@ func ncEqDelta(out, src []float32, hz float64) float64 {
 	return dbfs(toneAmpAt(out, ncSR, hz, 0.5, 1.5)) - dbfs(toneAmpAt(src, ncSR, hz, 0.5, 1.5))
 }
 
-// Карточка 5.1: все 0 → выход = вход (±0.1 дБ на каждом тоне).
+// Все 0 → выход = вход (±0.1 дБ на каждом тоне).
 func TestEQFlatIsTransparent(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -126,7 +121,7 @@ func TestEQFlatIsTransparent(t *testing.T) {
 	}
 }
 
-// Карточка 5.1: mid +6 на midf → тон на midf +6±1 дБ; на midf·4 и midf/4 — < 1.5 дБ.
+// mid +6 на midf → тон на midf +6±1 дБ; на midf·4 и midf/4 — < 1.5 дБ.
 func TestEQMidBell(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -143,7 +138,7 @@ func TestEQMidBell(t *testing.T) {
 	}
 }
 
-// Карточка 5.1: полки — тон 50 Гц при low +6 → +5…+7; тон 12 кГц при high −6 → −5…−7.
+// Полки — тон 50 Гц при low +6 → +5…+7; тон 12 кГц при high −6 → −5…−7.
 func TestEQShelves(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -167,7 +162,7 @@ func ncSweepParams(over map[string]float64) map[string]float64 {
 	return p
 }
 
-// Карточка 5.2: до start звук не тронут; type 1 (ВЧ) 20→2000 на белом шуме — энергия
+// До start звук не тронут; type 1 (ВЧ) 20→2000 на белом шуме — энергия
 // < 200 Гц в последней секунде окна на ≥ 10 дБ ниже, чем в первой; после окна при
 // hold 0 — снова сухой.
 func TestSweepHighpassHold0(t *testing.T) {
@@ -188,7 +183,7 @@ func TestSweepHighpassHold0(t *testing.T) {
 	}
 }
 
-// Карточка 5.2: hold 1 — после окна низ остаётся срезан.
+// hold 1 — после окна низ остаётся срезан.
 func TestSweepHighpassHold1(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -200,7 +195,7 @@ func TestSweepHighpassHold1(t *testing.T) {
 	}
 }
 
-// Карточка 5.2: type 0 (НЧ) 20000→500 — верх > 4 кГц к концу окна ≥ 10 дБ ниже.
+// type 0 (НЧ) 20000→500 — верх > 4 кГц к концу окна ≥ 10 дБ ниже.
 func TestSweepLowpass(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -212,8 +207,8 @@ func TestSweepLowpass(t *testing.T) {
 	}
 }
 
-// Карточка 5.3: autowah на белом шуме — спектральный центроид колеблется с периодом
-// 1/rate (±15 %), размах ≥ (hi−lo)/3. Карточка не задаёт mix — берётся 1 (только
+// autowah на белом шуме — спектральный центроид колеблется с периодом
+// 1/rate (±15 %), размах ≥ (hi−lo)/3. mix берётся 1 (только
 // эффект): сухой широкополосный шум при mix < 1 сам задаёт центроид.
 func TestAutowahCentroidSwings(t *testing.T) {
 	t.Parallel()

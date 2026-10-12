@@ -34,8 +34,6 @@ const EDITOR = join(srcDir, 'components', 'PresetEditor.vue')
 const CATALOG = join(srcDir, 'components', 'PresetCatalog.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
 
-// --- библиотека: вход в редактор ---
-
 test('PresetLibrary импортирует и рендерит PresetEditor и кнопку «новый пресет»', () => {
   const src = read(LIBRARY)
   expect(importsModule(src, 'PresetEditor', 'PresetEditor.vue'), 'нет импорта PresetEditor').toBe(true)
@@ -55,8 +53,6 @@ test('у каждого пресета — «послушать на демо» 
   expect(scriptOf(src)).toContain('applySoundPresetWith')
   expect(importsName(src, 'usePresetDemo', 'usePresetDemo.js')).toBe(true)
 })
-
-// --- редактор: кирпичи и модалка ---
 
 test('PresetEditor собирает готовые кирпичи: ChainEditor, каталог, плеер, демо-эталон, PlaceControls', () => {
   const src = read(EDITOR)
@@ -92,10 +88,6 @@ test('PresetCatalog: табы дорожек и ритм-секция набор
   expect(templateOf(src)).toContain(`emit('preview'`)
   expect(templateOf(src)).toContain(`emit('add'`)
 })
-
-// --- документация ---
-// Ключи preset.* в словарях — общий тест i18n.test.js (литеральные t() есть в ru и en; ключи ru = en);
-// общий паттерн модалки — modalBackdrop.test.js по всем .vue.
 
 test('docs/ui-guide.md: раздел «Пресеты звука» описывает редактор и демо-эталоны', () => {
   const lines = read(UI_GUIDE).split('\n')

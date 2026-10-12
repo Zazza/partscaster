@@ -1,24 +1,21 @@
-"""Тесты карточки internal-own-track, этап 7б: условия 56 и 58 (тест-кейсы ТК90 и ТК92, часть
-про сами сэмплы). Модуль worker/drumsynth.py — чистый синтез наборов, без сети и файлов.
+"""Модуль worker/drumsynth.py — чистый синтез наборов, без сети и файлов.
 
-Контракт (из карточки):
+Контракт:
 - KITS {набор: [части]}: tr808, tr909, linn, cr78, simmons; части у каждого — kick, snare, hh-closed,
   hh-open, ride, crash, tom-small, tom-medium, tom-large, clap, rim, cowbell;
 - DRUM_LAYERS = 8 слоёв по силе; render(kit, part, layer, sr) → моно float, звук с отсчёта 0;
   пик растёт со слоем строго; детерминированно;
-- ТК90: пик огибающей в первых 25 мс; длина 30 мс…4 с; хвост к концу ≤ −50 дБ от пика; в каждом наборе
+- пик огибающей в первых 25 мс; длина 30 мс…4 с; хвост к концу ≤ −50 дБ от пика; в каждом наборе
   центроид kick < snare < hh-closed; hh-open звучит дольше hh-closed (до −20 дБ); тамы по высоте
   (максимум спектра 50–500 Гц первых 60 мс) small > medium > large; tr808 kick — основной тон хвоста
   40–70 Гц; linn — энергия выше 14 кГц ≤ −40 дБ от всей;
 - BASS_KITS {"synthbass": (moog, sub808, acid)}, BASS_RANGE {часть: range MIDI}: у всех трёх E1 (28)…G3 (55),
-  по 28 нот (условие 58б, ТК92 новой редакции); render_bass(part, midi, sr) — 2,5 с;
-- ТК92 (новая редакция): основной тон каждого сэмпла точным методом (yin с frame 8192 или пик спектра
-  с уточнением; карточка допускает любой — тест засчитывает лучший из двух) — ±10 центов от своей ноты.
+  по 28 нот; render_bass(part, midi, sr) — 2,5 с;
+- основной тон каждого сэмпла точным методом (yin с frame 8192 или пик спектра
+  с уточнением; тест засчитывает лучший из двух) — ±10 центов от своей ноты.
 
-Предположение (карточка не уточняет): слои нумеруются 0…DRUM_LAYERS−1, сила растёт с номером.
+Предположение: слои нумеруются 0…DRUM_LAYERS−1, сила растёт с номером.
 Все сэмплы считаются один раз на модуль (кэш) и переиспользуются тестами.
-
-Запуск: cd worker && python3 -m unittest test_drumsynth -v
 """
 import unittest
 
@@ -136,7 +133,7 @@ def midi_spectrum(s, midi, sr=SR):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestDrumSamples(unittest.TestCase):
-    """ТК90: каждый набор × часть × слой."""
+    """Каждый набор × часть × слой."""
 
     def test_mono_float_length_and_attack(self):
         for kit in MACHINES:
@@ -187,7 +184,7 @@ class TestDrumSamples(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestKitCharacter(unittest.TestCase):
-    """ТК90: соотношения частей внутри набора (по верхнему слою)."""
+    """Соотношения частей внутри набора (по верхнему слою)."""
 
     def test_centroid_kick_snare_hh(self):
         for kit in MACHINES:
@@ -233,7 +230,7 @@ class TestKitCharacter(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthBass(unittest.TestCase):
-    """Условие 58, ТК92: синт-басы — части, ноты, высота каждого сэмпла."""
+    """Синт-басы — части, ноты, высота каждого сэмпла."""
 
     def test_bass_range(self):
         for part in BASS_PARTS:
@@ -255,9 +252,9 @@ class TestSynthBass(unittest.TestCase):
                     self.assertLessEqual(float(np.abs(s).max()), 1.0)
 
     def test_pitch_within_10_cents(self):
-        """ТК92 новой редакции: точный замер — ±10 центов (лучший из yin 8192 и пика спектра)."""
+        """Точный замер — ±10 центов (лучший из yin 8192 и пика спектра)."""
         for part in BASS_PARTS:
-            for midi in range(BASS_FIRST[part], BASS_LAST + 1):   # по карточке, не по BASS_RANGE
+            for midi in range(BASS_FIRST[part], BASS_LAST + 1):   # не по BASS_RANGE
                 with self.subTest(part=part, midi=midi):
                     s = bass(part, midi)
                     # лучший из двух замеров; yin (медленнее) — только если пик спектра не уложился

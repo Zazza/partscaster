@@ -1,7 +1,6 @@
-"""Тесты чистых функций проверки изменённого плана (карточка internal-plan-check).
+"""Тесты чистых функций проверки изменённого плана.
 
 Модуль plancheck чистый — без fastapi/numpy, тесты идут в системном python3.
-Запуск: cd worker && python3 -m unittest test_plancheck
 """
 import re
 import unittest

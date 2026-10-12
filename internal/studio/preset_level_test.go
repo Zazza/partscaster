@@ -12,10 +12,9 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 8а, условие 67 (тест-кейс ТК101): громкость дорожки по замеру.
-// Написаны по карточке, без чтения реализации.
+// Громкость дорожки по замеру.
 //
-// Контракт: у записи пресета yue.PresetSpec.LevelDb *float64 (json level_db, −40…+6) — громкость дорожки
+// У записи пресета yue.PresetSpec.LevelDb *float64 (json level_db, −40…+6) — громкость дорожки
 // к треку после применения. ApplySoundPreset: уровень дорожки = rms_p95_db её замера (JobStems:
 // metrics.metrics.rms_p95_db) − сумма мощностей основных дорожек с замером (vocals, drums, bass, other);
 // Db записи += clamp(level_db − уровень, −12, +12). Нет замера дорожки или основных — Db как в записи,
@@ -27,12 +26,10 @@ import (
 // исходном треке, в дБ; середина трека (2–8 с) — без краёв окна. Замеры (rms_p95_db) задаёт фейк
 // независимо от звука — как числа воркера.
 //
-// Ожидания — по формуле условия 67: сумма основных при p95 vocals −20, drums −20, other −20, bass −30 —
-// 10·lg(3·10⁻² + 10⁻³) = −15,086 (в ТК101 написано −14,95 — арифметическая неточность карточки);
-// bass: уровень −14,914, level_db −10 → Db +4,914 (в пределах ТК101 «+4,95 ±0,05»);
-// hh −40: уровень −24,914, level_db −28 → Db −3,086. В ТК101 написано «+3,05» — знак расходится с
-// формулой условия 67 (−28 − (−24,91) < 0: дорожку надо сделать ТИШЕ); тест следует условию,
-// расхождение вынесено в отчёт test-author.
+// Ожидания: сумма основных при p95 vocals −20, drums −20, other −20, bass −30 —
+// 10·lg(3·10⁻² + 10⁻³) = −15,086;
+// bass: уровень −14,914, level_db −10 → Db +4,914;
+// hh −40: уровень −24,914, level_db −28 → Db −3,086. (−28 − (−24,91) < 0: дорожку надо сделать ТИШЕ).
 
 const (
 	lvDur   = 10.0
@@ -42,7 +39,7 @@ const (
 	lvHH    = "0.05*sin(2*PI*5000*t)"
 )
 
-// lvFake — psFake (presets_test.go) + замеры громкости дорожек в списке JobStems, как у воркера.
+// lvFake — psFake + замеры громкости дорожек в списке JobStems, как у воркера.
 type lvFake struct {
 	*psFake
 	p95 map[string]float64 // дорожка → rms_p95_db; нет в карте — у дорожки нет замера
@@ -87,14 +84,14 @@ func lvSetup(t *testing.T, p95 map[string]float64) (*lvFake, []float32) {
 	return &lvFake{psFake: f, p95: p95}, decodeFile(t, files["audio.flac"])
 }
 
-// lvMain — замеры ТК101: vocals, drums, other −20, bass −30 (+ hh −40).
+// lvMain — замеры: vocals, drums, other −20, bass −30 (+ hh −40).
 func lvMain() map[string]float64 {
 	return map[string]float64{"vocals": -20, "drums": -20, "other": -20, "bass": -30, "hh": -40}
 }
 
 func lvF(v float64) *float64 { return &v }
 
-// lvSum — сумма мощностей основных дорожек ТК101, дБ (−15,086).
+// lvSum — сумма мощностей основных дорожек, дБ (−15,086).
 var lvSum = 10 * math.Log10(3*math.Pow(10, -2)+math.Pow(10, -3))
 
 // lvApplied — Db, на который пересборка изменила дорожку с тоном hz (дБ к исходному треку).
@@ -120,7 +117,7 @@ func lvPreset(id int64, specs ...yue.PresetSpec) yue.SoundPreset {
 	return yue.SoundPreset{ID: id, Name: "Громкость", Specs: specs}
 }
 
-// ТК101: bass level_db −10 → Db = −10 − (−30 − сумма основных) = +4,91 ±0,05.
+// bass level_db −10 → Db = −10 − (−30 − сумма основных) = +4,91 ±0,05.
 func TestPresetLevelDbBass(t *testing.T) {
 	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
@@ -135,7 +132,7 @@ func TestPresetLevelDbBass(t *testing.T) {
 	}
 }
 
-// ТК101: Db записи задан — поправка складывается с ним: −2 + 4,91.
+// Db записи задан — поправка складывается с ним: −2 + 4,91.
 func TestPresetLevelDbAddsToRecordDb(t *testing.T) {
 	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
@@ -146,7 +143,7 @@ func TestPresetLevelDbAddsToRecordDb(t *testing.T) {
 	}
 }
 
-// ТК101: поправка не больше ±12 дБ: level_db +6 → +12, level_db −40 → −12.
+// Поправка не больше ±12 дБ: level_db +6 → +12, level_db −40 → −12.
 func TestPresetLevelDbClamp(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -163,7 +160,7 @@ func TestPresetLevelDbClamp(t *testing.T) {
 	}
 }
 
-// ТК101: у дорожки нет замера → Db как в записи, без ошибки.
+// У дорожки нет замера → Db как в записи, без ошибки.
 func TestPresetLevelDbNoStemMetric(t *testing.T) {
 	t.Parallel()
 	m := lvMain()
@@ -175,7 +172,7 @@ func TestPresetLevelDbNoStemMetric(t *testing.T) {
 	}
 }
 
-// Условие 67: нет замера ни у одной основной дорожки → Db как в записи, без ошибки.
+// Нет замера ни у одной основной дорожки → Db как в записи, без ошибки.
 func TestPresetLevelDbNoMainMetrics(t *testing.T) {
 	t.Parallel()
 	f, orig := lvSetup(t, map[string]float64{"hh": -40})
@@ -185,7 +182,7 @@ func TestPresetLevelDbNoMainMetrics(t *testing.T) {
 	}
 }
 
-// ТК101: часть барабанов hh (замер −40) — та же сумма основных: level_db −28 → Db = −28 − (−40 − сумма) = −3,09.
+// Часть барабанов hh (замер −40) — та же сумма основных: level_db −28 → Db = −28 − (−40 − сумма) = −3,09.
 func TestPresetLevelDbDrumPart(t *testing.T) {
 	t.Parallel()
 	f, orig := lvSetup(t, lvMain())
@@ -196,7 +193,7 @@ func TestPresetLevelDbDrumPart(t *testing.T) {
 	}
 }
 
-// Условие 69: поле level_db в JSON записи пресета (воркер ↔ приложение).
+// Поле level_db в JSON записи пресета (воркер ↔ приложение).
 func TestPresetSpecLevelDbJSON(t *testing.T) {
 	t.Parallel()
 	b, err := json.Marshal(yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(-8)})

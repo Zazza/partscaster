@@ -73,7 +73,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: unittest
         run: |
-          # все test_*.py — автопоиском, ручной список терял модули
+          # все test_*.py — автопоиском: ручной список терял модули
           # API-тесты воркера (continue/head/миграции) без них пропускаются
           pip install fastapi httpx numpy scipy librosa soundfile
           cd worker

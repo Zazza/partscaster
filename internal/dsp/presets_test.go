@@ -6,12 +6,11 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-guitar-pedals, условия 2.5 и 4.1: наборы педалей
+// Тесты наборов педалей
 // dsp.Presets() — {id, name, note, steps}; ссылаются только на существующие цепочки,
-// без цепочек с ключом; каждый набор собирается в граф (StepsGraph). Написаны по
-// карточке, без чтения реализации.
+// без цепочек с ключом; каждый набор собирается в граф (StepsGraph).
 
-// Карточка 2.5: список наборов не пуст; id уникальны и не пусты; у каждого есть
+// Список наборов не пуст; id уникальны и не пусты; у каждого есть
 // name и note и хотя бы один шаг.
 func TestPresetsListWellFormed(t *testing.T) {
 	t.Parallel()
@@ -40,7 +39,7 @@ func TestPresetsListWellFormed(t *testing.T) {
 	}
 }
 
-// Карточка 4.1: наборы ссылаются только на существующие цепочки и не на цепочки
+// Наборы ссылаются только на существующие цепочки и не на цепочки
 // с Key (шаги идут на одну дорожку/трек, второго входа нет); параметры шага —
 // крутилки этой цепочки.
 func TestPresetsReferenceExistingChains(t *testing.T) {
@@ -64,7 +63,7 @@ func TestPresetsReferenceExistingChains(t *testing.T) {
 	}
 }
 
-// Карточка 2.5/4.1: наборы реально звучат — граф проходит через ffmpeg (Run).
+// Наборы реально звучат — граф проходит через ffmpeg (Run).
 func TestPresetsRunOnSine(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)

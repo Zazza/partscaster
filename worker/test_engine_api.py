@@ -1,36 +1,32 @@
-"""Спецификация второго движка yue2.cpp через API воркера (internal-own-track, этап 20,
-условия 156–161; ТК184, ТК185 (API), ТК186, ТК189, ТК190, ТК191).
+"""Второй движок yue2.cpp через API воркера.
 
 Что должно работать:
-C1 (ТК184). GET /config: engine (нет — torch), cpp_model (нет — q8), cpp_low_vram (нет — false),
+C1. GET /config: engine (нет — torch), cpp_model (нет — q8), cpp_low_vram (нет — false),
     cpp_available (программа есть и запускается), cpp_models {имя: {file, size, installed}}.
     POST /config: неизвестное значение → 422; engine=cpp без программы → 422 «yue2.cpp не
     установлен»; engine=cpp / cpp_model с нескачанной моделью (или без VAE) → 422 «модель не
     скачана»; иначе 200, значения в settings.json данных.
-C2 (ТК185). POST /engine/models/install?name=: качает модель и VAE (есть с верной суммой — без
+C2. POST /engine/models/install?name=: качает модель и VAE (есть с верной суммой — без
     сети); сумма не сошлась → 502, нет ни файла, ни .part; неизвестное имя → 422; две загрузки
     одной модели — по очереди (файл скачан один раз). GET /engine/models/progress →
     {name, file, done, total} во время загрузки, {} после.
-C3 (ТК186). Воркер сам запускает yue-server ($YUE_CPP_BIN) на 127.0.0.1 с --model/--vae модели из
+C3. Воркер сам запускает yue-server ($YUE_CPP_BIN) на 127.0.0.1 с --model/--vae модели из
     настроек; экономный режим → --max-seq 8192; смена модели → следующая генерация на новом
     процессе, старый остановлен; идущую генерацию смена не трогает; перед стартом yue2.cpp
     модель PyTorch выгружается; перед загрузкой PyTorch yue2.cpp остановлен.
-C4 (ТК189). Джоба на yue2.cpp: done, файлы audio.flac/score.abc/semantic.npy/latent.npy/
+C4. Джоба на yue2.cpp: done, файлы audio.flac/score.abc/semantic.npy/latent.npy/
     request.json/config.json, jobs.engine = "cpp-q8" (пишется при старте); черновик — 450 шагов;
     отмена → cancel на сервер, статус canceled; failed с «out of memory» в журнале → ошибка про
     нехватку видеопамяти, сервер остановлен; торч-джоба → "torch"; старый трек — "".
     Прогресс — по строкам журнала («[AR] Semantic 100/1000» → semantic, 10 %).
-    yue2.cpp продолжает трек PyTorch по semantic.npy и score.abc (условие 161).
-C5 (ТК190). /version: model — метка действующего движка, engine; рецепт: worker_model — по
+    yue2.cpp продолжает трек PyTorch по semantic.npy и score.abc.
+C5. /version: model — метка действующего движка, engine; рецепт: worker_model — по
     движку корня трека, не текущему.
-C6 (ТК191). PyTorch продолжает трек без plan.json: план строится из score.abc (pipe.plan с abc).
+C6. PyTorch продолжает трек без plan.json: план строится из score.abc (pipe.plan с abc).
 
 Внешние границы — программа yue-server (скрипт-фейк из test_engine_cpp), HTTP-источник моделей
-(локальный сервер; адрес источника подставляется обёрткой вокруг engine_cpp.download — договор
+(локальный сервер; адрес источника подставляется обёрткой вокруг engine_cpp.download — контракт
 не задаёт другого способа), пайплайн yue2/torch (заглушки, как в test_jobs_lifecycle).
-
-Написаны по карточке и договору, без чтения реализации этапа 20.
-Запуск из каталога worker: python -m unittest test_engine_api -v
 """
 import json
 import os
@@ -104,8 +100,6 @@ class _CppCase(_WorkerApiCase):
         super().setUp()
         _setup_cpp(self)
 
-    # --- джобы
-
     def _new(self, **extra):
         jid = _job_id(self, _post_job(self, **extra))
         with self._conn() as c:
@@ -146,8 +140,6 @@ class _CppCase(_WorkerApiCase):
     def _release(self):
         (self.fake_dir / "release").write_text("1")
 
-
-# ---------------------------------------------------------------- ТК184
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestEngineConfig(_CppCase):
@@ -247,8 +239,6 @@ class TestEngineConfig(_CppCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(self._cfg()["engine"], "torch")
 
-
-# ---------------------------------------------------------------- ТК185 (API)
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestEngineModelInstall(_CppCase):
@@ -350,8 +340,6 @@ class TestEngineModelInstall(_CppCase):
         self.assertEqual(self._parts(), [])
 
 
-# ---------------------------------------------------------------- ТК186
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestEngineServerLifecycle(_CppCase):
 
@@ -437,8 +425,6 @@ class TestEngineServerLifecycle(_CppCase):
         self.assertEqual(pipe.calls, [])
 
 
-# ---------------------------------------------------------------- ТК189
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestCppJob(_CppCase):
 
@@ -514,7 +500,7 @@ class TestCppJob(_CppCase):
         pid = fake_starts(self.fake_dir)[0]["pid"]
         self.assertTrue(wait_until(lambda: not pid_alive(pid), 10), "после нехватки памяти сервер не остановлен")
 
-    # кросс-ревью s20: нехватка памяти в «только план» — понятный текст и сервер остановлен (не держит видеопамять)
+    # нехватка памяти в «только план» — понятный текст и сервер остановлен (не держит видеопамять)
     def test_plan_oom_stops_server(self):
         self._cpp("q8", mode="failed", log_lines=[OOM_LINE])
         r = self.client.post("/plan", json={"style": "rock", "lyrics": "[verse] la", "cot": "full", "seed": 5})
@@ -586,8 +572,6 @@ class TestCppJob(_CppCase):
         self.assertEqual(body["abc"], DEFAULT_ABC)
 
 
-# ---------------------------------------------------------------- ТК190
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestEngineVersion(_CppCase):
 
@@ -648,8 +632,6 @@ class TestRecipeEngineLabel(_RecipeCase):
         self._post_op(root, "continue", {"from_sec": 10.0, "parent_id": root, "seed": 1}, f"job:{kid}")
         self.assertIn(MODEL_FILES["q6"], self._model(kid))
 
-
-# ---------------------------------------------------------------- ТК191
 
 class _PlanCalled(RuntimeError):
     pass

@@ -1,6 +1,4 @@
-// Обёртки api.js: каждая импортированная из wailsjs функция там есть, и обёртки фраз «Инструментов» на месте
-// (условие 96). Поймано вживую: правка api.js не записалась, сборка и тесты были зелёными, а на странице —
-// «z.fxPhrases is not a function».
+// Обёртки api.js: каждая импортированная из wailsjs функция там есть, и обёртки фраз «Инструментов» на месте.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

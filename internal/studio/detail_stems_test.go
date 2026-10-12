@@ -8,12 +8,10 @@ import (
 	"testing"
 )
 
-// Тесты карточки «дорожки гитары и клавиш»: помимо 4 основных стемов у трека
+// Помимо 4 основных стемов у трека
 // есть «подробные» stem-guitar.flac и stem-piano.flac — уточнение внутри other,
 // в сумму трека не входят. Пересборка (заглушка/громкость/эффект/линия
-// громкости) работает с ними как с обычной дорожкой. Фейковый воркер (secFake)
-// и синтетика — из sections_test.go/stem_fx_test.go, звуковые хелперы — из
-// helpers_test.go.
+// громкости) работает с ними как с обычной дорожкой.
 //
 // Синтетика (fxDur = 8 с): подробная дорожка — тон 3000 Гц; other = 500 Гц +
 // тот же тон 3000 Гц (гитара/клавиши живут внутри «прочего»); голос, барабаны,
@@ -73,7 +71,7 @@ func assertDetailRemovedInWindow(t *testing.T, out, base []float32, what string)
 	}
 }
 
-// G1: заглушка дорожки guitar в окне — итог = база минус дорожка гитары в окне;
+// Заглушка дорожки guitar в окне — итог = база минус дорожка гитары в окне;
 // остальные дорожки не трогаются; файл есть — MakeStems не нужен.
 func TestDetailRebuildMuteGuitar(t *testing.T) {
 	t.Parallel()
@@ -88,7 +86,7 @@ func TestDetailRebuildMuteGuitar(t *testing.T) {
 	}
 }
 
-// G1 (симметрично для клавиш): заглушка piano.
+// Симметрично для клавиш: заглушка piano.
 func TestDetailRebuildMutePiano(t *testing.T) {
 	t.Parallel()
 	f, base := detailSetup(t, "piano")
@@ -96,7 +94,7 @@ func TestDetailRebuildMutePiano(t *testing.T) {
 	assertDetailRemovedInWindow(t, uploadedOnly(t, f), base, "piano −100 дБ")
 }
 
-// G2: эффект (цепочка из dsp — «Убрать свист» на 3000 Гц) на Stems ["piano"]
+// Эффект (цепочка из dsp — «Убрать свист» на 3000 Гц) на Stems ["piano"]
 // применяется в окне — результат в окне отличается от базы (3000 ослаблен), 500 Гц
 // не тронут; вне окна — база.
 func TestDetailRebuildChainOnPiano(t *testing.T) {
@@ -122,7 +120,7 @@ func TestDetailRebuildChainOnPiano(t *testing.T) {
 	}
 }
 
-// G3: stem-guitar.flac нет, основные стемы есть → MakeStems(id) ровно один раз,
+// stem-guitar.flac нет, основные стемы есть → MakeStems(id) ровно один раз,
 // затем дорожка скачивается и применяется.
 func TestDetailRebuildMakesStemsForMissingGuitar(t *testing.T) {
 	t.Parallel()
@@ -138,7 +136,7 @@ func TestDetailRebuildMakesStemsForMissingGuitar(t *testing.T) {
 	assertDetailRemovedInWindow(t, uploadedOnly(t, f), decodeFile(t, pf["audio.flac"]), "guitar после MakeStems")
 }
 
-// G3: после MakeStems дорожки гитары всё равно нет — ошибка с понятным текстом
+// После MakeStems дорожки гитары всё равно нет — ошибка с понятным текстом
 // (называет дорожку), ничего не загружено; не молчаливый пропуск. MakeStems упал —
 // тоже ошибка без загрузки.
 func TestDetailRebuildGuitarUnavailableIsError(t *testing.T) {
@@ -173,7 +171,7 @@ func TestDetailRebuildGuitarUnavailableIsError(t *testing.T) {
 	}
 }
 
-// G4: VolumeEnvelope принимает дорожку guitar: её тон идёт по огибающей, 500 Гц не меняется.
+// VolumeEnvelope принимает дорожку guitar: её тон идёт по огибающей, 500 Гц не меняется.
 func TestDetailVolumeEnvelopeGuitar(t *testing.T) {
 	t.Parallel()
 	f, _ := detailSetup(t, "guitar")
@@ -198,7 +196,7 @@ func TestDetailVolumeEnvelopeGuitar(t *testing.T) {
 	}
 }
 
-// G4 (симметрично): piano тоже допустимая дорожка линии громкости.
+// Симметрично: piano тоже допустимая дорожка линии громкости.
 func TestDetailVolumeEnvelopePiano(t *testing.T) {
 	t.Parallel()
 	f, _ := detailSetup(t, "piano")
@@ -210,7 +208,7 @@ func TestDetailVolumeEnvelopePiano(t *testing.T) {
 	}
 }
 
-// G4: неизвестная дорожка — ошибка, ничего не загружено, MakeStems не зовётся.
+// Неизвестная дорожка — ошибка, ничего не загружено, MakeStems не зовётся.
 func TestDetailVolumeEnvelopeUnknownStem(t *testing.T) {
 	t.Parallel()
 	f, _ := detailSetup(t, "guitar")
@@ -227,7 +225,7 @@ func TestDetailVolumeEnvelopeUnknownStem(t *testing.T) {
 	}
 }
 
-// G5: подпись пересборки называет дорожку по-русски: guitar → «гитара»
+// Подпись пересборки называет дорожку по-русски: guitar → «гитара»
 // (не общее «гитары/синты» дорожки other), piano → «клавиши».
 func TestDetailRebuildLabel(t *testing.T) {
 	t.Parallel()

@@ -95,7 +95,7 @@ var pitchParams = []Param{
 
 // pitchGraph — транспонирование без смены темпа (rubberband; форманты
 // сохраняются — голос не «бурундучит»). Нет rubberband в сборке ffmpeg —
-// ffmpeg падает с понятной ошибкой (docs/limitations.md).
+// ffmpeg падает с понятной ошибкой.
 func pitchGraph(p map[string]float64) string {
 	s := math.Round(p["semis"])
 	if s == 0 {

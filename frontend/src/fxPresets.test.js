@@ -1,8 +1,6 @@
-// Тесты карточки internal-instruments-page, тест-кейс 3 (условие 3): готовые цепочки
-// движка fxPresets.js — [{id, name: {ru, en}, note: {ru, en}, chain}], chain — JSON
+// Готовые цепочки fxPresets.js — [{id, name: {ru, en}, note: {ru, en}, chain}], chain — JSON
 // воркера. Каждый пресет проходит проверку по описанию блоков воркера: снимок SPEC —
 // fxBlocks.json (побайтная копия worker/fx_blocks.json, паритет сверяет tails.test.js).
-// Написаны по карточке и контракту, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import blocks from './fxBlocks.json'
 import { fxPresets } from './fxPresets.js'
@@ -84,7 +82,7 @@ describe('fxPresets: правила для каждого пресета', () =>
     }))).toEqual([])
   })
 
-  // захваты NAM в поставку не входят (карточка, условие 3): у пресета обязательная строка —
+  // захваты NAM в поставку не входят: у пресета обязательная строка —
   // ключ есть и это строка; пустая значит «выберите захват», страница подставит загруженный
   it('обязательные строки есть ключом (у amp — model, пустая — выбор захвата)', () => {
     expect(violations(fxPresets, (p) => p.chain.flatMap((b) => (blocks[b.type]?.strings || [])
@@ -93,12 +91,11 @@ describe('fxPresets: правила для каждого пресета', () =>
   })
 })
 
-// Тесты карточки internal-studio-engine, условия 13–14. Условие 13: вместо «Гитара: перегруз
-// (NAM)» (id guitar-crunch) — три гитарные цепочки: чистый усилитель + реверб (вход −6),
+// Гитарные цепочки: чистый усилитель + реверб (вход −6),
 // перегруз погорячее (вход +12), Vox и пружина (вход +6, пружинный реверб); amp.model пустой
-// (захват выбирает пользователь). Условие 14: готовые цепочки «Бочка: набор», «Малый: набор»
+// (захват выбирает пользователь). Готовые цепочки «Бочка: набор», «Малый: набор»
 // с блоком sampler (kit — строка), блок sampler есть в описании блоков.
-describe('fxPresets: гитары (условие 13) и наборы барабанов (условие 14)', () => {
+describe('fxPresets: гитары и наборы барабанов', () => {
   const amps = (p) => p.chain.filter((b) => b.type === 'amp')
   const ampPresets = fxPresets.filter((p) => amps(p).length > 0)
   const byInput = (db) => ampPresets.filter((p) => amps(p).some((b) => b.input_db === db))
@@ -154,11 +151,10 @@ describe('fxPresets: гитары (условие 13) и наборы бараб
   })
 })
 
-// Карточка internal-own-track, этап 0, условие 3 (тест-кейс ТК12): готовые цепочки знают
-// дорожки — у каждого пресета поле stems (список дорожек), кроме мастер-склейки.
+// Готовые цепочки знают дорожки — у каждого пресета поле stems (список дорожек), кроме мастер-склейки.
 describe('fxPresets: дорожки пресетов (stems)', () => {
-  // 'synth' — готовые синты поверх трека (internal-own-track, этап 4, условие 26)
-  // 'perc' — готовые перкуссии поверх трека (этап 5, условие 33)
+  // 'synth' — готовые синты поверх трека
+  // 'perc' — готовые перкуссии поверх трека
   const KNOWN = ['vocals', 'drums', 'kick', 'snare', 'toms', 'hh', 'ride', 'crash', 'bass', 'guitar', 'piano', 'other', 'synth', 'perc', 'master']
   const MASTER = 'master-glue'
   const byId = (id) => fxPresets.find((p) => p.id === id)
@@ -180,7 +176,7 @@ describe('fxPresets: дорожки пресетов (stems)', () => {
       expect(fxPresets.some((p) => (p.stems || []).includes(stem))).toBe(true)
     })
 
-  // соответствие из условия 3: гитары → guitar/other; голос → vocals; барабаны-комната → drums;
+  // соответствие: гитары → guitar/other; голос → vocals; барабаны-комната → drums;
   // бочка → kick; малый → snare; хэт → hh; райд → ride; крэш → crash; бас → bass; синт → other/piano
   it.each([
     ['guitar-amp-clean', ['guitar', 'other']],
@@ -203,23 +199,22 @@ describe('fxPresets: дорожки пресетов (stems)', () => {
   })
 })
 
-// Карточка internal-own-track, этап 4 «Синты», условие 26 (тест-кейс ТК52): восемь готовых
-// синтов со stems ['synth'], у каждого стиль по умолчанию (pad/pulse/arp/drone) и октава
-// (−2…+2), цепочка начинается с блока synth. Написаны по карточке, без чтения реализации.
-describe('fxPresets: готовые синты (ТК52)', () => {
+// Восемь готовых синтов со stems ['synth'], у каждого стиль по умолчанию (pad/pulse/arp/drone) и октава
+// (−2…+2), цепочка начинается с блока synth.
+describe('fxPresets: готовые синты', () => {
   const NAMES = [
     'Струнный ансамбль (Solina)', 'Пэд с хорусом (Juno)', 'Синт-бас (Moog)', 'Лид (Moog)',
     'Медь (CS-80)', 'Орган (Farfisa)', 'Орган (Vox Continental)', 'Игрушка (VL-Tone)',
   ]
   const synths = fxPresets.filter((p) => (p.stems || []).includes('synth'))
 
-  // этап 7в (усл. 64): синтов стало больше — прежние восемь на месте, у всех stems [synth]
+  // прежние восемь на месте, у всех stems [synth]
   it('не меньше восьми синтов со stems [synth]', () => {
     expect(synths.length).toBeGreaterThanOrEqual(8)
     for (const p of synths) expect(p.stems, p.id).toEqual(['synth'])
   })
 
-  it('названия этапа 4 — на месте (этап 7в добавил новые)', () => {
+  it('прежние названия — на месте', () => {
     for (const n of NAMES) expect(synths.map((p) => p.name.ru)).toContain(n)
   })
 

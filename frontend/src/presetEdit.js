@@ -113,7 +113,6 @@ export function toModel(preset) {
   }
 }
 
-/** Свежая модель «нового пресета». */
 export function newModel() {
   return toModel({ name: '', note: '', specs: [] })
 }

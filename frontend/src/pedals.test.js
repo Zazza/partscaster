@@ -1,6 +1,5 @@
-// Тесты карточки internal-guitar-pedals, условие 2.1: операции доски педалей —
+// Операции доски педалей —
 // чистые функции, вход не мутируют. Доска = массив педалей [{chain, params, off}].
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import {
   addPedal, removePedal, movePedal, togglePedal, setParam,

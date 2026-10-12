@@ -10,7 +10,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-studio-engine, тест-кейс 8 (MCP, условие 7):
 // rebuild_sections принимает в записи поле engine (массив блоков движка) →
 // SectionSpec.Engine как есть; описание инструмента это говорит. Воркер — fxFake
 // (fx_test.go: fakeService + ApplyFx), звук — синтетика ffmpeg (fxLavfi/fxDecode
@@ -38,8 +37,8 @@ func engineChainOf(t *testing.T) []map[string]any {
 	return chain
 }
 
-// ТК8: engine записи → SectionSpec.Engine как есть (вложенные bands тоже);
-// запись без engine — Engine пустой, остальное как раньше.
+// engine записи → SectionSpec.Engine как есть (вложенные bands тоже);
+// запись без engine — Engine пустой, остальное без изменений.
 func TestParseSectionSpecsEngine(t *testing.T) {
 	t.Parallel()
 	var raw any
@@ -125,7 +124,7 @@ func TestRebuildSectionsEngineCallsWorker(t *testing.T) {
 	}
 }
 
-// Условие 8 через MCP: воркер отказал (движок выключен) — инструмент падает с
+// Воркер отказал (движок выключен) — инструмент падает с
 // причиной, ничего не загружено.
 func TestRebuildSectionsEngineWorkerErrorIsError(t *testing.T) {
 	t.Parallel()
@@ -151,7 +150,7 @@ func TestRebuildSectionsEngineWorkerErrorIsError(t *testing.T) {
 	}
 }
 
-// Условия 2/8 через MCP: воркер без превью движка (/config без fx_preview) —
+// Воркер без превью движка (/config без fx_preview) —
 // rebuild_sections падает с текстом про обновление воркера, ApplyFx не вызван,
 // ничего не загружено.
 func TestRebuildSectionsEngineOldWorkerIsError(t *testing.T) {

@@ -8,15 +8,15 @@ import (
 	"unicode/utf8"
 )
 
-// Тесты условия 55 / ТК89 карточки internal-own-track: подпись пересборки
+// Подпись пересборки
 // (rebuildLabel) — не длиннее 280 рун (воркер принимает 300, запас под
 // « · мастер»). Части по порядку, пока влезают; не влезли — в конце « + ещё N»
 // (N — сколько частей не вошло); первая часть сама длиннее предела —
-// обрезается с «…». Короткая подпись — побайтно прежняя.
+// обрезается с «…».
 
 const labelLimit = 280
 
-// mmssLabel — окно подписи в формате карточки: « M:SS–M:SS».
+// mmssLabel — окно подписи в формате « M:SS–M:SS».
 func mmssLabel(from, to int) string {
 	return fmt.Sprintf("%d:%02d–%d:%02d", from/60, from%60, to/60, to%60)
 }
@@ -46,7 +46,6 @@ func oneBlockSpec(typ string) SectionSpec {
 		Engine: []map[string]any{{"type": typ}}}
 }
 
-// ТК89: одна запись → подпись прежняя (побайтно).
 func TestRebuildLabelSingleUnchanged(t *testing.T) {
 	t.Parallel()
 	sp := SectionSpec{ChildID: 0, From: 80, To: 88, Stems: []string{"other"}, Engine: engChain()}
@@ -56,7 +55,7 @@ func TestRebuildLabelSingleUnchanged(t *testing.T) {
 	}
 }
 
-// Условие 55: несколько коротких записей, вместе короче предела, — прежний формат через « + ».
+// Несколько коротких записей, вместе короче предела, — через « + ».
 func TestRebuildLabelFewShortUnchanged(t *testing.T) {
 	t.Parallel()
 	specs, parts := fortyEngine()
@@ -80,7 +79,7 @@ func TestRebuildLabelExactLimitUnchanged(t *testing.T) {
 	}
 }
 
-// ТК89: 40 записей движка с окнами → ≤ 280 рун, начинается с подписи первой
+// 40 записей движка с окнами → ≤ 280 рун, начинается с подписи первой
 // записи, кончается « + ещё N»; вошедшие части — целые, по порядку, через « + »;
 // N = 40 − число вошедших; следующая часть уже не влезла бы.
 func TestRebuildLabelFortyEngineTruncated(t *testing.T) {
@@ -119,7 +118,7 @@ func TestRebuildLabelFortyEngineTruncated(t *testing.T) {
 	}
 }
 
-// Условие 55: две записи, вторая не влезает → «<первая> + ещё 1».
+// Две записи, вторая не влезает → «<первая> + ещё 1».
 func TestRebuildLabelSecondDoesNotFit(t *testing.T) {
 	t.Parallel()
 	first := oneBlockSpec(strings.Repeat("a", 200))
@@ -131,7 +130,7 @@ func TestRebuildLabelSecondDoesNotFit(t *testing.T) {
 	}
 }
 
-// ТК89: одна запись с подписью 400 рун (движок из многих блоков) → ≤ 280 рун,
+// Одна запись с подписью 400 рун (движок из многих блоков) → ≤ 280 рун,
 // кончается «…», до «…» — начало исходной подписи.
 func TestRebuildLabelLongFirstEllipsis(t *testing.T) {
 	t.Parallel()
@@ -172,7 +171,7 @@ func TestRebuildLabelOverLimitByOne(t *testing.T) {
 	}
 }
 
-// ТК89: rebuildSections с 40 записями — UploadDsp получает подпись ≤ 280 рун
+// rebuildSections с 40 записями — UploadDsp получает подпись ≤ 280 рун
 // (фейк сервиса secFake; записи — громкость дорожки, без воркера).
 func TestRebuildSectionsFortyLabelWithinLimit(t *testing.T) {
 	t.Parallel()

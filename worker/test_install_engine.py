@@ -1,4 +1,4 @@
-"""Спецификация выбора движка при установке воркера (internal-own-track, этап 20, условие 162, ТК192).
+"""Выбор движка при установке воркера.
 
 install.sh --engine torch|cpp (по умолчанию torch), --cpp-model auto|bf16|q8|q6|q5, --cpp-low-vram.
 Песочница — та же, что в test_install_sh (временный HOME, заглушки в PATH, журнал вызовов), плюс:
@@ -6,28 +6,26 @@ install.sh --engine torch|cpp (по умолчанию torch), --cpp-model auto|
 - venv-python дополнительно пишет каталог запуска и YUE_DATA_DIR/YUE_CPP_MODELS в py-ctx.log;
 - программа yue2.cpp из архива — <каталог версии>/yue2cpp/yue-server (заглушка; fail-yue-server → код 1);
 - git, cmake, nvcc — заглушки (сеть и настоящая сборка не нужны): git clone/init создаёт каталог,
-  cmake --build кладёт собранную программу в $YUE_HOME/yue2cpp-src/build/yue-server (путь из условия 158).
+  cmake --build кладёт собранную программу в $YUE_HOME/yue2cpp-src/build/yue-server .
 
 Что должно работать:
 E1. Без --engine: settings.json данных не создаётся и не меняется, engine_cpp.py download не вызывается,
-    программа yue2.cpp не ищется/не собирается. --engine torch (162в) пишет engine=torch, cpp_model и
+    программа yue2.cpp не ищется/не собирается. --engine torch пишет engine=torch, cpp_model и
     cpp_low_vram не трогает, загрузки нет.
-E2. --engine cpp --cpp-model auto (и --engine cpp без --cpp-model, 162б): видеопамять — первая строка
-    nvidia-smi (162а); ≥ 11776 МиБ → q8 и cpp_low_vram false; 7680–11775 → q8 и true; < 7680 → q5 и true.
+E2. --engine cpp --cpp-model auto (и --engine cpp без --cpp-model): видеопамять — первая строка
+    nvidia-smi; ≥ 11776 МиБ → q8 и cpp_low_vram false; 7680–11775 → q8 и true; < 7680 → q5 и true.
     В $YUE_HOME/data/settings.json — engine "cpp", cpp_model, cpp_low_vram; прочие ключи сохраняются.
-E3. Явная модель (--cpp-model q6) — без авто, экономный режим false (162г); --cpp-low-vram → true.
-    --cpp-model / --cpp-low-vram без --engine cpp → код 2 до изменений (162б).
+E3. Явная модель (--cpp-model q6) — без авто, экономный режим false; --cpp-low-vram → true.
+    --cpp-model / --cpp-low-vram без --engine cpp → код 2 до изменений.
 E4. Модель качается: <venv>/bin/python engine_cpp.py download <имя> из каталога установленной версии,
     в каталог данных этой установки; повторный запуск зовёт download снова (проверка «уже есть» — внутри).
 E5. Программа из архива отвечает на --help → она и берётся, сборки нет (git/cmake не зовутся).
 E6. Программы нет (или не запускается) и нет nvcc → код 0, воркер установлен, сообщение
     «yue2.cpp не собран: нужны git, cmake, nvcc», в settings.json нет engine=cpp.
 E7. Программы нет, git/cmake/nvcc есть → сборка закреплённого коммита c893629; повтор при уже собранной
-    программе — без пересборки; пометка $YUE_HOME/yue2cpp-src/.commit с другим коммитом → пересборка (162е).
-E9. Загрузка модели не удалась → код 0, воркер установлен, «модель yue2.cpp не скачана», нет engine=cpp (162д).
+    программе — без пересборки; пометка $YUE_HOME/yue2cpp-src/.commit с другим коммитом → пересборка.
+E9. Загрузка модели не удалась → код 0, воркер установлен, «модель yue2.cpp не скачана», нет engine=cpp.
 E8. Неизвестное значение (--cpp-model q4, --engine foo) → код 2 до любых изменений.
-
-Запуск из каталога worker: python -m unittest test_install_engine -v
 """
 import json
 import shutil
@@ -62,7 +60,7 @@ case " $* " in *" clone "*|*" init "*) mkdir -p "$last";; esac
 exit 0
 """
 
-# cmake: сборка кладёт рабочую программу туда, где её ищет воркер (условие 158)
+# cmake: сборка кладёт рабочую программу туда, где её ищет воркер
 CMAKE = r"""#!/bin/sh
 { echo "== cmake"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
 case " $* " in *" --build "*)
@@ -85,8 +83,6 @@ class _EngineCase(base._InstallCase):
         self.set_vram(16 * GIB)
         self.data = self.yue_home / "data"
         self.settings_path = self.data / "settings.json"
-
-    # --- помощники ---
 
     def set_vram(self, *mib):
         """Объём видеопамяти по картам (МиБ), по строке на карту — как печатает nvidia-smi."""
@@ -152,7 +148,7 @@ class _EngineCase(base._InstallCase):
 
 
 class TestDefaultEngine(_EngineCase):
-    """E1: без --engine поведение прежнее."""
+    """E1: без --engine ничего не меняется."""
 
     def test_no_engine_no_settings_no_download(self):
         self.install("1.0.0", "--no-start")
@@ -173,13 +169,13 @@ class TestDefaultEngine(_EngineCase):
         self.assertEqual([n for n, _ in self.calls() if n in ("git", "cmake", "nvcc")], [])
 
     def test_engine_torch_writes_torch_without_download(self):
-        """162в: явный выбор torch записывается."""
+        """Явный выбор torch записывается."""
         self.install("1.0.0", "--no-start", "--engine", "torch")
         self.assertEqual(self.downloads(), [], self.calls())
         self.assertEqual(self.settings().get("engine"), "torch")
 
     def test_engine_torch_keeps_cpp_choices(self):
-        """162в: возврат на torch не стирает выбранную модель и экономный режим."""
+        """Возврат на torch не стирает выбранную модель и экономный режим."""
         self.data.mkdir(parents=True)
         self.settings_path.write_text(
             '{"engine": "cpp", "cpp_model": "q6", "cpp_low_vram": true, "stems_model": "roformer"}',
@@ -212,7 +208,7 @@ class TestAutoModel(_EngineCase):
         self.check(6 * GIB, "q5", True)
 
     def test_boundary_12gb_card_reports_less(self):
-        """162а: карта «12 ГБ» сообщает 12282 МиБ — это ещё не экономный режим."""
+        """Карта «12 ГБ» сообщает 12282 МиБ — это ещё не экономный режим."""
         self.check(12282, "q8", False)
 
     def test_boundary_11776_not_low_vram(self):
@@ -228,14 +224,14 @@ class TestAutoModel(_EngineCase):
         self.check(7679, "q5", True)
 
     def test_first_gpu_line_used(self):
-        """162а: несколько карт — берётся первая строка (воркер работает на cuda:0)."""
+        """Несколько карт — берётся первая строка (воркер работает на cuda:0)."""
         self.check((16 * GIB, 6 * GIB), "q8", False)
 
     def test_first_gpu_line_used_small_first(self):
         self.check((6 * GIB, 16 * GIB), "q5", True)
 
     def test_engine_cpp_without_model_is_auto(self):
-        """162б: --engine cpp без --cpp-model = auto."""
+        """--engine cpp без --cpp-model = auto."""
         self.check(6 * GIB, "q5", True, args=())
 
     def test_engine_cpp_without_model_is_auto_big(self):
@@ -267,7 +263,7 @@ class TestExplicitModel(_EngineCase):
         self.assertEqual([d[:2] for d in self.downloads()], [["download", "q6"]], self.calls())
 
     def test_explicit_model_overrides_small_vram(self):
-        """162г: явная модель без флага — экономный режим false даже на малой видеопамяти."""
+        """Явная модель без флага — экономный режим false даже на малой видеопамяти."""
         self.set_vram(6 * GIB)  # авто дало бы q5 + экономный
         self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q6")
         self.assert_cpp("q6", False)
@@ -302,7 +298,7 @@ class TestModelDownload(_EngineCase):
         self.assertEqual(script, rel / "engine_cpp.py", "engine_cpp.py must be run from the installed version")
 
     def test_download_goes_to_this_install_data(self):
-        """Каталог моделей по умолчанию — <данные>/yue2cpp-models (157): данные — те, что у юнита."""
+        """Каталог моделей по умолчанию — <данные>/yue2cpp-models: данные — те, что у юнита."""
         x = Path(self._td.name) / "other-home"
         (self.stubs / "yue-home").write_text(str(x))
         self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", YUE_HOME=str(x))
@@ -315,7 +311,7 @@ class TestModelDownload(_EngineCase):
         self.assertEqual(self.settings(want / "settings.json").get("engine"), "cpp")
 
     def test_download_failure_not_fatal(self):
-        """162д: загрузка не удалась — воркер установлен, движок не переключён."""
+        """Загрузка не удалась — воркер установлен, движок не переключён."""
         (self.stubs / "fail-download").touch()
         p = self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
         self.assertEqual(len(self.downloads()), 1, self.calls())
@@ -378,7 +374,7 @@ class TestBinary(_EngineCase):
         self.assertEqual(self.settings().get("stems_model"), "roformer")
         self.assert_no_cpp_engine()
 
-    # кросс-ревью s20: прежний выбор yue2.cpp, а новая версия без рабочей программы и без сборки — основной движок,
+    # прежний выбор yue2.cpp, а новая версия без рабочей программы и без сборки — основной движок,
     # иначе генерации падали бы на неработающем cpp
     def test_failed_setup_resets_previous_cpp_to_torch(self):
         self.no_nvcc_guard()
@@ -409,7 +405,7 @@ class TestBinary(_EngineCase):
             (self.yue_home / "yue2cpp-src" / ".commit").write_text(commit + "\n")
 
     def test_already_built_not_rebuilt(self):
-        """162е: пометки нет — программа берётся как есть."""
+        """Пометки нет — программа берётся как есть."""
         self.add_build_tools()
         self.put_built()
         self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
@@ -424,7 +420,7 @@ class TestBinary(_EngineCase):
         self.assert_cpp("q8", False)
 
     def test_built_other_commit_rebuilt(self):
-        """162е: пометка другого коммита — пересборка закреплённого."""
+        """Пометка другого коммита — пересборка закреплённого."""
         self.add_build_tools()
         self.put_built("0123abc")
         self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
@@ -451,7 +447,7 @@ class TestBadValues(_EngineCase):
         self.assert_refused("--engine", "foo")
 
     def test_cpp_options_without_engine_cpp(self):
-        """162б: параметры yue2.cpp без --engine cpp — ошибка до изменений."""
+        """Параметры yue2.cpp без --engine cpp — ошибка до изменений."""
         for args in (("--cpp-model", "q8"), ("--cpp-low-vram",), ("--engine", "torch", "--cpp-model", "q8"),
                      ("--engine", "torch", "--cpp-low-vram")):
             with self.subTest(args=args):

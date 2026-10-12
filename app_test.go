@@ -37,7 +37,6 @@ func (f *fakeService) FetchAudio(ctx context.Context, id int64, file string) (io
 	return io.NopCloser(bytes.NewReader(f.fetchData[file])), "application/octet-stream", nil
 }
 
-// fakePlayer — мок Player: записывает вызовы.
 type fakePlayer struct {
 	loaded  []int64
 	plays   int

@@ -1,16 +1,15 @@
-// Тесты карточки internal-own-track, уточнение 123а: готовый «кусок с правками» играет с from − 4 с;
+// Готовый «кусок с правками» играет с from − 4 с;
 // окно — запомненное from или cont_from джобы; начало раньше 4 с — с 0.
 //   - fragmentStart(fj, lead = 4) из results.js — секунда старта проигрывания;
 //   - сценарий слияния: строка списка джоб (без from) приходит поверх запомненного объекта куска —
 //     окно должно пережить обновление, поэтому шаг опроса (jobWatchStep, его зовёт watchJob в StudioPage.vue)
 //     сливает объект, а не заменяет;
 //   - playFragment(api, fj, lead) из results.js — проигрывание готового куска (его зовёт StudioPage.vue).
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect, vi } from 'vitest'
 import { fragmentStart, playFragment } from './results.js'
 import { jobWatchStep } from './jobWatch.js'
 
-describe('fragmentStart — старт куска за lead секунд до правки (123а)', () => {
+describe('fragmentStart — старт куска за lead секунд до правки', () => {
   it('from 30 → 26', () => {
     expect(fragmentStart({ from: 30 })).toBe(26)
   })
@@ -99,7 +98,7 @@ describe('jobWatchStep — шаг опроса джобы в студии: ст�
   })
 })
 
-describe('playFragment — готовый кусок играет за lead секунд до правки (123а)', () => {
+describe('playFragment — готовый кусок играет за lead секунд до правки', () => {
   const apiStub = () => {
     const calls = []
     return {

@@ -8,11 +8,10 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 6, условие 47 (тест-кейс ТК77, MCP):
 // rebuild_sections передаёт place и master записей; fx_apply — file и in_place;
 // sound_preset_create / _update — master (и place у записей specs).
 // Воркер — fxFake (fx_test.go) и presetFake (sound_presets_test.go); звук — fxLavfi.
-// Порядок вызовов пересборки с мастером проверяет ТК72 (internal/studio/master_test.go);
+// Порядок вызовов пересборки с мастером проверяет internal/studio/master_test.go;
 // здесь — только что MCP доносит поля до пересборки и воркера.
 
 const mixMasterChain = `[{"type":"glue","threshold_db":-18,"ratio":2},{"type":"limiter","target_lufs":-14}]`
@@ -26,7 +25,7 @@ func mixChain(t *testing.T, s string) []map[string]any {
 	return c
 }
 
-// ТК77: записи с place и master разбираются в SectionSpec.Place / Master; place без width — ширина 1.
+// Записи с place и master разбираются в SectionSpec.Place / Master; place без width — ширина 1.
 func TestParseSectionSpecsPlaceMaster(t *testing.T) {
 	t.Parallel()
 	src := `[
@@ -60,7 +59,7 @@ func TestParseSectionSpecsPlaceMaster(t *testing.T) {
 	}
 }
 
-// ТК77 сквозной: rebuild_sections с записью мастера — ApplyFx у трека (source mix, file =
+// Сквозной: rebuild_sections с записью мастера — ApplyFx у трека (source mix, file =
 // загруженный микс overdub-inst-0.flac, in_place, цепочка мастера как есть).
 func TestRebuildSectionsMasterCallsWorker(t *testing.T) {
 	t.Parallel()
@@ -97,7 +96,7 @@ func TestRebuildSectionsMasterCallsWorker(t *testing.T) {
 	}
 }
 
-// ТК77: fx_apply передаёт file и in_place.
+// fx_apply передаёт file и in_place.
 func TestFxApplyPassesFileInPlace(t *testing.T) {
 	t.Parallel()
 	s, fake := newFxServer(t)
@@ -115,7 +114,7 @@ func TestFxApplyPassesFileInPlace(t *testing.T) {
 	}
 }
 
-// ТК77: sound_preset_create передаёт master и place у записей specs.
+// sound_preset_create передаёт master и place у записей specs.
 func TestSoundPresetCreatePassesMasterPlace(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -139,7 +138,7 @@ func TestSoundPresetCreatePassesMasterPlace(t *testing.T) {
 	}
 }
 
-// Условие 47: sound_preset_update тоже передаёт master.
+// sound_preset_update тоже передаёт master.
 func TestSoundPresetUpdatePassesMaster(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)

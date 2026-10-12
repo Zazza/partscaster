@@ -1,8 +1,7 @@
-// Тесты карточки internal-studio-engine, условие 36i (ТК43): engineRun.js — логика
-// «применить цепочку движка» (EngineBox) и «докачать наборы» (EngineBox, InstrumentsPage)
-// вне компонентов. Написаны по карточке, без чтения реализации.
+// engineRun.js — логика «применить цепочку движка» (EngineBox) и «докачать наборы» (EngineBox, InstrumentsPage)
+// вне компонентов.
 //
-// Контракт (карточка + допущения теста):
+// Контракт:
 // - ensureKits(api, chain, kits): chain — цепочка для воркера ({type, ...параметры}, как у
 //   missingKits), kits — список наборов воркера ([{name: 'набор/часть', samples}], как в
 //   fxAssets().kits). Недостающие наборы (по kit и kit_open блоков sampler/bass) ставятся
@@ -24,7 +23,7 @@
 //   Снимок берётся до первого await: изменения исходных объектов во время ожидания
 //   workerConfig / fxAssets / installFxKit не меняют ни запрос превью, ни запись.
 // - Текст ошибки «старый воркер» — из i18n; в тестах принимается ru («обнов») или en
-//   («update»), т.к. язык окружения тестов не задан карточкой.
+//   («update»), т.к. язык окружения тестов не задан.
 import { describe, it, expect } from 'vitest'
 import { ensureKits, applyEngine } from './engineRun.js'
 
@@ -79,8 +78,6 @@ function fakeApi({
 }
 
 const kit = (name) => ({ name, samples: 3 })
-
-// ---------- ensureKits ----------
 
 describe('ensureKits: недостающие наборы', () => {
   it('всё стоит → ничего не ставит', async () => {
@@ -155,8 +152,6 @@ describe('ensureKits: недостающие наборы', () => {
     expect(f.installs()).toEqual(['osdk'])
   })
 })
-
-// ---------- applyEngine ----------
 
 const CHAIN = () => [
   { type: 'amp', model: 'JCM2000.nam', input_db: 0, output_db: -3 },

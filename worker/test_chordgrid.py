@@ -1,7 +1,7 @@
-"""Тесты карточки internal-own-track, этап 4 «Синты»: сетка аккордов трека —
-чистый модуль chordgrid.py (условие 21, ТК44) и эндпоинт GET /jobs/{id}/chord_grid (ТК45).
+"""Сетка аккордов трека —
+чистый модуль chordgrid.py и эндпоинт GET /jobs/{id}/chord_grid.
 
-Контракт (из карточки и контракта задачи; реализацию не читали):
+Контракт:
 - chord_pcs(name) → классы высот аккорда от основного тона: основной тон, терция
   (у sus — секунда/кварта), квинта, (септима); «Dm» → [2, 5, 9], «Bb» → [10, 2, 5];
   нераспознанный → None. Аккорды: мажор, m, dim, 7, maj7, m7, sus2, sus4, с b/#;
@@ -13,9 +13,7 @@
   начинающимся с доли phase + (k + shift)·4;
 - GET /jobs/{id}/chord_grid → {bpm, bars: [{start, end, chord, section}]}; нет плана
   (score.abc) → 404; нет долей → 422.
-
-Запуск: cd worker && python3 -m unittest test_chordgrid -v
-Чистые классы требуют только numpy; эндпоинт — окружение воркера (fastapi/librosa/soundfile).
+Чистые тесты требуют только numpy; эндпоинт — окружение воркера (fastapi/librosa/soundfile).
 """
 import unittest
 
@@ -34,10 +32,8 @@ def _cg():
     return chordgrid
 
 
-# ---------- chord_pcs: классы высот аккорда ----------
-
 class TestChordPcs(unittest.TestCase):
-    """Условие 21/22: разбор имени аккорда (тот же набор, что во фронте chordPcs)."""
+    """Разбор имени аккорда (тот же набор, что во фронте chordPcs)."""
 
     def test_examples_from_contract(self):
         cg = _cg()
@@ -79,8 +75,6 @@ class TestChordPcs(unittest.TestCase):
                 self.assertIsNone(cg.chord_pcs(name))
 
 
-# ---------- plan_bars: аккорды и секции по тактам плана ----------
-
 # 8 тактов Dm C Bb A ×2: куплет и припев, аккорды в голосе Ins
 _PLAN8 = (
     "X:1\nM:4/4\nL:1/16\nQ:1/4=120\nK:Dm\n"
@@ -94,14 +88,14 @@ PLAN8_CHORDS = ["Dm", "C", "Bb", "A", "Dm", "C", "Bb", "A"]
 
 
 class TestPlanBars(unittest.TestCase):
-    """ТК44 (часть плана): аккорд такта, наследование, секции."""
+    """Аккорд такта, наследование, секции."""
 
-    def test_tk44_chords_and_sections(self):
+    def test_chords_and_sections(self):
         bars = _cg().plan_bars(_PLAN8)
         self.assertEqual([b["chord"] for b in bars], PLAN8_CHORDS)
         self.assertEqual([b["section"] for b in bars], ["verse"] * 4 + ["chorus"] * 4)
 
-    def test_tk44_bar_without_chord_inherits_previous(self):
+    def test_bar_without_chord_inherits_previous(self):
         abc = ("X:1\nM:4/4\nL:1/16\nQ:1/4=120\nK:C\n% verse\nV: Ins\n"
                "C16|\"F\"F16|F16|G16|\"G\"G16|\n")
         bars = _cg().plan_bars(abc)
@@ -127,8 +121,6 @@ class TestPlanBars(unittest.TestCase):
         self.assertEqual(_cg().plan_bars("X:1\nM:4/4\nL:1/16\nK:C\n"), [])
 
 
-# ---------- best_shift: сдвиг плана по хроме ----------
-
 def _chroma_for(plan_chords, shift, phase, nbeats, seed=0, noise=0.25):
     """Хрома по долям: такт плана k лежит на долях phase + (k + shift)·4 … +4
     (ноты аккорда — 1), остальные доли — шум (вступление/хвост трека без аккордов плана)."""
@@ -146,9 +138,9 @@ def _chroma_for(plan_chords, shift, phase, nbeats, seed=0, noise=0.25):
 
 @unittest.skipUnless(_HAS_NP, _SKIP_NP)
 class TestBestShift(unittest.TestCase):
-    """ТК44: хрома звука сдвинута на 2 такта и 1 долю → (2, 1)."""
+    """Хрома звука сдвинута на 2 такта и 1 долю → (2, 1)."""
 
-    def test_tk44_shift_2_bars_1_beat(self):
+    def test_shift_2_bars_1_beat(self):
         ch = _chroma_for(PLAN8_CHORDS, 2, 1, nbeats=1 + 4 * 14)
         got = _cg().best_shift(PLAN8_CHORDS, ch)
         self.assertEqual(tuple(int(v) for v in got), (2, 1))
@@ -185,8 +177,6 @@ class TestBestShift(unittest.TestCase):
         self.assertIn(int(shift), range(-1, 2))
         self.assertIn(int(phase), range(4))
 
-
-# ---------- ТК45: эндпоинт GET /jobs/{id}/chord_grid ----------
 
 try:
     import test_pure as _tp
@@ -237,7 +227,7 @@ def _beats_audio(dur=20.0, bpm=120, sr=_SR, silent=False):
 
 @unittest.skipUnless(_API_OK, _SKIP_API)
 class TestChordGridEndpoint(_ApiBase):
-    """ТК45 и условие 21: 404 без плана, такты по долям звука, 422 без долей."""
+    """404 без плана, такты по долям звука, 422 без долей."""
 
     def _job_with(self, plan=_PLAN8, silent=False):
         import soundfile as sf
@@ -251,7 +241,7 @@ class TestChordGridEndpoint(_ApiBase):
             c.execute("UPDATE jobs SET audio_file='audio.flac' WHERE id=?", (jid,))
         return jid
 
-    def test_tk45_no_plan_404(self):
+    def test_no_plan_404(self):
         jid = self._job_with(plan=None)
         r = self.client.get(f"/jobs/{jid}/chord_grid")
         self.assertEqual(r.status_code, 404, r.text)
@@ -260,7 +250,7 @@ class TestChordGridEndpoint(_ApiBase):
         r = self.client.get("/jobs/9999/chord_grid")
         self.assertEqual(r.status_code, 404, r.text)
 
-    def test_tk45_bars_by_beats_120_bpm(self):
+    def test_bars_by_beats_120_bpm(self):
         jid = self._job_with()
         r = self.client.get(f"/jobs/{jid}/chord_grid")
         self.assertEqual(r.status_code, 200, r.text)
@@ -299,7 +289,7 @@ class TestChordGridEndpoint(_ApiBase):
 
 
     def test_short_track_few_beats_ok(self):
-        # кросс-ревью s4: короткий трек (3,5 с, ~6 долей) — сетка строится, не 422
+        # короткий трек (3,5 с, ~6 долей) — сетка строится, не 422
         import soundfile as sf
         jid = self._job_with()
         d = self.jobs_dir / str(jid)

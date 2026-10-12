@@ -10,7 +10,6 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-sound-engine, условие 4 (клиент воркера):
 // ApplyFx — POST /jobs/{id}/fx с цепочкой как есть; FxAssets — GET /fx/assets;
 // UploadFxAsset — POST /fx/assets?kind=&name= с сырыми байтами.
 
@@ -168,7 +167,7 @@ func TestUploadFxAssetSendsKindNameAndBytes(t *testing.T) {
 	}
 }
 
-// Тесты карточки internal-instruments-page, тест-кейс 8: режим превью движка.
+// Режим превью движка.
 // FxRequest.Preview уходит в тело только при true; ответ превью
 // {file, duration_sec, clipped} декодируется в вариант (поле File).
 
@@ -206,7 +205,7 @@ func TestApplyFxPreviewSentOnlyWhenTrue(t *testing.T) {
 		t.Fatalf("ответ превью: %+v", v)
 	}
 
-	// без Preview — поля нет вовсе (обычный вариант этапа 2)
+	// без Preview — поля нет вовсе
 	if _, err := c.ApplyFx(context.Background(), 7, FxRequest{
 		Source: "guitar", Chain: []map[string]any{{"type": "reverb"}},
 	}); err != nil {
@@ -217,7 +216,7 @@ func TestApplyFxPreviewSentOnlyWhenTrue(t *testing.T) {
 	}
 }
 
-// Решение кросс-ревью internal-instruments-page: ответ превью
+// Ответ превью
 // {file, duration_sec, clipped} не теряет duration_sec и clipped.
 func TestApplyFxPreviewKeepsDurationAndClipped(t *testing.T) {
 	t.Parallel()
@@ -243,9 +242,8 @@ func TestApplyFxPreviewKeepsDurationAndClipped(t *testing.T) {
 	}
 }
 
-// Карточка internal-studio-engine, условие 10: FxRequest.Pad (кусок превью от начала
-// трека) уходит в тело только при true; при false поля нет — старый воркер и запросы
-// этапа 3 его не видят.
+// FxRequest.Pad (кусок превью от начала
+// трека) уходит в тело только при true; при false поля нет — старый воркер его не видит.
 func TestApplyFxPadSentOnlyWhenTrue(t *testing.T) {
 	t.Parallel()
 	var got map[string]any

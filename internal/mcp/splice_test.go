@@ -9,7 +9,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-splice, условие 3 (MCP): splice {job_id, parts, crossfade?,
+// splice {job_id, parts, crossfade?,
 // title?} — склейка кусков (studio.Splice) → вариант у job_id → версия-трек
 // (VariantToTrack: файл варианта, title или название по умолчанию, voice_src как у
 // базы); ответ — «версия-трек #N, длина M:SS». Ошибки — без загрузки.

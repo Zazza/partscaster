@@ -1,7 +1,6 @@
-"""Тесты карточки internal-own-track, этап 1 «Пресеты звука», условия 1, 2, 8
-(тест-кейсы ТК13–ТК17): хранилище пресетов звука на воркере и статусы пресетов у трека.
+"""Тесты хранилища пресетов звука на воркере и статусов пресетов у трека.
 
-Контракт (из карточки, без чтения реализации):
+Контракт:
 - таблица sound_presets; встроенные (slug transmission, sex-on-fire) досеиваются при
   старте по slug — повторный старт не дублирует;
 - GET /sound-presets — список, встроенные первыми; POST — создать (→ объект с id);
@@ -18,7 +17,7 @@
   error→pending, running→pending; прочие → 409; пресета нет у джобы → 404;
   ответ — актуальный список sound_presets джобы.
 
-Допущения тестов (карточка их не называет — см. отчёт test-author):
+Допущения тестов:
 - «старт» воркера = init_db() + _migrate(): их зовёт и импорт модуля, и база тестов
   (_WorkerApiCase); startup-событие FastAPI в тестах не запускается (там очередь);
 - POST /jobs в тестах не рендерит: startup-событие с очередью не стартует, джоба
@@ -27,7 +26,6 @@
 
 Внешних границ здесь нет (ни GPU, ни сети) — ничего не подменяется.
 
-Запуск: cd worker && python3 -m unittest test_sound_presets -v
 Без окружения воркера (fastapi/httpx/numpy) — пропуск.
 """
 import copy
@@ -37,8 +35,8 @@ from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase
 
 _SKIP = "нужны fastapi/httpx/numpy (окружение воркера)"
 
-# этап 2, условие 18 (internal-own-track): третий встроенный — live-rhythm; этап 8б, условие 72: плюс жанровые
-# пресеты (worker/genres.py) — встроенные теперь из кода, прежние три среди них
+# третий встроенный — live-rhythm; плюс жанровые
+# пресеты (worker/genres.py) — встроенные из кода, прежние три среди них
 LEGACY_SLUGS = {"transmission", "sex-on-fire", "live-rhythm"}
 
 
@@ -101,7 +99,6 @@ class _PresetCase(_WorkerApiCase):
         detail = r.json().get("detail")
         self.assertTrue(detail, r.text)
 
-    # джобы
     def _submit(self, **extra):
         body = {"style": "dark rock", "lyrics": "[verse] la la"}
         body.update(extra)
@@ -134,12 +131,10 @@ class _PresetCase(_WorkerApiCase):
         return item
 
 
-# ---------- ТК13: встроенные пресеты ----------
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestBuiltinPresets(_PresetCase):
 
-    def test_tc13_empty_db_has_builtins(self):
+    def test_empty_db_has_builtins(self):
         lst = self._list()
         self.assertEqual(len(lst), NB, lst)
         self.assertEqual({p.get("slug") for p in lst}, BUILTIN_SLUGS)
@@ -147,7 +142,7 @@ class TestBuiltinPresets(_PresetCase):
             self.assertIs(p.get("builtin"), True, p)
             self.assertIsInstance(p.get("id"), int, p)
 
-    def test_tc13_builtins_first_after_own_presets(self):
+    def test_builtins_first_after_own_presets(self):
         own = self._create(name="Свой")
         lst = self._list()
         self.assertEqual(len(lst), NB + 1, lst)
@@ -165,7 +160,7 @@ class TestBuiltinPresets(_PresetCase):
             spec = next(s for s in p["specs"] if part in s["stems"])
             self.assertTrue(any(b.get("type") == "sampler" for b in spec.get("engine") or []), spec)
         chains = [f["chain"] for f in p["final"] if not f.get("off")]
-        # этап 1б, условие 13: шаг level из финала убран (громкость — target_lufs)
+        # шага level в финале нет (громкость — target_lufs)
         self.assertEqual(chains, ["width"])
 
     def test_cond8_sex_on_fire_recipe(self):
@@ -174,16 +169,14 @@ class TestBuiltinPresets(_PresetCase):
         stems = {s for spec in p["specs"] for s in spec["stems"]}
         self.assertEqual(stems, {"kick", "snare", "bass", "other", "vocals"})
         chains = [f["chain"] for f in p["final"] if not f.get("off")]
-        # этап 1б, условие 13: шаг level из финала убран (громкость — target_lufs)
+        # шага level в финале нет (громкость — target_lufs)
         self.assertEqual(chains, ["eq", "width"])
 
-
-# ---------- ТК14: создание, изменение, удаление ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestPresetCrud(_PresetCase):
 
-    def test_tc14_create_returns_object_with_id_and_listed(self):
+    def test_create_returns_object_with_id_and_listed(self):
         created = self._create()
         self.assertEqual(created.get("name"), "Мой звук")
         self.assertFalse(created.get("builtin"))
@@ -197,7 +190,7 @@ class TestPresetCrud(_PresetCase):
         self.assertEqual(got["specs"][0]["db"], -3)
         self.assertEqual([f["chain"] for f in got["final"]], ["width", "level"])
 
-    def test_tc14_put_replaces_name_and_specs(self):
+    def test_put_replaces_name_and_specs(self):
         pid = self._create()["id"]
         new_specs = [{"stems": ["vocals"], "chain": "soften", "params": {"strength": 0.6}, "db": 2}]
         r = self.client.put(f"/sound-presets/{pid}", json=_preset(name="Другое имя", specs=new_specs))
@@ -210,7 +203,7 @@ class TestPresetCrud(_PresetCase):
         self.assertEqual(got["specs"][0]["params"], {"strength": 0.6})
         self.assertNotIn("engine", {k for k, v in got["specs"][0].items() if v})
 
-    def test_tc14_delete_removes_from_list(self):
+    def test_delete_removes_from_list(self):
         pid = self._create()["id"]
         r = self.client.delete(f"/sound-presets/{pid}")
         self.assertLess(r.status_code, 300, r.text)
@@ -218,7 +211,7 @@ class TestPresetCrud(_PresetCase):
         # встроенные на месте
         self.assertEqual(len(self._builtins()), NB)
 
-    def test_tc14_builtin_put_and_delete_409(self):
+    def test_builtin_put_and_delete_409(self):
         before = self._builtins()
         for b in before:
             with self.subTest(slug=b.get("slug")):
@@ -230,7 +223,7 @@ class TestPresetCrud(_PresetCase):
         after = {p["id"]: p["name"] for p in self._builtins()}
         self.assertEqual(after, {b["id"]: b["name"] for b in before})
 
-    def test_tc14_missing_put_and_delete_404(self):
+    def test_missing_put_and_delete_404(self):
         r = self.client.put("/sound-presets/99999", json=_preset())
         self.assertEqual(r.status_code, 404, r.text)
         r = self.client.delete("/sound-presets/99999")
@@ -269,8 +262,6 @@ class TestPresetCrud(_PresetCase):
         self.assertEqual(self._by_id(pid)["name"], "Мой звук")
 
 
-# ---------- ТК15: проверка тела → 422 ----------
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestPresetValidation(_PresetCase):
 
@@ -280,50 +271,50 @@ class TestPresetValidation(_PresetCase):
         self._assert_422(r)
         self.assertEqual(self._preset_count(), n, "невалидный пресет сохранился")
 
-    def test_tc15_name_empty(self):
+    def test_name_empty(self):
         self._bad(name="")
 
-    def test_tc15_name_spaces(self):
+    def test_name_spaces(self):
         self._bad(name="    ")
 
-    def test_tc15_name_81(self):
+    def test_name_81(self):
         self._bad(name="я" * 81)
 
     def test_note_501(self):
         self._bad(note="x" * 501)
 
-    def test_tc15_stems_empty(self):
+    def test_stems_empty(self):
         self._bad(specs=[{"stems": [], "engine": ENGINE}])
 
-    def test_tc15_stems_unknown(self):
+    def test_stems_unknown(self):
         self._bad(specs=[{"stems": ["flute"], "engine": ENGINE}])
 
-    def test_tc15_two_kinds_engine_and_chain(self):
+    def test_two_kinds_engine_and_chain(self):
         self._bad(specs=[{"stems": ["bass"], "engine": ENGINE, "chain": "soften", "params": {"strength": 0.5}}])
 
-    def test_tc15_no_kind(self):
+    def test_no_kind(self):
         self._bad(specs=[{"stems": ["bass"], "db": 2}])
 
-    def test_tc15_engine_unknown_block(self):
+    def test_engine_unknown_block(self):
         self._bad(specs=[{"stems": ["bass"], "engine": [{"type": "no-such-block"}]}])
 
-    def test_tc15_steps_13(self):
+    def test_steps_13(self):
         steps = [{"chain": "soften", "params": {"strength": 0.5}}] * 13
         self._bad(specs=[{"stems": ["vocals"], "steps": steps}])
 
     def test_steps_empty(self):
         self._bad(specs=[{"stems": ["vocals"], "steps": []}])
 
-    def test_tc15_db_30(self):
+    def test_db_30(self):
         self._bad(specs=[{"stems": ["bass"], "engine": ENGINE, "db": 30}])
 
     def test_db_minus_30(self):
         self._bad(specs=[{"stems": ["bass"], "engine": ENGINE, "db": -30}])
 
-    def test_tc15_final_13(self):
+    def test_final_13(self):
         self._bad(final=[{"chain": "level", "params": {"gain": 1}}] * 13)
 
-    def test_tc15_specs_and_final_empty(self):
+    def test_specs_and_final_empty(self):
         self._bad(specs=[], final=[])
 
     def test_specs_17(self):
@@ -336,7 +327,7 @@ class TestPresetValidation(_PresetCase):
         self._bad(specs=[{"stems": ["bass"], "chain": "soften", "params": {"strength": "сильно"}}])
 
     def test_specs_and_final_wrong_types(self):
-        # кросс-ревью s1: false/{}/"" — не «пусто», а ошибка типа (иначе PUT молча стирал бы правки)
+        # false/{}/"" — не «пусто», а ошибка типа (иначе PUT молча стирал бы правки)
         for bad in (None, False, {}, ""):
             with self.subTest(specs=bad):
                 self._bad(specs=bad, final=[{"chain": "level", "params": {"gain": 3}}])
@@ -344,16 +335,16 @@ class TestPresetValidation(_PresetCase):
                 self._bad(final=bad)
 
     def test_ffmpeg_chain_on_drum_part(self):
-        # кросс-ревью s1: части барабанов пересборка обрабатывает только движком
+        # части барабанов пересборка обрабатывает только движком
         self._bad(specs=[{"stems": ["kick"], "chain": "eq", "params": {"low": -12}}])
         self._bad(specs=[{"stems": ["snare", "bass"], "steps": [{"chain": "eq"}]}])
 
     def test_final_all_off_without_specs(self):
-        # ревью s1: финал из одних выключенных шагов и без правок — пустой пресет
+        # финал из одних выключенных шагов и без правок — пустой пресет
         self._bad(specs=[], final=[{"chain": "level", "params": {"gain": 3}, "off": True}])
 
     def test_params_nan_and_infinity(self):
-        # ревью безопасности s1: NaN/Infinity из JSON — не число рецепта (ломали бы ответ и графы)
+        # NaN/Infinity из JSON — не число рецепта (ломали бы ответ и графы)
         for bad in ("NaN", "Infinity"):
             with self.subTest(bad=bad):
                 n = self._preset_count()
@@ -370,12 +361,10 @@ class TestPresetValidation(_PresetCase):
         self._bad(reference_job_id="376")
 
 
-# ---------- ТК16: пресеты у нового трека ----------
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestJobPresetIds(_PresetCase):
 
-    def test_tc16_job_gets_pending_presets(self):
+    def test_job_gets_pending_presets(self):
         pid = self._create()["id"]
         jid = self._submit_ok(sound_preset_ids=[pid])
         sp = self._get_job(jid).get("sound_presets")
@@ -385,7 +374,7 @@ class TestJobPresetIds(_PresetCase):
         self.assertFalse(sp[0].get("child_id"))
         self.assertFalse(sp[0].get("error"))
 
-    def test_tc16_three_presets_ok_and_in_list_endpoint(self):
+    def test_three_presets_ok_and_in_list_endpoint(self):
         ids = [b["id"] for b in self._builtins()[:2]] + [self._create()["id"]]   # три пресета
         jid = self._submit_ok(sound_preset_ids=ids)
         sp = self._get_job(jid)["sound_presets"]
@@ -405,19 +394,19 @@ class TestJobPresetIds(_PresetCase):
         self._assert_422(r)
         self.assertEqual(self._job_count(), n, "джоба создана при 422")
 
-    def test_tc16_four_ids_422(self):
+    def test_four_ids_422(self):
         ids = [b["id"] for b in self._builtins()[:2]] + [self._create(name="a")["id"], self._create(name="b")["id"]]
         self.assertEqual(len(set(ids)), 4)
         self._bad_submit(sound_preset_ids=ids)
 
-    def test_tc16_missing_id_422(self):
+    def test_missing_id_422(self):
         self._bad_submit(sound_preset_ids=[99999])
 
-    def test_tc16_duplicate_id_422(self):
+    def test_duplicate_id_422(self):
         pid = self._create()["id"]
         self._bad_submit(sound_preset_ids=[pid, pid])
 
-    def test_tc16_draft_with_ids_422(self):
+    def test_draft_with_ids_422(self):
         pid = self._create()["id"]
         self._bad_submit(sound_preset_ids=[pid], draft=True)
 
@@ -425,7 +414,7 @@ class TestJobPresetIds(_PresetCase):
         jid = self._submit_ok(sound_preset_ids=[], draft=True)
         self.assertEqual(self._get_job(jid).get("sound_presets"), [])
 
-    def test_tc16_without_field_empty_list(self):
+    def test_without_field_empty_list(self):
         jid = self._submit_ok()
         self.assertEqual(self._get_job(jid).get("sound_presets"), [])
 
@@ -434,8 +423,6 @@ class TestJobPresetIds(_PresetCase):
         jid = self._job(semantic=False)
         self.assertEqual(self._get_job(jid).get("sound_presets"), [])
 
-
-# ---------- ТК17: переходы статуса пресета у трека ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestPresetState(_PresetCase):
@@ -451,7 +438,7 @@ class TestPresetState(_PresetCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r
 
-    def test_tc17_pending_to_running_returns_list(self):
+    def test_pending_to_running_returns_list(self):
         r = self._run()
         data = r.json()
         self.assertIsInstance(data, list, data)
@@ -459,19 +446,19 @@ class TestPresetState(_PresetCase):
         self.assertEqual(item["status"], "running")
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "running")
 
-    def test_tc17_second_capture_409(self):
+    def test_second_capture_409(self):
         self._run()
         r = self._state(self.jid, self.pid, status="running")
         self.assertEqual(r.status_code, 409, r.text)
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "running")
 
-    def test_tc17_done_without_child_rejected(self):
+    def test_done_without_child_rejected(self):
         self._run()
         r = self._state(self.jid, self.pid, status="done")
         self.assertIn(r.status_code, (409, 422), r.text)
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "running")
 
-    def test_tc17_done_with_child(self):
+    def test_done_with_child(self):
         self._run()
         r = self._state(self.jid, self.pid, status="done", child_id=self.child)
         self.assertEqual(r.status_code, 200, r.text)
@@ -479,7 +466,7 @@ class TestPresetState(_PresetCase):
         self.assertEqual(item["status"], "done")
         self.assertEqual(item["child_id"], self.child)
 
-    def test_tc17_error_with_reason(self):
+    def test_error_with_reason(self):
         self._run()
         r = self._state(self.jid, self.pid, status="error", error="нет дорожек: kick")
         self.assertEqual(r.status_code, 200, r.text)
@@ -499,7 +486,7 @@ class TestPresetState(_PresetCase):
         self.assertIn(r.status_code, (409, 422), r.text)
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "running")
 
-    def test_tc17_error_to_pending_retry(self):
+    def test_error_to_pending_retry(self):
         self._run()
         self._state(self.jid, self.pid, status="error", error="сбой")
         r = self._state(self.jid, self.pid, status="pending")
@@ -514,7 +501,7 @@ class TestPresetState(_PresetCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "pending")
 
-    def test_tc17_done_to_running_409(self):
+    def test_done_to_running_409(self):
         self._run()
         self._state(self.jid, self.pid, status="done", child_id=self.child)
         r = self._state(self.jid, self.pid, status="running")
@@ -534,7 +521,7 @@ class TestPresetState(_PresetCase):
         self.assertEqual(r.status_code, 409, r.text)
         self.assertEqual(self._status_of(self.jid, self.pid)["status"], "pending")
 
-    def test_tc17_preset_not_on_job_404(self):
+    def test_preset_not_on_job_404(self):
         other = self._builtins()[0]["id"]
         r = self._state(self.jid, other, status="running")
         self.assertEqual(r.status_code, 404, r.text)
@@ -552,11 +539,9 @@ class TestPresetState(_PresetCase):
         self.assertEqual(r.status_code, 200, r.text)
 
 
-# ---------- Этап 1б. ТК27: target_lufs у пресета (условие 11) ----------
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestPresetTargetLufs(_PresetCase):
-    """Условие 11: target_lufs — число −24…−6 или null; вне границ / не число → 422."""
+    """target_lufs — число −24…−6 или null; вне границ / не число → 422."""
 
     def _bad(self, **over):
         n = self._preset_count()
@@ -564,36 +549,36 @@ class TestPresetTargetLufs(_PresetCase):
         self._assert_422(r)
         self.assertEqual(self._preset_count(), n, "невалидный пресет сохранился")
 
-    def test_tc27_minus13_stored_and_returned(self):
+    def test_minus13_stored_and_returned(self):
         created = self._create(target_lufs=-13)
         got = self._by_id(created["id"])
         self.assertEqual(got.get("target_lufs"), -13)
 
-    def test_tc27_null_ok(self):
+    def test_null_ok(self):
         created = self._create(target_lufs=None)
         got = self._by_id(created["id"])
         self.assertIn("target_lufs", got, got)
         self.assertIsNone(got["target_lufs"])
 
-    def test_tc27_bounds_inclusive(self):
+    def test_bounds_inclusive(self):
         # края диапазона −24…−6 допустимы
         for v in (-24, -6, -13.5):
             with self.subTest(v=v):
                 pid = self._create(name=f"п {v}", target_lufs=v)["id"]
                 self.assertEqual(self._by_id(pid)["target_lufs"], v)
 
-    def test_tc27_minus30_422(self):
+    def test_minus30_422(self):
         self._bad(target_lufs=-30)
 
-    def test_tc27_zero_422(self):
+    def test_zero_422(self):
         self._bad(target_lufs=0)
 
-    def test_tc27_just_outside_bounds_422(self):
+    def test_just_outside_bounds_422(self):
         for v in (-24.5, -5.5):
             with self.subTest(v=v):
                 self._bad(target_lufs=v)
 
-    def test_tc27_string_422(self):
+    def test_string_422(self):
         self._bad(target_lufs="-13")
 
     def test_put_changes_target_lufs(self):
@@ -619,8 +604,6 @@ class TestPresetTargetLufs(_PresetCase):
         self.assertEqual(got["target_lufs"], -14)
 
 
-# ---------- Этап 1б. ТК28: встроенные обновляются при старте (условие 13) ----------
-
 def _bass_spec(preset):
     return next(s for s in preset["specs"] if "bass" in s["stems"])
 
@@ -631,7 +614,7 @@ def _engine_block(spec, typ):
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestBuiltinUpsert(_PresetCase):
-    """Условие 13: досев встроенных — upsert по slug (имя, описание, рецепт, target_lufs,
+    """Досев встроенных — upsert по slug (имя, описание, рецепт, target_lufs,
     reference_job_id), id прежний; свои пресеты не трогаются."""
 
     def _patch_builtin(self, slug, change):
@@ -654,7 +637,7 @@ class TestBuiltinUpsert(_PresetCase):
         self.w.init_db()
         self.w._migrate()
 
-    def test_tc28_changed_builtin_recipe_upserted_same_id(self):
+    def test_changed_builtin_recipe_upserted_same_id(self):
         own = self._create(name="Свой", target_lufs=-14)
         own_before = self._by_id(own["id"])
         before = {p["slug"]: p for p in self._builtins()}
@@ -691,7 +674,7 @@ class TestBuiltinUpsert(_PresetCase):
         # всего: встроенные + свой, без дублей
         self.assertEqual(len(self._list()), NB + 1)
 
-    def test_tc28_upsert_does_not_touch_own_preset_with_same_name(self):
+    def test_upsert_does_not_touch_own_preset_with_same_name(self):
         # свой пресет с именем встроенного — не встроенный, upsert его не трогает
         t_name = next(p for p in self._builtins() if p["slug"] == "transmission")["name"]
         own = self._create(name=t_name)
@@ -701,7 +684,7 @@ class TestBuiltinUpsert(_PresetCase):
         self.assertEqual(self._by_id(own["id"]), own_before)
         self.assertEqual(len(self._builtins()), NB)
 
-    def test_tc28_repeat_restart_idempotent(self):
+    def test_repeat_restart_idempotent(self):
         self._patch_builtin("sex-on-fire", lambda b: b.update(target_lufs=-9))
         self._restart()
         first = self._builtins()
@@ -714,47 +697,45 @@ class TestBuiltinUpsert(_PresetCase):
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, _SKIP)
 class TestBuiltinRecipes1b(_PresetCase):
-    """Условие 13 и 11: рецепты встроенных после прослушивания (#488)."""
+    """Рецепты встроенных пресетов."""
 
     def _get(self, slug):
         return next(p for p in self._list() if p.get("slug") == slug)
 
-    def test_tc28_transmission_bass_output_db_0(self):
+    def test_transmission_bass_output_db_0(self):
         bass = _engine_block(_bass_spec(self._get("transmission")), "bass")
         self.assertIsNotNone(bass)
         self.assertEqual(bass.get("output_db"), 0)
 
-    def test_tc28_transmission_bass_eq_without_150(self):
+    def test_transmission_bass_eq_without_150(self):
         eq = _engine_block(_bass_spec(self._get("transmission")), "eq")
         self.assertIsNotNone(eq)
         freqs = [band.get("freq_hz") for band in eq.get("bands") or []]
         self.assertNotIn(150, freqs, eq)
-        # остальное в eq баса как было: 800 Гц +4, срез низа 80
+        # остальное в eq баса: 800 Гц +4, срез низа 80
         self.assertIn(800, freqs, eq)
         b800 = next(band for band in eq["bands"] if band.get("freq_hz") == 800)
         self.assertEqual(b800.get("gain_db"), 4)
         self.assertEqual(eq.get("highpass_hz"), 80)
 
-    def test_tc28_transmission_final_and_target(self):
+    def test_transmission_final_and_target(self):
         p = self._get("transmission")
         self.assertNotIn("level", [f["chain"] for f in p["final"]])
         self.assertEqual(p.get("target_lufs"), -13)
 
-    def test_tc28_sex_on_fire_final_and_target(self):
+    def test_sex_on_fire_final_and_target(self):
         p = self._get("sex-on-fire")
         self.assertNotIn("level", [f["chain"] for f in p["final"]])
         self.assertEqual(p.get("target_lufs"), -12)
 
     def test_builtins_in_code_final_without_level(self):
-        # условие 13: у встроенных (источник досева) в финале нет level; цели −13/−12 — тесты выше
+        # у встроенных (источник досева) в финале нет level; цели −13/−12 — тесты выше
         import presets
         for b in presets.BUILTIN:
             self.assertNotIn("level", [f["chain"] for f in b["final"]], b["slug"])
 
 
-# ---------- Этап 2. ТК39: встроенный «Живая ритм-секция» (условия 17, 18) ----------
-#
-# Контракт (из карточки): slug live-rhythm; записи kick, snare, toms (по высоте: kit_mid/kit_low),
+# Контракт: slug live-rhythm; записи kick, snare, toms (по высоте: kit_mid/kit_low),
 # hh (kit_open osdk/hh-half, choke 1), ride, crash — sampler + комната (последний блок reverb:
 # decay_s 0.5, predelay_ms 5, lowpass_hz 7000, wet 0.12); bass — бас-гитара набором (блок bass);
 # без финала, target_lufs null.
@@ -783,7 +764,7 @@ class TestBuiltinLiveRhythm(unittest.TestCase):
         self.assertTrue(found, f"у {stem} нет sampler: {engine}")
         return found[0]
 
-    def test_tc39_seven_records_one_part_each(self):
+    def test_seven_records_one_part_each(self):
         b = self._live()
         self.assertEqual(len(b["specs"]), 7)
         self.assertEqual(sorted(s for spec in b["specs"] for s in spec["stems"]),
@@ -793,7 +774,7 @@ class TestBuiltinLiveRhythm(unittest.TestCase):
                 self.assertEqual(len(spec["stems"]), 1, "запись на несколько частей")
                 self.assertTrue(spec.get("engine"), "запись не цепочка движка")
 
-    def test_tc39_drums_sampler_and_room(self):
+    def test_drums_sampler_and_room(self):
         b = self._live()
         for stem in LIVE_DRUMS:
             with self.subTest(stem=stem):
@@ -804,23 +785,23 @@ class TestBuiltinLiveRhythm(unittest.TestCase):
                 for k, v in ROOM.items():
                     self.assertEqual(last.get(k), v, f"комната: {k}")
 
-    def test_tc39_toms_by_pitch(self):
+    def test_toms_by_pitch(self):
         smp = self._sampler("toms")
         self.assertEqual(smp.get("kit"), "osdk/tom-small")
         self.assertEqual(smp.get("kit_mid"), "osdk/tom-medium")
         self.assertEqual(smp.get("kit_low"), "osdk/tom-large")
 
-    def test_tc39_hh_open_and_choke(self):
+    def test_hh_open_and_choke(self):
         smp = self._sampler("hh")
         self.assertEqual(smp.get("kit_open"), "osdk/hh-half")
         self.assertEqual(smp.get("choke"), 1)
 
-    def test_tc39_bass_kit_without_room(self):
+    def test_bass_kit_without_room(self):
         engine = self._spec(self._live(), "bass")["engine"]
         self.assertTrue(any(blk.get("type") == "bass" for blk in engine), engine)
         self.assertFalse(any(blk.get("type") == "reverb" for blk in engine), "у баса комнаты быть не должно")
 
-    def test_tc39_no_final_target_null(self):
+    def test_no_final_target_null(self):
         b = self._live()
         self.assertEqual(b.get("final") or [], [])
         self.assertIn("target_lufs", b)

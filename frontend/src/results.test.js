@@ -1,5 +1,5 @@
-// Тесты карточки internal-own-track, условие 124 «Одно „Готово“: понятный список версий» (тест-кейс ТК151):
-//   - resultTitle(v, chainName) → {title, detail, kind} по таблице условия:
+// «Одно „Готово“: понятный список версий»:
+//   - resultTitle(v, chainName) → {title, detail, kind} по таблице:
 //       dsp-preset-N.flac        → «Пресет: <label>»                 (preset)
 //       dsp-preset-N-mix.flac    → «Пресет: микс до мастера»         (premix)
 //       overdub-inst-*.flac      → «Микс с правками · N правок»      (mix; N — частей label через « + »)
@@ -7,25 +7,24 @@
 //       dsp-fx-*.flac            → label или «Движок»                (engine)
 //       dsp-preview-*.flac       → «<цепочка> (превью 15 с)»
 //       dsp-<chain>.flac         → имя цепочки или label             (effect)
-//       overdub-<id>.flac        → label или «Переиграно поверх оригинала» (layer; уточнение 124а, ТК154)
+//       overdub-<id>.flac        → label или «Переиграно поверх оригинала» (layer)
 //     detail — полный label; пустой label — запасные имена (заголовок не пустой);
 //   - resultsOrder(list) — новые сверху по created_at, без даты — в конце;
 //   - resultDate(iso, now) — «10.10 14:00», другой год — с годом;
 //   - галочка «подробнее» запоминается, по умолчанию выкл. (readFlag/writeFlag из prefs.js); по дереву шаблона
 //     StudioPage.vue строка «Δ крест» — под v-if флага этой галочки (одна галочка на список).
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { resultTitle, resultsOrder, resultDate } from './results.js'
 import { readFlag, writeFlag } from './prefs.js'
 import { templateAst, findElements, dir, attr, shownIf, idents } from './testkit/sfc.js'
 
-// chainName — функция id цепочки → имя (нет — undefined); форма уточнена по JSDoc results.js: карточка её не задаёт
+// chainName — функция id цепочки → имя (нет — undefined)
 const NAMES = { wall: 'Стена звука' }
 const byId = (id) => NAMES[id]
 const none = () => undefined
 const v = (file, label = '', extra = {}) => ({ file, label, created_at: '2026-10-10T14:00:10', metrics: null, ...extra })
 
-describe('resultTitle: таблица условия 124', () => {
+describe('resultTitle: таблица названий', () => {
   it('dsp-preset-N.flac → «Пресет: <label>», kind preset', () => {
     const r = resultTitle(v('dsp-preset-3.flac', 'тёплый ламповый'), none)
     expect(r.title).toBe('Пресет: тёплый ламповый')
@@ -129,8 +128,8 @@ describe('resultTitle: таблица условия 124', () => {
   })
 })
 
-// уточнение 124а (ТК154): слой «поверх оригинала» от «Переиграть в другом стиле»
-describe('resultTitle: overdub-<id>.flac — слой поверх оригинала (124а)', () => {
+// слой «поверх оригинала» от «Переиграть в другом стиле»
+describe('resultTitle: overdub-<id>.flac — слой поверх оригинала', () => {
   it('с label → label, kind layer, detail — label', () => {
     const r = resultTitle(v('overdub-12.flac', 'jazz piano, brushes'), none)
     expect(r.title).toBe('jazz piano, brushes')
@@ -206,7 +205,7 @@ describe('resultDate: «10.10 14:00»', () => {
   })
 })
 
-// ---------- «подробнее»: дельты метрик под одной галочкой, по умолчанию выкл. ----------
+// «подробнее»: дельты метрик под одной галочкой, по умолчанию выкл.
 
 class MemStorage {
   constructor(init = {}) { this.m = new Map(Object.entries(init)) }

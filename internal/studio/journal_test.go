@@ -11,7 +11,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 19, условие 149 (б), ТК172: составные операции
+// Составные операции
 // studio после УСПЕХА пишут ровно одну запись журнала через OpRecorder сервиса:
 //   RebuildSections → rebuild_sections (result — файл микса, refs — child_id),
 //   VolumeEnvelope → envelope, Splice → splice (refs — job_id кусков),
@@ -21,7 +21,7 @@ import (
 // без «контекста без журнала» внутренний VariantToTrack/ApplyFx дал бы лишние записи).
 // Ошибка правки — записи нет; сбой записи — правка успешна.
 //
-// Фейки воркера — secFake/psFake (sections_test.go, presets_test.go); jrRec добавляет к ним
+// jrRec добавляет к фейкам secFake/psFake
 // внешнюю границу «журнал воркера» (RecordOp).
 
 type jrEntry struct {
@@ -142,10 +142,8 @@ func onlyUpload(t *testing.T, f *secFake) string {
 	return ""
 }
 
-// ---------- RebuildSections ----------
-
-// ТК172: пересборка → rebuild_sections у родителя, result — файл микса, refs — child_id, params — спеки.
-// Через Journaled — по-прежнему одна запись (внутренние вызовы не пишутся).
+// Пересборка → rebuild_sections у родителя, result — файл микса, refs — child_id, params — спеки.
+// Через Journaled — одна запись (внутренние вызовы не пишутся).
 func TestJournalRebuildSections(t *testing.T) {
 	t.Parallel()
 	for _, wrap := range []bool{false, true} {
@@ -175,7 +173,7 @@ func TestJournalRebuildSections(t *testing.T) {
 	}
 }
 
-// ТК172: ошибка пересборки → записи нет.
+// Ошибка пересборки → записи нет.
 func TestJournalRebuildSectionsErrorNoRecord(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -194,7 +192,7 @@ func TestJournalRebuildSectionsErrorNoRecord(t *testing.T) {
 	}
 }
 
-// ТК172: сбой записи журнала — правка успешна, вариант загружен.
+// Сбой записи журнала — правка успешна, вариант загружен.
 func TestJournalRebuildSectionsRecordFailureKeepsEdit(t *testing.T) {
 	t.Parallel()
 	f, _ := secSetup(t)
@@ -207,8 +205,6 @@ func TestJournalRebuildSectionsRecordFailureKeepsEdit(t *testing.T) {
 		t.Errorf("микс не загружен: %v", keys(f.uploads))
 	}
 }
-
-// ---------- VolumeEnvelope ----------
 
 func TestJournalVolumeEnvelope(t *testing.T) {
 	t.Parallel()
@@ -238,9 +234,7 @@ func TestJournalVolumeEnvelopeErrorNoRecord(t *testing.T) {
 	}
 }
 
-// ---------- Splice ----------
-
-// ТК172: склейка → splice у базы, refs — job_id кусков, result — файл склейки.
+// Склейка → splice у базы, refs — job_id кусков, result — файл склейки.
 func TestJournalSplice(t *testing.T) {
 	t.Parallel()
 	f := spliceSetup(t)
@@ -274,8 +268,6 @@ func TestJournalSpliceErrorNoRecord(t *testing.T) {
 		t.Errorf("записи при ошибке: %+v", rec.recs)
 	}
 }
-
-// ---------- ApplyChain / ApplySteps (общие для App и MCP) ----------
 
 // jrTrack — трек envTrack (secFake) со списком треков воркера: конвейер DSP берёт имя звука из Jobs.
 type jrTrack struct{ *secFake }
@@ -344,9 +336,7 @@ func TestJournalApplyStepsErrorNoRecord(t *testing.T) {
 	}
 }
 
-// ---------- ApplySoundPreset ----------
-
-// ТК172 / 149(б): пресет → одна запись sound_preset у трека, params — пресет ЦЕЛИКОМ,
+// Пресет → одна запись sound_preset у трека, params — пресет ЦЕЛИКОМ,
 // result job:<версия>; внутренний VariantToTrack через Journaled не пишется.
 func TestJournalApplySoundPreset(t *testing.T) {
 	t.Parallel()
@@ -382,8 +372,8 @@ func TestJournalApplySoundPresetErrorNoRecord(t *testing.T) {
 	}
 }
 
-// 149(б): пересборка с мастером — внутренний ApplyFx мастера (не превью) через Journaled
-// не даёт своей записи fx: в журнале одна rebuild_sections. Фейк — msFake (master_test.go).
+// Пересборка с мастером — внутренний ApplyFx мастера (не превью) через Journaled
+// не даёт своей записи fx: в журнале одна rebuild_sections.
 func TestJournalRebuildSectionsMasterInnerFxNotRecorded(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)

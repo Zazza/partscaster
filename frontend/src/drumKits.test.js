@@ -1,15 +1,3 @@
-// Тесты карточки internal-own-track, этап 7б «Наборы барабанов и синт-басы»: условия 57 и 58 (тест-кейс ТК93).
-//   drumKits.js: DRUM_KITS [{id, name {ru,en}, note {ru,en}, parts}] — osdk (живой), tr808, tr909, linn, cr78,
-//     simmons; parts: kick, snare — {kit}; toms — {kit (small), kit_mid, kit_low}; hh — {kit (closed),
-//     kit_open, choke 1}; ride, crash — {kit}. DRUM_TREATMENTS [{id, name {ru,en}, chain}] — dry, room, gated,
-//     tight, lofi.
-//   trackDesk.js: rhythmSection(stemNames, presets, room, locale, kit = 'osdk') — room true/false или id
-//     обработки; kit 'osdk' — прежние цепочки побайтно; другой набор — sampler с частями набора
-//     (floor_db/dynamics/output_db — как у цепочек osdk той же части); бас — прежний bass-kit без обработки.
-//   fxPresets.js: drums-<часть>-<набор> (group 'drum-kits', stems [часть]) для каждой машины; синт-басы —
-//     блок bass с kit synthbass/*, group 'bass-kit', stems ['bass'] (туда же прежний bass-kit).
-//   Уточнение ТК93 (условие 57а): обработка gated — reverb с gate_ms > 0, без блока gate.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import blocks from './fxBlocks.json'
 import { DRUM_KITS, DRUM_TREATMENTS } from './drumKits.js'
@@ -20,10 +8,10 @@ import { PRESET_GROUPS } from './presetGroups.js'
 const KIT_IDS = ['osdk', 'tr808', 'tr909', 'linn', 'cr78', 'simmons']
 const MACHINES = KIT_IDS.filter((k) => k !== 'osdk')
 const DESK_PARTS = ['kick', 'snare', 'toms', 'hh', 'ride', 'crash']
-// части наборов воркера (ТК90)
+// части наборов воркера
 const SYNTH_PARTS = ['kick', 'snare', 'hh-closed', 'hh-open', 'ride', 'crash',
   'tom-small', 'tom-medium', 'tom-large', 'clap', 'rim', 'cowbell']
-// прежние имена частей живого набора osdk (готовые «набором» до этапа 7б)
+// имена частей живого набора osdk
 const OSDK_PARTS = {
   kick: { kit: 'osdk/kick' },
   snare: { kit: 'osdk/snare' },
@@ -40,7 +28,7 @@ const machineParts = (id) => ({
   ride: { kit: `${id}/ride` },
   crash: { kit: `${id}/crash` },
 })
-// готовые «набором» до этапа 7б: дорожка → id пресета
+// готовые «набором»: дорожка → id пресета
 const OLD_PRESET = {
   kick: 'drums-kick-kit', snare: 'drums-snare-kit', toms: 'drums-toms-kit', hh: 'drums-hh-kit',
   ride: 'drums-ride-kit', crash: 'drums-crash-kit', bass: 'bass-kit',
@@ -52,7 +40,7 @@ const STEMS = ['kick', 'snare', 'hh', 'bass']
 const ALL_STEMS = ['kick', 'snare', 'toms', 'hh', 'ride', 'crash', 'bass']
 const clone = (v) => JSON.parse(JSON.stringify(v))
 
-// как было до этапа 7б (ТК37): готовая цепочка, при комнате — ROOM в конце; подпись — имя пресета (+ комната)
+// готовая цепочка, при комнате — ROOM в конце; подпись — имя пресета (+ комната)
 function before(stems, room, locale = 'ru') {
   return ALL_STEMS.filter((s) => stems.includes(s)).map((stem) => {
     const p = preset(OLD_PRESET[stem])
@@ -70,7 +58,7 @@ function inRange(v, spec) {
   return v >= spec.min && v <= spec.max
 }
 
-describe('DRUM_KITS (ТК93, условие 57)', () => {
+describe('DRUM_KITS', () => {
   it('6 наборов: живой osdk и пять машин', () => {
     expect(DRUM_KITS.map((k) => k.id).sort()).toEqual([...KIT_IDS].sort())
     expect(DRUM_KITS.length).toBe(6)
@@ -108,7 +96,7 @@ describe('DRUM_KITS (ТК93, условие 57)', () => {
   })
 })
 
-describe('DRUM_TREATMENTS (условие 57)', () => {
+describe('DRUM_TREATMENTS', () => {
   it('обработки: сухо, комната, гейт-реверб, плотно, лоуфай', () => {
     expect(DRUM_TREATMENTS.map((t) => t.id).sort()).toEqual(['dry', 'gated', 'lofi', 'room', 'tight'])
   })
@@ -136,7 +124,7 @@ describe('DRUM_TREATMENTS (условие 57)', () => {
     expect(treatment('room').chain).toEqual([ROOM])
   })
 
-  it('гейт-реверб 80-х: reverb с обрезанным хвостом (gate_ms > 0), без блока gate (уточнение ТК93, условие 57а)', () => {
+  it('гейт-реверб 80-х: reverb с обрезанным хвостом (gate_ms > 0), без блока gate', () => {
     const c = treatment('gated').chain
     const rv = c.filter((b) => b.type === 'reverb')
     expect(rv.length).toBeGreaterThan(0)
@@ -160,7 +148,7 @@ describe('DRUM_TREATMENTS (условие 57)', () => {
   })
 })
 
-describe('rhythmSection с набором и обработкой (ТК93)', () => {
+describe('rhythmSection с набором и обработкой', () => {
   it('без набора, сухо — побайтно как раньше', () => {
     expect(rhythmSection(STEMS, fxPresets, false)).toEqual(before(STEMS, false))
   })
@@ -190,7 +178,7 @@ describe('rhythmSection с набором и обработкой (ТК93)', () 
       const b = r.chain[0]
       expect(b.type).toBe('sampler')
       expect(b).toMatchObject(parts[r.stem])
-      // усл. 84 (этап 10): у живого хэта громкость 0 (его поднимает эквалайзер), у хэта машин — прежние +4
+      // у живого хэта громкость 0 (его поднимает эквалайзер), у хэта машин — +4
       const want = (k) => (r.stem === 'hh' && k === 'output_db' ? 4 : old[k])
       for (const k of ['floor_db', 'dynamics', 'output_db']) expect(b[k], `${r.stem}.${k}`).toEqual(want(k))
       for (const k of ['kit', 'kit_mid', 'kit_low', 'kit_open', 'choke']) expect(b[k], `${r.stem}.${k}`).toEqual(parts[r.stem][k])
@@ -261,8 +249,8 @@ describe('rhythmSection с набором и обработкой (ТК93)', () 
   })
 })
 
-describe('fxPresets: готовые по частям наборов и синт-басы (условия 57, 58)', () => {
-  it('группы drum-kits и bass-kit есть в PRESET_GROUPS с подписями карточки', () => {
+describe('fxPresets: готовые по частям наборов и синт-басы', () => {
+  it('группы drum-kits и bass-kit есть в PRESET_GROUPS с ожидаемыми подписями', () => {
     expect(PRESET_GROUPS['drum-kits']?.ru).toBe('Барабаны: наборы')
     expect(PRESET_GROUPS['bass-kit']?.ru).toBe('Бас: замена нот сэмплами')
     for (const g of ['drum-kits', 'bass-kit']) {

@@ -17,7 +17,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 19, условие 153, ТК171: ведущий импорта рецепта
+// Ведущий импорта рецепта
 // studio.RecipeRunner{Svc, Owner}.Tick(ctx) — один шаг за тик:
 //   первая сессия RecipeImports() со status running → ClaimRecipeImport(id, Owner)
 //   (ErrClaimed — ничего не делает) → RecipeImport(id) (recipe + state) → шаг →
@@ -34,9 +34,7 @@ import (
 // params отдельных op и проверяет круг «журнал → рецепт → воспроизведение».
 //
 // Воркер «новой установки» — rcNew: сессии импорта и генерации — внешняя граница; звук,
-// загрузки, стемы — psFake/secFake (presets_test.go, sections_test.go).
-
-// ---------- исходная установка: журнал ----------
+// загрузки, стемы — psFake/secFake.
 
 // rcOrig — исходный воркер: создающие вызовы возвращают ids по очереди, ApplyFx — fxFiles по очереди.
 type rcOrig struct {
@@ -112,7 +110,7 @@ func rcDefaultRoot() rcRoot {
 		Cot: "full", Arc: "build", MaxTokens: 3000, Temperature: 1.1, Cfg: 1.5, PlanAbc: rcStr("X:plan")}
 }
 
-// rcIDKeys — ключи params, чьи значения-id треков экспорт заменяет на n-id (договор этапа 19).
+// rcIDKeys — ключи params, чьи значения-id треков экспорт заменяет на n-id.
 var rcIDKeys = map[string]bool{"parent_id": true, "child_id": true, "job_id": true, "voice_src": true, "head_id": true}
 
 func rcSubst(v any, nodes map[int64]string) any {
@@ -197,7 +195,7 @@ func rcBuild(t *testing.T, rootID int64, root rcRoot, recs []jrEntry, folder str
 	return out
 }
 
-// rcMainRecipe — ТК171: корень 10 → continue (11, сид воркера 5151) → fx на 11 (dsp-fx-a.flac)
+// rcMainRecipe — корень 10 → continue (11, сид воркера 5151) → fx на 11 (dsp-fx-a.flac)
 // → variant_track(11, dsp-fx-a.flac) = 12; head 12, папка «Альбом».
 func rcMainRecipe(t *testing.T, root rcRoot) json.RawMessage {
 	t.Helper()
@@ -225,8 +223,6 @@ func rcFxReq(from *float64, file string) yue.FxRequest {
 	return yue.FxRequest{Source: "mix", From: from, File: file, Label: "тёплый",
 		Chain: []map[string]any{{"type": "eq", "low": 2.0}, {"type": "comp", "ratio": 3.0}}}
 }
-
-// ---------- новая установка ----------
 
 type rcCont struct {
 	jobID         int64
@@ -518,9 +514,7 @@ func rcRootID(f *rcNew) int64 {
 	return 0
 }
 
-// ---------- ТК171 ----------
-
-// ТК171: seed-режим — Submit (тот же сид и поля корня), ContinueJob(новый корень, тот же from,
+// seed-режим — Submit (тот же сид и поля корня), ContinueJob(новый корень, тот же from,
 // сид из журнала, abc, style_add), ApplyFx на новом продолжении, VariantToTrack по НОВОМУ имени
 // файла; в конце SetHead(корень, новый head), папка «Альбом», status done, root_job_id.
 func TestRecipeRunnerSeedModeReplaysInOrder(t *testing.T) {
@@ -577,7 +571,7 @@ func TestRecipeRunnerSeedModeReplaysInOrder(t *testing.T) {
 	}
 }
 
-// ТК171: seed-режим с abc в исходной заявке — корень с тем же abc.
+// seed-режим с abc в исходной заявке — корень с тем же abc.
 func TestRecipeRunnerSeedModeKeepsRequestAbc(t *testing.T) {
 	t.Parallel()
 	root := rcDefaultRoot()
@@ -589,7 +583,7 @@ func TestRecipeRunnerSeedModeKeepsRequestAbc(t *testing.T) {
 	}
 }
 
-// ТК171: plan-режим — корень рендерится по plan_abc.
+// plan-режим — корень рендерится по plan_abc.
 func TestRecipeRunnerPlanModeRendersPlanAbc(t *testing.T) {
 	t.Parallel()
 	root := rcDefaultRoot()
@@ -646,7 +640,7 @@ func TestRecipeRunnerGenerationErrorStops(t *testing.T) {
 	}
 }
 
-// ТК171: сбой на 3-м узле (fx) → error; повтор после ручного running продолжает с 3-го:
+// Сбой на 3-м узле (fx) → error; повтор после ручного running продолжает с 3-го:
 // корень и продолжение не перевызываются.
 func TestRecipeRunnerResumesAfterFailure(t *testing.T) {
 	t.Parallel()
@@ -753,7 +747,7 @@ func TestRecipeRunnerRemapsFilesBetweenEdits(t *testing.T) {
 	}
 }
 
-// ТК171: splice-правка — job_id кусков переназначены на новые треки; склейка у нового корня.
+// splice-правка — job_id кусков переназначены на новые треки; склейка у нового корня.
 func TestRecipeRunnerSpliceRemapsJobIDs(t *testing.T) {
 	t.Parallel()
 	src := spliceSetup(t) // звук у 11 (spliceA) и 12 (spliceB)
@@ -802,7 +796,7 @@ func TestRecipeRunnerSpliceRemapsJobIDs(t *testing.T) {
 	}
 }
 
-// ТК171: sound_preset — заново ApplySoundPreset с пресетом из рецепта; узел-версия = его
+// sound_preset — заново ApplySoundPreset с пресетом из рецепта; узел-версия = его
 // результат (head → эта версия).
 func TestRecipeRunnerSoundPresetReapplied(t *testing.T) {
 	t.Parallel()
@@ -841,7 +835,7 @@ func TestRecipeRunnerSoundPresetReapplied(t *testing.T) {
 	}
 }
 
-// rcWithDurations — рецепт с durations {nK: секунды} (уточнение договора этапа 19).
+// rcWithDurations — рецепт с durations {nK: секунды}.
 func rcWithDurations(t *testing.T, raw json.RawMessage, d map[string]float64) json.RawMessage {
 	t.Helper()
 	var m map[string]any
@@ -869,7 +863,7 @@ func rcHasDrift(lines []string) bool {
 	return false
 }
 
-// 153: новая длительность узла отличается от durations[nK] > 2 % → строка в progress сессии
+// Новая длительность узла отличается от durations[nK] > 2 % → строка в progress сессии
 // (окна правок могли сместиться); ≤ 2 % — такой строки нет. Новые джобы фейка — psDur секунд.
 func TestRecipeRunnerDurationDrift(t *testing.T) {
 	t.Parallel()
@@ -898,9 +892,7 @@ func TestRecipeRunnerDurationDrift(t *testing.T) {
 	}
 }
 
-// ---------- 153а: продление захвата, чужой захват ----------
-
-// 153а / ТК179: долгий шаг (ApplyFx дольше интервала продления) → ClaimRecipeImport зовётся
+// Долгий шаг (ApplyFx дольше интервала продления) → ClaimRecipeImport зовётся
 // повторно ВО ВРЕМЯ шага. Не параллельный: подменяет recipeLeaseEvery пакета.
 func TestRecipeRunnerRenewsClaimDuringLongStep(t *testing.T) {
 	old := recipeLeaseEvery
@@ -925,7 +917,7 @@ func TestRecipeRunnerRenewsClaimDuringLongStep(t *testing.T) {
 	}
 }
 
-// 153а: сохранение состояния несёт owner ведущего (воркер отвергнет устаревшее состояние чужого).
+// Сохранение состояния несёт owner ведущего (воркер отвергнет устаревшее состояние чужого).
 func TestRecipeRunnerSaveCarriesOwner(t *testing.T) {
 	t.Parallel()
 	f := newRcNew(t, nil, rcMainRecipe(t, rcDefaultRoot()), "seed")
@@ -941,7 +933,7 @@ func TestRecipeRunnerSaveCarriesOwner(t *testing.T) {
 	}
 }
 
-// 153а / ТК179: SaveRecipeImport ответил ErrClaimed (сессию забрал другой) → ведущий не делает
+// SaveRecipeImport ответил ErrClaimed (сессию забрал другой) → ведущий не делает
 // следующий шаг ни в этом тике, ни в следующих.
 func TestRecipeRunnerStopsWhenSaveClaimed(t *testing.T) {
 	t.Parallel()
@@ -959,8 +951,6 @@ func TestRecipeRunnerStopsWhenSaveClaimed(t *testing.T) {
 		t.Errorf("вызовы %v, want остановка после fx (сессию держит другой)", f.calls)
 	}
 }
-
-// ---------- 153в: RecipeImportAction ----------
 
 func rcLastUpdate(t *testing.T, f *rcNew) map[string]json.RawMessage {
 	t.Helper()
@@ -1035,9 +1025,7 @@ func TestRecipeImportActionUnknownAndServiceError(t *testing.T) {
 	}
 }
 
-// ---------- ТК180: сквозной рецепт (фикстура build_recipe воркера) ----------
-
-// ТК180: testdata/recipe_e2e.json (python-тест сверяет её с build_recipe — golden) проигрывается
+// testdata/recipe_e2e.json (python-тест сверяет её с build_recipe — golden) проигрывается
 // ведущим: все вызовы — с новыми id и новыми именами файлов; variant_track из файла fx — новое имя
 // fx, из overdub-{nK}.flac — overdub-<новый id overdub-джобы>.flac; итог — SetHead на новую версию.
 func TestRecipeRunnerReplaysE2EFixture(t *testing.T) {
@@ -1092,8 +1080,6 @@ func TestRecipeRunnerReplaysE2EFixture(t *testing.T) {
 	}
 }
 
-// ---------- ТК182: досохранение хода, финал head = корень, имя ведущего ----------
-
 // rcNext — state.next присланного сохранения (-100 — state нет).
 func rcNext(t *testing.T, u map[string]json.RawMessage) int {
 	t.Helper()
@@ -1110,7 +1096,7 @@ func rcNext(t *testing.T, u map[string]json.RawMessage) int {
 	return st.Next
 }
 
-// 153д / ТК182: шаг fx сделан, PATCH не принят (обычная ошибка) → следующий тик досохраняет тот же
+// Шаг fx сделан, PATCH не принят (обычная ошибка) → следующий тик досохраняет тот же
 // ход (next продвинут за fx), ApplyFx второй раз не зовётся.
 func TestRecipeRunnerResavesStepAfterSaveError(t *testing.T) {
 	t.Parallel()
@@ -1135,7 +1121,7 @@ func TestRecipeRunnerResavesStepAfterSaveError(t *testing.T) {
 	}
 }
 
-// 153д: ErrClaimed — ход не досохраняется: состояние воркера главнее, шаг идёт от него
+// ErrClaimed — ход не досохраняется: состояние воркера главнее, шаг идёт от него
 // (в фейке другой ведущий ничего не сделал — fx повторяется по состоянию воркера).
 func TestRecipeRunnerNoResaveAfterClaimed(t *testing.T) {
 	t.Parallel()
@@ -1153,7 +1139,7 @@ func TestRecipeRunnerNoResaveAfterClaimed(t *testing.T) {
 	}
 }
 
-// 153г / ТК182: в журнале set_head на продолжение (n2), а в рецепте head = n1 → в конце
+// В журнале set_head на продолжение (n2), а в рецепте head = n1 → в конце
 // SetHead(новый корень, 0): давний выбор из журнала не остаётся.
 func TestRecipeRunnerFinalHeadRootResetsHead(t *testing.T) {
 	t.Parallel()
@@ -1180,7 +1166,7 @@ func TestRecipeRunnerFinalHeadRootResetsHead(t *testing.T) {
 	}
 }
 
-// 153е: имя ведущего уникально на экземпляр и содержит вид программы.
+// Имя ведущего уникально на экземпляр и содержит вид программы.
 func TestRecipeOwnerUnique(t *testing.T) {
 	t.Parallel()
 	a, b := RecipeOwner("app"), RecipeOwner("app")
@@ -1195,9 +1181,7 @@ func TestRecipeOwnerUnique(t *testing.T) {
 	}
 }
 
-// ---------- ТК183 / 153ж: досохранение только от той же базы ----------
-
-// 153ж: сохранение хода A не принято, а на воркере уже другое состояние (вёл B: next продвинут,
+// Сохранение хода A не принято, а на воркере уже другое состояние (вёл B: next продвинут,
 // своё соответствие) → A свой старый ход не пишет и fx ради него не повторяет; идёт от состояния B.
 func TestRecipeRunnerDropsUnsavedWhenWorkerStateChanged(t *testing.T) {
 	t.Parallel()
@@ -1224,7 +1208,7 @@ func TestRecipeRunnerDropsUnsavedWhenWorkerStateChanged(t *testing.T) {
 	}
 }
 
-// 153ж: досохранение получило ErrClaimed → в этом же тике шаг не выполняется.
+// Досохранение получило ErrClaimed → в этом же тике шаг не выполняется.
 func TestRecipeRunnerResaveClaimedSkipsStep(t *testing.T) {
 	t.Parallel()
 	f := newRcNew(t, nil, rcMainRecipe(t, rcDefaultRoot()), "seed")

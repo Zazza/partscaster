@@ -10,11 +10,10 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 13, условие 96 (тест-кейс ТК135, MCP):
 // инструмент fx_phrase — список фраз / расчёт фразы с цепочкой → file, cycle_sec.
 // Воркер — phraseFake поверх fakeService (server_test.go).
 // Допущение: аргументы инструмента названы как поля API воркера (phrase, tempo, chain, stems,
-// bypass); без phrase — список фраз. Написаны по карточке, без чтения реализации.
+// bypass); без phrase — список фраз.
 
 type phraseFake struct {
 	*fakeService

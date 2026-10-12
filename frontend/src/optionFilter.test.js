@@ -1,4 +1,3 @@
-// Тесты поиска по пунктам выпадающего списка — по спецификации matchOptions.
 import { describe, it, expect } from 'vitest'
 import { matchOptions } from './optionFilter.js'
 

@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// writeFile создаёт файл (с каталогами) под root.
 func writeFile(t *testing.T, root, rel, content string) {
 	t.Helper()
 	p := filepath.Join(root, rel)

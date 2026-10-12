@@ -1,7 +1,7 @@
-// ТК110 (карточка internal-own-track, ревью s8b, условие 73а): поиск в выборе пресетов — и по семье
+// Поиск в выборе пресетов — и по семье
 // с течением. У опции может быть поле search (доп. текст для поиска); matchOptions ищет по label + search;
-// presetOptions кладёт в search «<семья> <течение>». Написаны по карточке, без чтения реализации.
-// Предположение: заголовки presetOptions отличаются disabled (или props.disabled), как в ТК107.
+// presetOptions кладёт в search «<семья> <течение>».
+// Предположение: заголовки presetOptions отличаются disabled (или props.disabled).
 import { describe, it, expect } from 'vitest'
 import { matchOptions } from './optionFilter.js'
 import { presetOptions } from './soundPresets.js'
@@ -10,7 +10,7 @@ const values = (list) => list.map((x) => x.value)
 const isHeader = (o) => o.disabled === true || (o.props && o.props.disabled === true)
 const p = (id, name, family) => ({ id, name, family, note: '', specs: [] })
 
-describe('matchOptions: поле search (ТК110)', () => {
+describe('matchOptions: поле search', () => {
   it('опция {label X, search «электроника синти-поп»} находится по «электроника»', () => {
     const opts = [{ value: 1, label: 'X', search: 'электроника синти-поп' }, { value: 2, label: 'Y' }]
     expect(values(matchOptions(opts, 'электроника'))).toEqual([1])
@@ -47,7 +47,7 @@ describe('matchOptions: поле search (ТК110)', () => {
   })
 })
 
-describe('presetOptions: search содержит семью и течение (ТК110)', () => {
+describe('presetOptions: search содержит семью и течение', () => {
   const input = [
     p(1, 'Синти-поп · светлый', 'Электроника'),
     p(2, 'Пост-панк · холодный', 'Рок'),

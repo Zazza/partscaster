@@ -8,11 +8,11 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-dsp-space, условия 6.5 и 10.5 (MCP): цепочка с ключом
+// Цепочка с ключом
 // (ducking, Key drums) не применяется на весь трек — понятная ошибка до скачивания
 // и ffmpeg; dsp_chains отдаёт новые цепочки и поле key; описания упоминают key.
 
-// Карточка 6.5: dsp_apply ducking без stem — ошибка «только эффект на дорожку», до
+// dsp_apply ducking без stem — ошибка «только эффект на дорожку», до
 // ffmpeg (ничего не скачано и не загружено).
 func TestDspApplyKeyChainWholeTrackIsError(t *testing.T) {
 	t.Parallel()
@@ -34,7 +34,7 @@ func TestDspApplyKeyChainWholeTrackIsError(t *testing.T) {
 	}
 }
 
-// Карточка 10.5: dsp_chains отдаёт новые цепочки (dsp.All) и key у ducking.
+// dsp_chains отдаёт новые цепочки (dsp.All) и key у ducking.
 func TestDspChainsListsNewChainsAndKey(t *testing.T) {
 	t.Parallel()
 	s, _ := newTestServer(t)

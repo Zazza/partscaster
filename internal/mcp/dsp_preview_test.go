@@ -10,9 +10,9 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-guitar-pedals, условие 1.8 (MCP dsp_preview): stem,
+// dsp_preview: stem,
 // from, to, steps — вместо chain/params (один из двух способов); результат —
-// вариант с метриками, как раньше (загруженный превью-вариант). Воркер —
+// вариант с метриками (загруженный превью-вариант). Воркер —
 // fakeService (server_test.go), звук — синтетика ffmpeg (fxLavfi из stem_fx_test.go).
 
 // pvServer — сервер с джобой 5: audio.flac = other + drums, стемы other/drums/bass/vocals (8 с).
@@ -33,7 +33,7 @@ func pvServer(t *testing.T) (*Server, *fakeService) {
 	return s, fake
 }
 
-// Карточка 1.8: dsp_preview со stem/from/to/steps принимается и отдаёт вариант.
+// dsp_preview со stem/from/to/steps принимается и отдаёт вариант.
 func TestDspPreviewStepsOnStem(t *testing.T) {
 	t.Parallel()
 	s, fake := pvServer(t)
@@ -50,7 +50,7 @@ func TestDspPreviewStepsOnStem(t *testing.T) {
 	}
 }
 
-// Карточка 1.8: steps без stem — превью на весь трек.
+// steps без stem — превью на весь трек.
 func TestDspPreviewStepsWholeTrack(t *testing.T) {
 	t.Parallel()
 	s, fake := pvServer(t)
@@ -64,7 +64,7 @@ func TestDspPreviewStepsWholeTrack(t *testing.T) {
 	}
 }
 
-// Карточка 1.8: старый способ (chain/params) по-прежнему принимается.
+// Способ chain/params тоже принимается.
 func TestDspPreviewChainStillWorks(t *testing.T) {
 	t.Parallel()
 	s, _ := pvServer(t)
@@ -75,7 +75,7 @@ func TestDspPreviewChainStillWorks(t *testing.T) {
 	}
 }
 
-// Карточка 1.8: ни chain, ни steps — ошибка, ничего не загружено.
+// Ни chain, ни steps — ошибка, ничего не загружено.
 func TestDspPreviewNoChainNoStepsIsError(t *testing.T) {
 	t.Parallel()
 	for name, args := range map[string]string{
@@ -97,7 +97,7 @@ func TestDspPreviewNoChainNoStepsIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.8 + 1.1: неизвестная или key-цепочка в steps — ошибка, ничего не загружено.
+// Неизвестная или key-цепочка в steps — ошибка, ничего не загружено.
 func TestDspPreviewBadStepIsError(t *testing.T) {
 	t.Parallel()
 	for name, args := range map[string]string{
@@ -118,7 +118,7 @@ func TestDspPreviewBadStepIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.8: chain не обязателен — достаточно одного из chain/steps (передачу
+// chain не обязателен — достаточно одного из chain/steps (передачу
 // stem/from/to/steps/solo проверяют тесты вызова выше и ниже).
 func TestDspPreviewChainNotRequired(t *testing.T) {
 	t.Parallel()
@@ -134,7 +134,7 @@ func TestDspPreviewChainNotRequired(t *testing.T) {
 	}
 }
 
-// Карточка 1.10: dsp_preview solo: true без stem — ошибка, ничего не загружено
+// dsp_preview solo: true без stem — ошибка, ничего не загружено
 // (у превью на весь трек соло нет).
 func TestDspPreviewSoloWithoutStemIsError(t *testing.T) {
 	t.Parallel()
@@ -149,7 +149,7 @@ func TestDspPreviewSoloWithoutStemIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.10: dsp_preview solo: true со stem — вариант из WetSolo: обработанная
+// dsp_preview solo: true со stem — вариант из WetSolo: обработанная
 // дорожка без микса. В миксе есть тон drums 300 Гц (0.2), в соло other его нет;
 // тон other 440 Гц (eq режет только верх) — на месте. Без solo — тот же запрос
 // даёт микс (300 Гц есть): так проверяется, что solo что-то меняет.

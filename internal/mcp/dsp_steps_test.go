@@ -11,13 +11,13 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-guitar-pedals, условие 2.5 (MCP): dsp_presets отдаёт
+// dsp_presets отдаёт
 // наборы педалей {id, name, note, steps}; dsp_apply и rebuild_sections (спека)
-// принимают steps. Написаны по карточке, без чтения реализации. Воркер —
+// принимают steps. Воркер —
 // fakeService (server_test.go), звук — синтетика ffmpeg (fxLavfi/fxDecode/fxTone
 // из stem_fx_test.go).
 
-// Карточка 2.5: dsp_apply со steps без stem — шаги на весь трек: два шага «−6 дБ»
+// dsp_apply со steps без stem — шаги на весь трек: два шага «−6 дБ»
 // последовательно дают −12 дБ у тона; результат — один новый вариант у джобы.
 func TestDspApplyStepsWholeTrack(t *testing.T) {
 	t.Parallel()
@@ -46,7 +46,7 @@ func TestDspApplyStepsWholeTrack(t *testing.T) {
 	}
 }
 
-// Карточка 2.5: dsp_apply со steps и неизвестной цепочкой — ошибка, ничего не загружено.
+// dsp_apply со steps и неизвестной цепочкой — ошибка, ничего не загружено.
 func TestDspApplyStepsUnknownChainIsError(t *testing.T) {
 	t.Parallel()
 	s, fake := newTestServer(t)
@@ -60,7 +60,7 @@ func TestDspApplyStepsUnknownChainIsError(t *testing.T) {
 	}
 }
 
-// Карточка 2.5: спека rebuild_sections принимает steps (chain/off/params).
+// Спека rebuild_sections принимает steps (chain/off/params).
 func TestParseSectionSpecsSteps(t *testing.T) {
 	t.Parallel()
 	var raw any

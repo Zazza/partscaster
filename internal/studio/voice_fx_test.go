@@ -8,9 +8,7 @@ import (
 
 // Тесты «эффекта на голос»: голосовая цепочка (Voice) на стеме vocals —
 // громкость обработанного голоса выравнивается по RMS исходного (перегруз
-// сжимает и громчит), сверху дБ спеки; группа не меняется. Фейковый воркер
-// и хелперы — из sections_test.go, «ремонтные» цепочки без выравнивания —
-// в stem_fx_test.go.
+// сжимает и громчит), сверху дБ спеки; группа не меняется.
 //
 // Синтетика: голос (vocals) — тоны 1000 Гц (в полосе мегофона 400–3000) и
 // 200 Гц (ниже полосы — мегафон его срезает), группа (other) — тон 500 Гц.
@@ -56,7 +54,7 @@ func voice200Drop(t *testing.T, out, base []float32, from, to float64) float64 {
 	return db(toneAmp(out, 200, from, to)) - db(b)
 }
 
-// Карточка: мегафон на весь голос — уровень тона в полосе ≈ исходному
+// Мегафон на весь голос — уровень тона в полосе ≈ исходному
 // (выравнивание RMS: перегруз громчит), тон ниже полосы срезан ≥ 12 дБ,
 // группа не тронута.
 func TestRebuildSectionsVoiceChainLevelMatch(t *testing.T) {
@@ -76,7 +74,7 @@ func TestRebuildSectionsVoiceChainLevelMatch(t *testing.T) {
 	}
 }
 
-// Карточка: дБ спеки — поверх выравнивания: +6 дБ даёт +6 к тону в полосе,
+// дБ спеки — поверх выравнивания: +6 дБ даёт +6 к тону в полосе,
 // группа как была.
 func TestRebuildSectionsVoiceChainDbOnTop(t *testing.T) {
 	t.Parallel()
@@ -92,7 +90,7 @@ func TestRebuildSectionsVoiceChainDbOnTop(t *testing.T) {
 	}
 }
 
-// Карточка: окно [From, To) — эффект только в нём: вне окна трек = исходный.
+// Окно [From, To) — эффект только в нём: вне окна трек = исходный.
 func TestRebuildSectionsVoiceChainWindow(t *testing.T) {
 	t.Parallel()
 	f, base := voiceFxSetup(t)
@@ -114,7 +112,7 @@ func TestRebuildSectionsVoiceChainWindow(t *testing.T) {
 	}
 }
 
-// Карточка: гейн выравнивания в отчёте — приглушающий (перегруз громчит),
+// Гейн выравнивания в отчёте — приглушающий (перегруз громчит),
 // не 1 и не потолок; общий RMS окна ≈ исходному.
 func TestRebuildSectionsVoiceChainGainReported(t *testing.T) {
 	t.Parallel()
@@ -131,7 +129,7 @@ func TestRebuildSectionsVoiceChainGainReported(t *testing.T) {
 	}
 }
 
-// Карточка: та же цепочка на дорожке группы работает и там: мегафон на other —
+// Та же цепочка на дорожке группы работает и там: мегафон на other —
 // 500 Гц (в полосе) обработан и выровнен, голос не тронут.
 func TestRebuildSectionsVoiceChainOnOtherStem(t *testing.T) {
 	t.Parallel()

@@ -14,7 +14,7 @@ EXE=""
 
 mkdir -p dist
 # второй движок yue2.cpp (эксперимент) — готовой сборкой в архиве воркера: собирается в контейнере на Linux с docker;
-# без неё архив прежний, install.sh --engine cpp соберёт программу сам
+# без неё install.sh --engine cpp соберёт программу сам
 if [[ "$GOOS" == "linux" && ! -x dist/yue2cpp-linux-x86_64/yue-server ]] && command -v docker >/dev/null; then
   tools/yue2cpp-build.sh || echo "!! сборка yue2.cpp не удалась — архив воркера без неё" >&2
 fi

@@ -1,30 +1,26 @@
-"""Спецификация модуля engine_cpp — второй движок генерации yue2.cpp (internal-own-track,
-этап 20, условия 157–159, ТК185–ТК188; договор интерфейсов этапа 20).
+"""Модуль engine_cpp — второй движок генерации yue2.cpp.
 
 Что должно работать:
 M1. MODELS — закреплённый список bf16/q8/q6/q5 {file, sha256, size} + общий VAE, репозиторий
-    Serveurperso/YuE2-GGUF, ревизия e630f2b8…, коммит программы c893629 (условие 157, 158).
+    Serveurperso/YuE2-GGUF, ревизия e630f2b8…, коммит программы c893629.
 M2. models_dir(): $YUE_CPP_MODELS, иначе <данные>/yue2cpp-models.
     model_installed(name): файл модели И VAE есть с нужным размером.
 M3. download(name, progress_cb, base_url): качает недостающее (модель и VAE) через .part,
     сверяет sha256 и переименовывает; сумма не сошлась → RuntimeError, нет ни файла, ни .part;
-    готовый файл с верной суммой — без обращения к источнику (ТК185).
+    готовый файл с верной суммой — без обращения к источнику.
 M4. find_binary(): $YUE_CPP_BIN → <каталог воркера>/yue2cpp/yue-server → $YUE_HOME/yue2cpp-src/
-    build/yue-server; нет — None. cuda_lib_dirs(): каталоги lib пакетов nvidia из venv (ТК186).
+    build/yue-server; нет — None. cuda_lib_dirs(): каталоги lib пакетов nvidia из venv.
 M5. CppServer: запуск только на 127.0.0.1 с --model/--vae; экономный режим → --max-seq 8192;
     LD_LIBRARY_PATH содержит переданные lib_dirs; stop() останавливает процесс; synth() —
     POST /synth, опрос /job, результат multipart; отмена → POST /job?cancel=1 и InterruptedError;
-    failed → RuntimeError с хвостом журнала; строки журнала уходят в on_log (ТК186, ТК189).
-M6. build_request / continue_request / plan_request — перевод заявки (ТК187, поправка:
+    failed → RuntimeError с хвостом журнала; строки журнала уходят в on_log.
+M6. build_request / continue_request / plan_request — перевод заявки (
     output_format "wav24" — у yue-server форматы mp3|wav16|wav24|wav32).
-M7. parse_multipart / save_artifacts / parse_log_line — разбор ответа и журнала (ТК188).
-M8. engine_label / model_label — метки движка для jobs.engine и /version (условие 160).
+M7. parse_multipart / save_artifacts / parse_log_line — разбор ответа и журнала.
+M8. engine_label / model_label — метки движка для jobs.engine и /version.
 
 Внешняя граница — программа yue-server и HTTP-источник моделей: обе подменяются
 (скрипт-фейк, локальный http.server). Сеть и GPU не нужны.
-
-Написаны по карточке и договору, без чтения реализации engine_cpp.
-Запуск из каталога worker: python -m unittest test_engine_cpp -v
 """
 import array
 import hashlib
@@ -63,8 +59,6 @@ WAV_SR = 48000
 WAV_FRAMES = WAV_SR // 2
 DEFAULT_ABC = "X:1\nT:fake\nM:4/4\nL:1/8\nK:C\nV:Vocal\nCDEF GABc|\n"
 
-
-# ---------------------------------------------------------------- фейк yue-server
 
 _FAKE_SERVER = r'''#!__PYTHON__
 """Фейк yue-server для тестов: пишет аргументы/окружение и отвечает как yue-server."""
@@ -369,8 +363,6 @@ def multipart_body(replay: dict, audio: bytes, latent: bytes) -> bytes:
             + f"\r\n--{b}--\r\n".encode())
 
 
-# ---------------------------------------------------------------- HTTP-источник моделей
-
 class FakeModelSource:
     """Локальный HTTP-источник: отдаёт файл по последнему компоненту пути
     (база URL может включать репозиторий/ревизию — не важно). Пишет запросы;
@@ -518,8 +510,6 @@ class _EnvCase(unittest.TestCase):
         self.e = _import()
 
 
-# ---------------------------------------------------------------- M1, M2, M8
-
 class TestPinnedModels(_EnvCase):
     """M1: закреплённый список моделей, ревизия, коммит программы."""
 
@@ -586,8 +576,6 @@ class TestLabels(_EnvCase):
         self.assertIn("YuE2-3B-Q5_K_M.gguf", self.e.model_label("q5"))
 
 
-# ---------------------------------------------------------------- M3: загрузка (ТК185)
-
 class TestDownload(_EnvCase):
 
     def setUp(self):
@@ -644,8 +632,6 @@ class TestDownload(_EnvCase):
         self.assertEqual(list(self.models.iterdir()), [])
 
 
-# ---------------------------------------------------------------- M4: программа и библиотеки
-
 class TestFindBinary(_EnvCase):
 
     def _exe(self, path: Path) -> Path:
@@ -694,8 +680,6 @@ class TestCudaLibDirs(_EnvCase):
     def test_returns_list(self):
         self.assertIsInstance(self.e.cuda_lib_dirs(), list)
 
-
-# ---------------------------------------------------------------- M5: сервер (ТК186, часть ТК189)
 
 class _ServerCase(_EnvCase):
 
@@ -805,7 +789,7 @@ class TestCppServerSynth(_ServerCase):
         self.assertEqual(len(cancels), 1, fake_requests(self.fake_dir))
         self.assertTrue(cancels[0]["query"].get("id"))
 
-    # кросс-ревью s20: сервер умер посреди заявки (CUDA обрывает процесс) — причина из журнала, не «Connection refused»;
+    # сервер умер посреди заявки (CUDA обрывает процесс) — причина из журнала, не «Connection refused»;
     # при нехватке памяти — CppOOM и процесс считается остановленным
     def test_server_died_mid_job_reports_oom(self):
         set_scenario(self.fake_dir, mode="hold")
@@ -834,8 +818,6 @@ class TestCppServerSynth(_ServerCase):
             s.synth(self._body(), lambda: False, lambda _l: None)
         self.assertIn("out of memory", str(cm.exception))
 
-
-# ---------------------------------------------------------------- M6: перевод заявки (ТК187)
 
 @unittest.skipUnless(_HAS_NUMPY, "нужен numpy")
 class TestBuildRequest(_EnvCase):
@@ -910,7 +892,7 @@ class TestContinueRequest(_EnvCase):
         self.assertEqual(req["abc"], new)
 
     def test_torch_parent_without_plan_json(self):
-        # условие 161: yue2.cpp продолжает трек PyTorch по semantic.npy и score.abc
+        # yue2.cpp продолжает трек PyTorch по semantic.npy и score.abc
         d = self._parent(plan_json=False)
         self.assertFalse((d / "plan.json").exists())
         req = self.e.continue_request(job_row(parent_id=3, role="continue", cont_from=30.0),
@@ -938,8 +920,6 @@ class TestPlanRequest(_EnvCase):
         self.assertEqual(req["lm_seed"], 11)
         self.assertIn(req.get("output_format", "wav24"), ALLOWED_FORMATS)
 
-
-# ---------------------------------------------------------------- M7: разбор ответа (ТК188)
 
 @unittest.skipUnless(_HAS_NUMPY, "нужны numpy/soundfile")
 class TestParseAndSave(_EnvCase):

@@ -10,13 +10,11 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 13в, условие 104 (тест-кейс ТК141, клиент):
 // FxInstruments — GET /fx/instruments → [{id, name, base, group, stems, chain, extra}];
 // FxInstrumentCreate — POST /fx/instruments → созданный;
 // FxInstrumentUpdate — PUT /fx/instruments/{id} → обновлённый;
 // FxInstrumentDelete — DELETE /fx/instruments/{id} → {ok}.
 // Ошибки воркера (404 нет id, 422 проверка) доходят до вызывающего.
-// Написаны по карточке, без чтения реализации.
 
 const instrJSON = `{"id":7,"name":"Мой пэд","base":"synth-juno","group":"synth-pad","stems":["synth"],
 	"chain":[{"type":"eq","highpass_hz":80}],"extra":{"style":"pad","octave":1}}`

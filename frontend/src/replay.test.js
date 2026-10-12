@@ -1,4 +1,3 @@
-// Тесты карточки internal-own-track, условие 125 «Овердаб → „Переиграть в другом стиле“» (тест-кейс ТК152):
 //   - replayRequest(form, job) → {style, lyrics, gain, seed} | null:
 //       стиль — жанр, партии-чипы (odPartyChips, по-английски) и «своими словами» через «, »; пустой → null;
 //       голос: lyrics — текст трека, none — '[Instrumental]', own — свой текст (пустой свой → текст трека);
@@ -6,7 +5,6 @@
 //       интерпретация: close → сид трека, new → 0;
 //   - по исходнику: StudioPage.vue без блока овердаба (нет submitOverdub / studio.overdub),
 //     App.vue — пункт меню t('replay.menu') и ReplayModal, ReplayModal.vue зовёт api.submitOverdub.
-// Написаны по карточке, без чтения реализации.
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { replayRequest, REPLAY_INSTRUMENTAL } from './replay.js'
@@ -14,7 +12,7 @@ import { odPartyChips } from './slotOptions.js'
 
 const JOB = { id: 42, seed: 12345, lyrics: '[verse]\nwarm wire hums', style: 'dark rock' }
 
-// форма модалки (интерфейс уточнён по JSDoc replay.js после написания тестов: карточка его не задаёт):
+// форма модалки:
 // chips — английские подписи odPartyChips, mix — 'cover'|'layer', close — «ближе к оригиналу» (иначе «новая»)
 const form = (over = {}) => ({
   genre: 'post-punk',
@@ -109,8 +107,6 @@ it('replayRequest возвращает ровно {style, lyrics, gain, seed}', 
   const r = replayRequest(form({ mix: 'layer', gain: 0.5, voice: 'none', close: false }), JOB)
   expect(Object.keys(r).sort()).toEqual(['gain', 'lyrics', 'seed', 'style'])
 })
-
-// ---------- по исходнику ----------
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const APP = read('./App.vue')

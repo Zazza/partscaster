@@ -91,7 +91,6 @@ export const api = {
   applySteps: (id, steps, label = '') => YueApplySteps(id, steps, label),
   dspPresets: () => YueDspPresets(),
   copilot: (p) => YueCopilot(p),
-  // v2/v3
   transcribeFile: () => YueTranscribeFile(),
   importTrack: () => YueImportTrack(),
   transcribeJob: (id) => YueTranscribeJob(id),

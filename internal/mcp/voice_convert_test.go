@@ -13,7 +13,6 @@ type voiceCall struct {
 	p     yue.VoiceParams
 }
 
-// voiceFake — fakeService + VoiceConvert, записывающий аргументы.
 type voiceFake struct {
 	*fakeService
 	calls []voiceCall

@@ -1,12 +1,12 @@
-"""Тесты карточки internal-studio-engine, условие 14 (этап 5а): наборы сэмплов
+"""Наборы сэмплов
 барабанов на воркере — POST /fx/kits/install, kits в GET /fx/assets,
 resources.kit(name), sampler по HTTP с настоящим хранилищем.
 
-Контракт (из карточки и контракта задачи):
+Контракт:
 - набор `<набор>/<часть>` — файлы `<data>/fx/kits/<набор>/<часть>/*.wav`;
 - GET /fx/assets → добавлено `kits: [{name: "<набор>/<часть>", samples: N}]`;
 - POST /fx/kits/install?name=osdk → `{name, parts: {kick: N, snare: M, …}, downloaded: bool}`
-  (с условия 26 — ещё hh-closed, hh-half, hh-open, ride, crash, см. ТК30–32);
+  (и hh-closed, hh-half, hh-open, ride, crash);
   воркер сам качает The Open Source Drum Kit (GitHub crabacus/the-open-source-drumkit,
   ветка master): kick/* → kick, snare/snare-top<N>.wav → snare (snare-top-off*,
   snare-top-buttend*, snare-bottom* — нет); загрузка в `<data>/fx/kits/osdk/{kick,snare}/`;
@@ -19,8 +19,6 @@ GitHub (FakeGitHub) — через него идут и urlopen, и urlretrieve,
 содержимого/архивов (api.github.com), raw.githubusercontent.com, архивы
 github.com/.../archive и codeload.github.com. Прямое подключение сокетом (мимо
 urllib) запрещено и записывается — тест падает, реальных запросов нет.
-
-Запуск: cd worker && python3 -m unittest test_fx_kits -v
 """
 import http.client
 import io
@@ -56,7 +54,7 @@ TREE = {
     "snare/snare-bottom-off2.wav": 0.75,
     "hihat/hihat1.wav": 0.81,
     "toms/tom1.wav": 0.82,
-    # части хэта и тарелок (условие 26): папки и имена — как у настоящего набора,
+    # части хэта и тарелок: папки и имена — как у настоящего набора,
     # плюс посторонние файлы рядом (ride-bell, ride-mid-out, crash-bell)
     "hihat/closed-hihat/chh1.wav": 0.11,
     "hihat/closed-hihat/chh2.wav": 0.12,
@@ -73,7 +71,7 @@ TREE = {
     "crash/crash2.wav": 0.34,
     "crash/crash3.wav": 0.35,
     "crash/crash-bell1.wav": 0.93,
-    # тамы трёх размеров (internal-own-track, этап 2, условие 15): верхние микрофоны
+    # тамы трёх размеров: верхние микрофоны
     # small-/medium-/large-tom<N>; нижние (*-under*) — посторонние
     "toms/small-tom1.wav": 0.13,
     "toms/small-tom12.wav": 0.14,
@@ -99,7 +97,6 @@ PART_PEAKS = {
     "hh-open": {0.31, 0.32},
     "ride": {0.41, 0.42},
     "crash": {0.33, 0.34, 0.35},
-    # этап 2, условие 15: тамы по размеру
     "tom-small": {0.13, 0.14},
     "tom-medium": {0.15, 0.16},
     "tom-large": {0.17, 0.18},
@@ -177,7 +174,6 @@ class FakeGitHub:
         self.fault = None      # None | "incomplete" (обрыв ответа файла) | "not_list" (каталог — объект)
         self.ref = REF         # ref текущего запроса (?ref=…) — отражается в download_url, как у GitHub
 
-    # --- данные ---
     def _dirs(self):
         return sorted({p.rsplit("/", 1)[0] for p in self.files if "/" in p})
 
@@ -238,7 +234,6 @@ class FakeGitHub:
                 t.addfile(info, io.BytesIO(b))
         return buf.getvalue()
 
-    # --- маршрутизация ---
     def open(self, fullurl, data=None, timeout=None, **kw):
         url = fullurl.full_url if isinstance(fullurl, urllib.request.Request) else str(fullurl)
         self.calls.append(url)
@@ -376,7 +371,7 @@ class TestKitInstall(_KitCase):
         self.assertEqual(sorted(p.name for p in root.iterdir() if p.is_dir()), sorted(PART_PEAKS))
         # kick/* → kick (все три), snare-top<N>.wav → snare (только два), части хэта и
         # тарелок — только свои файлы (ride-bell, ride-mid-out, crash-bell — нет), тамы по размеру
-        # (нижние микрофоны *-under* — нет; ТК36), копии *.wav.bak — нет, прочее не тянется
+        # (нижние микрофоны *-under* — нет), копии *.wav.bak — нет, прочее не тянется
         for part, peaks in PART_PEAKS.items():
             with self.subTest(part=part):
                 got = self._peaks(root / part)
@@ -418,7 +413,7 @@ class TestKitInstall(_KitCase):
 
 
 class TestKitInstallRobust(_KitCase):
-    """Регрессия кросс-ревью (условие 14): установка по очереди, сбой сети без
+    """Установка по очереди, сбой сети без
     полукаталога, версия набора закреплена за коммитом."""
 
     def _assert_full_kit(self):
@@ -439,11 +434,11 @@ class TestKitInstallRobust(_KitCase):
         detail = r.json().get("detail")
         self.assertTrue(isinstance(detail, str) and detail.strip(), f"502 без причины: {r.text}")
         self.assertTrue(self.gh.calls, "сеть не вызывалась — сбой не проверен")
-        # каталогов частей (kick/snare) и файлов набора нет; пустой каталог osdk допускается
-        # (условие — «каталога части нет»), но установку не должен считать готовой — см. повтор ниже
+        # каталогов частей (kick/snare) и файлов набора нет; пустой каталог osdk допускается,
+        # но установку не должен считать готовой — см. повтор ниже
         osdk = self.kits / "osdk"
         left = sorted(str(p.relative_to(osdk)) for p in osdk.rglob("*")) if osdk.exists() else []
-        # условие 116 (internal-own-track, этап 14б): целиком скачанные файлы остаются в <часть>.part для докачки;
+        # целиком скачанные файлы остаются в <часть>.part для докачки;
         # опубликованных частей и недокачанных файлов (*.dl) нет
         self.assertTrue(all(x.split("/")[0].endswith(".part") for x in left), f"после сбоя — каталог части: {left}")
         self.assertFalse([x for x in left if x.endswith(".dl")], f"недокачанный файл остался: {left}")
@@ -528,9 +523,7 @@ class TestSamplerOverHttp(_KitCase):
         self.assertIn("nope/kick", r.text)
 
 
-# ---------- Условие 15 (internal-studio-engine, этап 5б): набор growlybass, ТК14 ----------
-#
-# Контракт: FX_KITS["growlybass"] — Karoryfer growlybass (GitHub
+# FX_KITS["growlybass"] — Karoryfer growlybass (GitHub
 # sfzinstruments/karoryfer.growlybass), версия закреплена коммитом (40 hex);
 # sustain/*.wav → часть bass.
 
@@ -540,15 +533,15 @@ class TestGrowlybassCatalog(_KitCase):
         super().setUp()
         self.kits = self.w.FX_KITS
 
-    def test_tc14_tc30_tc97_all_downloaded_kits_pinned(self):
-        # ТК14 growlybass, ТК30 osdk, ТК97 salamander: версия каждого скачиваемого набора закреплена коммитом
+    def test_all_downloaded_kits_pinned(self):
+        # версия каждого скачиваемого набора закреплена коммитом
         pinned = {name: spec["ref"] for name, spec in self.kits.items() if "repo" in spec}
         self.assertTrue({"growlybass", "osdk", "salamander"} <= set(pinned), pinned)
         for name, ref in pinned.items():
             with self.subTest(kit=name):
                 self.assertRegex(ref, r"^[0-9a-f]{40}$", "версия набора не закреплена коммитом")
 
-    def test_tc14_part_bass_from_sustain_wavs(self):
+    def test_part_bass_from_sustain_wavs(self):
         parts = self.kits["growlybass"]["parts"]
         self.assertEqual(list(parts), ["bass"])
         folder, pattern = parts["bass"]
@@ -561,8 +554,6 @@ class TestGrowlybassCatalog(_KitCase):
                 self.assertFalse(re.fullmatch(pattern, name), f"{name} попал в часть bass")
 
 
-# ---------- Условие 15, ТК22: предел длины сэмпла — в каталоге набора ----------
-#
 # FX_KITS["growlybass"]["max_s"] = 6: сэмпл баса читается до 6 с; у прочих наборов
 # (osdk) предела нет — файл 8 с читается целиком.
 
@@ -584,23 +575,18 @@ class TestKitMaxLength(_KitCase):
         self.assertEqual(len(samples), 1)
         return len(np.asarray(samples[0]))
 
-    def test_tc22_bass_sample_read_up_to_6s(self):
+    def test_bass_sample_read_up_to_6s(self):
         _long_wav(self.kits / "growlybass" / "bass" / "a1.wav")
         n = self._read_len("growlybass/bass")
         self.assertLessEqual(n, 6 * KIT_SR, "сэмпл баса длиннее 6 с прочитан целиком")
         self.assertGreaterEqual(n, 6 * KIT_SR - KIT_SR // 100, "сэмпл баса обрезан короче 6 с")
 
-    def test_tc22_osdk_sample_read_whole(self):
+    def test_osdk_sample_read_whole(self):
         _long_wav(self.kits / "osdk" / "kick" / "k1.wav")
         self.assertEqual(self._read_len("osdk/kick"), 8 * KIT_SR, "сэмпл osdk 8 с обрезан")
 
 
-# ТК30 (части хэта и тарелок) и ТК36 (тамы по размеру, без *-under*): раскладка проверяется
-# установкой по дереву TREE (TestKitInstall.test_install_osdk_layout, PART_PEAKS).
-
-# ---------- Условие 26 (этап 5в), ТК32: osdk поверх набора этапа 5а докачивает части ----------
-#
-# На воркере уже есть только osdk/kick и osdk/snare (установка этапа 5а). Повторная установка
+# На воркере уже есть только osdk/kick и osdk/snare. Повторная установка
 # скачивает лишь недостающие части (hh-closed, hh-half, hh-open, ride, crash), kick/snare не
 # перекачиваются; ответ — downloaded: true, parts — все 7 частей.
 
@@ -617,7 +603,7 @@ class TestOsdkUpgradeAddsParts(_KitCase):
         self.before = {str(p.relative_to(self.kits)): p.stat().st_mtime_ns
                        for p in (self.kits / "osdk").rglob("*.wav")}
 
-    def test_tc32_downloads_only_missing_parts(self):
+    def test_downloads_only_missing_parts(self):
         r = self._install()
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
@@ -629,7 +615,7 @@ class TestOsdkUpgradeAddsParts(_KitCase):
             with self.subTest(part=part):
                 self.assertEqual(sorted(self._peaks(root / part)), sorted(PART_PEAKS[part]))
 
-    def test_tc32_kick_snare_not_redownloaded(self):
+    def test_kick_snare_not_redownloaded(self):
         self.assertEqual(self._install().status_code, 200)
         # файлы kick/snare — те же («старые» пики, тот же mtime, новых нет)
         self.assertEqual(sorted(self._peaks(self.kick)), LOCAL_KICK)
@@ -644,7 +630,7 @@ class TestOsdkUpgradeAddsParts(_KitCase):
             with self.subTest(url=u):
                 self.assertNotRegex(u, r"/(kick|snare)/", "файл kick/snare скачан заново")
 
-    def test_tc32_then_repeat_without_network(self):
+    def test_then_repeat_without_network(self):
         self.assertEqual(self._install().status_code, 200)
         self.gh.calls.clear()
         r = self._install()

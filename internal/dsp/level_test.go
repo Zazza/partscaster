@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Тесты цепочки «Громкость альбома» (level) по спецификации: выход = вход × 10^(gain/20),
+// Тесты цепочки «Громкость альбома» (level): выход = вход × 10^(gain/20),
 // пики отсчётов не выше 10^(ceiling/20) (лимитер работает только у громких пиков, тихий
 // материал не трогает), тембр не меняется, длина сохраняется. Звук — через Run на синтетике.
 
@@ -16,7 +16,7 @@ func levelGainDB(out, src []float32, from, to float64) float64 {
 	return dbfs(segRMS(out, from, to)) - dbfs(segRMS(src, from, to))
 }
 
-// Случай 1: тихий синус, gain ±3 дБ → RMS меняется на ±3 дБ (±0.2), до потолка далеко.
+// Тихий синус, gain ±3 дБ → RMS меняется на ±3 дБ (±0.2), до потолка далеко.
 func TestLevelGainShiftsRMS(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -29,7 +29,7 @@ func TestLevelGainShiftsRMS(t *testing.T) {
 	}
 }
 
-// Случай 2: gain 0 на тихом сигнале — выход совпадает со входом
+// gain 0 на тихом сигнале — выход совпадает со входом
 // (разность ниже −50 дБ относительно входа, первые 50 мс не считаем).
 func TestLevelZeroGainTransparent(t *testing.T) {
 	t.Parallel()
@@ -43,7 +43,7 @@ func TestLevelZeroGainTransparent(t *testing.T) {
 	}
 }
 
-// Случай 3: громкий синус 0.99, gain +3, ceiling −1.5 → после 100 мс (атака лимитера)
+// Громкий синус 0.99, gain +3, ceiling −1.5 → после 100 мс (атака лимитера)
 // ни один отсчёт не выше 10^(−1.5/20)+0.01.
 func TestLevelCeilingLimitsPeaks(t *testing.T) {
 	t.Parallel()
@@ -67,7 +67,7 @@ func TestLevelCeilingLimitsPeaks(t *testing.T) {
 	}
 }
 
-// Случай 4: тембр не меняется — соотношение амплитуд 440 Гц и 3000 Гц при gain −6
+// Тембр не меняется — соотношение амплитуд 440 Гц и 3000 Гц при gain −6
 // то же, что на входе (±0.3 дБ).
 func TestLevelKeepsTimbre(t *testing.T) {
 	t.Parallel()
@@ -85,7 +85,7 @@ func TestLevelKeepsTimbre(t *testing.T) {
 	}
 }
 
-// Случай 5: длина выхода равна длине входа — при любых параметрах.
+// Длина выхода равна длине входа — при любых параметрах.
 func TestLevelKeepsLength(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -101,7 +101,7 @@ func TestLevelKeepsLength(t *testing.T) {
 	}
 }
 
-// Случай 6: level есть в All(), не голосовая; крутилки gain/ceiling по спеке; есть from.
+// level есть в All(), не голосовая; крутилки gain/ceiling по спеке; есть from.
 func TestLevelRegistered(t *testing.T) {
 	t.Parallel()
 	var l *Chain

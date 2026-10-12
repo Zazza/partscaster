@@ -1,10 +1,6 @@
-// Тесты карточки internal-own-track, этап 8б: условия 71 и 73 (тест-кейсы ТК106, ТК107).
-// ТК106 — в названиях и подсказках готовых цепочек (fxPresets) нет имён групп и исполнителей из списка условия 71.
-// ТК107 — presetTree / presetOptions из soundPresets.js: список пресетов звука по семьям и течениям.
-// Написаны по карточке, без чтения реализации.
-// Предположения (карточка не уточняет): имя ищется целым словом без учёта регистра; опция-заголовок
+// Предположения: имя ищется целым словом без учёта регистра; опция-заголовок
 // неактивна через disabled или props.disabled, подпись — title (или text); порядок семей проверяется
-// относительный (пустые семьи в дереве карточкой не оговорены).
+// относительный.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
 import { presetTree, presetOptions } from './soundPresets.js'
@@ -22,7 +18,7 @@ const RX = BANNED.map((n) => [n, new RegExp(`(?<![\\p{L}\\p{N}_])${esc(n)}(?![\\
 const bannedIn = (text) => RX.filter(([, rx]) => rx.test(text || '')).map(([n]) => n)
 const texts = (v) => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).filter((x) => typeof x === 'string') : [])
 
-describe('fxPresets: без имён групп и исполнителей (ТК106)', () => {
+describe('fxPresets: без имён групп и исполнителей', () => {
   it('сверка работает: регистр не важен, слово целиком', () => {
     expect(bannedIn('как у the cure')).toEqual(['The Cure'])
     expect(bannedIn('r.e.m. и BOWIE')).toEqual(['R.E.M.', 'Bowie'])
@@ -39,7 +35,7 @@ describe('fxPresets: без имён групп и исполнителей (Т�
 const FAM = ['Рок', 'Тяжёлое', 'Электроника', 'Поп и другое']
 const p = (id, name, family) => ({ id, name, family, note: '', specs: [] })
 
-describe('presetTree — семьи → течения → пресеты (ТК107)', () => {
+describe('presetTree — семьи → течения → пресеты', () => {
   // нарочно вперемешку: свои, электроника, рок, поп, тяжёлое
   const input = [
     p(100, 'Мой бас', ''),
@@ -87,7 +83,7 @@ describe('presetTree — семьи → течения → пресеты (ТК1
 const isHeader = (o) => o.disabled === true || (o.props && o.props.disabled === true)
 const label = (o) => o.title ?? o.text
 
-describe('presetOptions — опции VSelect с заголовками (ТК107)', () => {
+describe('presetOptions — опции VSelect с заголовками', () => {
   const input = [
     p(1, 'Синти-поп · светлый', 'Электроника'),
     p(2, 'Пост-панк · холодный', 'Рок'),

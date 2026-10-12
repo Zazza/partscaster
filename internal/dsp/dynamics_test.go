@@ -6,14 +6,10 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-dsp-space, раздел 6: fade, multiband, ducking
-// (transient убрана из задачи, карточка 6.2).
-// Хелперы nc* — из newchains_test.go.
+// Тесты цепочек fade, multiband, ducking.
 
-// --- fade ---
-
-// Карточка 6.1: in N — громкость в 0…N растёт монотонно от тишины (< −40 дБ на
-// первых 50 мс) до полной. N = 2 с — выбор теста (карточка задаёт порог для любого N).
+// in N — громкость в 0…N растёт монотонно от тишины (< −40 дБ на
+// первых 50 мс) до полной. N = 2 с — выбор теста, порог — для любого N.
 func TestFadeIn(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -38,7 +34,7 @@ func TestFadeIn(t *testing.T) {
 	}
 }
 
-// Карточка 6.1: затухание — до start вход без изменений, в середине затухания тише
+// Затухание — до start вход без изменений, в середине затухания тише
 // входа ≥ 3 дБ, после start+out — тишина (< −60 дБ).
 func TestFadeOut(t *testing.T) {
 	t.Parallel()
@@ -60,7 +56,7 @@ func TestFadeOut(t *testing.T) {
 	}
 }
 
-// Карточка 6.1: все 0 → выход = вход.
+// Все 0 → выход = вход.
 func TestFadeAllZeroIsDry(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -72,8 +68,6 @@ func TestFadeAllZeroIsDry(t *testing.T) {
 	}
 }
 
-// --- multiband ---
-
 // ncStepLevels — тон 1000 Гц: тихие (−30 дБ) и громкие (−6 дБ) секунды по очереди.
 const ncStepLevels = "sin(2*PI*1000*t)*if(lt(mod(t\\,2)\\,1)\\,0.0316\\,0.5)"
 
@@ -81,7 +75,7 @@ func ncStepDiff(s []float32) float64 {
 	return dbfs(segRMS(s, 3.3, 3.9)) - dbfs(segRMS(s, 2.3, 2.9))
 }
 
-// Карточка 6.3: разница уровней тихого и громкого сегментов при amount 1 меньше
+// Разница уровней тихого и громкого сегментов при amount 1 меньше
 // входной ≥ 6 дБ; amount 0 → выход = вход (±0.5 дБ).
 func TestMultibandCompresses(t *testing.T) {
 	t.Parallel()
@@ -100,9 +94,7 @@ func TestMultibandCompresses(t *testing.T) {
 	}
 }
 
-// --- ducking ---
-
-// Карточка 6.4: тон (вход 0) + ключ-щелчки каждые 0.5 с (вход 1): уровень тона в
+// Тон (вход 0) + ключ-щелчки каждые 0.5 с (вход 1): уровень тона в
 // 20–60 мс после щелчка ≥ 6 дБ ниже, чем перед следующим щелчком; ключ в выходе
 // не слышен; длина = длине входа 0 (ключ длиннее).
 func TestDuckingFromKey(t *testing.T) {

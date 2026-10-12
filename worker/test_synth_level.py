@@ -1,35 +1,30 @@
-"""Тесты карточки internal-own-track, этап 9 «Громкость синт-партий на ухо»: условия 78–80, 79а, 79б, 81а
-(тест-кейсы ТК114–ТК121, часть воркера; фронт — frontend/src/synthLevelDefault.test.js).
+"""Тесты громкости синт-партий на ухо (часть воркера; фронт — frontend/src/synthLevelDefault.test.js).
 
-Контракт (из карточки):
-- условие 78: громкость партии синта к треку (rel_db) меряется A-взвешенным RMS (кривая A, IEC 61672) и у
+Контракт:
+- громкость партии синта к треку (rel_db) меряется A-взвешенным RMS (кривая A, IEC 61672) и у
   трека, и у партии — на отсчётах, где звучат ноты партии; один множитель на всю партию (окно превью — тот же
-  кусок полного рендера); тихий трек (A-RMS ниже −60 дБ) — прежнее правило: пик партии −6 дБFS;
-- условие 79: блоки после synth в той же цепочке (eq, reverb, …) входят в замер: уровень на выходе цепочки =
+  кусок полного рендера); тихий трек (A-RMS ниже −60 дБ) — пик партии −6 дБFS;
+- блоки после synth в той же цепочке (eq, reverb, …) входят в замер: уровень на выходе цепочки =
   цель rel_db; замер детерминирован и не зависит от окна;
-- условие 80: умолчание rel_db у synth −8 (было −6), у perc прежнее −14.
+- умолчание rel_db у synth −8, у perc −14.
 
-Точки входа — те же, что у прежних тестов уровня синта (test_fx_api.TestSynthRefLevel):
+Точки входа — те же, что у test_fx_api.TestSynthRefLevel:
 yue_worker.synth_window(chain, frm, win, track, sr) готовит партию к окну, fx_engine.process рендерит
 цепочку; выход блока synth — сама партия (вход заменяется), блоки после него обрабатывают её.
 A-взвешивание для проверки — своё (частотная характеристика A по IEC 61672 на FFT), не из кода воркера.
 
-Толкования (карточка не уточняет):
+Толкования:
 - «звучащие отсчёты» в проверке — середина партии (от 0,5 с после первой ноты до 0,5 с до конца последней):
   трек стационарный, поэтому A-RMS трека от точного набора отсчётов почти не зависит; атака/спад краёв
   в замер не попадают;
-- ТК115: эквалайзер «+8 дБ на 1–2,6 кГц» — полоса 1600 Гц, q 1 (ширина ≈ 1,6 кГц); партия — яркая
+- эквалайзер «+8 дБ на 1–2,6 кГц» — полоса 1600 Гц, q 1 (ширина ≈ 1,6 кГц); партия — яркая
   (энергия в полосе есть, иначе eq ничего не меняет); rel_db −10 (не умолчание) — цель следует rel_db;
-- ТК118: «тихий трек» — и полная тишина (деление на ноль), и трек, у которого простой RMS выше −60 дБ,
-  а A-RMS ниже (гул 30 Гц): порог — по A-уровню, как в условии 78.
-- ТК119: трек — тот же «упор в низ», масштабированный к A-RMS −20 дБFS по своей кривой A; «пик ≤ 1,0» — максимум
+- «тихий трек» — и полная тишина (деление на ноль), и трек, у которого простой RMS выше −60 дБ,
+  а A-RMS ниже (гул 30 Гц): порог — по A-уровню.
+- зажим: трек — тот же «упор в низ», масштабированный к A-RMS −20 дБFS по своей кривой A; «пик ≤ 1,0» — максимум
   |отсчёта| выхода цепочки; сторож eq +8 — на этом же треке, rel_db −8, допуск ±1,5.
-- ТК120: «ресурсы открыты» — фабрика yue_worker.fx_resources вызвана хотя бы раз; «закрыты» — close() вызван
+- «ресурсы открыты» — фабрика yue_worker.fx_resources вызвана хотя бы раз; «закрыты» — close() вызван
   столько же раз, сколько фабрика; ресурсы подменены заглушкой (внешняя граница — хранилище наборов на диске).
-- ТК121: отменено — make test-worker и CI запускают `unittest discover -p 'test_*.py'`, ручного списка
-  модулей нет (этап 17, условие 132); умолчание perc −14 (ТК117) проверено поведением в test_perc.
-
-Запуск: cd worker && python3 -m unittest test_synth_level -v
 """
 import unittest
 from unittest import mock
@@ -134,7 +129,7 @@ class TestAWeightingSelf(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelByEar(unittest.TestCase):
-    """ТК114 (условие 78): тёмная и яркая партии с rel_db −8 — обе на −8 ±1 дБ к треку по A-уровню."""
+    """Тёмная и яркая партии с rel_db −8 — обе на −8 ±1 дБ к треку по A-уровню."""
 
     @classmethod
     def setUpClass(cls):
@@ -147,13 +142,13 @@ class TestSynthLevelByEar(unittest.TestCase):
         # опора: у трека простой RMS заметно выше A-уровня (упор в низ)
         self.assertGreater(_rms_db(self.track, *MEAS) - self.ref_a, 6)
 
-    def test_tk114_dark_a_level_minus8(self):
+    def test_dark_a_level_minus8(self):
         self.assertAlmostEqual(_a_rms_db(self.out["dark"], *MEAS) - self.ref_a, -8, delta=1.0)
 
-    def test_tk114_bright_a_level_minus8(self):
+    def test_bright_a_level_minus8(self):
         self.assertAlmostEqual(_a_rms_db(self.out["bright"], *MEAS) - self.ref_a, -8, delta=1.0)
 
-    def test_tk114_plain_rms_bright_lower_than_dark(self):
+    def test_plain_rms_bright_lower_than_dark(self):
         # мерится не простой RMS: у яркой партии простой RMS ниже, чем у тёмной, на ≥ 2 дБ
         dark, bright = (_rms_db(self.out[k], *MEAS) for k in ("dark", "bright"))
         self.assertGreaterEqual(dark - bright, 2.0, f"простой RMS: тёмная {dark:.1f}, яркая {bright:.1f}")
@@ -161,7 +156,7 @@ class TestSynthLevelByEar(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelChainOutput(unittest.TestCase):
-    """ТК115 (условие 79): synth → eq +8 дБ (1–2,6 кГц) → reverb wet 0,35 — на выходе цепочки у цели rel_db."""
+    """synth → eq +8 дБ (1–2,6 кГц) → reverb wet 0,35 — на выходе цепочки у цели rel_db."""
 
     REL = -10
 
@@ -173,20 +168,20 @@ class TestSynthLevelChainOutput(unittest.TestCase):
         cls.with_fx = _a_rms_db(_render([part, EQ_UP, REVERB], cls.track), *MEAS) - cls.ref_a
         cls.bare = _a_rms_db(_render([part], cls.track), *MEAS) - cls.ref_a
 
-    def test_tk115_eq_reverb_chain_at_target(self):
+    def test_eq_reverb_chain_at_target(self):
         self.assertAlmostEqual(self.with_fx, self.REL, delta=1.5,
                                msg="eq +8 дБ после synth поднял партию над целью")
 
-    def test_tk115_bare_part_at_target(self):
+    def test_bare_part_at_target(self):
         self.assertAlmostEqual(self.bare, self.REL, delta=1.0)
 
-    def test_tk115_difference_small(self):
+    def test_difference_small(self):
         self.assertLessEqual(abs(self.with_fx - self.bare), 2.0)
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelWindow(unittest.TestCase):
-    """ТК116 (условия 78, 79): окно [20, 30] с = тот же отрезок полного рендера [0, 40] — и с блоками после synth."""
+    """Окно [20, 30] с = тот же отрезок полного рендера [0, 40] — и с блоками после synth."""
 
     def _check(self, chain):
         track = _track()
@@ -203,18 +198,18 @@ class TestSynthLevelWindow(unittest.TestCase):
         notes = _notes(BRIGHT_MIDI, 1.0, 15.0, vel=0.3) + _notes(BRIGHT_MIDI, 15.0, 38.0, vel=1.0)
         return dict(BRIGHT, notes=notes, rel_db=-8)
 
-    def test_tk116_window_equals_full_bare(self):
+    def test_window_equals_full_bare(self):
         self._check([self._part()])
 
-    def test_tk116_window_equals_full_with_post_blocks(self):
+    def test_window_equals_full_with_post_blocks(self):
         self._check([self._part(), EQ_UP, REVERB])
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelDefault(unittest.TestCase):
-    """ТК117 (условие 80): synth без rel_db → цель −8 по A-уровню; fx_blocks: synth −8, perc −14."""
+    """synth без rel_db → цель −8 по A-уровню; fx_blocks: synth −8, perc −14."""
 
-    def test_tk117_no_rel_db_target_minus8(self):
+    def test_no_rel_db_target_minus8(self):
         track = _track()
         ref_a = _a_rms_db(track, *MEAS)
         part = _part(BRIGHT, BRIGHT_MIDI)
@@ -225,18 +220,18 @@ class TestSynthLevelDefault(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelQuietTrack(unittest.TestCase):
-    """ТК118 (условие 78): тихий трек (A-RMS < −60 дБ) — пик партии −6 дБFS ±0,5, без деления на ноль."""
+    """Тихий трек (A-RMS < −60 дБ) — пик партии −6 дБFS ±0,5, без деления на ноль."""
 
     def _peak_db(self, track):
         y = _render([_part(BRIGHT, BRIGHT_MIDI, rel_db=-8)], track)
         self.assertTrue(np.all(np.isfinite(y)), "в выходе NaN/inf — деление на ноль")
         return 20 * np.log10(max(float(np.abs(y).max()), 1e-15))
 
-    def test_tk118_silence(self):
+    def test_silence(self):
         self.assertAlmostEqual(self._peak_db(np.zeros((int(DUR * SR), 2), dtype=np.float32)), -6, delta=0.5)
 
-    def test_tk118_rumble_below_minus60_a(self):
-        # гул 30 Гц: простой RMS −50 дБFS (выше прежнего порога), A-уровень ≈ −90 дБ — трек «тихий на ухо»
+    def test_rumble_below_minus60_a(self):
+        # гул 30 Гц: простой RMS −50 дБFS, A-уровень ≈ −90 дБ — трек «тихий на ухо»
         t = np.arange(int(DUR * SR)) / SR
         x = (10 ** (-50 / 20) * np.sqrt(2) * np.sin(2 * np.pi * 30 * t)).astype(np.float32)
         track = np.stack([x, x], axis=1)
@@ -247,8 +242,8 @@ class TestSynthLevelQuietTrack(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelCorrectionLimit(unittest.TestCase):
-    """ТК119 (условие 79а): synth → gain −24 → gate (−20, range −80) на треке A ≈ −20 дБFS —
-    поправка цепочки зажата: не громче rel_db + 12 (+1) и без клипа; synth → eq +8 по-прежнему у цели."""
+    """synth → gain −24 → gate (−20, range −80) на треке A ≈ −20 дБFS —
+    поправка цепочки зажата: не громче rel_db + 12 (+1) и без клипа; synth → eq +8 у цели."""
 
     REL = -8
 
@@ -259,7 +254,7 @@ class TestSynthLevelCorrectionLimit(unittest.TestCase):
         cls.track = tr.astype(np.float32)
         cls.ref_a = _a_rms_db(cls.track, *MEAS)
 
-    def test_tk119_track_a_level_minus20(self):
+    def test_track_a_level_minus20(self):
         self.assertAlmostEqual(self.ref_a, -20.0, delta=0.2)          # опора
 
     def _gated(self):
@@ -270,16 +265,16 @@ class TestSynthLevelCorrectionLimit(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(y)), "в выходе NaN/inf")
         return y
 
-    def test_tk119_gated_not_louder_than_limit(self):
+    def test_gated_not_louder_than_limit(self):
         lvl = _a_rms_db(self._gated(), *MEAS) - self.ref_a
         self.assertLessEqual(lvl, self.REL + 12 + 1,
                              f"A-уровень выхода {lvl:.1f} дБ к треку — поправка цепочки не зажата +12 дБ")
 
-    def test_tk119_gated_no_clip(self):
+    def test_gated_no_clip(self):
         peak = float(np.abs(self._gated()).max())
         self.assertLessEqual(peak, 1.0, f"пик выхода {peak:.2f} — клип")
 
-    def test_tk119_eq_up_still_at_target(self):
+    def test_eq_up_still_at_target(self):
         y = _render([_part(BRIGHT, BRIGHT_MIDI, rel_db=self.REL), EQ_UP], self.track)
         self.assertAlmostEqual(_a_rms_db(y, *MEAS) - self.ref_a, self.REL, delta=1.5)
 
@@ -304,7 +299,7 @@ class _StubResources:
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthLevelPostResources(unittest.TestCase):
-    """ТК120 (условие 79б): synth → sampler(kit) — замер открывает хранилище и закрывает его, без ChainError;
+    """synth → sampler(kit) — замер открывает хранилище и закрывает его, без ChainError;
     synth → reverb без ir — хранилище не открывается."""
 
     def _run(self, chain):
@@ -317,14 +312,14 @@ class TestSynthLevelPostResources(unittest.TestCase):
                 self.fail(f"synth_window бросил ChainError: {e}")
         return prepared, counter
 
-    def test_tk120_sampler_after_synth_opens_and_closes(self):
+    def test_sampler_after_synth_opens_and_closes(self):
         chain = [_part(DARK, DARK_MIDI, rel_db=-8), {"type": "sampler", "kit": "stub/kick"}]
         prepared, c = self._run(chain)
         self.assertIsNotNone(prepared)
         self.assertGreaterEqual(c["open"], 1, "хранилище для sampler после synth не открыто")
         self.assertEqual(c["close"], c["open"], f"открыто {c['open']}, закрыто {c['close']}")
 
-    def test_tk120_reverb_without_ir_no_resources(self):
+    def test_reverb_without_ir_no_resources(self):
         _, c = self._run([_part(DARK, DARK_MIDI, rel_db=-8), REVERB])
         self.assertEqual(c["open"], 0, "reverb без ir открыл хранилище")
 

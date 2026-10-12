@@ -1,26 +1,23 @@
-"""Тесты карточки internal-own-track, этап 10: условия 82 и 84 (тест-кейсы ТК122, ТК125 — часть воркера).
-Написаны по карточке, без чтения новой реализации.
+"""Цели громкости жанровых пресетов и хэт набора (часть воркера).
 
-- ТК122 / 82: у каждого жанрового пресета (genres.build()) цели громкости по эталонам: бочка/малый — таблица
+- у каждого жанрового пресета (genres.build()) цели громкости по эталонам: бочка/малый — таблица
   семьи (мягкий мастер soft — обе на 2 дБ ниже); запись хэта [hh] — −23 (Электроника −25); гитара — прежняя цель
   варианта + сдвиг семьи (Рок −2,5, Тяжёлое −4,5, Поп и другое −1, Электроника 0), медианы −10,5 / −10,5 / −11 /
   −13; бас — без изменений (медианы −7, −7, −6, −7).
-- ТК125 / 84: хэт «Живой ритм-секции» (presets.BUILTIN, slug live-rhythm) — sampler (output_db 0) → eq: срез низа
+- хэт «Живой ритм-секции» (presets.BUILTIN, slug live-rhythm) — sampler (output_db 0) → eq: срез низа
   ≥ 800 Гц, полоса около 10 кГц ≥ +6 дБ, около 1 кГц ≤ −3 дБ; готовая цепочка drums-hh-kit (копия fxPresets на
   воркере, fx_presets.json) — та же; хэты драм-машин — только sampler. Звук: eq цепочки drums-hh-kit на шуме
   «как хэт набора» (центр ≈ 5 кГц, 13 % энергии ниже 500 Гц) → центр ≥ 7 кГц, ниже 500 Гц ≤ 2 %.
 
-Толкования (карточка не уточняет):
-- «Различия вариантов внутри семьи сохраняются» проверяется по снимку целей баса и гитары до этапа 10
+Толкования:
+- «Различия вариантов внутри семьи сохраняются» проверяется по снимку целей баса и гитары до сдвига семьи
   (BEFORE — значения genres.build() на коммите fdc7a59): гитара = было + сдвиг семьи, бас = было.
 - Мягкий вариант — вариант, у которого в таблице GENRES мастер «soft» (последний элемент кортежа варианта).
-- Хэт: цель −23/−25 одинакова и для soft (условие сдвигает на 2 дБ только бочку и малый).
+- Хэт: цель −23/−25 одинакова и для soft (сдвиг на 2 дБ — только бочка и малый).
 - «Центр спектра» — средняя частота, взвешенная по мощности спектра всего сигнала; «ниже 500 Гц» — доля
   мощности. Частоты полос — «около»: 10 кГц = 8–12,5 кГц, 1 кГц = 0,8–1,25 кГц.
 - Звуковая проверка берёт из цепочки только блоки eq (sampler требует сэмплов набора) — проверяется, что
   эквалайзер цепочки делает из звука «как хэт набора» яркий хэт.
-
-Запуск: cd worker && python3 -m unittest test_genre_levels -v
 """
 import json
 import statistics
@@ -52,7 +49,7 @@ GTR_MEDIAN = {"Рок": -10.5, "Тяжёлое": -10.5, "Поп и другое"
 BASS_MEDIAN = {"Рок": -7.0, "Тяжёлое": -7.0, "Поп и другое": -7.0, "Электроника": -6.0}
 MACHINES = ("tr808", "tr909", "linn", "cr78", "simmons")
 
-# снимок до этапа 10: slug → (цель баса, цель гитары)
+# снимок до сдвига семьи: slug → (цель баса, цель гитары)
 BEFORE = {
     "postpunk-cold": (-6, -10), "postpunk-angular": (-7, -9), "postpunk-machine": (-6, -11),
     "coldwave-tape": (-6, -11), "coldwave-synth": (-6, -12), "coldwave-fog": (-7, -11), "newwave-gated": (-7, -10),
@@ -101,7 +98,7 @@ def _soft_slugs():
 
 
 def _eq_ok(test, eq, where):
-    """Условие 84: срез низа ≥ 800 Гц, полоса около 10 кГц ≥ +6 дБ, около 1 кГц ≤ −3 дБ."""
+    """Срез низа ≥ 800 Гц, полоса около 10 кГц ≥ +6 дБ, около 1 кГц ≤ −3 дБ."""
     test.assertGreaterEqual(float(eq.get("highpass_hz") or 0), 800, f"{where}: срез низа eq {eq.get('highpass_hz')}")
     bands = eq.get("bands") or []
     hi = [b for b in bands if 8000 <= float(b.get("freq_hz", 0)) <= 12500]
@@ -114,21 +111,19 @@ def _fx_presets():
     return {p["id"]: p for p in json.loads((WORKER / "fx_presets.json").read_text(encoding="utf-8"))}
 
 
-# ---------- ТК122: цели громкости жанровых пресетов ----------
-
 class TestGenreLevels(unittest.TestCase):
 
     def setUp(self):
         self.built = genres.build()
         self.soft = _soft_slugs()
 
-    def test_tc122_snapshot_covers_all(self):
+    def test_snapshot_covers_all(self):
         # снимок и пресеты — одно множество (иначе проверки гитары/баса ниже пропустили бы пресет)
         self.assertEqual({p["slug"] for p in self.built}, set(BEFORE))
         self.assertTrue(self.soft, "в таблице нет вариантов с мастером soft")
         self.assertLess(len(self.soft), len(self.built))
 
-    def test_tc122_kick_snare_by_family(self):
+    def test_kick_snare_by_family(self):
         for p in self.built:
             with self.subTest(slug=p["slug"], family=p["family"]):
                 kick, snare = DRUMS[p["family"]]
@@ -137,27 +132,27 @@ class TestGenreLevels(unittest.TestCase):
                 self.assertAlmostEqual(_level(p, "kick"), kick, places=6)
                 self.assertAlmostEqual(_level(p, "snare"), snare, places=6)
 
-    def test_tc122_hh_target(self):
+    def test_hh_target(self):
         for p in self.built:
             with self.subTest(slug=p["slug"], family=p["family"]):
                 lv = _level(p, "hh")
                 self.assertIsNotNone(lv, "у записи хэта нет level_db")
                 self.assertAlmostEqual(lv, HH[p["family"]], places=6)
 
-    def test_tc122_guitar_shift_keeps_variants(self):
+    def test_guitar_shift_keeps_variants(self):
         for p in self.built:
             with self.subTest(slug=p["slug"], family=p["family"]):
                 was = BEFORE[p["slug"]][1]
                 self.assertAlmostEqual(_level(p, "guitar"), was + GTR_SHIFT[p["family"]], places=6)
 
-    def test_tc122_guitar_median_by_family(self):
+    def test_guitar_median_by_family(self):
         for fam, want in GTR_MEDIAN.items():
             with self.subTest(family=fam):
                 lv = [_level(p, "guitar") for p in self.built if p["family"] == fam]
                 self.assertTrue(lv, f"нет пресетов семьи {fam}")
                 self.assertLessEqual(abs(statistics.median(lv) - want), 0.5, f"медиана гитары {fam}")
 
-    def test_tc122_bass_unchanged(self):
+    def test_bass_unchanged(self):
         for p in self.built:
             with self.subTest(slug=p["slug"]):
                 self.assertAlmostEqual(_level(p, "bass"), BEFORE[p["slug"]][0], places=6)
@@ -167,11 +162,9 @@ class TestGenreLevels(unittest.TestCase):
                 self.assertLessEqual(abs(statistics.median(lv) - want), 0.5, f"медиана баса {fam}")
 
 
-# ---------- ТК125: хэт набора ярче ----------
-
 class TestHhKitEqChains(unittest.TestCase):
 
-    def test_tc125_fx_preset_hh_kit(self):
+    def test_fx_preset_hh_kit(self):
         chain = _fx_presets()["drums-hh-kit"]["chain"]
         self.assertGreaterEqual(len(chain), 2, f"drums-hh-kit: {chain}")
         self.assertEqual(chain[0].get("type"), "sampler")
@@ -179,7 +172,7 @@ class TestHhKitEqChains(unittest.TestCase):
         self.assertEqual(chain[1].get("type"), "eq", "после sampler — eq")
         _eq_ok(self, chain[1], "drums-hh-kit")
 
-    def test_tc125_live_rhythm_hh(self):
+    def test_live_rhythm_hh(self):
         live = [b for b in presets.BUILTIN if b.get("slug") == "live-rhythm"]
         self.assertEqual(len(live), 1, "нет встроенного пресета live-rhythm")
         hh = _specs(live[0], "hh")
@@ -191,7 +184,7 @@ class TestHhKitEqChains(unittest.TestCase):
         self.assertIn("eq", types[1:], f"хэт live-rhythm без eq после sampler: {types}")
         _eq_ok(self, eng[types.index("eq", 1)], "live-rhythm hh")
 
-    def test_tc125_machines_hh_sampler_only(self):
+    def test_machines_hh_sampler_only(self):
         fx = _fx_presets()
         for m in MACHINES:
             with self.subTest(machine=m):
@@ -231,13 +224,13 @@ def _spectrum_stats(x):
 @unittest.skipUnless(_HAS_ENGINE, "нужен fx_engine (numpy/scipy — окружение воркера)")
 class TestHhKitEqSound(unittest.TestCase):
 
-    def test_tc125_input_is_kit_like(self):
-        # предпосылка: шум похож на хэт набора osdk по замеру карточки (5,0 кГц, 13 %)
+    def test_input_is_kit_like(self):
+        # предпосылка: шум похож на хэт набора osdk по замеру (5,0 кГц, 13 %)
         c, low = _spectrum_stats(_hat_like())
         self.assertAlmostEqual(c, 5000, delta=300)
         self.assertAlmostEqual(low, 0.13, delta=0.01)
 
-    def test_tc125_eq_makes_hat_bright(self):
+    def test_eq_makes_hat_bright(self):
         chain = _fx_presets()["drums-hh-kit"]["chain"]
         eqs = [b for b in chain if b.get("type") == "eq"]
         self.assertTrue(eqs, f"в drums-hh-kit нет eq: {[b.get('type') for b in chain]}")

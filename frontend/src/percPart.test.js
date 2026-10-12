@@ -1,4 +1,3 @@
-// Тесты карточки internal-own-track, этап 5 «Перкуссия по сетке», условие 32 (тест-кейсы ТК58, ТК59):
 // percPart.js — удары перкуссионной партии по сетке тактов трека.
 // Контракт: percHits(bars, {pattern, sections, swing, accent}) → [{t, d, vel}] в секундах трека;
 // такт {start, end, section} (как bars у chord_grid) = 4 равные доли. Рисунки: fours — каждая доля;
@@ -9,13 +8,12 @@
 // d — длина клетки. Такты вне sections — без ударов; sections пусто/не задано — все такты.
 // barsFromBeat({bpm, offset}, dur) → такты по 4 доли от offset до конца трека (последний может быть
 // неполным), section ''.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { percHits, barsFromBeat } from './percPart.js'
 
 const bar = (start, end, section = 'verse') => ({ start, end, section })
 const BAR = [bar(0, 2)]
-// accent 1 и swing 0 заданы явно: ТК58 описывает силу «при accent 1» (умолчание карточка не называет)
+// accent 1 и swing 0 заданы явно
 const hits = (pattern, opts = {}) => percHits(BAR, { pattern, accent: 1, swing: 0, ...opts })
 const ts = (h) => h.map((x) => x.t)
 const vels = (h) => h.map((x) => x.vel)
@@ -24,7 +22,7 @@ const expectClose = (got, want) => {
   got.forEach((g, i) => expect(g, `#${i}`).toBeCloseTo(want[i], 6))
 }
 
-describe('percHits: рисунки (ТК58)', () => {
+describe('percHits: рисунки', () => {
   it('fours → t [0, .5, 1, 1.5], d .5, сила доли .9', () => {
     const h = hits('fours')
     expectClose(ts(h), [0, 0.5, 1, 1.5])
@@ -72,7 +70,7 @@ describe('percHits: рисунки (ТК58)', () => {
   })
 })
 
-describe('percHits: акцент (ТК58)', () => {
+describe('percHits: акцент', () => {
   it('accent 0 → все удары .9', () => {
     for (const p of ['eighths', 'sixteenths', 'offbeat']) {
       for (const v of vels(hits(p, { accent: 0 }))) expect(v, p).toBeCloseTo(0.9, 6)
@@ -84,7 +82,7 @@ describe('percHits: акцент (ТК58)', () => {
   })
 })
 
-describe('percHits: свинг (ТК58)', () => {
+describe('percHits: свинг', () => {
   it('eighths swing .5 → вторые восьмые на .375 (0,25 + 0,5·0,25), первые на месте', () => {
     expectClose(ts(hits('eighths', { swing: 0.5 })), [0, 0.375, 0.5, 0.875, 1, 1.375, 1.5, 1.875])
   })
@@ -99,7 +97,7 @@ describe('percHits: свинг (ТК58)', () => {
   })
 })
 
-describe('percHits: секции (ТК58)', () => {
+describe('percHits: секции', () => {
   const two = [bar(0, 2, 'verse'), bar(2, 4, 'chorus')]
 
   it('секция не выбрана → её такты без ударов', () => {
@@ -116,7 +114,7 @@ describe('percHits: секции (ТК58)', () => {
   })
 })
 
-describe('barsFromBeat (ТК59)', () => {
+describe('barsFromBeat', () => {
   it('bpm 120, offset .3, dur 10 → такты по 2 с от .3, последний неполный до 10, section ""', () => {
     const bars = barsFromBeat({ bpm: 120, offset: 0.3 }, 10)
     const want = [[0.3, 2.3], [2.3, 4.3], [4.3, 6.3], [6.3, 8.3], [8.3, 10]]
@@ -146,9 +144,9 @@ describe('barsFromBeat (ТК59)', () => {
   })
 })
 
-// Условие 38 (ТК62): barsFromBeat({bpm, offset}, dur, shift) — shift 0…3 — с какой доли (от offset)
+// barsFromBeat({bpm, offset}, dur, shift) — shift 0…3 — с какой доли (от offset)
 // начинается такт: первый такт с offset + shift·(60/bpm); вне 0…3 — зажим, не целое — округление.
-describe('barsFromBeat: такт с доли shift (ТК62)', () => {
+describe('barsFromBeat: такт с доли shift', () => {
   const GRID = { bpm: 120, offset: 0.3 }
   const expectBars = (bars, want) => {
     expect(bars.length).toBe(want.length)
@@ -159,7 +157,7 @@ describe('barsFromBeat: такт с доли shift (ТК62)', () => {
     })
   }
 
-  it('shift 0 → как ТК59 (такты от offset .3)', () => {
+  it('shift 0 → как без shift (такты от offset .3)', () => {
     expectBars(barsFromBeat(GRID, 10, 0), [[0.3, 2.3], [2.3, 4.3], [4.3, 6.3], [6.3, 8.3], [8.3, 10]])
   })
 

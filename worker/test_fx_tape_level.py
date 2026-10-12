@@ -1,15 +1,14 @@
-"""Тесты карточки internal-own-track, условие 60 (тест-кейс ТК94): блок tape не громче входа.
+"""Блок tape не громче входа.
 
-Контракт из карточки:
+Контракт:
 - насыщение tape: тихий сигнал — без изменения уровня, громкие пики сжимаются;
 - saturation 0 — без насыщения (выход = вход после среза верха, линейно);
-- ТК94: wow 0, flutter 0, hiss 0, lowpass_hz 20000, saturation 0,5:
+- wow 0, flutter 0, hiss 0, lowpass_hz 20000, saturation 0,5:
   синус 440 Гц −40 дБFS → уровень выхода −40 ±0,3 дБ; синус 0 дБFS → пик выхода < 0,6;
   saturation 0 → выход = вход после среза верха (±1e-6 к тому же без насыщения).
 Параметры — worker/fx_blocks.json (wow, flutter, saturation, lowpass_hz, hiss).
 
-Написаны по карточке, без чтения реализации. Внешних границ нет — моков нет.
-Запуск: cd worker && python3 -m unittest test_fx_tape_level -v
+Внешних границ нет — моков нет.
 """
 import unittest
 
@@ -95,10 +94,8 @@ class TapeLevelTest(unittest.TestCase):
         self.assertEqual(float(np.max(np.abs(y))), 0.0)
 
 
-# --- условие 60а, ТК94а: версия движка в ключе кэша превью /fx -----------------------
 # Превью /fx цепочки tape дважды → один файл; ENGINE_VERSION + 1 (подмена) → другой файл
 # (имя отличается); повтор при новой версии → тот же новый файл.
-# Мок — только версия движка (граница «правка звучания блоков»), свои функции не мокаются.
 
 try:
     import test_fx_api as _fa
@@ -111,7 +108,7 @@ except Exception as e:  # окружение без fastapi/httpx — пропу
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TapePreviewCacheEngineVersionTest(_ApiBase):
-    """ТК94а: версия движка входит в ключ кэша превью /fx."""
+    """Версия движка входит в ключ кэша превью /fx."""
 
     def _preview(self, jid):
         r = self._fx(jid, source="mix", output="mix", chain=_tape(0.5), preview=True,
@@ -119,10 +116,10 @@ class TapePreviewCacheEngineVersionTest(_ApiBase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()["file"]
 
-    def test_tc94a_engine_version_bump_changes_preview_file(self):
+    def test_engine_version_bump_changes_preview_file(self):
         from unittest import mock
         fx = _fx()
-        old = fx.ENGINE_VERSION  # нет атрибута → красный по условию 60а
+        old = fx.ENGINE_VERSION  # нет атрибута → тест красный
         self.assertIsInstance(old, int)
         jid, d = self._audio_job()
 

@@ -1,5 +1,5 @@
-// Тесты карточки internal-own-track, этап 8а, условие 68 (тест-кейс ТК102): эталоны партий для паритета
-// Go ↔ JS. Go-порты PartNotes / PercHits / BarsFromBeat (internal/studio) обязаны давать то же, что
+// Эталоны партий для паритета Go ↔ JS.
+// Go-порты PartNotes / PercHits / BarsFromBeat (internal/studio) обязаны давать то же, что
 // synthPart.partNotes / percPart.percHits / percPart.barsFromBeat; Go-тест (internal/studio/parts_test.go)
 // сверяет их с internal/studio/testdata/parts_golden.json с точностью 1e-9.
 //
@@ -7,10 +7,8 @@
 // без переменной — сверяет файл с генерацией (как данные MCP: поменял JS — перегенерируй эталоны).
 // Опции в эталоне записаны полностью (умолчания JS подставлены явно): Go получает их как есть.
 //
-// Набор случаев — из ТК102: стили pad/arp/pulse/drone, octave −1/0/2, sections, все рисунки, swing 0,2,
-// accent 0/0,5/1, неизвестный аккорд, «D/F#», пустые такты; barsFromBeat — тоже.
-// Не входит: partNotes с sections [] — у JS это «ни одного такта», а карточка (условие 68) для рецепта
-// задаёт «пусто — все»; расхождение вынесено в отчёт test-author.
+// Не входит: partNotes с sections [] — у JS это «ни одного такта», а для рецепта
+// «пусто — все».
 import { describe, it, expect } from 'vitest'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -91,7 +89,7 @@ const golden = { partNotes: synthCases, percHits: percCases, barsFromBeat: beatC
 const section = (k) => `"${k}": [\n${golden[k].map((c) => JSON.stringify(c)).join(',\n')}\n]`
 const text = `{\n${Object.keys(golden).map(section).join(',\n')}\n}\n`
 
-describe('эталоны партий для Go (ТК102)', () => {
+describe('эталоны партий для Go', () => {
   it('случаи не пустые: есть ноты, удары и такты', () => {
     expect(synthCases.filter((c) => c.out.length).length).toBeGreaterThan(10)
     expect(percCases.filter((c) => c.out.length).length).toBeGreaterThan(10)

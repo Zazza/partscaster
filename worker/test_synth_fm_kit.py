@@ -1,17 +1,16 @@
-"""Тесты карточки internal-own-track, этап 7в: условия 61 и 62 (тест-кейсы ТК95 и ТК96) — FM-генератор
-и сэмплы набора в блоке synth.
+"""Тесты FM-генератора и сэмплов набора в блоке synth.
 
-Контракт (из карточки):
-- условие 61: osc1/osc2 принимают 0…5; 5 — «FM»: sin(2π f t + I(t)·sin(2π·r·f·t)),
+Контракт:
+- osc1/osc2 принимают 0…5; 5 — «FM»: sin(2π f t + I(t)·sin(2π·r·f·t)),
   I(t) = fm_index·e^(−t/fm_decay_s) от начала ноты; fm_ratio 0,5…14 (1), fm_index 0…10 (2),
   fm_decay_s 0,01…5 (0,5); fm_index 0 — чистый синус;
-- ТК95: fm_index 0 → у ноты A4 энергия вне 440 ±5 Гц ≤ −40 дБ; fm_index 3, fm_ratio 1, fm_decay 5 →
+- fm_index 0 → у ноты A4 энергия вне 440 ±5 Гц ≤ −40 дБ; fm_index 3, fm_ratio 1, fm_decay 5 →
   гармоники 880 и 1320 (каждая ≥ −30 дБ от основной) в первые 0,2 с; fm_decay 0,05 → к 1 с гармоники
   ≤ −40 дБ от основной; fm_ratio 3,5 → составляющие на 440 ± 1540 Гц (1980 есть); osc1 6 → ChainError;
-- условие 62: строковый kit (умолчание «») — ноты играются сэмплами набора, генераторы/суб/шум не звучат;
+- строковый kit (умолчание «») — ноты играются сэмплами набора, генераторы/суб/шум не звучат;
   высота сэмпла — из имени («A0v10» → MIDI 21, «C#4…», «D#1…»); нота — ближайшим сэмплом со сдвигом
   высоты пересчётом частоты; vel — громкость; набора нет → ChainError с понятным текстом;
-- ТК96: набор из синусов «A3v10» (220 Гц), «C4v10» (261,6), «D#4v10» (311,1): MIDI 57 → 220 ±1 Гц;
+- набор из синусов «A3v10» (220 Гц), «C4v10» (261,6), «D#4v10» (311,1): MIDI 57 → 220 ±1 Гц;
   MIDI 59 → 246,9 ±1,5 Гц; vel 0,4 тише vel 0,8 на 6 ±0,5 дБ; kit «нет/такого» → ChainError;
   имя без ноты («foo») пропускается; длина выхода = входу.
 
@@ -19,11 +18,9 @@
 расширения в том же порядке; нет — KeyError, как у настоящего). Вход — тишина: громкость партии тогда
 по пику (−6 дБФS у всей партии), и ноты одной партии сравнимы между собой.
 
-Предположения (карточка не уточняет):
+Предположения:
 - нота дальше ±6 полутонов от всех сэмплов — проверяется только, что она звучит (высота не задана однозначно);
 - подставное хранилище отдаёт сэмплы в порядке, отличном от высоты: пара «сэмпл ↔ имя» — по индексу.
-
-Запуск: cd worker && python3 -m unittest test_synth_fm_kit -v
 """
 import unittest
 from unittest import mock
@@ -79,7 +76,7 @@ def _sine(hz, sr=SR, seconds=3.0, amp=0.5, harm2=0.0):
 
 
 def _sine_kit(sr=SR, extra=(), c4_harm2=0.0):
-    """Набор из ТК96 (порядок не по высоте); extra — дополнительные (имя, сэмпл)."""
+    """Набор синусов (порядок не по высоте); extra — дополнительные (имя, сэмпл)."""
     items = [("D#4v10", _sine(_hz(DS4), sr)), ("A3v10", _sine(_hz(A3), sr)),
              ("C4v10", _sine(_hz(C4), sr, harm2=c4_harm2))] + list(extra)
     return items, sr
@@ -125,8 +122,6 @@ def _rms(x):
     return float(np.sqrt(np.mean(np.square(x)))) if len(x) else 0.0
 
 
-# ---------- ТК95: FM-генератор (условие 61) ----------
-
 def _fm(**kw):
     """Нота A4 FM-генератором: ровная огибающая, фильтр открыт — спектр задаёт только генератор."""
     blk = {"osc1": 5, "cutoff_hz": 16000, "attack_s": 0.005, "decay_s": 0.01, "sustain": 1.0,
@@ -165,7 +160,7 @@ class TestFmParams(unittest.TestCase):
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestFmSound(unittest.TestCase):
 
-    def test_tc95_index0_pure_sine(self):
+    def test_index0_pure_sine(self):
         y = _fm(fm_index=0)
         f, s = _spec(_seg(y, 0.3, 1.5))
         p = s ** 2
@@ -174,7 +169,7 @@ class TestFmSound(unittest.TestCase):
         self.assertLessEqual(10 * np.log10(p[~near].sum() / p[near].sum()), -40,
                              "fm_index 0 — не чистый синус")
 
-    def test_tc95_harmonics_early(self):
+    def test_harmonics_early(self):
         y = _fm(fm_index=3, fm_ratio=1, fm_decay_s=5)
         f, s = _spec(_seg(y, 0.01, 0.2))
         base = _band_peak(f, s, 440)
@@ -183,7 +178,7 @@ class TestFmSound(unittest.TestCase):
                 self.assertGreaterEqual(_db(_band_peak(f, s, h), base), -30,
                                         f"нет гармоники {h} Гц в первые 0,2 с")
 
-    def test_tc95_index_decays(self):
+    def test_index_decays(self):
         y = _fm(fm_index=3, fm_ratio=1, fm_decay_s=0.05)
         f, s = _spec(_seg(y, 1.0, 1.6))
         base = _band_peak(f, s, 440)
@@ -193,7 +188,7 @@ class TestFmSound(unittest.TestCase):
                 self.assertLessEqual(_db(_band_peak(f, s, h), base), -40,
                                      f"гармоника {h} Гц не погасла к 1 с (fm_decay 0,05)")
 
-    def test_tc95_ratio_3_5_sidebands(self):
+    def test_ratio_3_5_sidebands(self):
         y = _fm(fm_index=3, fm_ratio=3.5, fm_decay_s=5)
         f, s = _spec(_seg(y, 0.01, 0.3))
         top = float(s[(f >= 50) & (f <= 6000)].max())
@@ -203,8 +198,6 @@ class TestFmSound(unittest.TestCase):
         # гармоники 440 (кратные) при r = 3,5 не появляются: 880 Гц в FM-спектре нет
         self.assertLessEqual(_db(_band_peak(f, s, 880), top), -40, "при fm_ratio 3,5 есть 880 Гц")
 
-
-# ---------- ТК96: сэмплы набора в synth (условие 62) ----------
 
 def _kit_block(notes, kit="keys/sines", **kw):
     blk = {"kit": kit, "attack_s": 0.005, "decay_s": 0.01, "sustain": 1.0, "release_s": 0.05, "notes": notes}
@@ -221,13 +214,13 @@ class TestSynthKit(unittest.TestCase):
     def test_kit_param_default_empty(self):
         self.assertEqual(fx.parse_chain([{"type": "synth"}])[0].get("kit"), "")
 
-    def test_tc96_exact_sample_pitch(self):
+    def test_exact_sample_pitch(self):
         res = self._res()
         _, y = _run(_kit_block([{"t": 0.1, "d": 2.0, "midi": [A3], "vel": 0.8}]), resources=res)
         self.assertIn("keys/sines", res.calls, "набор не прочитан")
         self.assertAlmostEqual(_f0(_seg(y, 0.5, 1.8)), 220.0, delta=1.0)
 
-    def test_tc96_shifted_nearest_pitch(self):
+    def test_shifted_nearest_pitch(self):
         _, y = _run(_kit_block([{"t": 0.1, "d": 2.0, "midi": [B3], "vel": 0.8}]), resources=self._res())
         self.assertAlmostEqual(_f0(_seg(y, 0.5, 1.8)), 246.9, delta=1.5)
 
@@ -245,7 +238,7 @@ class TestSynthKit(unittest.TestCase):
         _, y = _run(_kit_block([{"t": 0.1, "d": 2.0, "midi": [A3], "vel": 0.8}]), resources=res)
         self.assertAlmostEqual(_f0(_seg(y, 0.5, 1.8)), 220.0, delta=1.0)
 
-    def test_tc96_velocity_is_volume(self):
+    def test_velocity_is_volume(self):
         notes = [{"t": 0.1, "d": 0.8, "midi": [A3], "vel": 0.8},
                  {"t": 1.5, "d": 0.8, "midi": [A3], "vel": 0.4}]
         _, y = _run(_kit_block(notes, rel_db=-6), resources=self._res())
@@ -263,13 +256,13 @@ class TestSynthKit(unittest.TestCase):
         self.assertLessEqual(10 * np.log10(p[~near].sum() / p[near].sum()), -30,
                              "с kit звучат генераторы/суб/шум")
 
-    def test_tc96_missing_kit_chain_error(self):
+    def test_missing_kit_chain_error(self):
         with self.assertRaises(fx.ChainError) as e:
             _run(_kit_block([{"t": 0.1, "d": 1.0, "midi": [A3], "vel": 0.8}], kit="нет/такого"),
                  resources=self._res())
         self.assertIn("нет/такого", str(e.exception), "текст ошибки не называет набор")
 
-    def test_tc96_name_without_note_skipped(self):
+    def test_name_without_note_skipped(self):
         # «foo» — без высоты в имени: не играется (иначе 1 кГц был бы слышен), остальные работают
         res = FakeKits({"keys/sines": _sine_kit(extra=[("foo", _sine(1000.0))])})
         _, y = _run(_kit_block([{"t": 0.1, "d": 2.0, "midi": [A3], "vel": 0.8}]), resources=res)
@@ -288,7 +281,7 @@ class TestSynthKit(unittest.TestCase):
         _, y = _run(_kit_block([{"t": 0.1, "d": 1.5, "midi": [A4 + 12], "vel": 0.8}]), resources=self._res())
         self.assertGreater(_rms(_seg(y, 0.4, 1.4)), 1e-3, "нота дальше ±6 полутонов не звучит")
 
-    def test_tc96_output_length_equals_input(self):
+    def test_output_length_equals_input(self):
         res = self._res()
         for seconds in (0.5, 2.3):
             with self.subTest(seconds=seconds):
@@ -297,12 +290,10 @@ class TestSynthKit(unittest.TestCase):
                 self.assertEqual(y.shape, x.shape)
 
 
-# ---------- ТК96а: превью окна = тот же кусок полного рендера (условие 62а) ----------
-#
 # Контракт: synth с kit или с osc1 5 (FM) — сэмпл и спад FM-глубины идут от начала ноты, поэтому превью окна
 # [3, 5) партии (source mix, add true, ноты в секундах трека) = отрезок [3, 5) полного рендера (превью [0, DUR))
-# ±0,5 дБ по RMS и ±1e-3 по форме. Прочие синты (osc1 0 без kit) — как раньше; прежнее поведение (перезапуск
-# ноты за lead до окна) по форме не задано, проверяется только уровень (±0,5 дБ — было и раньше).
+# ±0,5 дБ по RMS и ±1e-3 по форме. Прочие синты (osc1 0 без kit): перезапуск
+# ноты за lead до окна по форме не задан, проверяется только уровень (±0,5 дБ).
 # Сравнение — output solo: в mix одинаковый в обоих файлах трек маскировал бы разницу синта.
 # Набор — настоящее хранилище воркера (файлы в каталоге данных), внешних границ нет.
 
@@ -315,7 +306,7 @@ _API_BASE = _fa._FxApiCase if _API_OK else unittest.TestCase
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TestSynthPreviewEqualsRender(_API_BASE):
-    """ТК96а: нота t 0, d 6; превью окна [3, 5) = [3, 5) полного рендера."""
+    """Нота t 0, d 6; превью окна [3, 5) = [3, 5) полного рендера."""
 
     def setUp(self):
         super().setUp()
@@ -374,31 +365,29 @@ class TestSynthPreviewEqualsRender(_API_BASE):
         np.testing.assert_allclose(got[e:-e], want[e:-e], rtol=0, atol=1e-3,
                                    err_msg="форма превью окна не как у того же куска полного рендера")
 
-    def test_tc96a_kit_preview_equals_render(self):
+    def test_kit_preview_equals_render(self):
         self._assert_same({"kit": "test/decay"})
 
-    def test_tc96a_fm_preview_equals_render(self):
+    def test_fm_preview_equals_render(self):
         self._assert_same({"osc1": 5, "fm_index": 3, "fm_ratio": 1, "fm_decay_s": 0.6})
 
-    def test_tc96a_plain_synth_level_unchanged(self):
-        # osc1 0 без kit — как раньше: форма не задана (перезапуск ноты за lead), уровень совпадает
+    def test_plain_synth_level_unchanged(self):
+        # osc1 0 без kit: форма не задана (перезапуск ноты за lead), уровень совпадает
         got, want = self._pair({"osc1": 0})
         self.assertAlmostEqual(_db(_rms(got), _rms(want)), 0.0, delta=0.5)
 
 
 
-# ---------- Кросс-ревью s7c r1: условия 62б, 62в (ТК96б, ТК96в) ----------
-#
-# Контракт (из карточки):
-# - 62б: начальная фаза генераторов ноты (и унисона) — из сида по (начало ноты в треке, мс; MIDI; голос унисона),
+# Контракт:
+# - начальная фаза генераторов ноты (и унисона) — из сида по (начало ноты в треке, мс; MIDI; голос унисона),
 #   а не по порядку нот в окне: превью окна, где отброшены ранние ноты, звучит той же формой, что трек;
-# - ТК96б: FM osc1 5 fm_index 3 fm_decay 0,6, ноты A3 {t 0, d 0,5} и {t 1, d 6}: превью окна [3, 5) = отрезок
+# - FM osc1 5 fm_index 3 fm_decay 0,6, ноты A3 {t 0, d 0,5} и {t 1, d 6}: превью окна [3, 5) = отрезок
 #   полного рендера ±1e-3 по форме вне краёв окна (10 мс); обычный синт osc1 0 с теми же нотами — уровень ±0,5 дБ;
-# - 62в: для kit/FM начало ноты переносится к окну не дальше чем на 60 с: нота 700 с, окно [610, 612) → 200, не 422;
-# - ТК96в: FM-нота {t 0, d 700}: превью окна [610, 612) → 200, выход ненулевой.
-# Обвязка — та же, что у ТК96а (output solo, настоящее хранилище наборов).
+# - для kit/FM начало ноты переносится к окну не дальше чем на 60 с: нота 700 с, окно [610, 612) → 200, не 422;
+# - FM-нота {t 0, d 700}: превью окна [610, 612) → 200, выход ненулевой.
+# Обвязка — та же, что у TestSynthPreviewEqualsRender (output solo, настоящее хранилище наборов).
 #
-# Предположение (карточка не уточняет): kit с нотой 700 с в окне [610, 612) — тоже 200 (62в говорит «kit/FM»);
+# Предположение: kit с нотой 700 с в окне [610, 612) — тоже 200 («kit/FM»);
 # звучание не проверяется — сэмпл дольше 8 с не звучит, тишина там допустима.
 
 TWO_NOTES = [{"t": 0.0, "d": 0.5, "midi": [A3], "vel": 0.8}, {"t": 1.0, "d": 6.0, "midi": [A3], "vel": 0.8}]
@@ -416,7 +405,7 @@ def _real_kits_setup(case):
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TestSynthPhaseFromTrackPosition(_API_BASE):
-    """ТК96б: ранняя нота вне окна отброшена — поздняя нота в превью звучит той же формой, что в треке."""
+    """Ранняя нота вне окна отброшена — поздняя нота в превью звучит той же формой, что в треке."""
 
     setUp = _real_kits_setup
     _track_job = TestSynthPreviewEqualsRender._track_job
@@ -424,21 +413,21 @@ class TestSynthPhaseFromTrackPosition(_API_BASE):
     _pair = TestSynthPreviewEqualsRender._pair
     _assert_same = TestSynthPreviewEqualsRender._assert_same
 
-    def test_tc96b_fm_two_notes_form_equals_render(self):
+    def test_fm_two_notes_form_equals_render(self):
         self._assert_same(dict(FM_B, notes=TWO_NOTES))
 
-    def test_tc96b_fm_unison_two_notes_form_equals_render(self):
+    def test_fm_unison_two_notes_form_equals_render(self):
         # фаза каждого голоса унисона — тоже по месту ноты в треке
         self._assert_same(dict(FM_B, notes=TWO_NOTES, unison=3, detune_cents=12))
 
-    def test_tc96b_plain_synth_two_notes_level_unchanged(self):
+    def test_plain_synth_two_notes_level_unchanged(self):
         got, want = self._pair({"osc1": 0, "notes": TWO_NOTES})
         self.assertAlmostEqual(_db(_rms(got), _rms(want)), 0.0, delta=0.5)
 
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TestSynthLongNoteFarWindow(_API_BASE):
-    """ТК96в: нота 700 с, окно [610, 612) — кусок окна принимается цепочкой (не 422) и звучит (FM); для kit — принят.
+    """Нота 700 с, окно [610, 612) — кусок окна принимается цепочкой (не 422) и звучит (FM); для kit — принят.
 
     Без 10-минутного трека через /fx: полный трек считал бы синт на всю длину в памяти (гигабайты — 2026-10-09
     прогон этого теста совпал с зависанием машины). Проверяется ровно то, что давало 422: подготовка окна воркером
@@ -458,22 +447,20 @@ class TestSynthLongNoteFarWindow(_API_BASE):
         finally:
             res.close()
 
-    def test_tc96v_fm_long_note_far_window_ok_and_sounds(self):
+    def test_fm_long_note_far_window_ok_and_sounds(self):
         y = self._window(FM_B)
         self.assertGreater(_rms(y), 1e-4, "длинная FM-нота в далёком окне молчит")
 
-    def test_tc96v_kit_long_note_far_window_ok(self):
+    def test_kit_long_note_far_window_ok(self):
         self._window({"kit": "test/decay"})
 
 
-# ---------- Кросс-ревью s7c r1: условие 63а (ТК96г) ----------
-#
 # Контракт: последние 50 мс сэмпла набора synth — спад к нулю (без щелчка там, где сэмпл кончается);
-# ТК96г: хранилище отдаёт сэмпл 2 с синуса постоянной громкости (как обрезанный по max_s), нота 4 с →
+# хранилище отдаёт сэмпл 2 с синуса постоянной громкости (как обрезанный по max_s), нота 4 с →
 # 1,95…2,0 с от начала ноты гаснут к 0 (|y| в конце сэмпла < 1 % пика), после — тишина.
 # Сэмпл — косинус с максимумом ровно в последнем отсчёте: без спада там был бы пик, а не случайный ноль.
 #
-# Предположения (карточка не уточняет форму спада):
+# Предположения (форма спада не задана):
 # - «последние 50 мс» — до 1,95 с сэмпл звучит как был: уровень [1,8; 1,9) с — в пределах 1 дБ от [0,5; 1,5);
 # - «последний отсчёт» проверяется по последним 10 отсчётам (0,2 мс): допускает сдвиг сэмпла на пару отсчётов.
 
@@ -495,7 +482,7 @@ class TestSynthKitSampleEndFades(unittest.TestCase):
         blk = _kit_block([{"t": NOTE_T, "d": 4.0, "midi": [A3], "vel": 0.8}], kit="keys/const", cutoff_hz=16000)
         return _run(blk, seconds=5.0, resources=_const_cos_kit())[1]
 
-    def test_tc96g_sample_end_fades_to_zero(self):
+    def test_sample_end_fades_to_zero(self):
         y = self._render()
         peak = float(np.max(np.abs(_seg(y, NOTE_T + 0.5, NOTE_T + 1.5))))
         self.assertGreater(peak, 1e-3, "нота не звучит")
@@ -503,7 +490,7 @@ class TestSynthKitSampleEndFades(unittest.TestCase):
         tail = np.abs(y[end - 10:end])
         self.assertLess(float(tail.max()), 0.01 * peak, "сэмпл обрывается без спада (щелчок в конце сэмпла)")
 
-    def test_tc96g_fade_is_only_last_50ms(self):
+    def test_fade_is_only_last_50ms(self):
         y = self._render()
         body = _rms(_seg(y, NOTE_T + 0.5, NOTE_T + 1.5))
         before = _rms(_seg(y, NOTE_T + 1.8, NOTE_T + 1.9))
@@ -511,7 +498,7 @@ class TestSynthKitSampleEndFades(unittest.TestCase):
         fading = _rms(_seg(y, NOTE_T + 1.95, NOTE_T + SAMPLE_S))
         self.assertLess(fading, body * 0.9, "на 1,95…2,0 с нет спада")
 
-    def test_tc96g_silence_after_sample(self):
+    def test_silence_after_sample(self):
         y = self._render()
         peak = float(np.max(np.abs(_seg(y, NOTE_T + 0.5, NOTE_T + 1.5))))
         after = _seg(y, NOTE_T + SAMPLE_S + 0.001, NOTE_T + 4.0)

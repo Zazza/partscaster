@@ -79,8 +79,6 @@ export function cursorSec(lastPos, lastTsMs, playing, nowMs, durationSec) {
   return Math.min(Math.max(pos, 0), durationSec)
 }
 
-// ---------- окно просмотра (зум волны) ----------
-
 // минимальный охват окна: дальше — доли секунды на экран, клик теряет смысл
 export const WAVE_MIN_SPAN = 1
 

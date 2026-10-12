@@ -1,8 +1,5 @@
-// Тесты карточки internal-own-track, этап 9, условие 80 (тест-кейс ТК117, часть фронта):
-// умолчание rel_db синта −8 (было −6) — блок synth в описании блоков, студия «Синт по аккордам»
-// (запасное значение ползунка, когда в цепочке нет блока synth) и подписи; у perc прежний −14.
-// Побайтная сверка копий fx_blocks (фронт, MCP) с worker/fx_blocks.json уже есть в tails.test.js (ТК83) —
-// здесь не дублируется. Написаны по карточке, без чтения новой реализации.
+// Умолчание rel_db синта −8 — блок synth в описании блоков, студия «Синт по аккордам»
+// (запасное значение ползунка, когда в цепочке нет блока synth) и подписи; у perc −14.
 import { describe, it, expect } from 'vitest'
 import BLOCKS from './fxBlocks.json'
 import ru from './i18n/ru.js'
@@ -11,7 +8,7 @@ import { synthLevel, SYNTH_REL_DB_DEFAULT } from './synthPart.js'
 
 const def = (type, id) => (BLOCKS[type].params.find((p) => p.id === id) || {}).default
 
-describe('умолчание rel_db синта −8 (ТК117, условие 80)', () => {
+describe('умолчание rel_db синта −8', () => {
   it('fxBlocks: synth rel_db по умолчанию −8', () => {
     expect(def('synth', 'rel_db')).toBe(-8)
   })

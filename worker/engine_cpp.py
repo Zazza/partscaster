@@ -2,7 +2,7 @@
 
 Модель та же (YuE2-3B), движок другой: меньше видеопамяти (Q8 ~8 ГБ, экономный режим ~4,5 ГБ против ~11 ГБ у
 PyTorch) и быстрее. Сид между движками и между моделями yue2.cpp НЕ переносится — другое исполнение; ноты
-(semantic) переносятся: продолжение и пересчёт идут по ним (опыт 2026-10-12, треки «Опыт: yue2.cpp»).
+(semantic) переносятся: продолжение и пересчёт идут по ним.
 
 Сервер yue2.cpp (yue-server) запускает и гасит сам воркер — только 127.0.0.1, свободный порт. Без torch: модуль
 грузится и там, где модели нет (тесты, установка). Из командной строки: python engine_cpp.py download <модель>.
@@ -66,8 +66,6 @@ def _semantic_sampling(budget: int, temperature: float, min_tokens: int = 200) -
     return {"temperature": temperature, "top_p": 0.95, "top_k": 100, "repetition_penalty": 1.2,
             "penalty_window": 50, "min_tokens": min(min_tokens, budget), "max_tokens": budget}
 
-
-# ---------- модели ----------
 
 def models_dir() -> Path:
     data = Path(os.environ.get("YUE_DATA_DIR", Path.home() / "yue-studio" / "data"))
@@ -160,8 +158,6 @@ def download(name: str, progress_cb=None, base_url: str = HF_BASE) -> None:
         _fetch(spec, base_url, progress_cb)
 
 
-# ---------- программа ----------
-
 def _candidates() -> list[Path]:
     out = []
     if os.environ.get("YUE_CPP_BIN"):
@@ -224,8 +220,6 @@ def find_binary() -> Path | None:
     return None
 
 
-# ---------- метки ----------
-
 def engine_label(name: str) -> str:
     """Метка движка трека (jobs.engine): по ней видно, с каким движком сид повторит исполнение."""
     return f"cpp-{name}"
@@ -234,8 +228,6 @@ def engine_label(name: str) -> str:
 def model_label(name: str) -> str:
     return f"{HF_REPO}:{MODELS[name]['file']}@yue2.cpp-{CPP_COMMIT}"
 
-
-# ---------- заявки ----------
 
 def _base(style: str, lyrics: str, cot: str, seed: int, cfg: float, budget: int, temperature: float) -> dict:
     return {
@@ -295,8 +287,6 @@ def plan_request(style: str, lyrics: str, cot: str, seed: int) -> dict:
     body["semantic_sampling"]["min_tokens"] = 0
     return body
 
-
-# ---------- ответ ----------
 
 def parse_multipart(body: bytes) -> dict:
     """Ответ /job?result=1 (один трек): replay JSON (план, ноты, сиды), аудио, латенты [T,64] f32."""
@@ -363,8 +353,6 @@ def parse_log_line(line: str, counters: dict) -> None:
     elif _RE_SYNTH.search(line):
         counters["phase"] = "decode"
 
-
-# ---------- сервер ----------
 
 class CppOOM(RuntimeError):
     """Нехватка видеопамяти у yue2.cpp (в тексте «CUDA out of memory» — его узнаёт friendly_error воркера)."""
@@ -593,8 +581,6 @@ class CppServer:
         audio, _ = sf.read(io.BytesIO(body), dtype="float32", always_2d=True)
         return audio
 
-
-# ---------- командная строка (install.sh) ----------
 
 def _cli(argv: list[str]) -> int:
     if len(argv) != 2 or argv[0] != "download":

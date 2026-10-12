@@ -9,7 +9,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-vocal-ride, условие 3 (MCP): volume_envelope
+// volume_envelope
 // {job_id, points:[{t,db}], stem?} → JSON варианта; без points/пустые — ошибка.
 // Воркер — fakeService (server_test.go); звук — синтетика ffmpeg (fxLavfi/fxDecode/fxTone
 // из stem_fx_test.go).

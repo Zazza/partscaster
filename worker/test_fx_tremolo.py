@@ -1,7 +1,6 @@
-"""Тесты карточки internal-own-track, этап 7а, условие 50 (тест-кейс ТК85): блок tremolo
-движка fx_engine — громкость качается по LFO.
+"""Блок tremolo движка fx_engine — громкость качается по LFO.
 
-Контракт из карточки:
+Контракт:
 - параметры rate_hz (0,5…15, умолч. 5), depth (0…1, 0,5), shape (0…1, 0), stereo (0…1, 0);
   описание — worker/fx_blocks.json, вне диапазона — ChainError (API отвечает 422);
 - множитель левого канала g(t) = 1 − depth·m(t), m ∈ [0, 1]; при shape 0
@@ -9,8 +8,7 @@
 - stereo 1: правый — 1 − depth·(1 − m(t)) (противофаза); на моно stereo — как 0;
 - длина = входу, без сдвига (умножение); depth 0 → выход = вход.
 
-Написаны по карточке, без чтения реализации. Внешних границ нет — моков нет.
-Запуск: cd worker && python3 -m unittest test_fx_tremolo -v
+Внешних границ нет — моков нет.
 """
 import unittest
 
@@ -96,7 +94,7 @@ class TremoloSpecTest(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TremoloSoundTest(unittest.TestCase):
-    def test_tc85_sine_envelope_follows_lfo(self):
+    def test_sine_envelope_follows_lfo(self):
         x = _sine()
         y = _fx().process(x, SR, _trem(rate_hz=4, depth=0.6, shape=0, stereo=0))
         env = _gain_env(y[:, 0], x[:, 0])
@@ -174,8 +172,7 @@ class TremoloSoundTest(unittest.TestCase):
                     self.assertTrue(np.all(np.isfinite(y)))
 
 
-# ---------- Кросс-ревью s7a r1: условие 50а, ТК85а — фаза LFO от времени в треке ----------
-# Контракт: LFO считается от t = _t0 + отсчёт/sr; _t0 (начало куска в треке, с) ставит только
+# LFO считается от t = _t0 + отсчёт/sr; _t0 (начало куска в треке, с) ставит только
 # воркер: превью окна [from, to) — _t0 = from, полный рендер — 0; присланный в запросе _t0
 # выбрасывается. Служебный _t0 разрешён только tremolo и perc, у прочих блоков — ChainError.
 
@@ -186,9 +183,9 @@ TREM_FULL = {"rate_hz": 5, "depth": 1, "stereo": 1}
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TremoloPhaseFromTrackTimeTest(unittest.TestCase):
-    """ТК85а (движок): кусок с _t0 = тот же отрезок обработки целого сигнала."""
+    """Кусок с _t0 = тот же отрезок обработки целого сигнала."""
 
-    def test_tc85a_chunk_with_t0_equals_slice_of_full(self):
+    def test_chunk_with_t0_equals_slice_of_full(self):
         fx = _fx()
         x = _sine(LONG)
         a, b = int(round(T0 * SR)), int(round(T1 * SR))
@@ -197,7 +194,7 @@ class TremoloPhaseFromTrackTimeTest(unittest.TestCase):
         self.assertEqual(chunk.shape, (b - a, 2))
         np.testing.assert_allclose(chunk, full[a:b], rtol=0, atol=1e-6)
 
-    def test_tc85a_without_t0_chunk_starts_from_zero_phase(self):
+    def test_without_t0_chunk_starts_from_zero_phase(self):
         # контроль осмысленности: без _t0 фаза куска — от нуля, и он с отрезком не совпадает
         fx = _fx()
         x = _sine(LONG)
@@ -238,7 +235,7 @@ except Exception as e:  # окружение без fastapi/httpx — пропу
 
 @unittest.skipUnless(_API_OK, _API_SKIP)
 class TremoloPreviewMatchesRenderTest(_ApiBase):
-    """ТК85а (воркер): превью окна [2,1; 3,1) (source mix, output mix) = тот же отрезок
+    """Превью окна [2,1; 3,1) (source mix, output mix) = тот же отрезок
     полного /fx-рендера ±1e-4; присланный в запросе _t0 игнорируется."""
 
     def _long_job(self):
@@ -267,7 +264,7 @@ class TremoloPreviewMatchesRenderTest(_ApiBase):
         a, b = int(round(T0 * sr)), int(round(T1 * sr))
         return y[a:b]
 
-    def test_tc85a_t0_from_request_is_ignored(self):
+    def test_t0_from_request_is_ignored(self):
         jid, d = self._long_job()
         want = self._render_slice(jid, d)
         base, _ = _fa._read(d / self._preview(jid, _trem(**TREM_FULL))["file"])
@@ -281,7 +278,7 @@ class TremoloPreviewMatchesRenderTest(_ApiBase):
                 np.testing.assert_allclose(got, base, rtol=0, atol=1e-6)
                 np.testing.assert_allclose(got, want, rtol=0, atol=1e-4)
 
-    def test_tc85a_t0_in_full_render_request_is_ignored(self):
+    def test_t0_in_full_render_request_is_ignored(self):
         # полный рендер — _t0 = 0, присланный в запросе не сдвигает фазу
         jid, d = self._long_job()
         plain = self._ok(jid, source="mix", output="mix", chain=_trem(**TREM_FULL))

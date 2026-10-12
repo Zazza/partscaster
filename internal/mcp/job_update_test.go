@@ -14,7 +14,6 @@ type updateCall struct {
 	title, folder *string
 }
 
-// updateFake — fakeService + UpdateJob, записывающий аргументы.
 type updateFake struct {
 	*fakeService
 	updates []updateCall

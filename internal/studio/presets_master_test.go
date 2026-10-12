@@ -12,13 +12,13 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 6, условие 45 (ТК73): мастер пресета звука.
+// Мастер пресета звука.
 // Применение: specs → final (ПК) → мастер на воркере (ApplyFx source mix, file = файл после
 // final, in_place; файла-варианта нет — обычный рендер /fx) → VariantToTrack. target_lufs —
 // блок limiter мастера: нет limiter — дописывается {limiter, target_lufs}; есть без target —
 // получает target; шага level на ПК для цели нет.
 //
-// Воркер — msPresetFake: psFake (presets_test.go) + мастер. Превью движка (записи specs)
+// Воркер — msPresetFake: psFake + мастер. Превью движка (записи specs)
 // уходят в psFake; вызов без превью — мастер: in_place отвечает тем же файлом, иначе —
 // новым вариантом dsp-fx-mix-*.flac у джобы.
 
@@ -111,7 +111,7 @@ func msOneMaster(t *testing.T, f *msPresetFake) yue.FxRequest {
 	return f.master[0]
 }
 
-// ТК73: target −13, master [] → ApplyFx с цепочкой [{limiter, target_lufs −13}] на файле после
+// target −13, master [] → ApplyFx с цепочкой [{limiter, target_lufs −13}] на файле после
 // final, in_place, source mix; версия — из того же файла; потолок limiter (если задан) −1.
 func TestApplySoundPresetTargetIsWorkerLimiter(t *testing.T) {
 	t.Parallel()
@@ -144,7 +144,7 @@ func TestApplySoundPresetTargetIsWorkerLimiter(t *testing.T) {
 	}
 }
 
-// ТК73: шага level на ПК для цели больше нет — вариант финала с целью звучит так же, как без
+// Шага level на ПК для цели нет — вариант финала с целью звучит так же, как без
 // цели (±0,1 дБ); замер громкости микса на ПК не нужен (его отсутствие — не ошибка).
 func TestApplySoundPresetTargetNoLevelStep(t *testing.T) {
 	t.Parallel()
@@ -154,7 +154,7 @@ func TestApplySoundPresetTargetNoLevelStep(t *testing.T) {
 	ref := psFinalAmp(t, base.psFake, pb.ID)
 
 	f := msPresetSetup(t)
-	f.uploadMetrics = map[string]any{"lufs": -25.0} // по прежнему условию 11 дало бы level +12 дБ
+	f.uploadMetrics = map[string]any{"lufs": -25.0}
 	p := psPreset(62, []yue.PresetSpec{psVocalCut()}, psWidth())
 	p.TargetLUFS = psTarget(-13)
 	msApply(t, f, p)
@@ -174,7 +174,7 @@ func TestApplySoundPresetTargetNoLevelStep(t *testing.T) {
 	}
 }
 
-// ТК73: master [glue] + target −13 → [glue, limiter target −13].
+// master [glue] + target −13 → [glue, limiter target −13].
 func TestApplySoundPresetMasterPlusTarget(t *testing.T) {
 	t.Parallel()
 	f := msPresetSetup(t)
@@ -189,7 +189,7 @@ func TestApplySoundPresetMasterPlusTarget(t *testing.T) {
 	msCheckLimiter(t, r.Chain[1], -13)
 }
 
-// ТК73: master с limiter без target + target −12 → у limiter target −12, прочие поля целы,
+// master с limiter без target + target −12 → у limiter target −12, прочие поля целы,
 // второй limiter не дописан.
 func TestApplySoundPresetMasterLimiterGetsTarget(t *testing.T) {
 	t.Parallel()
@@ -212,7 +212,7 @@ func TestApplySoundPresetMasterLimiterGetsTarget(t *testing.T) {
 	}
 }
 
-// Усл. 45: master без target — цепочка как есть, на варианте финала in_place.
+// master без target — цепочка как есть, на варианте финала in_place.
 func TestApplySoundPresetMasterWithoutTarget(t *testing.T) {
 	t.Parallel()
 	f := msPresetSetup(t)
@@ -228,7 +228,7 @@ func TestApplySoundPresetMasterWithoutTarget(t *testing.T) {
 	}
 }
 
-// ТК73: без target и master пуст → ApplyFx не зовётся.
+// Без target и master пуст → ApplyFx не зовётся.
 func TestApplySoundPresetNoMasterNoTargetNoFx(t *testing.T) {
 	t.Parallel()
 	f := msPresetSetup(t)
@@ -242,7 +242,7 @@ func TestApplySoundPresetNoMasterNoTargetNoFx(t *testing.T) {
 	}
 }
 
-// Усл. 45: файла-варианта нет (ни specs, ни final) → обычный рендер /fx звука трека (без file
+// Файла-варианта нет (ни specs, ни final) → обычный рендер /fx звука трека (без file
 // и in_place), версия — из ответа.
 func TestApplySoundPresetMasterOnOriginalRendersVariant(t *testing.T) {
 	t.Parallel()
@@ -265,7 +265,7 @@ func TestApplySoundPresetMasterOnOriginalRendersVariant(t *testing.T) {
 	}
 }
 
-// ТК73: ошибка ApplyFx мастера → ошибка, VariantToTrack не вызван.
+// Ошибка ApplyFx мастера → ошибка, VariantToTrack не вызван.
 func TestApplySoundPresetMasterErrorNoTrack(t *testing.T) {
 	t.Parallel()
 	f := msPresetSetup(t)
@@ -280,14 +280,14 @@ func TestApplySoundPresetMasterErrorNoTrack(t *testing.T) {
 	}
 }
 
-// ТК79в / усл. 45б: пресет с записью «место» части барабанов (hh, pan 0,3) применяется без
+// Пресет с записью «место» части барабанов (hh, pan 0,3) применяется без
 // ошибки и без движка (место — не обработка); пересборка с Place: хэт (6000 Гц) в миксе
 // правее — справа громче, чем слева (M·(h, h) при pan 0,3: L ≈ 0,74·h, R ≈ 1,2·h).
 func TestApplySoundPresetDrumPartPlace(t *testing.T) {
 	t.Parallel()
 	const hh = "0.2*sin(2*PI*6000*t)"
 	f := &msPresetFake{psFake: psSetup(t, nil)}
-	// стерео-звук (L = R, как в place_test.go): на моно-треке панорама не видна; хэт звучит и
+	// стерео-звук (L = R): на моно-треке панорама не видна; хэт звучит и
 	// в самом треке (часть барабанов — внутри микса)
 	dir := t.TempDir()
 	for name, expr := range map[string]string{

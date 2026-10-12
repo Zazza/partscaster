@@ -1,4 +1,4 @@
-// Карточка internal-own-track, этап 12б, условие 92 / ТК131: модалки и
+// Модалки и
 // страницы-модалки не закрываются кликом мимо окна. По исходникам: во всех
 // .vue в src/ (рекурсивно, кроме сгенерированного src/wailsjs) у элемента
 // с классом modal-backdrop нет обработчика нажатия мыши (ни .self, ни без),
@@ -123,7 +123,7 @@ const files = vueFiles(here)
 
 test('подложки модалок найдены (обход исходников работает)', () => {
   const names = files.map((f) => f.rel)
-  // Те, что названы в условии 91, — подложка у них есть.
+  // У этих подложка есть.
   for (const n of [
     'App.vue',
     'components/WelcomeModal.vue',
@@ -143,7 +143,7 @@ test('подложки модалок найдены (обход исходни�
   expect(names.some((n) => n.startsWith('wailsjs'))).toBe(false)
 })
 
-describe('клик по подложке не закрывает модалку (ТК131)', () => {
+describe('клик по подложке не закрывает модалку', () => {
   for (const f of files) {
     test(`${f.rel}: у .modal-backdrop нет обработчика клика/нажатия`, () => {
       for (const tag of f.tags.filter(isBackdrop)) {

@@ -47,7 +47,6 @@ func (c *Client) FxInstrumentUpdate(ctx context.Context, id int64, in FxInstrume
 	return &out, nil
 }
 
-// FxInstrumentDelete — удалить свой инструмент.
 func (c *Client) FxInstrumentDelete(ctx context.Context, id int64) error {
 	return c.del(ctx, fmt.Sprintf("/fx/instruments/%d", id), nil)
 }

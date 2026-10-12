@@ -1,5 +1,3 @@
-// Тесты карточки internal-own-track, этап 20, условие 165 (тест-кейс ТК195, фронт).
-// Написаны по карточке («Договор интерфейсов этапа 20»), без чтения реализации.
 // frontend/src/engine.js — чистые функции блока «Движок генерации» и карточки трека:
 //   - engineLabel(job): метка движка трека по job.engine ("" у старых = PyTorch; "torch" | "cpp-bf16" |
 //     "cpp-q8" | "cpp-q6" | "cpp-q5"): yue2.cpp → «yue2.cpp Q8» (BF16/Q8/Q6/Q5), PyTorch и старые → '' (ничего);
@@ -7,15 +5,15 @@
 //     ("torch" | "cpp-q8" …); трек другого движка → непустое предупреждение, тот же → ''; старый трек ("") = PyTorch;
 //   - modelOptions(config): по config.cpp_models {имя: {file, size, installed}} → [{value, label, installed}]
 //     в порядке bf16, q8, q6, q5; label — размер в ГБ (один знак) и признак «скачана».
-// Тексты, кроме «yue2.cpp Q8», условие не фиксирует — проверяются только непустота и числа.
+// Тексты, кроме «yue2.cpp Q8», не фиксируются — проверяются только непустота и числа.
 // Паритет ключей ru/en и наличие каждого ключа t('…') в обоих словарях проверяет общий i18n.test.js.
 import { describe, it, expect, vi } from 'vitest'
-// engine.js берёт тексты через общий i18n (уточнение 165а), а он читает язык из localStorage —
+// engine.js берёт тексты через общий i18n, а он читает язык из localStorage —
 // в node его нет, подставляем пустое хранилище (как activeTrack.test.js)
 vi.hoisted(() => { globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } })
 import { engineLabel, retryWarning, modelOptions, engineConfig } from './engine.js'
 
-describe('engineLabel (условие 165, ТК195)', () => {
+describe('engineLabel', () => {
   it('трек yue2.cpp — «yue2.cpp <МОДЕЛЬ>»', () => {
     expect(engineLabel({ engine: 'cpp-q8' })).toBe('yue2.cpp Q8')
     expect(engineLabel({ engine: 'cpp-bf16' })).toBe('yue2.cpp BF16')
@@ -30,7 +28,7 @@ describe('engineLabel (условие 165, ТК195)', () => {
   })
 })
 
-describe('retryWarning (условие 165, ТК195)', () => {
+describe('retryWarning', () => {
   const warn = (trackEngine, current) => retryWarning({ id: 1, engine: trackEngine }, current)
 
   it('трек yue2.cpp, сейчас PyTorch — предупреждение', () => {
@@ -48,7 +46,7 @@ describe('retryWarning (условие 165, ТК195)', () => {
     expect(retryWarning({ id: 1 }, 'cpp-q8')).not.toBe('')
   })
 
-  // сид между моделями yue2.cpp не переносится (опыт этапа 20) — другая модель = другое исполнение
+  // сид между моделями yue2.cpp не переносится — другая модель = другое исполнение
   it('другая модель yue2.cpp — предупреждение', () => {
     expect(warn('cpp-q8', 'cpp-q5')).not.toBe('')
     expect(warn('cpp-bf16', 'cpp-q8')).not.toBe('')
@@ -64,7 +62,7 @@ describe('retryWarning (условие 165, ТК195)', () => {
     expect(retryWarning({ id: 1 }, 'torch')).toBe('')
   })
 
-  // уточнение 165а: конфиг не загружен — текущий движок неизвестен, ложного предупреждения нет
+  // конфиг не загружен — текущий движок неизвестен, ложного предупреждения нет
   it('текущий движок неизвестен ("" или undefined) — ничего', () => {
     for (const track of ['cpp-q8', 'torch', '']) {
       expect(warn(track, ''), `трек ${track || '""'}, текущий ""`).toBe('')
@@ -73,7 +71,7 @@ describe('retryWarning (условие 165, ТК195)', () => {
   })
 })
 
-describe('modelOptions (условие 165, ТК195)', () => {
+describe('modelOptions', () => {
   const CFG = {
     engine: 'cpp',
     cpp_model: 'q8',
@@ -115,7 +113,7 @@ describe('modelOptions (условие 165, ТК195)', () => {
     expect(same(true)).not.toBe(same(false))
   })
 
-  // уточнение 165а: модели нет в cpp_models — пропускается
+  // модели нет в cpp_models — пропускается
   it('в cpp_models только q8 — один пункт q8', () => {
     const opts = modelOptions({ cpp_models: { q8: { file: 'YuE2-3B-Q8_0.gguf', size: 3_810_232_064, installed: true } } })
     expect(opts.map((o) => o.value)).toEqual(['q8'])
@@ -128,7 +126,7 @@ describe('modelOptions (условие 165, ТК195)', () => {
   })
 })
 
-// ревью s20 (блокер): при основном движке «Сохранить» не шлёт модель yue2.cpp — воркер ответил бы 422
+// при основном движке «Сохранить» не шлёт модель yue2.cpp — воркер ответил бы 422
 // «модель не скачана» любому пользователю PyTorch без скачанных моделей
 describe('engineConfig — что уходит воркеру при сохранении', () => {
   it('основной движок — только engine, без cpp_model', () => {

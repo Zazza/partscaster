@@ -29,7 +29,6 @@ type player struct {
 	volume    float64       // 0..1, применяется при запуске плеера
 }
 
-// Player — интерфейс встроенного плеера (реализация — player ниже).
 type Player interface {
 	Load(id int64, data []byte, dur time.Duration) error
 	Play() error

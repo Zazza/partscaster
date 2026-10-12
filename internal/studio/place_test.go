@@ -15,7 +15,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 6, условие 40 (ТК68, ТК78а): место дорожки в стерео
+// Место дорожки в стерео
 // в пересборке. SectionSpec.Place {pan, width}:
 //   (а) у записи-добавления (Add) — матрица на её вставки;
 //   (б) запись «место»: ChildID 0, одна дорожка (не mix), без engine/chain/steps/envelope —
@@ -146,7 +146,7 @@ func plTone(t *testing.T, what string, s []float32, hz, from, to, want, ref floa
 	}
 }
 
-// ТК68 / усл. 40б: запись «место» other pan 1 без других правок — гитары только справа:
+// Запись «место» other pan 1 без других правок — гитары только справа:
 // левый = база − other (500 Гц слева нет), правый = база + (√2 − 1)·other; голос не тронут.
 func TestRebuildSectionsPlaceOnlyRight(t *testing.T) {
 	t.Parallel()
@@ -161,7 +161,7 @@ func TestRebuildSectionsPlaceOnlyRight(t *testing.T) {
 	plTone(t, "правый, голос", r, 3000, 1, 9, plAmp, plAmp)
 }
 
-// Усл. 40б: Db у записи «место» не применяется — результат тот же, что при Db 0.
+// Db у записи «место» не применяется — результат тот же, что при Db 0.
 func TestRebuildSectionsPlaceIgnoresDb(t *testing.T) {
 	t.Parallel()
 	f := plSetup(t)
@@ -172,7 +172,7 @@ func TestRebuildSectionsPlaceIgnoresDb(t *testing.T) {
 	plTone(t, "правый, other (Db −6 не применён)", r, 500, 1, 9, plAmp*math.Sqrt2, plAmp)
 }
 
-// ТК68: запись движка на other (замена в окне 2–6) + место pan 1 — в окне вклад other =
+// Запись движка на other (замена в окне 2–6) + место pan 1 — в окне вклад other =
 // M·(новая дорожка): кусок 1000 Гц только справа ×√2, исходная other (500 Гц) не возвращается
 // ни в одном канале (≤ −40 дБ); вне окна other — справа ×√2. Порядок записей не важен.
 func TestRebuildSectionsPlaceOverEngine(t *testing.T) {
@@ -197,7 +197,7 @@ func TestRebuildSectionsPlaceOverEngine(t *testing.T) {
 	}
 }
 
-// Усл. 40б: матрица и на заглушение той же дорожки — в окне заглушения other нет ни слева,
+// Матрица и на заглушение той же дорожки — в окне заглушения other нет ни слева,
 // ни справа (без матрицы на вычитании слева осталось бы −other), вне окна — справа ×√2.
 func TestRebuildSectionsPlaceOverMute(t *testing.T) {
 	t.Parallel()
@@ -210,7 +210,7 @@ func TestRebuildSectionsPlaceOverMute(t *testing.T) {
 	plTone(t, "вне окна, правый, other", r, 500, 7, 9, plAmp*math.Sqrt2, plAmp)
 }
 
-// ТК68 / усл. 40а: запись-добавление (Add, дорожка mix) с Place pan −1 — партия только слева
+// Запись-добавление (Add, дорожка mix) с Place pan −1 — партия только слева
 // ×√2; трек под ней не тронут.
 func TestRebuildSectionsAddWithPlace(t *testing.T) {
 	t.Parallel()
@@ -224,7 +224,7 @@ func TestRebuildSectionsAddWithPlace(t *testing.T) {
 	plTone(t, "окно, правый, other трека", r, 500, 3, 5, plAmp, plAmp)
 }
 
-// ТК78а: добавление на дорожке bass с Place pan 1 + запись «место» bass pan −1 — вклад партии =
+// Добавление на дорожке bass с Place pan 1 + запись «место» bass pan −1 — вклад партии =
 // M_place·M_add·партия. Партия L = R = c: M_add (pan 1) → (0, c·√2); M_place (pan −1) → (c, 0).
 // Только M_add дал бы (0, c·√2), только M_place — (c·√2, 0): слева ровно c, справа ≈ 0.
 func TestRebuildSectionsAddPlaceComposedWithStemPlace(t *testing.T) {
@@ -248,7 +248,7 @@ func TestRebuildSectionsAddPlaceComposedWithStemPlace(t *testing.T) {
 	}
 }
 
-// ТК68: две записи «место» на одну дорожку → ошибка, ничего не загружено.
+// Две записи «место» на одну дорожку → ошибка, ничего не загружено.
 func TestRebuildSectionsTwoPlacesSameStemIsError(t *testing.T) {
 	t.Parallel()
 	f := plSetup(t)
@@ -262,7 +262,7 @@ func TestRebuildSectionsTwoPlacesSameStemIsError(t *testing.T) {
 	}
 }
 
-// ТК68: запись «место» на mix → ошибка, ничего не загружено.
+// Запись «место» на mix → ошибка, ничего не загружено.
 func TestRebuildSectionsPlaceOnMixIsError(t *testing.T) {
 	t.Parallel()
 	f := plSetup(t)
@@ -275,7 +275,7 @@ func TestRebuildSectionsPlaceOnMixIsError(t *testing.T) {
 	}
 }
 
-// Усл. 39–40: место вне пределов (pan 2, width 3) → ошибка, ничего не загружено.
+// Место вне пределов (pan 2, width 3) → ошибка, ничего не загружено.
 func TestRebuildSectionsPlaceOutOfRangeIsError(t *testing.T) {
 	t.Parallel()
 	for _, p := range []yue.Place{{Pan: 2, Width: 1}, {Pan: 0, Width: 3}} {
@@ -290,7 +290,7 @@ func TestRebuildSectionsPlaceOutOfRangeIsError(t *testing.T) {
 	}
 }
 
-// Усл. 40в: подпись пересборки — «место: <дорожка> 30 % вправо, ширина 1,4».
+// Подпись пересборки — «место: <дорожка> 30 % вправо, ширина 1,4».
 func TestRebuildSectionsPlaceLabel(t *testing.T) {
 	t.Parallel()
 	f := plSetup(t)
@@ -304,7 +304,7 @@ func TestRebuildSectionsPlaceLabel(t *testing.T) {
 	}
 }
 
-// Договорённость интерфейса: place без width в JSON — ширина 1 (как есть); явный 0 — 0 (моно).
+// place без width в JSON — ширина 1 (как есть); явный 0 — 0 (моно).
 func TestSectionSpecPlaceJSONDefaultWidth(t *testing.T) {
 	t.Parallel()
 	var s SectionSpec
@@ -330,9 +330,7 @@ func TestSectionSpecPlaceJSONDefaultWidth(t *testing.T) {
 	}
 }
 
-// --- ТК79 (усл. 40г): место голоса и место барабанов поверх правок их частей ---
-
-// ТК79а: единственная запись «место» vocals pan 1 — голос только справа ×√2, слева ≈ 0;
+// Единственная запись «место» vocals pan 1 — голос только справа ×√2, слева ≈ 0;
 // гитары (other) не тронуты.
 func TestRebuildSectionsPlaceVocalsOnly(t *testing.T) {
 	t.Parallel()
@@ -367,7 +365,7 @@ func plDrumSetup(t *testing.T) *plFake {
 	return f
 }
 
-// ТК79б: движок (sampler) на kick — замена в окне 2–6, + «место» drums pan 1 → слева нет ни
+// Движок (sampler) на kick — замена в окне 2–6, + «место» drums pan 1 → слева нет ни
 // барабанов (200 и 6000 Гц), ни новой бочки (1000 Гц куска) — ≤ −40 дБ; справа новая бочка
 // ×√2 (своего места у kick нет: M_drums·I). Порядок записей не важен.
 func TestRebuildSectionsDrumsPlaceOverKickEngine(t *testing.T) {
@@ -395,7 +393,7 @@ func TestRebuildSectionsDrumsPlaceOverKickEngine(t *testing.T) {
 	}
 }
 
-// ТК79е / усл. 39а: моно-трек (импорт) + «место» other pan 1 → выход стерео; база приведена к
+// Моно-трек (импорт) + «место» other pan 1 → выход стерео; база приведена к
 // стерео копией канала (L = R, без −3 дБ): голос в обоих каналах на прежнем уровне 0,3 ±0,1 дБ,
 // other слева ≈ 0, справа ×√2.
 func TestRebuildSectionsPlaceOnMonoTrack(t *testing.T) {
@@ -406,7 +404,7 @@ func TestRebuildSectionsPlaceOnMonoTrack(t *testing.T) {
 	v := fmt.Sprintf("%g*sin(2*PI*3000*t)", plAmp)
 	o := fmt.Sprintf("%g*sin(2*PI*500*t)", plAmp)
 	sf := newSecFake()
-	put(sf, parentID, map[string]string{ // lavfi (helpers_test.go) пишет моно 16 кГц
+	put(sf, parentID, map[string]string{ // lavfi пишет моно 16 кГц
 		"audio.flac":       lavfi(t, aeval(v+"+"+o, plDur), p("m-audio.flac")),
 		"stem-vocals.flac": lavfi(t, aeval(v, plDur), p("m-vocals.flac")),
 		"stem-other.flac":  lavfi(t, aeval(o, plDur), p("m-other.flac")),
@@ -450,7 +448,7 @@ func (f *plMonoFake) ApplyFx(_ context.Context, id int64, req yue.FxRequest) (*y
 	return &yue.DspVariant{File: name, DurationSec: dur}, nil
 }
 
-// ТК79ж / усл. 39б: моно-трек и моно-дорожки (голос 3000, other 500, drums 200 Гц — по 0,2),
+// Моно-трек и моно-дорожки (голос 3000, other 500, drums 200 Гц — по 0,2),
 // «место» other pan 1 + заглушение drums (−100) + добавление на mix (моно-кусок 1000 Гц):
 // барабанов нет (≤ −40 дБ), кусок звучит в обоих каналах на своём уровне ±0,1 дБ (копия канала,
 // без −3 дБ), голос — тоже; other слева ≈ 0, справа ×√2.

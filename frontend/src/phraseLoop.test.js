@@ -1,8 +1,3 @@
-// Тесты карточки internal-own-track, этап 13, условия 97–98 (тест-кейс ТК136) и этап 13б, условие 101 (ТК138):
-// phraseLoop.js — phaseAfter(phaseStart, posSec, cycleOld, cycleNew), familyOf(preset), phraseStems(preset),
-// pagePresets(list), phraseChain(chain, preset, phrase, tempo); preset — {id, stems:[...], chain}.
-// Страница «Инструменты» — по исходнику InstrumentsPage.vue. Этап 13б поменял спецификацию: синты и перкуссия
-// показываются на странице (familyOf synth → synth, perc → perc). Написаны по карточке, без чтения реализации.
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,7 +8,7 @@ import { partNotes } from './synthPart.js'
 const preset = (id, stems) => ({ id, stems, chain: [{ type: 'eq' }] })
 const DRUM_PARTS = ['kick', 'snare', 'toms', 'hh', 'ride', 'crash']
 
-describe('phaseAfter (условие 97, ТК136)', () => {
+describe('phaseAfter', () => {
   it('тот же круг: место = фаза + пройденное', () => {
     expect(phaseAfter(0, 1, 4, 4)).toBeCloseTo(1, 9)
     expect(phaseAfter(1.5, 1, 4, 4)).toBeCloseTo(2.5, 9)
@@ -43,7 +38,7 @@ describe('phaseAfter (условие 97, ТК136)', () => {
   })
 })
 
-describe('familyOf (условия 97, 101; ТК136, ТК138)', () => {
+describe('familyOf', () => {
   it.each([
     [['guitar'], 'guitar'],
     [['other'], 'guitar'],
@@ -53,7 +48,7 @@ describe('familyOf (условия 97, 101; ТК136, ТК138)', () => {
     [['bass'], 'bass'],
     [['drums'], 'drums'],
     ...DRUM_PARTS.map((p) => [[p], 'drums']),
-    [['synth'], 'synth'], // этап 13б, условие 101: синты — на странице
+    [['synth'], 'synth'], // синты — на странице
     [['perc'], 'perc'], // перкуссия — на странице (фразы — барабанные)
   ])('stems %j → %s', (stems, fam) => {
     expect(familyOf(preset('x', stems))).toBe(fam)
@@ -67,7 +62,7 @@ describe('familyOf (условия 97, 101; ТК136, ТК138)', () => {
   )
 })
 
-describe('phraseStems (условие 97, ТК136)', () => {
+describe('phraseStems', () => {
   it('гитара → [guitar] (в т.ч. пресеты на other/piano)', () => {
     for (const stems of [['guitar'], ['other'], ['piano'], ['guitar', 'other']]) {
       expect(phraseStems(preset('g', stems))).toEqual(['guitar'])
@@ -86,16 +81,16 @@ describe('phraseStems (условие 97, ТК136)', () => {
     expect(phraseStems(preset('p', [part]))).toEqual([part])
   })
 
-  it('синт → [synth] (условие 101)', () => {
+  it('синт → [synth]', () => {
     expect(phraseStems(preset('s', ['synth']))).toEqual(['synth'])
   })
 
-  it('перкуссия → [perc] (условие 101)', () => {
+  it('перкуссия → [perc]', () => {
     expect(phraseStems(preset('pc', ['perc']))).toEqual(['perc'])
   })
 })
 
-describe('pagePresets (условия 97, 101; ТК136, ТК138)', () => {
+describe('pagePresets', () => {
   it('оставляет гитару/бас/барабаны/синт/перкуссию, выкидывает голос, мастер — порядок сохранён', () => {
     const list = [
       preset('synth', ['synth']),
@@ -122,14 +117,14 @@ describe('pagePresets (условия 97, 101; ТК136, ТК138)', () => {
   })
 })
 
-describe('phraseChain (условие 101, ТК138)', () => {
+describe('phraseChain', () => {
   const synthPhrase = { id: 'synth-pad', family: 'synth', beats: 16, chords: ['Em', 'C', 'G', 'D'], style: 'pad', cycle_sec: 9.6 }
   const synthPreset = { id: 'pad', stems: ['synth'], style: 'pad', octave: 0 }
   const chain = () => [
     { type: 'synth', osc1: 1, release_s: 0.5 },
     { type: 'reverb', decay_s: 2, wet: 0.4 },
   ]
-  // такты круга по карточке: beats/4 тактов, длина такта = cycle_sec / tempo / тактов, аккорды из chords по кругу
+  // такты круга: beats/4 тактов, длина такта = cycle_sec / tempo / тактов, аккорды из chords по кругу
   const bars = (phrase, tempo) => {
     const n = phrase.beats / 4
     const len = phrase.cycle_sec / tempo / n
@@ -217,7 +212,7 @@ describe('phraseChain (условие 101, ТК138)', () => {
   })
 })
 
-describe('страница «Инструменты» по исходнику (условие 98, ТК136)', () => {
+describe('страница «Инструменты» по исходнику', () => {
   const here = dirname(fileURLToPath(import.meta.url))
   const src = readFileSync(join(here, 'components', 'InstrumentsPage.vue'), 'utf8')
 

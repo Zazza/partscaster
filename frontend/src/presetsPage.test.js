@@ -1,5 +1,4 @@
-// Тесты страницы «Пресеты звука» по исходникам: отдельная страница с пунктом в меню ⋮,
-// библиотека пресетов переехала туда со страницы «Инструменты», раздел в docs/ui-guide.md.
+// Тесты страницы «Пресеты звука» по исходникам: отдельная страница с пунктом в меню ⋮.
 // Ловит «страницу сделали, а пункт меню забыли».
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -37,8 +36,6 @@ const APP = join(srcDir, 'App.vue')
 const PRESETS_PAGE = join(srcDir, 'components', 'PresetsPage.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
 
-// --- Условие 89: страница и пункт меню ---
-
 test('в меню ⋮ App.vue есть пункт li, открывающий страницу пресетов: navGo(\'presets\')', () => {
   const tpl = templateOf(read(APP))
   const items = [...tpl.matchAll(/<li\b[^>]*>/g)].map((m) => m[0])
@@ -58,8 +55,6 @@ test('App.vue импортирует и рендерит PresetsPage', () => {
   expect(importsComponent(src, 'PresetsPage'), 'App.vue не импортирует PresetsPage').toBe(true)
   expect(rendersComponent(src, 'PresetsPage'), 'App.vue не рендерит <PresetsPage>').toBe(true)
 })
-
-// --- ТК129: документация (подписи nav.presets* — общий тест i18n.test.js) ---
 
 // разделы markdown уровня ##: [{ title, body }]
 function h2Sections(md) {

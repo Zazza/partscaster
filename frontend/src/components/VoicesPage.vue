@@ -40,7 +40,6 @@ async function loadVoices() {
 }
 
 onMounted(loadVoices)
-// модалка: Esc закрывает
 const onKey = (e) => { if (e.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -137,7 +136,7 @@ function del(v) {
     })
 }
 
-// разовая уборка: черновики прослушивания засоряют список треков, руками удалять лень.
+// разовая уборка: черновики прослушивания засоряют список треков.
 // Карточки не трогаем — их аудио-копии хранятся отдельно от джоб.
 const cleaning = ref(false)
 

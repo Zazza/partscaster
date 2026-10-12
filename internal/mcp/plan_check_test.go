@@ -10,7 +10,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты проверки изменённого плана (карточка internal-plan-check, условия 2 и 3):
+// Тесты проверки изменённого плана:
 // инструмент plan_check и проверка abc перед continue_job / revoice_start.
 // Воркер — fakeService (внешняя граница).
 
@@ -44,8 +44,6 @@ func lineWith(lines []string, subs ...string) int {
 	}
 	return -1
 }
-
-// ---------- plan_check ----------
 
 func TestPlanCheckPassesArgs(t *testing.T) {
 	t.Parallel()
@@ -152,8 +150,6 @@ func TestPlanCheckPropagatesClientError(t *testing.T) {
 	}
 }
 
-// ---------- continue_job с abc ----------
-
 func TestContinueJobWithAbcChecksPlanAndPrintsWarnings(t *testing.T) {
 	t.Parallel()
 	s, fake := newTestServer(t)
@@ -207,8 +203,6 @@ func TestContinueJobWithoutAbcSkipsPlanCheck(t *testing.T) {
 		t.Fatalf("ContinueJob вызван %d раз, want 1", len(fake.continued))
 	}
 }
-
-// ---------- revoice_start с abc ----------
 
 func TestRevoiceStartWithAbcChecksPlanOfVoiceSource(t *testing.T) {
 	t.Parallel()
@@ -267,8 +261,6 @@ func TestRevoiceStartWithoutAbcSkipsPlanCheck(t *testing.T) {
 		t.Fatalf("без abc проверка не нужна: %+v", fake.planCheckCalls)
 	}
 }
-
-// ---------- тип yue.PlanCheck: JSON-контракт воркера ----------
 
 func TestPlanCheckJSONTags(t *testing.T) {
 	t.Parallel()

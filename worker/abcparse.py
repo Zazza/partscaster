@@ -26,8 +26,7 @@ def parse_abc(text: str) -> dict:
     """
     tempo = 120.0
     # время — по темпу ЗАГОЛОВКА (первый Q:): YuE смену темпа посреди плана не
-    # исполняет (замер: приём «темп +10%» — бочка осталась 120 BPM); раньше
-    # бралось последнее Q: файла, и после приёма весь ролл сжимался
+    # исполняет (замер: приём «темп +10%» — бочка осталась 120 BPM)
     head_tempo: float | None = None
     key, meter, unit = "", "4/4", 1
     voice_order: list[str] = []
@@ -102,7 +101,7 @@ def parse_abc(text: str) -> dict:
                 unit = 1.0 / float(mm.group(1))
             continue
         if s[0].isalpha() and s[1:2] == ":":
-            continue  # прочие поля заголовка
+            continue
         for ch in s:
             if ch == "|":
                 flush_bar()

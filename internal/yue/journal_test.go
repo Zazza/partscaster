@@ -12,7 +12,6 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 19, условия 149 (Go) и 151, ТК168 (Go-обёртка):
 // yue.Journaled(svc) после УСПЕШНОГО вызова пишет одну запись журнала через
 // svc.(OpRecorder).RecordOp(ctx, jobID, JobOp{Op, Params, Result, Refs}):
 //   Submit с ParentID → submit (params — заявка, сид фактический, result job:<id>),
@@ -165,7 +164,7 @@ func jnOne(t *testing.T, f *jnFake, op string) jnRec {
 	return f.recs[0]
 }
 
-// ТК168: Submit с родителем и сидом 0 → submit, params — заявка (родитель, стиль) с ФАКТИЧЕСКИМ
+// Submit с родителем и сидом 0 → submit, params — заявка (родитель, стиль) с ФАКТИЧЕСКИМ
 // сидом новой джобы из списка, result job:<новый id>.
 func TestJournaledSubmitWithParentRecordsActualSeed(t *testing.T) {
 	t.Parallel()
@@ -466,7 +465,7 @@ func TestRecordHelper(t *testing.T) {
 	Record(context.Background(), e, 5, op) // сбой — в лог, без паники
 }
 
-// --- клиент: RecordOp и сессии импорта (паритет, условие 151) ---
+// Клиент: RecordOp и сессии импорта.
 
 type jnReq struct {
 	method, path string

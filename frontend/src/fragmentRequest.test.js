@@ -1,10 +1,10 @@
-// Заявка «сыграть кусок с правками» (уточнения 123б, 123в, 123ж ревью s15) — fragmentWindow / fragmentRequest
+// Заявка «сыграть кусок с правками» — fragmentWindow / fragmentRequest
 // из requests.js, их зовёт renderFragment в StudioPage.vue:
-//   123б — кусок от начала (from < 1 с): обычный рендер POST /jobs с role 'fragment', без cont_from, бюджет шагов
+//   кусок от начала (from < 1 с): обычный рендер POST /jobs с role 'fragment', без cont_from, бюджет шагов
 //          max_tokens = (to + 2) · 25 (до конца куска плюс хвост 2 с, 25 шагов на секунду), по полному плану;
 //          иначе — /jobs/{id}/fragment с окном куска и сидом трека;
-//   123в — кусок получает приписку стиля приёмов (голос ±октава);
-//   123ж — импорт (без шагов модели) не запускает рендер, а даёт понятную ошибку.
+//   кусок получает приписку стиля приёмов (голос ±октава);
+//   импорт (без шагов модели) не запускает рендер, а даёт понятную ошибку.
 import { describe, it, expect } from 'vitest'
 import { fragmentRequest, fragmentWindow } from './requests.js'
 import { continuationPlan, trickStyleSuffix } from './abcEdit.js'
@@ -26,12 +26,12 @@ describe('fragmentWindow — окно куска', () => {
     expect(fragmentWindow(null, [], false)).toBeNull()
   })
 
-  it('импорт: ошибка «нет шагов модели» до любой заявки (123ж)', () => {
+  it('импорт: ошибка «нет шагов модели» до любой заявки', () => {
     expect(fragmentWindow({ from: 10, to: 20 }, [], true)).toEqual({ noTokens: true })
   })
 })
 
-describe('fragmentRequest — кусок от начала трека: обычный рендер (123б)', () => {
+describe('fragmentRequest — кусок от начала трека: обычный рендер', () => {
   it('from < 1 с → POST /jobs: role fragment, без cont_from, max_tokens = (to + 2) · 25, по полному плану', () => {
     const r = fragmentRequest(JOB, 0.5, 10, BASE, [])
     expect(r.fragment).toBeUndefined()
@@ -53,7 +53,7 @@ describe('fragmentRequest — кусок от начала трека: обыч�
     expect(r.submit.title).toBe('трек · кусок')
   })
 
-  it('с приёмами: план с правками и приписка стиля (123в)', () => {
+  it('с приёмами: план с правками и приписка стиля', () => {
     const r = fragmentRequest(JOB, 0, 4, BASE, [OCT])
     const plan = continuationPlan(BASE, [OCT])
     expect(r.submit.abc).toBe(plan || BASE)
@@ -72,7 +72,7 @@ describe('fragmentRequest — кусок с середины: /fragment', () => 
     })
   })
 
-  it('с приёмами — изменённый план и приписка стиля приёмов (123в)', () => {
+  it('с приёмами — изменённый план и приписка стиля приёмов', () => {
     const { fragment } = fragmentRequest(JOB, 30, 40, BASE, [OCT])
     expect(fragment.abc).toBe(continuationPlan(BASE, [OCT]))
     expect(fragment.styleAdd).toBe(trickStyleSuffix([OCT]))

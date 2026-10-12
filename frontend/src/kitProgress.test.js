@@ -1,15 +1,13 @@
-// Тесты карточки internal-own-track, этап 14б, условие 117 (тест-кейс ТК145, фронт):
 // kitProgressText(p, t) — строка «качаю набор «<name>»: часть <part>, <done> из <total> файлов, <МБ> МБ»;
 // p — {name, part, done, total, bytes} из GET /fx/kits/progress; нет установки ({} или null) — ''.
 // t — функция перевода (здесь заглушка: ключ + переменные JSON — числа видны в любом случае).
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { kitProgressText } from './kitProgress.js'
 
 const t = (k, vars) => k + JSON.stringify(vars ?? {})
 const P = { name: 'vsco-violin', part: 'pizz', done: 7, total: 31, bytes: 12_345_678 }
 
-describe('kitProgressText (условие 117, ТК145)', () => {
+describe('kitProgressText', () => {
   it('нет установки — пустая строка', () => {
     expect(kitProgressText({}, t)).toBe('')
     expect(kitProgressText(null, t)).toBe('')

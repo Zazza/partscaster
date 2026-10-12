@@ -1,6 +1,6 @@
-"""Спецификация API рецепта трека воркера (этап 19, условия 149, 150, 152).
+"""Спецификация API рецепта трека воркера.
 
-Что должно работать (карточка internal-own-track, «Договор интерфейсов этапа 19»):
+Что должно работать:
 J1. POST /jobs/{id}/ops {op, params: obj, result: str, refs: [int]} → {id}; op —
     только из списка (иначе 422); params не объект / битый JSON → 422; трека нет → 404.
     GET /jobs/{id}/ops → [{id, op, params, result, refs, created_at}] по порядку записи.
@@ -17,8 +17,6 @@ I2. POST /recipes/imports/{id}/claim {owner}: свободна → 200; держ
     лиза истекла → другой берёт (200).
 I3. PATCH /recipes/imports/{id} {state?, progress?, status?, error?, root_job_id?} →
     объект сессии; status done|error ставит finished_at.
-
-Запуск из каталога worker: python -m unittest test_recipe_api -v
 """
 import time
 import unittest
@@ -144,7 +142,7 @@ class TestJobOps(_RecipeCase):
         self.assertEqual(self.client.get(f"/jobs/{jid}/ops").json(), [])
 
     def test_overdub_without_seed_gets_real_seed(self):
-        # 149а/ТК182: сид выбирает воркер и пишет в строку трека — журнал повторит исполнение
+        # сид выбирает воркер и пишет в строку трека — журнал повторит исполнение
         src = self._mk(abc_file="score.abc")
         self._file(src, "score.abc", PLAN)
         for body in ({"style": "warm strings"}, {"style": "warm strings", "seed": None}):
@@ -281,7 +279,7 @@ class TestRecipeExport(_RecipeCase):
         self.assertEqual(self.client.get("/jobs/9999/recipe").status_code, 404)
 
     def test_export_after_deleted_middle_version(self):
-        # 150б/ТК181: корень → V (удалена) → X → W; экспорт от X и W — 422 с номером V,
+        # корень → V (удалена) → X → W; экспорт от X и W — 422 с номером V,
         # корень не перевыбирается; от корня — 200, warning про удалённую версию
         root = self._mk(title="Song")
         mid = self._mk(parent_id=root, role="continue", title="deleted mid")
@@ -432,7 +430,7 @@ class TestRecipeImport(_RecipeCase):
         self.assertTrue(s["finished_at"])
 
     def test_patch_by_other_owner_409_state_kept(self):
-        # 153а: импорт держит A — запись B отвергается, состояние не меняется
+        # импорт держит A — запись B отвергается, состояние не меняется
         sid = self._start()
         self.assertEqual(self._claim(sid, "A").status_code, 200)
         ok = self.client.patch(f"/recipes/imports/{sid}",

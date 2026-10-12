@@ -12,7 +12,6 @@ import (
 // version — версия сборки (git describe), вшивается при make build/release.
 var version = "dev"
 
-// YueAppVersion — версия приложения для настроек и сверки с воркером.
 func (a *App) YueAppVersion() string { return version }
 
 // YueVersion — сборка воркера и предупреждение о совместимости ("" — всё в порядке);
@@ -31,7 +30,6 @@ func (a *App) YueCheckWorker(url string) (*yue.CheckResult, error) {
 	return yue.Check(a.ctx, url)
 }
 
-// AgentSetup — раздел настроек «Для AI-агентов».
 type AgentSetup struct {
 	MCPPath  string              `json:"mcp_path"`
 	MCPFound bool                `json:"mcp_found"`

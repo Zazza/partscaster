@@ -1,12 +1,11 @@
-// Тесты карточки internal-own-track, этап 7а, условия 53 и 53а (тест-кейс ТК88): группы в списках
+// Группы в списках
 // готовых. presetGroups.js экспортирует PRESET_GROUPS — {id: {ru, en}} и чистую
 // groupPresets(list, locale) → [{group, label, items}]: порядок первого появления группы, внутри —
 // исходный порядок; без group — группа '' с label ''.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { PRESET_GROUPS, groupPresets } from './presetGroups.js'
 
-describe('PRESET_GROUPS (условие 53а)', () => {
+describe('PRESET_GROUPS', () => {
   it('объект id → {ru, en}, не меньше двух групп (гитары и басы)', () => {
     expect(PRESET_GROUPS && typeof PRESET_GROUPS).toBe('object')
     const ids = Object.keys(PRESET_GROUPS)
@@ -21,7 +20,7 @@ describe('PRESET_GROUPS (условие 53а)', () => {
   })
 })
 
-describe('groupPresets (ТК88)', () => {
+describe('groupPresets', () => {
   const [g1, g2] = Object.keys(PRESET_GROUPS)
   const list = () => [
     { id: 'a', group: g1 }, { id: 'b', group: g2 }, { id: 'c', group: g1 }, { id: 'd' },

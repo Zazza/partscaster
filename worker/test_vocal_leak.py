@@ -2,7 +2,6 @@
 начала участков, где уровень кадров 0.1 с ≥ thresh_db dBFS; короче min_len —
 выброс; паузы короче gap склеиваются; моно или (кадры, каналы).
 
-Запуск: cd worker && python3 -m unittest test_vocal_leak
 Без numpy (CI-джоба только с ruff) класс пропускается, как в test_pure.
 """
 import unittest

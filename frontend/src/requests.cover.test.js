@@ -1,13 +1,4 @@
-// Условие 136 (internal-own-track, этап 17): сборка заявок к воркеру — поведение по docs/api.md
-// и docs/ui-guide.md, «что воркер должен получить»:
-//   новый трек (POST /jobs): seed пусто → 0 (случайный), cot off повышается до melody при arc или
-//     своём плане (иначе воркер 422), max_tokens из длительности (0 — бюджет воркера), характер —
-//     только не по умолчанию, sound_preset_ids — только у полного трека (с draft воркер даёт 422),
-//     пометки `#` в стихе не поются, «без слов» — секции [Instrumental];
-//   стиль формы: строка перекрывает слоты и стойку, русские значения списков — по-английски,
-//     самописная кириллица — в перевод, сбой перевода — стиль как есть;
-//   студия: инструментал (план без вокальных голосов, rebuild), «заново с места» (/continue, другой
-//     сид), «перепеть с места» (только приёмы голоса), эффект на дорожку (окно — выделение).
+// Сборка заявок к воркеру: что воркер должен получить.
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { slotOptions, durOptions, durTokens } from './slotOptions.js'
 import { planTimeline } from './abcEdit.js'
@@ -17,7 +8,7 @@ import {
   vocalBars, revoicePlan, revoiceRecord, stemFxRequest,
 } from './requests.js'
 
-// диалект YuE (та же фикстура, что в abcEdit.test.js / worker/test_pure.py): 100 BPM, такт 4/4 = 2,4 с
+// диалект YuE: 100 BPM, такт 4/4 = 2,4 с
 const ABC = [
   'X:1', 'T:', 'M:4/4', 'L:1/16', 'Q:1/4=100',
   'V: Vocal clef=treble name="Vocal Melody" snm="Vocal"',
@@ -125,7 +116,7 @@ describe('новый трек: заявка POST /jobs (newTrackPayload)', () =>
 
   it('max_tokens: «авто» — 0 (бюджет воркера), выбранная длительность — её потолок, неизвестная — 0', () => {
     expect(newTrackPayload(form({ durMode: 'auto' })).max_tokens).toBe(0)
-    expect(newTrackPayload(form({ durMode: 's1' })).max_tokens).toBe(3000)   // docs/api.md: 3000 ≈ 1–2 мин
+    expect(newTrackPayload(form({ durMode: 's1' })).max_tokens).toBe(3000)   // 3000 ≈ 1–2 мин
     for (const [id, tok] of Object.entries(durTokens)) {
       expect(newTrackPayload(form({ durMode: id })).max_tokens).toBe(tok)
     }

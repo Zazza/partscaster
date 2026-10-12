@@ -84,7 +84,7 @@ export const fxPresets = [
     ],
   },
 
-  // ---------- готовые гитары без захвата (этап 7а): работают на голом воркере, только блоки движка ----------
+  // готовые гитары без захвата: работают на голом воркере, только блоки движка
   {
     id: 'guitar-postpunk',
     stems: ['guitar', 'other'], group: 'guitar-clean',
@@ -257,7 +257,7 @@ export const fxPresets = [
     ],
   },
 
-  // ---------- готовые басы (этап 7а): звук баса, ноты трека те же ----------
+  // готовые басы: звук баса, ноты трека те же
   {
     id: 'bass-melodic',
     stems: ['bass'], group: 'bass-tone',
@@ -316,7 +316,7 @@ export const fxPresets = [
       { type: 'comp', threshold_db: -22, ratio: 3, attack_ms: 20, release_ms: 200, makeup_db: 3 },
     ],
   },
-  // ---------- басы под жанр (этап 13г): звук бас-гитары под стиль, ноты трека те же ----------
+  // басы под жанр: звук бас-гитары под стиль, ноты трека те же
   {
     id: 'bass-vintage',
     stems: ['bass'], group: 'bass-genre',
@@ -507,7 +507,7 @@ export const fxPresets = [
       ru: 'На дорожку «хэт» (RoFormer): удары хэта — сэмплами The Open Source Drum Kit. Коротко звучащий удар — закрытый хэт, долго звучащий — полузакрытый; новый удар глушит предыдущий, как педаль. Эквалайзер: в сэмплах хэта слышны бочка и малый, и сам он тусклее, чем в записях, — низ срезан, верх поднят (центр звука 5 → 8,6 кГц, как у хэта настоящих записей). Набор — fx_kit_install osdk.',
       en: 'On the "hi-hat" stem (RoFormer): hi-hat hits with The Open Source Drum Kit samples. A short hit gets a closed hat, a long-ringing one a half-closed hat; each hit chokes the previous one like the pedal. EQ: the kit hat samples carry kick and snare bleed and sound duller than on records — lows cut, top lifted (spectral centre 5 → 8.6 kHz, like a hi-hat on real records). Kit — fx_kit_install osdk.',
     },
-    // эквалайзер — этап 10: сэмплы osdk — центр 5,1 кГц, 15 % ниже 500 Гц (протечка бочки/малого); хэт настоящих
+    // эквалайзер: сэмплы osdk — центр 5,1 кГц, 15 % ниже 500 Гц (протечка бочки/малого); хэт настоящих
     // записей — 5,8–9 кГц, низа нет; на #135 эта eq дала 8,6 кГц, 76 % выше 6 кГц, 0 % ниже 500 Гц
     chain: [
       { type: 'sampler', kit: 'osdk/hh-closed', kit_open: 'osdk/hh-half', choke: 1, floor_db: -24, output_db: 0 },
@@ -594,7 +594,7 @@ export const fxPresets = [
     },
     chain: [{ type: 'bass', kit: 'pastabass/linguine', division: 2, floor_db: -20 }],
   },
-  // синт-басы набором (этап 7б): ноты и ритм — те же (блок bass по дорожке «бас»), звук — синтезатора;
+  // синт-басы набором: ноты и ритм — те же (блок bass по дорожке «бас»), звук — синтезатора;
   // набор synthbass воркер синтезирует сам (fx_kit_install synthbass)
   {
     id: 'bass-synth-moog',
@@ -639,7 +639,7 @@ export const fxPresets = [
     ],
   },
 
-  // ---------- мастер (этап 6): на весь собранный микс, на воркере; limiter — громкость к цели по истинному пику ----------
+  // мастер: на весь собранный микс, на воркере; limiter — громкость к цели по истинному пику
   {
     id: 'master-stream', stems: ['master'],
     name: { ru: 'Мастер: стриминг −14 LUFS', en: 'Master: streaming −14 LUFS' },
@@ -675,9 +675,8 @@ export const fxPresets = [
     chain: [{ type: 'glue', threshold_db: -22, ratio: 1.5, attack_ms: 30, release_ms: 400, mix: 0.6 }],
   },
 
-  // ---------- синты (этап 4): блок synth (ноты партии подставляет студия по аккордам трека) + эффекты ----------
+  // синты: блок synth (ноты партии подставляет студия по аккордам трека) + эффекты
   // пэды — на октаву выше гитар (C5…B5): в регистре гитар пэд сливается с ними и не слышен даже громким
-  // (прослушивание «Gone» #683/#685 — «не слышу», #687 октавой выше — «отчётливо»)
   {
     id: 'synth-solina', stems: ['synth'], group: 'synth-pad', style: 'pad', octave: 1, place: { pan: 0, width: 1.5 },
     name: { ru: 'Струнный ансамбль (Solina)', en: 'String ensemble (Solina)' },
@@ -754,7 +753,7 @@ export const fxPresets = [
     ],
   },
 
-  // ---------- клавиши и синты (этап 7в): органы, фортепиано, электропиано, игрушки ----------
+  // клавиши и синты: органы, фортепиано, электропиано, игрушки
   {
     id: 'synth-mellotron', stems: ['synth'], group: 'synth-pad', style: 'pad', octave: 1, place: { pan: 0, width: 1.5 },
     name: { ru: 'Ленточные струны (Mellotron)', en: 'Tape strings (Mellotron)' },
@@ -917,7 +916,7 @@ export const fxPresets = [
     ],
   },
 
-  // ---------- оркестр (этап 14): VSCO-2 CE — партии по аккордам (блок synth с kit) и замена партии (блок bass) ----------
+  // оркестр: VSCO-2 CE — партии по аккордам (блок synth с kit) и замена партии (блок bass)
   {
     id: 'orch-violins-pad', stems: ['synth'], group: 'orch-strings', style: 'pad', octave: 1, place: { pan: 0, width: 1.5 },
     name: { ru: 'Скрипки: аккорды', en: 'Violins: chords' },
@@ -1227,7 +1226,7 @@ export const fxPresets = [
       { type: 'reverb', decay_s: 1.4, predelay_ms: 15, lowpass_hz: 8000, wet: 0.2 },
     ],
   },
-  // ---------- перкуссия по сетке (этап 5): блок perc (удары подставляет студия по тактам трека) + эффекты ----------
+  // перкуссия по сетке: блок perc (удары подставляет студия по тактам трека) + эффекты
   {
     id: 'perc-hat8', stems: ['perc'], place: { pan: 0.3, width: 1 }, pattern: 'eighths', swing: 0,
     name: { ru: 'Хэт восьмыми (808)', en: 'Hi-hat eighths (808)' },
@@ -1284,7 +1283,7 @@ export const fxPresets = [
   },
 ]
 
-// наборы драм-машин по частям (этап 7б) — из DRUM_KITS, сразу за живым набором; параметры удара — как у живого
+// наборы драм-машин по частям — из DRUM_KITS, сразу за живым набором; параметры удара — как у живого
 // набора той же части. Наборы воркер синтезирует сам (fx_kit_install tr808 …)
 {
   const cap = (s) => s[0].toUpperCase() + s.slice(1)

@@ -64,7 +64,7 @@ func presetBody(p SoundPreset) map[string]any {
 	if final == nil {
 		final = []PresetStep{}
 	}
-	// мастер и партии — тоже: без них воркер сохранял пресет без мастера (этап 6) и без партий
+	// мастер и партии — тоже: без них воркер сохранял пресет без мастера и без партий
 	master, parts := p.Master, p.Parts
 	if master == nil {
 		master = []map[string]any{}

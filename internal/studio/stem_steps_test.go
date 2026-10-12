@@ -11,19 +11,17 @@ import (
 	"yue-studio/internal/dsp"
 )
 
-// Тесты карточки internal-guitar-pedals, условие 2.4: «Применить к треку» — одна
+// «Применить к треку» — одна
 // спека пересборки (ChildID 0) со списком шагов SectionSpec.Steps вместо Chain;
 // шаги идут ПОСЛЕДОВАТЕЛЬНО (выход шага — вход следующего), а не суммой разниц
-// отдельных эффектов; выключенный шаг не влияет. Написаны по карточке, без чтения
-// реализации. Фейковый воркер (secFake), fxSetup (голос 3000 Гц + остальное 500 Гц)
-// и хелперы — из sections_test.go / stem_fx_test.go / helpers_test.go.
+// отдельных эффектов; выключенный шаг не влияет.
 
 // stLevel — шаг «Громкость альбома» на gain дБ (тихий тон — до потолка далеко).
 func stLevel(gain float64, off bool) dsp.Step {
 	return dsp.Step{Chain: "level", Params: map[string]float64{"gain": gain}, Off: off}
 }
 
-// Карточка 2.4: в окне трек = остальное + StepsGraph(steps)(дорожка). Эталон
+// В окне трек = остальное + StepsGraph(steps)(дорожка). Эталон
 // собирается из публичного API: дорожка прогоняется через граф StepsGraph
 // (dsp.Run), к ней добавляется голос. Разница в середине окна (вдали от фейдов)
 // ≤ −30 дБ к эталону. Шаги — вырез eq −12 дБ на 500 Гц и «громкость −6 дБ»:
@@ -106,7 +104,7 @@ func sumOfDiffs(t *testing.T, other string, steps []dsp.Step, voc []float32) []f
 	return acc
 }
 
-// Карточка 2.4 (+ контракт): дорожка «гитара» — подробный стем, шаги работают и на
+// Дорожка «гитара» — подробный стем, шаги работают и на
 // нём (дорожка по умолчанию у педалей — guitar).
 func TestRebuildSectionsStepsOnGuitar(t *testing.T) {
 	t.Parallel()
@@ -136,7 +134,7 @@ func TestRebuildSectionsStepsUnknownChainIsError(t *testing.T) {
 	}
 }
 
-// Контракт: SectionSpec.Steps — json `steps,omitempty`.
+// SectionSpec.Steps — json `steps,omitempty`.
 func TestSectionSpecStepsJSON(t *testing.T) {
 	t.Parallel()
 	var sp SectionSpec

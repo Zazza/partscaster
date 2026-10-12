@@ -7,12 +7,11 @@ import (
 	"testing"
 )
 
-// Тесты цепочки «Смягчить звон» (id "soften", карточка internal-stem-fx, условие 2):
+// Тесты цепочки «Смягчить звон» (id "soften"):
 // де-эссер для голоса — снижает 4–9 кГц на звонких местах, тело голоса почти не
-// трогает. Имена крутилок карточкой не фиксируются — берутся Defaults().
+// трогает. Имена крутилок не фиксируются — берутся Defaults().
 // Синтетика 44.1 кГц: «голос» — гармоники 200 Гц до 2 кГц, «шипящие» — короткие
-// всплески шума 6–8 кГц. Хелперы (needFFmpeg, decodeAt, toneAmpAt, dbfs) — из
-// inserts_test.go / chains_test.go.
+// всплески шума 6–8 кГц.
 
 const (
 	sfDur = 6.0
@@ -107,7 +106,7 @@ func softenRun(t *testing.T, in string) []float32 {
 	return decodeAt(t, out, dwSR)
 }
 
-// Карточка: цепочка доступна по ID и имеет имя; есть крутилки (сила, частота),
+// Цепочка доступна по ID и имеет имя; есть крутилки (сила, частота),
 // дефолты лежат в своих диапазонах.
 func TestSoftenByIDAndDefaults(t *testing.T) {
 	t.Parallel()
@@ -116,7 +115,7 @@ func TestSoftenByIDAndDefaults(t *testing.T) {
 		t.Fatalf(`ByID("soften") = %+v, want цепочку с этим ID и именем`, c)
 	}
 	if len(c.Params) < 2 {
-		t.Errorf("крутилок %d, want ≥ 2 (сила и частота по карточке)", len(c.Params))
+		t.Errorf("крутилок %d, want ≥ 2 (сила и частота)", len(c.Params))
 	}
 	for _, p := range c.Params {
 		if p.Min > p.Max || p.Default < p.Min || p.Default > p.Max {
@@ -125,7 +124,7 @@ func TestSoftenByIDAndDefaults(t *testing.T) {
 	}
 }
 
-// Карточка: шипящие всплески 6–8 кГц ослаблены ≥ 4 дБ, тело голоса 200–2000 Гц
+// Шипящие всплески 6–8 кГц ослаблены ≥ 4 дБ, тело голоса 200–2000 Гц
 // изменилось не больше чем на 1 дБ.
 func TestSoftenTamesSibilantsKeepsBody(t *testing.T) {
 	t.Parallel()

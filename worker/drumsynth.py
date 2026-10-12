@@ -69,7 +69,7 @@ def _norm(y: np.ndarray) -> np.ndarray:
     return y / pk if pk > 0 else y
 
 
-# ---------- голоса: (t, sr, rng, b) → звук; b — яркость слоя 0…1 ----------
+# голоса: (t, sr, rng, b) → звук; b — яркость слоя 0…1
 
 def _kick(kit, t, sr, rng, b):
     if kit == "tr808":
@@ -232,8 +232,6 @@ def render(kit: str, part: str, layer: int, sr: int = 48000) -> np.ndarray:
     # сила удара: громкость от −24 дБ (слой 0) до 0 дБ (последний)
     return y * 10 ** ((-24.0 + 24.0 * b) / 20)
 
-
-# ---------- синт-басы набором (блок bass): ноты по полутонам ----------
 
 BASS_KITS = {"synthbass": ("moog", "sub808", "acid")}
 # ноты сэмплов, MIDI: E1 … G3 — диапазон баса трека; файлы m<MIDI>.wav — блок bass берёт высоту из имени (замер

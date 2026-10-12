@@ -1,7 +1,6 @@
 """Тесты замены голоса (Seed-VC): чистые функции voice.py и API
 POST /jobs/{id}/voice — по спецификации, не по реализации.
 
-Запуск: cd worker && python3 -m unittest test_voice
 Без numpy (CI-джоба только с ruff) классы пропускаются, как в test_pure.
 """
 import json

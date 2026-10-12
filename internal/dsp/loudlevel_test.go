@@ -7,13 +7,12 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 10, условие 83 (тест-кейс ТК124): уровень громких мест файла.
-// Написаны по карточке, без чтения реализации.
+// Тесты уровня громких мест файла.
 //
 // Контракт: LoudLevelDb(path) (float64, error) — как rms_p95_db воркера: моно 22 050 Гц, RMS кадрами 2048
 // с шагом 512, 95-й перцентиль, дБFS.
 //
-// Толкования (карточка не уточняет):
+// Толкования:
 //   - моно — среднее каналов (как librosa.load(mono=True) воркера): одинаковые каналы дают тот же уровень;
 //   - «5 % громко → около уровня громкого»: на границе громкого куска кадры частично громкие, поэтому
 //     допуск −6…+0,5 дБ к уровню громкого (для librosa-подобного счёта ≈ −3,7); средняя мощность (≈ −13 к
@@ -43,7 +42,7 @@ func llLevel(t *testing.T, path string) float64 {
 
 func llSineDb(a float64) float64 { return 20 * math.Log10(a/math.Sqrt2) }
 
-// ТК124: синус постоянной амплитуды A → 20·lg(A/√2) ± 0,3 дБ (разные частоты дискретизации и амплитуды).
+// Синус постоянной амплитуды A → 20·lg(A/√2) ± 0,3 дБ (разные частоты дискретизации и амплитуды).
 func TestLoudLevelDbSine(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -62,7 +61,7 @@ func TestLoudLevelDbSine(t *testing.T) {
 	}
 }
 
-// ТК124 (моно): стерео с одинаковыми каналами — тот же уровень, что у одного канала.
+// Стерео с одинаковыми каналами — тот же уровень, что у одного канала.
 func TestLoudLevelDbStereoSameAsMono(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -74,7 +73,7 @@ func TestLoudLevelDbStereoSameAsMono(t *testing.T) {
 	}
 }
 
-// ТК124: 5 % громко (A), 95 % тихо (A/100) → около уровня громкого (95-й перцентиль, не среднее).
+// 5 % громко (A), 95 % тихо (A/100) → около уровня громкого (95-й перцентиль, не среднее).
 func TestLoudLevelDbLoudFivePercent(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -88,7 +87,7 @@ func TestLoudLevelDbLoudFivePercent(t *testing.T) {
 	}
 }
 
-// Условие 83 (95-й перцентиль, а не максимум): громко лишь 2 % → уровень заметно ниже громкого.
+// 95-й перцентиль, а не максимум: громко лишь 2 % → уровень заметно ниже громкого.
 func TestLoudLevelDbNotPeak(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -102,7 +101,7 @@ func TestLoudLevelDbNotPeak(t *testing.T) {
 	}
 }
 
-// ТК124: тишина → очень низкое конечное значение, без NaN, паники и ошибки.
+// Тишина → очень низкое конечное значение, без NaN, паники и ошибки.
 func TestLoudLevelDbSilence(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)

@@ -7,14 +7,12 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-guitar-pedals, условие 1.1 (StepsGraph — цепочка шагов
-// педалборда в одном графе для Run). Написаны по карточке, без чтения реализации:
+// Тесты StepsGraph — цепочки шагов
+// педалборда в одном графе для Run:
 // сравнивается звук на синтетике (Run), а не текст графа.
 //
 // Эталоны собираются из существующего API: один шаг — Run(ByID(chain).FilterGraph(p));
 // два шага — Run первого в промежуточный файл, затем Run второго по нему.
-// Хелперы (needFFmpeg, ncGen, ncChain, ncDecode2, ncDiffDb) — из inserts_test.go /
-// newchains_test.go.
 
 const stSR = 16000
 
@@ -86,7 +84,7 @@ func TestStepJSON(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: один шаг ≡ звук ByID(chain).FilterGraph(params) (разница ≤ −50 дБ).
+// Один шаг ≡ звук ByID(chain).FilterGraph(params) (разница ≤ −50 дБ).
 func TestStepsGraphSingleStepEqualsChain(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -113,7 +111,7 @@ func TestStepsGraphSingleStepEqualsChain(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: два шага — звук = второй(первый(вход)).
+// Два шага — звук = второй(первый(вход)).
 func TestStepsGraphTwoStepsIsComposition(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -137,7 +135,7 @@ func TestStepsGraphTwoStepsIsComposition(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: выключенный шаг (Off) = его нет — в звуке и в хвосте.
+// Выключенный шаг (Off) = его нет — в звуке и в хвосте.
 func TestStepsGraphOffStepIsAbsent(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -166,7 +164,7 @@ func TestStepsGraphOffStepIsAbsent(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: хвост = сумма TailSec включённых шагов.
+// Хвост = сумма TailSec включённых шагов.
 func TestStepsGraphTailIsSumOfEnabled(t *testing.T) {
 	t.Parallel()
 	hallP := map[string]float64{"size": 2, "predelay": 40}
@@ -203,7 +201,7 @@ func TestStepsGraphTailIsSumOfEnabled(t *testing.T) {
 	}
 }
 
-// Карточка 1.1: одинаковые цепочки дважды подряд работают (метки графа не конфликтуют)
+// Одинаковые цепочки дважды подряд работают (метки графа не конфликтуют)
 // и звучат как цепочка, применённая дважды.
 func TestStepsGraphSameChainTwice(t *testing.T) {
 	t.Parallel()
@@ -229,7 +227,7 @@ func TestStepsGraphSameChainTwice(t *testing.T) {
 	}
 }
 
-// Карточка 1.1 и контракт: Key-цепочка — ошибка; неизвестная цепочка — ошибка;
+// Key-цепочка — ошибка; неизвестная цепочка — ошибка;
 // ни одного включённого шага — ошибка.
 func TestStepsGraphErrors(t *testing.T) {
 	t.Parallel()
@@ -253,7 +251,7 @@ func TestStepsGraphErrors(t *testing.T) {
 	}
 }
 
-// Карточка internal-guitar-pedals 1.11 (правило выравнивания без ffmpeg): у каждого
+// Правило выравнивания без ffmpeg: у каждого
 // перегруза (od-ts, fuzz-muff, dist-rat, fuzz-octave) громкость выравнивается, а его
 // крутилка level идёт поправкой сверху; у голосовой примочки — выравнивание без
 // поправки; у eq и выключенного шага выравнивания нет. Звуком выравнивание проверяют

@@ -1,5 +1,4 @@
-// Тесты карточки internal-own-track, условие 122 «Пульт: „звук ▾“ — выбор инструмента» (тест-кейс ТК148),
-// components/TrackDesk.vue:
+// components/TrackDesk.vue, выбор инструмента «звук ▾»:
 //   - выбор «группа → инструмент» — два VSelect в раскрытой дорожке: группа и инструмент (второй — с поиском,
 //     пункты — инструменты выбранной группы, itemOptions из presetGroups.js);
 //   - раскрытие дорожки (toggleRow) не выбирает первый пресет и не открывает редактор блоков;
@@ -24,7 +23,7 @@ const { default: TrackDesk } = await import('./components/TrackDesk.vue')
 const STEMS = [{ name: 'bass', file: 'stem-bass.flac' }, { name: 'guitar', file: 'stem-guitar.flac' }]
 const desk = () => mountSetup(TrackDesk, { job: { id: 3, duration_sec: 60 }, stems: STEMS, active: '', sel: null, cursor: 0 })
 
-describe('TrackDesk: выбор инструмента (ТК148)', () => {
+describe('TrackDesk: выбор инструмента', () => {
   it('раскрытие дорожки: ничего не выбрано, редактор блоков закрыт', async () => {
     const { b } = await desk()
     b.toggleRow('guitar')
@@ -76,7 +75,7 @@ describe('TrackDesk: выбор инструмента (ТК148)', () => {
   })
 })
 
-describe('TrackDesk: раскладка шаблона (ТК148)', () => {
+describe('TrackDesk: раскладка шаблона', () => {
   const root = templateAst('components/TrackDesk.vue')
   const selects = findElements(root, (n) => n.tag === 'VSelect')
   const inOpenRow = (s) => s.ancestors.some((a) => idents(shownIf(a)).includes('open'))

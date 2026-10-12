@@ -1,4 +1,4 @@
-"""Спецификация установщика воркера install.sh (internal-own-track, условие 143, ТК164).
+"""Установщик воркера install.sh.
 
 Песочница: HOME — временный каталог; внешние программы (nvidia-smi, uv, systemctl, curl,
 sleep) — заглушки в PATH, пишут вызовы в журнал. `uv venv <путь>` создаёт venv-заглушку,
@@ -21,8 +21,6 @@ I7. Без --no-start — daemon-reload, enable, restart, проверка /heal
     с --no-start — restart не вызывается.
 I8. --rollback (из current/install.sh): current → предыдущая версия, перезапуск; нет
     предыдущей → ошибка, current прежний.
-
-Запуск из каталога worker: python -m unittest test_install_sh -v
 """
 import os
 import re
@@ -112,8 +110,6 @@ class _InstallCase(unittest.TestCase):
         self._n = 0
         self.yue_home = self.home / "yue-studio"
         self.venv = self.home / "yue" / ".venv"
-
-    # --- помощники ---
 
     def make_version(self, ver, requirements=None):
         """Распакованный каталог версии ver (копия шаблона со своим VERSION)."""
@@ -273,19 +269,19 @@ class TestInstallBasic(_InstallCase):
         self.assertNotEqual(p.returncode, 0, p.stdout)
 
     def test_unit_follows_yue_home(self):
-        """143г/ТК175: YUE_HOME доходит до юнита — код, worker.env и данные от $YUE_HOME."""
+        """YUE_HOME доходит до юнита — код, worker.env и данные от $YUE_HOME."""
         x = Path(self._td.name) / "x"
         self.install("1.0.0", "--no-start", YUE_HOME=str(x))
         unit = (x / "units" / "yue-worker.service").read_text().splitlines()
         for want in (f"WorkingDirectory={x}/current", f"EnvironmentFile={x}/worker.env",
                      f'Environment="YUE_DATA_DIR={x}/data"',
-                     # ревью s20: воркер ищет собранную install.sh программу yue2.cpp в $YUE_HOME/yue2cpp-src
+                     # воркер ищет собранную install.sh программу yue2.cpp в $YUE_HOME/yue2cpp-src
                      f'Environment="YUE_HOME={x}"'):
             self.assertIn(want, unit)
         self.assertFalse(any("%h/yue-studio" in ln for ln in unit), unit)
 
     def test_unit_default_yue_home(self):
-        """143г: при умолчаниях юнит остаётся с %h/yue-studio."""
+        """При умолчаниях юнит остаётся с %h/yue-studio."""
         self.install("1.0.0", "--no-start")
         unit = (self.yue_home / "units" / "yue-worker.service").read_text().splitlines()
         for want in ("WorkingDirectory=%h/yue-studio/current", "EnvironmentFile=%h/yue-studio/worker.env",
@@ -294,7 +290,7 @@ class TestInstallBasic(_InstallCase):
 
 
 class TestInstallPathsAndFailures(_InstallCase):
-    """143д, 143е / ТК177: пути в юните, недопустимые пути, отказы при выборе каталога версии."""
+    """Пути в юните, недопустимые пути, отказы при выборе каталога версии."""
 
     def run_direct(self, ver, *args, timeout=120, **env):
         """Установка без паузы помощника run_sh, со своим таймаутом."""
@@ -359,7 +355,7 @@ TOOLS = ("bash", "sh", "env", "sed", "date", "cp", "mv", "ln", "mkdir", "rm", "r
 
 
 class TestInstallHealthWithoutCurl(_InstallCase):
-    """143ж/ТК178: curl нет — /health проверяется python-ом venv воркера."""
+    """curl нет — /health проверяется python-ом venv воркера."""
 
     def setUp(self):
         super().setUp()
@@ -439,7 +435,7 @@ class TestInstallRequirements(_InstallCase):
         self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
 
     def test_pip_failure_on_update_keeps_previous_current(self):
-        """143а/ТК166: сбой pip при обновлении — действующей остаётся прежняя версия."""
+        """Сбой pip при обновлении — действующей остаётся прежняя версия."""
         self.install("1.0.0", "--no-start")
         before = os.readlink(self.current())
         (self.stubs / "fail-uv-pip").touch()
@@ -495,7 +491,7 @@ class TestInstallReleases(_InstallCase):
         self.assertEqual(self.worker_env(), env)
 
     def test_reinstall_from_current_copies_release(self):
-        """143а/ТК166: bash current/install.sh (без --rollback) — новая запись в releases/
+        """bash current/install.sh (без --rollback) — новая запись в releases/
         настоящий каталог, не ссылка; current указывает на неё."""
         self.install("1.0.0", "--no-start")
         first = self.current_release()
@@ -511,7 +507,7 @@ class TestInstallReleases(_InstallCase):
         self.assertEqual(self.current_release(), new[0])
 
     def test_failed_install_leaves_no_release_for_rollback(self):
-        """143б/ТК174: сбой pip до переключения current убирает каталог новой версии —
+        """Сбой pip до переключения current убирает каталог новой версии —
         --rollback не выбирает версию, которая ни разу не работала."""
         self.install("1.0.0", "--no-start")
         (self.stubs / "fail-uv-pip").touch()
@@ -527,7 +523,7 @@ class TestInstallReleases(_InstallCase):
         self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
 
     def test_same_version_same_second_unique_release(self):
-        """143в/ТК175: повтор той же версии в ту же секунду — две разные записи в releases/,
+        """Повтор той же версии в ту же секунду — две разные записи в releases/,
         обе каталоги, первая не вложена во вторую и не содержит её."""
         # время — граница: поддельные часы стоят, пока не позовут sleep (он сдвигает их на N с);
         # обе установки начинаются в одну и ту же секунду
@@ -562,7 +558,7 @@ class TestInstallReleases(_InstallCase):
 
 
 class TestInstallWorkerEnvData(_InstallCase):
-    """143а/ТК166: worker.env читается как данные (КЛЮЧ=значение), не исполняется."""
+    """worker.env читается как данные (КЛЮЧ=значение), не исполняется."""
 
     def test_worker_env_not_executed(self):
         marker = Path(self._td.name) / "pwned"

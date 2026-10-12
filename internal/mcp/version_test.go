@@ -12,7 +12,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Спецификация версий в MCP (internal-own-track, условия 138–140, ТК165а):
+// Спецификация версий в MCP:
 //   - initialize → serverInfo.version = версия, вшитая при сборке (SetVersion), без неё "dev";
 //   - status и doctor показывают версию воркера (/version);
 //   - воркер старее (нет /version или api < WorkerAPI) — к выводу инструментов приписка
@@ -198,7 +198,7 @@ func TestToolCallVersionCheckThrottled(t *testing.T) {
 	}
 }
 
-// ТК167 (условие 139а): неудачная проверка версии (воркер недоступен) тоже запоминается —
+// Неудачная проверка версии (воркер недоступен) тоже запоминается —
 // выключенная машина не стоит таймаута на каждом вызове; приписок нет.
 func TestToolCallUnreachableVersionCheckCached(t *testing.T) {
 	t.Parallel()
@@ -229,7 +229,7 @@ func (u *urlVersionFake) Version(ctx context.Context) (*yue.VersionInfo, error) 
 	return u.byURL[url], nil
 }
 
-// ТК176 (условие 139б): кэш совместимости привязан к адресу — после смены адреса воркера
+// Кэш совместимости привязан к адресу — после смены адреса воркера
 // следующий вызов проверяет новый воркер сразу, не дожидаясь 30 минут.
 func TestToolCallVersionRecheckedOnURLChange(t *testing.T) {
 	t.Parallel()

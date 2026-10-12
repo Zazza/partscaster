@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Карточка internal-own-track, этап 1, условие 5: клиент пресетов звука — пути, методы, тело
+// Клиент пресетов звука — пути, методы, тело
 // запроса (без id/slug/builtin) и 409 захвата статуса как *StatusError.
 
 func TestSoundPresetUpdateSendsPutWithoutIdentity(t *testing.T) {

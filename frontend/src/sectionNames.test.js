@@ -1,4 +1,3 @@
-// Тесты подписей секций песни: свободные английские названия от YuE → подпись в интерфейсе.
 import { describe, it, expect } from 'vitest'
 import { sectionLabel } from './sectionNames.js'
 

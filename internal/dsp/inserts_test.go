@@ -46,8 +46,6 @@ func TestInsertsGraphThree(t *testing.T) {
 	}
 }
 
-// --- интеграция с ffmpeg ---
-
 func needFFmpeg(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
@@ -162,8 +160,6 @@ func TestRunInputsInsertDuration(t *testing.T) {
 	}
 }
 
-// --- плавный вход/выход и инверсия (карточка «+ инструмент/приём» по стемам) ---
-
 func TestInsertsGraphFadeIn(t *testing.T) {
 	t.Parallel()
 	g := InsertsGraph([]Insert{{AtSec: 1, DurSec: 2, Gain: 1, FadeIn: 0.5}})
@@ -202,8 +198,6 @@ func segRMS(s []float32, from, to float64) float64 {
 	return RMS(s[a:b])
 }
 
-// --- фильтр нижних частот у вклейки (сбивка: у старых барабанов вычитается только низ) ---
-
 // hiSR — частота для проверок с 9000 Гц: при 16 кГц он выше Найквиста (8 кГц).
 const hiSR = 44100
 
@@ -240,9 +234,8 @@ func toneAmpAt(s []float32, rate int, hz, from, to float64) float64 {
 	return 2 * math.Hypot(re, im) / float64(b-a)
 }
 
-// --- вставка на месте: SkipSec == AtSec, без растяжения — дорожка ложится на своё же
-// место без сдвига при любой частоте и любом времени (было: +3 дБ остатка при 44,1 кГц
-// на 20.007 с — atrim/adelay расходились на сэмпл) ---
+// Вставка на месте: SkipSec == AtSec, без растяжения — дорожка ложится на своё же
+// место без сдвига при любой частоте и любом времени.
 
 // ipNoise — белый шум (float32 wav) длительностью dur с частотой sr и каналами ch.
 func ipNoise(t *testing.T, path string, sr, ch int, dur float64) {
@@ -511,8 +504,6 @@ func TestInsertInPlaceSpeed(t *testing.T) {
 	}
 }
 
-// --- регрессии ревью: маска частот у вставки на месте и короткие окна ---
-
 // ipNoiseStereo — стерео белый шум с независимыми каналами (разные seed), float32 wav.
 func ipNoiseStereo(t *testing.T, path string, sr int, dur float64) {
 	t.Helper()
@@ -659,7 +650,7 @@ func TestInsertInPlaceLowpassSpeedAndAccuracy(t *testing.T) {
 }
 
 // 7. Короткое окно у самого нуля: вставка с DurSec 5e-05 и фейдами 0.05 не роняет
-// ffmpeg (было: «st=5e-05» в afade не разбирался) — на месте с AtSec 0 и 5e-05, вклейка с 5e-05.
+// ffmpeg («st=5e-05» в afade не разбирался) — на месте с AtSec 0 и 5e-05, вклейка с 5e-05.
 func TestInsertInPlaceShortWindowAtZero(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)

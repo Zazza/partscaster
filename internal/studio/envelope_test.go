@@ -11,13 +11,11 @@ import (
 	"yue-studio/internal/dsp"
 )
 
-// Тесты карточки internal-vocal-ride, условие 2: VolumeEnvelope.
 // stem "" — весь трек (звук трека по FetchBase) через EnvelopeGraph, загрузка
 // dsp-envelope.flac; stem vocals/drums/bass/other — только эта дорожка через
-// пересборку (спека ChildID 0, Stems [stem], Envelope). Фейковый воркер (secFake)
-// и синтетика — из sections_test.go/stem_fx_test.go, звуковые хелперы — из helpers_test.go.
+// пересборку (спека ChildID 0, Stems [stem], Envelope).
 
-// rampPts — огибающая кейса карточки: 0 дБ до 1 с, линейно в дБ до −12 в 3 с, дальше −12.
+// rampPts — 0 дБ до 1 с, линейно в дБ до −12 в 3 с, дальше −12.
 var rampPts = []dsp.EnvPoint{{T: 1, Db: 0}, {T: 3, Db: -12}}
 
 const envAmp = 0.3 // тон 440 Гц трека «весь трек»
@@ -50,7 +48,7 @@ func assertRamp440(t *testing.T, out []float32) {
 	}
 }
 
-// Кейс карточки: stem "" — загружен ровно один файл dsp-envelope.flac у той же джобы,
+// stem "" — загружен ровно один файл dsp-envelope.flac у той же джобы,
 // уровень меняется по огибающей; возвращён вариант.
 func TestVolumeEnvelopeWholeTrack(t *testing.T) {
 	t.Parallel()
@@ -71,7 +69,7 @@ func TestVolumeEnvelopeWholeTrack(t *testing.T) {
 	assertRamp440(t, secUploaded(t, f, "dsp-envelope.flac"))
 }
 
-// Кейс карточки: импортированный трек — только audio.mp3 (audio.flac → 404) — тоже работает.
+// Импортированный трек — только audio.mp3 (audio.flac → 404) — тоже работает.
 func TestVolumeEnvelopeImportedMp3(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -99,7 +97,7 @@ func TestVolumeEnvelopeImportedMp3(t *testing.T) {
 	}
 }
 
-// Кейс карточки: stem vocals — через пересборку меняется только голос (3000 Гц) по
+// stem vocals — через пересборку меняется только голос (3000 Гц) по
 // огибающей; тон другой дорожки (other, 500 Гц) в миксе не меняется (|Δ| ≤ 0.5 дБ).
 func TestVolumeEnvelopeStemOnlyThatStem(t *testing.T) {
 	t.Parallel()
@@ -131,7 +129,7 @@ func TestVolumeEnvelopeStemOnlyThatStem(t *testing.T) {
 	}
 }
 
-// Кейс карточки: неизвестная дорожка — ошибка, ничего не загружено.
+// Неизвестная дорожка — ошибка, ничего не загружено.
 func TestVolumeEnvelopeUnknownStemIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := fxSetup(t)
@@ -143,7 +141,7 @@ func TestVolumeEnvelopeUnknownStemIsError(t *testing.T) {
 	}
 }
 
-// Кейс карточки: пустые/невалидные точки — ошибка, ничего не загружено (и для трека, и для дорожки).
+// Пустые/невалидные точки — ошибка, ничего не загружено (и для трека, и для дорожки).
 func TestVolumeEnvelopeEmptyPointsIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := fxSetup(t)

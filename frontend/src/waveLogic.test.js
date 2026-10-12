@@ -75,7 +75,7 @@ describe('клиппинг сетки по длине аудида (gridMarks)',
 
 describe('секунды → колонки ролла (secToPosRange)', () => {
   const posTimes = [{ from: 0, to: 2 }, { from: 2, to: 4 }, { from: 4, to: 6 }, { from: 6, to: 8 }]
-  // motorik 120, такт 2 с, 105 тактов — масштаб кейса приёмки #135
+  // motorik 120, такт 2 с, 105 тактов
   const longTimes = Array.from({ length: 105 }, (_, i) => ({ from: i * 2, to: (i + 1) * 2 }))
 
   it('выделение 2:40–2:48 при такте 2 с → колонки 80..83', () => {

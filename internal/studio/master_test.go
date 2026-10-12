@@ -10,16 +10,16 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 6, условия 44 и 44а (ТК72): мастер в пересборке.
+// Мастер в пересборке.
 // SectionSpec.Master (с Engine): после сборки и загрузки микса overdub-inst-N.flac —
 // ApplyFx(родитель, source mix, file = этот микс, in_place, chain = цепочка мастера) на
 // воркере; результат — тот же файл микса; одна активная запись мастера (две — ошибка);
 // реестр только из мастера — микс = оригинал + мастер; окно мастера игнорируется;
 // RebuildResult.Variant — ответ ApplyFx (метрики lufs, true_peak_db).
-// 44а: после ApplyFx — ещё UploadDsp(overdub-premaster-N.flac) с тем же звуком, что ушёл в
+// После ApplyFx — ещё UploadDsp(overdub-premaster-N.flac) с тем же звуком, что ушёл в
 // первую загрузку («микс без мастера» для «▶ стало / ▶ было»).
 //
-// Воркер — msFake: secFake (sections_test.go) + ApplyFx, который пишет порядок вызовов.
+// Воркер — msFake: secFake + ApplyFx, который пишет порядок вызовов.
 // Загрузки фейк хранит по имени (secFake.uploads): «на месте» воркер файл не меняет.
 
 type msFake struct {
@@ -80,7 +80,7 @@ func msSetup(t *testing.T) (*msFake, map[string]string) {
 	return &msFake{secFake: sf}, pf
 }
 
-// msWantLog — порядок 44/44а: микс → мастер на нём → микс без мастера.
+// msWantLog — порядок: микс → мастер на нём → микс без мастера.
 func msWantLog(n string) []string {
 	return []string{"upload:overdub-inst-" + n + ".flac", "fx:overdub-inst-" + n + ".flac",
 		"upload:overdub-premaster-" + n + ".flac"}
@@ -125,7 +125,7 @@ func msCheckMasterCall(t *testing.T, f *msFake, file string) {
 	}
 }
 
-// ТК72: громкость other + мастер — порядок UploadDsp(overdub-inst-0) → ApplyFx(тот же файл,
+// Громкость other + мастер — порядок UploadDsp(overdub-inst-0) → ApplyFx(тот же файл,
 // in_place, chain мастера, source mix) → UploadDsp(overdub-premaster-0); результат — файл микса
 // с метриками ответа ApplyFx.
 func TestRebuildSectionsMasterOrderAndResult(t *testing.T) {
@@ -163,7 +163,7 @@ func TestRebuildSectionsMasterOrderAndResult(t *testing.T) {
 	}
 }
 
-// 44а: без мастера «микса без мастера» нет — одна загрузка, ApplyFx не зовётся.
+// Без мастера «микса без мастера» нет — одна загрузка, ApplyFx не зовётся.
 func TestRebuildSectionsNoMasterNoPremaster(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)
@@ -175,7 +175,7 @@ func TestRebuildSectionsNoMasterNoPremaster(t *testing.T) {
 	}
 }
 
-// ТК72 / усл. 44: имя микса — overdub-inst-N.flac по последней вклейке; мастер — на нём же.
+// Имя микса — overdub-inst-N.flac по последней вклейке; мастер — на нём же.
 func TestRebuildSectionsMasterOnChildMix(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)
@@ -190,7 +190,7 @@ func TestRebuildSectionsMasterOnChildMix(t *testing.T) {
 	msCheckPremaster(t, f, "7")
 }
 
-// ТК72: реестр только из мастера — загружается оригинал, мастер на нём.
+// Реестр только из мастера — загружается оригинал, мастер на нём.
 func TestRebuildSectionsMasterOnly(t *testing.T) {
 	t.Parallel()
 	f, pf := msSetup(t)
@@ -213,7 +213,7 @@ func TestRebuildSectionsMasterOnly(t *testing.T) {
 	msCheckPremaster(t, f, "0")
 }
 
-// ТК72: две активные записи мастера → ошибка без UploadDsp и без ApplyFx.
+// Две активные записи мастера → ошибка без UploadDsp и без ApplyFx.
 func TestRebuildSectionsTwoMastersIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)
@@ -226,7 +226,7 @@ func TestRebuildSectionsTwoMastersIsError(t *testing.T) {
 	}
 }
 
-// Усл. 44: мастер считается на воркере — его ошибка — ошибка пересборки.
+// Мастер считается на воркере — его ошибка — ошибка пересборки.
 func TestRebuildSectionsMasterFxErrorIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)
@@ -236,7 +236,7 @@ func TestRebuildSectionsMasterFxErrorIsError(t *testing.T) {
 	}
 }
 
-// Усл. 44: мастер — «с Engine»: запись мастера без цепочки → ошибка, ничего не загружено.
+// Мастер — «с Engine»: запись мастера без цепочки → ошибка, ничего не загружено.
 func TestRebuildSectionsMasterWithoutEngineIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := msSetup(t)

@@ -11,7 +11,6 @@ export function readFlag(key, def = false, storage = globalThis.localStorage) {
   }
 }
 
-/** Запомнить галочку key. */
 export function writeFlag(key, on, storage = globalThis.localStorage) {
   try { storage.setItem(key, on ? '1' : '0') } catch { /* без localStorage — до закрытия экрана */ }
 }

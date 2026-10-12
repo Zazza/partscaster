@@ -7,11 +7,9 @@ import (
 	"testing"
 )
 
-// Тесты цепочек по ID (карточка 1.5): breathe, gap, cresc, tempo-from, tape, warp
+// Тесты цепочек по ID: breathe, gap, cresc, tempo-from, tape, warp
 // и общий параметр from. Проверяется звук на синтетике через Run, а не текст графа
-// (кроме регрессии «кГц → Гц», которую карточка формулирует про граф).
-//
-// Хелперы (needFFmpeg, lavfi, decode, segRMS, toneAmpAt) — из inserts_test.go.
+// (кроме регрессии «кГц → Гц» — она про граф).
 
 const chSR = 16000
 
@@ -69,7 +67,7 @@ func hasParam(c *Chain, id string) bool {
 	return false
 }
 
-// Карточка: цепочки breathe/gap/cresc/tempo-from/tape/warp доступны по ID; чужой ID — nil.
+// Цепочки breathe/gap/cresc/tempo-from/tape/warp доступны по ID; чужой ID — nil.
 func TestChainsByID(t *testing.T) {
 	t.Parallel()
 	for _, id := range []string{"breathe", "gap", "cresc", "tempo-from", "tape", "warp"} {
@@ -82,7 +80,6 @@ func TestChainsByID(t *testing.T) {
 	}
 }
 
-// Карточка: Defaults — значения по умолчанию всех крутилок цепочки.
 func TestChainsDefaultsCoverParams(t *testing.T) {
 	t.Parallel()
 	for _, c := range All() {
@@ -102,7 +99,7 @@ func TestChainsDefaultsCoverParams(t *testing.T) {
 	}
 }
 
-// Карточка: общий параметр from — у цепочек без собственного start; у cresc/tempo-from/gap
+// Общий параметр from — у цепочек без собственного start; у cresc/tempo-from/gap
 // (своя отметка start) его нет.
 func TestChainsFromParamOnlyWithoutStart(t *testing.T) {
 	t.Parallel()
@@ -128,7 +125,7 @@ func TestChainsFromParamOnlyWithoutStart(t *testing.T) {
 	}
 }
 
-// Карточка: каждая цепочка с дефолтами даёт валидный граф — Run не падает, выход не пуст.
+// Каждая цепочка с дефолтами даёт валидный граф — Run не падает, выход не пуст.
 // Вход 3 с: отметки start по умолчанию (120 с) лежат за концом — граф всё равно валиден.
 func TestEveryChainDefaultsRuns(t *testing.T) {
 	t.Parallel()
@@ -173,7 +170,7 @@ func TestEveryChainDefaultsRuns(t *testing.T) {
 	}
 }
 
-// Карточка: после tape/warp с дефолтами синус не заглушён (RMS > −40 дБ).
+// После tape/warp с дефолтами синус не заглушён (RMS > −40 дБ).
 // Дополнительно без шипения: срез 5–16 кГц не должен съедать тон 440 Гц — выход
 // не тише входа более чем на 12 дБ (срез «в Гц» давал −60 дБ и глубже).
 func TestTapeWarpDoNotSilence(t *testing.T) {
@@ -201,7 +198,7 @@ func TestTapeWarpDoNotSilence(t *testing.T) {
 	}
 }
 
-// Карточка: cresc — к концу громче, чем в начале; до start громкость не меняется.
+// cresc — к концу громче, чем в начале; до start громкость не меняется.
 func TestCrescLouderAtEnd(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -249,7 +246,7 @@ func shortToneAmp(s []float32, hz, from, to float64) float64 {
 	return sum / float64(n)
 }
 
-// Карточка: tempo-from — выход короче при ускорении; участок до отметки своей длины не меняет.
+// tempo-from — выход короче при ускорении; участок до отметки своей длины не меняет.
 func TestTempoFromShortensAfterMark(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -282,7 +279,7 @@ func TestTempoFromFactorOneKeepsLength(t *testing.T) {
 	}
 }
 
-// Карточка: gap — тишина на dur секунд с отметки start; вне паузы звук на месте; длина та же.
+// gap — тишина на dur секунд с отметки start; вне паузы звук на месте; длина та же.
 func TestGapSilencesWindow(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -304,7 +301,7 @@ func TestGapSilencesWindow(t *testing.T) {
 // breatheExpr — громко (0.5) 0–3 с, тихо (0.02) 3–6 с.
 const breatheExpr = "if(lt(t\\,3)\\,0.5\\,0.02)*sin(2*PI*440*t)"
 
-// Карточка: breathe (экспандер) — тихие места тише, громкие как были.
+// breathe (экспандер) — тихие места тише, громкие как были.
 func TestBreatheExpandsDynamics(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -333,7 +330,7 @@ func TestBreatheZeroIsOff(t *testing.T) {
 	}
 }
 
-// Карточка: from — до from звук не меняется, после — эффект работает; длина сохраняется.
+// from — до from звук не меняется, после — эффект работает; длина сохраняется.
 func TestFromKeepsAudioBeforeMark(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -369,7 +366,7 @@ func TestFromZeroWholeTrack(t *testing.T) {
 
 // Педаль/эффект не сдвигает звук во времени: щелчок на 1,0 с остаётся на 1,0 с (±1 мс). Иначе обработанная
 // дорожка опаздывает относительно остальных — гребёнка с остатками той же партии в других дорожках.
-// «Кабинет» раньше опаздывал на 10 мс (zero_phase у firequalizer сдвигал метки времени).
+// «Кабинет» опаздывал на 10 мс из-за zero_phase у firequalizer (сдвигает метки времени).
 func TestCabAndEchoesDoNotShift(t *testing.T) {
 	needFFmpeg(t)
 	t.Parallel()

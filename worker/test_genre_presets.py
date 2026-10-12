@@ -1,23 +1,20 @@
-"""Тесты карточки internal-own-track, этап 8б: условия 70–72 (тест-кейсы ТК104, ТК105, ТК108).
-Написаны по карточке, без чтения новой реализации.
+"""Встроенные жанровые пресеты звука и готовые цепочки на воркере.
 
-- ТК104 / 70: worker/fx_presets.json побайтно равен internal/mcp/fx_presets.json; deploy.sh увозит
+- worker/fx_presets.json побайтно равен internal/mcp/fx_presets.json; deploy.sh увозит
   fx_presets.json на машину воркера (scp).
-- ТК105 / 71–72: встроенные пресеты звука (presets.BUILTIN) — жанровые ≥ 100, все проходят validate
+- встроенные пресеты звука (presets.BUILTIN) — жанровые ≥ 100, все проходят validate
   (parse_engine = fx_engine.parse_chain), slug уникальны [a-z0-9-], family из четырёх семей, течение
   (название до « · ») ≥ 3 варианта, течений ≥ 34, без записей голоса, с барабанами и басом, наборы — из
   известных, партии ≤ 3 с первым блоком synth|perc, мастер или цель громкости; в name/note нет имён
-  групп и исполнителей из списка условия 71.
-- ТК108 / 72: старая база без колонки family → после старта колонка есть, встроенные с семьёй, свои — ''.
+  групп и исполнителей из списка запрещённых.
+- старая база без колонки family → после старта колонка есть, встроенные с семьёй, свои — ''.
 
-Предположения (карточка не уточняет):
+Предположения:
 - Жанровые проверки (семья-течение-вариант, голос, барабаны/бас, мастер) — для всех встроенных, кроме
-  прежних рецептов человека transmission / sex-on-fire / live-rhythm: их условие 71 велит только
-  обезличить (slug прежний), а запись голоса в transmission — рецепт человека. Общие проверки (validate,
+  рецептов transmission / sex-on-fire / live-rhythm: их только
+  обезличить (slug прежний), а запись голоса в transmission — часть рецепта. Общие проверки (validate,
   slug, family, имена, наборы, партии) — для всех встроенных.
 - Имя ищется целым словом без учёта регистра («Eno» не ловит «enough», «Muse» — «museum»).
-
-Запуск: cd worker && python3 -m unittest test_genre_presets -v
 """
 import json
 import re
@@ -42,7 +39,7 @@ DRUM_STEMS = {"drums", "kick", "snare", "toms", "hh", "ride", "crash"}
 LEGACY = {"transmission", "sex-on-fire", "live-rhythm"}
 SEP = " · "
 
-# условие 71: имена групп и исполнителей, которых не должно быть в названиях и подсказках
+# имена групп и исполнителей, которых не должно быть в названиях и подсказках
 BANNED = [
     "Interpol", "Joy Division", "The Cure", "New Order", "Rammstein", "Nightwish", "Placebo", "Radiohead",
     "Smiths", "R.E.M.", "Jack White", "White Stripes", "My Bloody Valentine", "Slowdive", "Muse",
@@ -78,11 +75,9 @@ def genre_presets():
     return [b for b in presets.BUILTIN if b.get("slug") not in LEGACY]
 
 
-# ---------- ТК104: готовые цепочки на воркере — копия побайтно (деплой: test_fx_kits_synth) ----------
-
 class TestFxPresetsOnWorker(unittest.TestCase):
 
-    def test_tc104_worker_copy_bytes_equal_mcp(self):
+    def test_worker_copy_bytes_equal_mcp(self):
         worker_copy = WORKER / "fx_presets.json"
         mcp_copy = ROOT / "internal" / "mcp" / "fx_presets.json"
         self.assertTrue(worker_copy.is_file(), "нет worker/fx_presets.json (make mcp-data)")
@@ -90,16 +85,14 @@ class TestFxPresetsOnWorker(unittest.TestCase):
                          "worker/fx_presets.json и internal/mcp/fx_presets.json разошлись — make mcp-data")
 
 
-# ---------- ТК105: встроенные жанровые пресеты ----------
-
 class TestBuiltinGenrePresets(unittest.TestCase):
 
-    def test_tc105_at_least_100_genre_presets(self):
+    def test_at_least_100_genre_presets(self):
         self.assertGreaterEqual(len(presets.BUILTIN), 100)
         self.assertGreaterEqual(len(genre_presets()), 100)
 
     @unittest.skipUnless(_HAS_ENGINE, "нужен fx_engine (numpy/scipy — окружение воркера)")
-    def test_tc105_all_pass_validate(self):
+    def test_all_pass_validate(self):
         for b in presets.BUILTIN:
             with self.subTest(slug=b.get("slug")):
                 try:
@@ -107,7 +100,7 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                 except presets.PresetError as e:
                     self.fail(f"{b.get('slug')}: {e}")
 
-    def test_tc105_slugs_unique_latin(self):
+    def test_slugs_unique_latin(self):
         slugs = [b.get("slug") for b in presets.BUILTIN]
         self.assertEqual(len(slugs), len(set(slugs)), "slug повторяется")
         for s in slugs:
@@ -115,25 +108,25 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                 self.assertIsInstance(s, str)
                 self.assertRegex(s, r"^[a-z0-9-]+$")
 
-    def test_tc105_legacy_slugs_kept(self):
-        # условие 71: transmission / sex-on-fire — slug прежний (переименованы только название и подсказка)
+    def test_legacy_slugs_kept(self):
+        # transmission / sex-on-fire — slug прежний (переименованы только название и подсказка)
         slugs = {b.get("slug") for b in presets.BUILTIN}
         self.assertIn("transmission", slugs)
         self.assertIn("sex-on-fire", slugs)
 
-    def test_tc105_family_one_of_four(self):
+    def test_family_one_of_four(self):
         for b in presets.BUILTIN:
             with self.subTest(slug=b.get("slug")):
                 self.assertIn(b.get("family"), FAMILIES)
 
-    def test_tc105_name_genre_dot_variant(self):
+    def test_name_genre_dot_variant(self):
         for b in genre_presets():
             with self.subTest(slug=b.get("slug")):
                 parts = b["name"].split(SEP)
                 self.assertEqual(len(parts), 2, f"название не «<Течение> · <вариант>»: {b['name']!r}")
                 self.assertTrue(parts[0].strip() and parts[1].strip(), b["name"])
 
-    def test_tc105_genres_three_variants_and_34_genres(self):
+    def test_genres_three_variants_and_34_genres(self):
         counts = {}
         for b in genre_presets():
             g = b["name"].split(SEP)[0]
@@ -142,7 +135,7 @@ class TestBuiltinGenrePresets(unittest.TestCase):
         few = {g: n for g, n in counts.items() if n < 3}
         self.assertEqual(few, {}, "у течений меньше трёх вариантов")
 
-    def test_tc105_genre_in_single_family(self):
+    def test_genre_in_single_family(self):
         # течение — внутри своей семьи (список в UI — семья → течение → варианты)
         fam = {}
         for b in genre_presets():
@@ -150,21 +143,21 @@ class TestBuiltinGenrePresets(unittest.TestCase):
         mixed = {g: f for g, f in fam.items() if len(f) > 1}
         self.assertEqual(mixed, {}, "течение в нескольких семьях")
 
-    def test_tc105_no_vocals_records(self):
+    def test_no_vocals_records(self):
         for b in genre_presets():
             with self.subTest(slug=b.get("slug")):
                 for s in b.get("specs", []):
                     self.assertNotIn("vocals", s.get("stems", []), "голос жанровый пресет не трогает")
 
-    def test_tc105_drums_and_bass_records(self):
+    def test_drums_and_bass_records(self):
         for b in genre_presets():
             with self.subTest(slug=b.get("slug")):
                 stems = [set(s.get("stems", [])) for s in b.get("specs", [])]
                 self.assertTrue(any(st & DRUM_STEMS for st in stems), "нет записи барабанов")
                 self.assertTrue(any("bass" in st for st in stems), "нет записи баса")
 
-    def test_tc105_guitar_processing_and_levels(self):
-        # условие 72: обработка гитары (дорожка guitar) и цели громкости level_db барабанов, баса, гитары
+    def test_guitar_processing_and_levels(self):
+        # обработка гитары (дорожка guitar) и цели громкости level_db барабанов, баса, гитары
         for b in genre_presets():
             with self.subTest(slug=b.get("slug")):
                 specs = b.get("specs", [])
@@ -176,7 +169,7 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                 self.assertTrue(any("bass" in st for st in lv), "нет цели громкости баса")
                 self.assertTrue(any("guitar" in st for st in lv), "нет цели громкости гитары")
 
-    def test_tc105_kits_known(self):
+    def test_kits_known(self):
         for b in presets.BUILTIN:
             for blk in _blocks(b):
                 for k, v in blk.items():
@@ -184,7 +177,7 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                         with self.subTest(slug=b.get("slug"), key=k, kit=v):
                             self.assertIn(v.split("/")[0], KNOWN_KITS)
 
-    def test_tc105_parts_limit_and_first_block(self):
+    def test_parts_limit_and_first_block(self):
         for b in presets.BUILTIN:
             with self.subTest(slug=b.get("slug")):
                 parts = b.get("parts", []) or []
@@ -194,13 +187,13 @@ class TestBuiltinGenrePresets(unittest.TestCase):
                     self.assertTrue(eng and isinstance(eng[0], dict), pt)
                     self.assertIn(eng[0].get("type"), ("synth", "perc"))
 
-    def test_tc105_master_or_target(self):
+    def test_master_or_target(self):
         for b in genre_presets():
             with self.subTest(slug=b.get("slug")):
                 self.assertTrue(b.get("master") or b.get("target_lufs") is not None,
                                 "нет ни мастера, ни цели громкости")
 
-    def test_tc105_no_artist_names(self):
+    def test_no_artist_names(self):
         for b in presets.BUILTIN:
             for field in ("name", "note"):
                 for text in _texts(b.get(field)):
@@ -214,8 +207,6 @@ class TestBuiltinGenrePresets(unittest.TestCase):
         self.assertEqual(banned_in("enough room, museum hall"), [])
 
 
-# ---------- ТК108: миграция — колонка family ----------
-
 OLD_SPECS = [{"stems": ["bass"], "engine": [{"type": "eq", "highpass_hz": 80}], "db": 0}]
 
 
@@ -223,7 +214,7 @@ OLD_SPECS = [{"stems": ["bass"], "engine": [{"type": "eq", "highpass_hz": 80}], 
 class TestSoundPresetsFamilyMigration(tp._WorkerDbCase):
 
     def _legacy(self):
-        # таблица пресетов этапа 8 (до family) и одна своя запись
+        # таблица пресетов без колонки family и одна своя запись
         with self._conn() as c:
             c.execute("DROP TABLE IF EXISTS sound_presets")
             c.execute("""CREATE TABLE sound_presets (
@@ -255,7 +246,7 @@ class TestSoundPresetsFamilyMigration(tp._WorkerDbCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tc108_column_added_builtins_have_family_own_empty(self):
+    def test_column_added_builtins_have_family_own_empty(self):
         self._legacy()
         self._start()
         with self._conn() as c:
@@ -272,7 +263,7 @@ class TestSoundPresetsFamilyMigration(tp._WorkerDbCase):
             with self.subTest(name=p.get("name")):
                 self.assertIn(p.get("family"), FAMILIES)
 
-    def test_tc108_second_start_no_errors(self):
+    def test_second_start_no_errors(self):
         self._legacy()
         self._start()
         before = self._list()
@@ -280,27 +271,25 @@ class TestSoundPresetsFamilyMigration(tp._WorkerDbCase):
         after = self._list()
         self.assertEqual(len(after), len(before), "второй старт задвоил пресеты")
 
-    def test_tc108_new_own_preset_family_empty(self):
+    def test_new_own_preset_family_empty(self):
         self._start()
         r = self._client().post("/sound-presets", json={"name": "Мой", "specs": OLD_SPECS})
         self.assertIn(r.status_code, (200, 201), r.text)
         self.assertEqual(r.json().get("family"), "")
 
 
-# ---------- ТК82: миграция старой таблицы пресетов ----------
-
-STAGE1_SPECS = [{"stems": ["bass"], "engine": [{"type": "eq", "highpass_hz": 80}], "db": 0}]
-STAGE1_FINAL = [{"chain": "width", "params": {"width": 1.1, "bass": 120}}]
+LEGACY_SPECS = [{"stems": ["bass"], "engine": [{"type": "eq", "highpass_hz": 80}], "db": 0}]
+LEGACY_FINAL = [{"chain": "width", "params": {"width": 1.1, "bass": 120}}]
 
 
 @unittest.skipUnless(tp._HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestSoundPresetsMigration(tp._WorkerDbCase):
-    """ТК82 / 49б (бывший test_tails): таблица этапа 1 (без target_lufs и master) + своя запись → старт:
+    """Таблица без target_lufs и master + своя запись → старт:
     своя с target_lufs null и master []; встроенные досеяны; второй старт без ошибок и без задвоения."""
 
 
     def _legacy(self):
-        # таблица пресетов этапа 1 (до target_lufs и master) и одна своя запись
+        # таблица пресетов без target_lufs и master и одна своя запись
         with self._conn() as c:
             # импорт воркера мог уже создать новую таблицу в этой базе — старая схема строго с нуля
             c.execute("DROP TABLE IF EXISTS sound_presets")
@@ -315,7 +304,7 @@ class TestSoundPresetsMigration(tp._WorkerDbCase):
                 builtin INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL)""")
             c.execute("INSERT INTO sound_presets (name, note, specs, final, created_at) VALUES (?, ?, ?, ?, ?)",
-                      ("Старый свой", "до мастера", json.dumps(STAGE1_SPECS), json.dumps(STAGE1_FINAL),
+                      ("Старый свой", "до мастера", json.dumps(LEGACY_SPECS), json.dumps(LEGACY_FINAL),
                        "2026-10-01T00:00:00"))
 
     def _start(self):
@@ -328,7 +317,7 @@ class TestSoundPresetsMigration(tp._WorkerDbCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tc82_old_table_migrated(self):
+    def test_old_table_migrated(self):
         self._legacy()
         self._start()
         first = len(self._list())
@@ -344,7 +333,7 @@ class TestSoundPresetsMigration(tp._WorkerDbCase):
         self.assertFalse(p.get("builtin"))
         self.assertIsNone(p.get("target_lufs"))
         self.assertEqual(p.get("master"), [])
-        self.assertEqual(p.get("specs"), STAGE1_SPECS)
+        self.assertEqual(p.get("specs"), LEGACY_SPECS)
         self.assertEqual([s["chain"] for s in p.get("final")], ["width"])
         self.assertTrue(any(x.get("builtin") for x in lst), "встроенные не досеяны")
 

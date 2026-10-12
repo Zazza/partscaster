@@ -1,10 +1,9 @@
-// Тесты карточки internal-own-track, этап 6б, условие 48 (тест-кейс ТК80): громкость дорожки на
+// Громкость дорожки на
 // пульте и подсказка «слышно ли».
 //   stemLevels(stems) → {имя: дБ}: rms_p95_db дорожки (metrics.metrics.rms_p95_db из списка дорожек
 //     воркера) относительно суммы основных (vocals, drums, bass, other — сумма мощностей); дорожка
 //     без замера — без записи; основных нет — {};
 //   stemAudibility(db): < −30 — 'silent', −30…−20 — 'quiet', иначе ''.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { stemLevels, stemAudibility } from './trackDesk.js'
 
@@ -16,7 +15,7 @@ const stem = (name, db) => ({
 })
 const MAIN = ['vocals', 'drums', 'bass', 'other'].map((n) => stem(n, -20))
 
-describe('stemLevels (ТК80)', () => {
+describe('stemLevels', () => {
   it('основные по −20 дБ (сумма −14) и hh −40 → hh −26, каждая основная −6', () => {
     const lv = stemLevels([...MAIN, stem('hh', -40)])
     const sum = 10 * Math.log10(4 * 10 ** (-20 / 10)) // −13,98
@@ -43,7 +42,7 @@ describe('stemLevels (ТК80)', () => {
   })
 })
 
-describe('stemAudibility (ТК80)', () => {
+describe('stemAudibility', () => {
   it.each([[-35, 'silent'], [-25, 'quiet'], [-10, ''], [-30, 'quiet'], [-20, '']])('%d дБ → %j', (db, want) => {
     expect(stemAudibility(db)).toBe(want)
   })

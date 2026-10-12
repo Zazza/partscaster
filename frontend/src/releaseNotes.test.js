@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { RELEASE_NOTES } from './releaseNotes.js'
 
-// Страж шага релиза (AGENTS.md п.2): версия вышла в CHANGELOG — в окне
+// Страж шага релиза: версия вышла в CHANGELOG — в окне
 // «Что нового» должна быть её запись. Иначе приложение не узнает о новой версии.
 const num = (v) => v.split('.').map(Number)
 const newer = (a, b) => {

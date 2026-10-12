@@ -14,7 +14,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-sound-engine, тест-кейс 15 (MCP): fx_apply передаёт
+// fx_apply передаёт
 // цепочку в Service как есть и возвращает вариант; fx_assets — список захватов
 // и IR; fx_asset_upload — локальный файл с ПК уходит в UploadFxAsset.
 // Воркер — fxFake: общий fakeService (server_test.go) + методы движка.
@@ -36,7 +36,7 @@ type fxFake struct {
 	cfg      map[string]any // ответ /config; nil — воркер с превью движка (fx_preview: true)
 	assets   map[string]any
 	uploads  []fxUploadCall
-	kitNames []string // вызовы InstallFxKit (условие 14)
+	kitNames []string // вызовы InstallFxKit
 	kitErr   error
 }
 
@@ -232,15 +232,15 @@ func TestFxAssetUploadMissingFile(t *testing.T) {
 	}
 }
 
-// Тесты карточки internal-instruments-page, тест-кейс 9 (MCP): fx_apply передаёт
+// fx_apply передаёт
 // preview; fx_blocks — описание блоков из встроенной копии worker/fx_blocks.json;
 // fx_presets — готовые цепочки (встроенный fx_presets.json из frontend/src/fxPresets.js).
 
 var fxBlockTypes = []string{"gate", "eq", "comp", "drive", "amp", "cab", "reverb", "delay", "gain", "sampler", "bass",
-	"synth", "chorus", "phaser", "flanger", "tape", "spring", // этап 4 (синты): синтезатор и эффекты к нему
-	"perc",            // этап 5: перкуссия по сетке
-	"glue", "limiter", // этап 6: мастер
-	"tremolo"} // этап 7а: готовые гитары (сёрф, тремоло-пульс)
+	"synth", "chorus", "phaser", "flanger", "tape", "spring", // синтезатор и эффекты к нему
+	"perc",            // перкуссия по сетке
+	"glue", "limiter", // мастер
+	"tremolo"} // готовые гитары (сёрф, тремоло-пульс)
 
 func TestFxApplyPassesPreview(t *testing.T) {
 	t.Parallel()
@@ -335,8 +335,8 @@ func TestFxPresetsReturnsList(t *testing.T) {
 	}
 }
 
-// internal-studio-engine, Н-2 кросс-ревью (синхронное обновление): fx_apply передаёт
-// fade в FxRequest.Fade; без fade — 0 (поведение этапа 3).
+// fx_apply передаёт
+// fade в FxRequest.Fade; без fade — 0.
 func TestFxApplyPassesFade(t *testing.T) {
 	t.Parallel()
 	s, fake := newFxServer(t)
@@ -359,7 +359,7 @@ func TestFxApplyPassesFade(t *testing.T) {
 	}
 }
 
-// internal-studio-engine, условие 14 (этап 5а): fx_kit_install передаёт name в
+// fx_kit_install передаёт name в
 // Service.InstallFxKit и возвращает ответ воркера; fx_assets показывает наборы (kits).
 
 func TestFxKitInstallPassesName(t *testing.T) {

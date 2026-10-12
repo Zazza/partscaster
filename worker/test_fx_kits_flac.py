@@ -1,7 +1,6 @@
-"""Тесты карточки internal-own-track, этап 7в: условие 63 (тест-кейс ТК97) — наборы с файлами .flac
-и набор фортепиано salamander.
+"""Наборы с файлами .flac и набор фортепиано salamander.
 
-Контракт (из карточки):
+Контракт:
 - наборы с файлами .flac: список (GET /fx/assets → kits [{name: "<набор>/<часть>", samples: N}]) и чтение
   набора (resources.kit / kit_names) учитывают *.flac наравне с *.wav;
 - FX_KITS["salamander"] — Salamander Grand Piano V3, репозиторий sfzinstruments/SalamanderGrandPiano, версия
@@ -11,10 +10,8 @@
 Хранилище — своё на тест (каталог данных из test_fx_api); наборы кладутся файлами, без установки и сети.
 resources — настоящие ресурсы воркера (fx_resources читает файлы каталога данных).
 
-Предположение (карточка не уточняет): в части с .flac и .wav вместе считаются оба; kit_names — имя файла
+Предположение: в части с .flac и .wav вместе считаются оба; kit_names — имя файла
 без расширения («A0v10»).
-
-Запуск: cd worker && python3 -m unittest test_fx_kits_flac -v
 """
 import re
 import unittest
@@ -50,12 +47,12 @@ class TestFlacKits(fa._FxApiCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tc97_assets_count_flac_and_wav_together(self):
+    def test_assets_count_flac_and_wav_together(self):
         self._put("mykeys", "mixed", {"A3v10.flac": 0.3, "C4v10.flac": 0.4, "D#4v10.wav": 0.5})
         kits = self._assets().get("kits")
         self.assertEqual(sorted((k["name"], k["samples"]) for k in kits), [("mykeys/mixed", 3)])
 
-    def test_tc97_resources_kit_reads_flac(self):
+    def test_resources_kit_reads_flac(self):
         import numpy as np
         peaks = {"A0v10.flac": 0.3, "C1v10.flac": 0.5, "D#1v10.flac": 0.7}
         self._put("salamander", "piano", peaks)
@@ -87,10 +84,10 @@ class TestSalamanderCatalog(fa._FxApiCase):
             self.fail("в FX_KITS нет набора salamander")
         self.spec = self.w.FX_KITS["salamander"]
 
-    def test_tc97_parts(self):
+    def test_parts(self):
         self.assertEqual(sorted(self.spec["parts"]), ["piano", "piano-soft"])
 
-    def test_tc97_piano_layer_v10(self):
+    def test_piano_layer_v10(self):
         _, pattern = self.spec["parts"]["piano"]
         for name in ("A0v10.flac", "C4v10.flac", "F#4v10.flac", "C8v10.flac"):
             with self.subTest(name=name):
@@ -99,7 +96,7 @@ class TestSalamanderCatalog(fa._FxApiCase):
             with self.subTest(name=name):
                 self.assertIsNone(re.fullmatch(pattern, name), f"{name} попадает в piano")
 
-    def test_tc97_piano_soft_layer_v4(self):
+    def test_piano_soft_layer_v4(self):
         _, pattern = self.spec["parts"]["piano-soft"]
         for name in ("C4v4.flac", "A0v4.flac", "D#1v4.flac"):
             with self.subTest(name=name):

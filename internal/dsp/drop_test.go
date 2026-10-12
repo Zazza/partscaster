@@ -34,7 +34,7 @@ func zcFreq(s []float32, from, to float64) float64 {
 	return float64(n) / 2 / (float64(b-a) / chSR)
 }
 
-// Карточка: drop доступна через ByID и в All(); крутилки start/dur/slow/gap/rise/floor;
+// drop доступна через ByID и в All(); крутилки start/dur/slow/gap/rise/floor;
 // своя отметка start — общего from нет.
 func TestDropChainParams(t *testing.T) {
 	t.Parallel()
@@ -61,7 +61,7 @@ func TestDropChainParams(t *testing.T) {
 	}
 }
 
-// Карточка: полный сценарий — до start без изменений, торможение затихает, тишина gap,
+// Полный сценарий — до start без изменений, торможение затихает, тишина gap,
 // нарастание от floor до полной за rise, длина в границах растяжки.
 func TestDropScenario(t *testing.T) {
 	t.Parallel()
@@ -115,7 +115,7 @@ func TestDropScenario(t *testing.T) {
 	}
 }
 
-// Карточка: rise=0 — после паузы сразу полная громкость.
+// rise=0 — после паузы сразу полная громкость.
 func TestDropRiseZeroFullLevel(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -131,7 +131,7 @@ func TestDropRiseZeroFullLevel(t *testing.T) {
 	}
 }
 
-// Карточка: slow=1 и gap=0 — торможения нет, тишины нет: длина ≈ входной.
+// slow=1 и gap=0 — торможения нет, тишины нет: длина ≈ входной.
 func TestDropNoSlowNoGapKeepsLength(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -144,7 +144,7 @@ func TestDropNoSlowNoGapKeepsLength(t *testing.T) {
 	}
 }
 
-// Карточка: длина выхода = вход + (S − dur) + gap, dur < S ≤ dur/slow — на другом наборе.
+// Длина выхода = вход + (S − dur) + gap, dur < S ≤ dur/slow — на другом наборе.
 func TestDropLengthBounds(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -159,7 +159,7 @@ func TestDropLengthBounds(t *testing.T) {
 	}
 }
 
-// Карточка: вне диапазона — зажимается: slow=0.1 → 0.5 (растяжка ≤ dur/0.5),
+// Вне диапазона — зажимается: slow=0.1 → 0.5 (растяжка ≤ dur/0.5),
 // floor=−100 → −40 (после паузы уровень ≈ −40 дБ, а не −100).
 func TestDropClampsOutOfRange(t *testing.T) {
 	t.Parallel()
@@ -181,7 +181,7 @@ func TestDropClampsOutOfRange(t *testing.T) {
 }
 
 // «Провал» с отметкой за концом трека ничего не меняет: тормозить нечего — трек той же длины, без паузы
-// тишины в конце, звук на месте (раньше пауза дописывалась и к пустому хвосту: 2 с → 4 с).
+// тишины в конце, звук на месте.
 func TestDropMarkBeyondEndLeavesTrack(t *testing.T) {
 	needFFmpeg(t)
 	t.Parallel()

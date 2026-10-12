@@ -1,9 +1,7 @@
-// Тесты карточки internal-own-track, «Мелкие долги этапов 7–8»: условие 77 (тест-кейс ТК113).
 // presetOptions: свои пресеты (family '') — ровно один заголовок «— Мои —», за ним все свои по порядку
-// дерева (presetTree); у остальных семей заголовки «— семья · течение —», как раньше.
+// дерева (presetTree); у остальных семей заголовки «— семья · течение —».
 // VSelect: у пункта списка привязан title — подсказка при наведении (проверка по исходнику шаблона).
-// Написаны по карточке, без чтения реализации.
-// Предположения: заголовок отличается disabled (или props.disabled), как в ТК107; текст заголовка — в
+// Предположения: заголовок отличается disabled (или props.disabled); текст заголовка — в
 // title, text или label; пункты VSelect — <li> с v-for.
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -18,7 +16,7 @@ const hasText = (o, t) => texts(o).includes(t)
 const p = (id, name, family) => ({ id, name, family, note: '', specs: [] })
 const OWN_HEAD = '— Мои —'
 
-describe('presetOptions: свои пресеты под одним заголовком «— Мои —» (ТК113)', () => {
+describe('presetOptions: свои пресеты под одним заголовком «— Мои —»', () => {
   const input = [
     p(101, 'Мастер для демо · громко', ''),
     p(2, 'Пост-панк · холодный', 'Рок'),
@@ -75,7 +73,7 @@ describe('presetOptions: свои пресеты под одним заголо�
   })
 })
 
-describe('VSelect: title опции — подсказка при наведении (ТК113)', () => {
+describe('VSelect: title опции — подсказка при наведении', () => {
   const src = readFileSync(join(here, 'VSelect.vue'), 'utf8')
   const tpl = (src.match(/<template>([\s\S]*)<\/template>/) || [])[1] || ''
   // открывающие теги <li ...>, кавычки внутри атрибутов учитываются (в выражениях бывает «=>»)

@@ -1,4 +1,4 @@
-"""Тесты карточки internal-own-track, этап 13: эндпоинты фраз воркера (ТК134, условие 95).
+"""Тесты эндпоинтов фраз воркера.
 
 Контракт:
 - GET /fx/phrases → [{id, family, name, bpm, cycle_sec}];
@@ -16,8 +16,6 @@
 
 Внешние границы подменяются как в test_fx_api: fx_resources — фейк с захватом «fake»,
 gpu_queue — фейк-контекст.
-
-Запуск: cd worker && python3 -m unittest test_phrase_api -v
 """
 import io
 import os
@@ -69,7 +67,7 @@ class _PhraseApiCase(fa._FxApiCase):
 
 class TestPhraseList(_PhraseApiCase):
 
-    def test_tc134_list(self):
+    def test_list(self):
         import phrases
         lst = self._phrases()
         self.assertIsInstance(lst, list)
@@ -78,15 +76,15 @@ class TestPhraseList(_PhraseApiCase):
             with self.subTest(id=p.get("id")):
                 for k in ("id", "family", "name", "bpm", "cycle_sec"):
                     self.assertIn(k, p)
-                self.assertIn(p["family"], ("guitar", "bass", "drums", "synth"))  # synth — этап 13б
+                self.assertIn(p["family"], ("guitar", "bass", "drums", "synth"))
                 self.assertTrue(p["name"]["ru"] and p["name"]["en"])
                 self.assertGreater(p["cycle_sec"], 0)
         cat = phrases.PHRASES
         ids = set(cat) if isinstance(cat, dict) else {e["id"] for e in cat}
         self.assertEqual({p["id"] for p in lst}, ids)
 
-    def test_tc137_list_gives_beats_chords_style(self):
-        """Этап 13б, условие 100: каталог отдаёт beats и chords (фронт строит по ним такты), у synth — style."""
+    def test_list_gives_beats_chords_style(self):
+        """Каталог отдаёт beats и chords (фронт строит по ним такты), у synth — style."""
         lst = self._phrases()
         fams = {p["family"] for p in lst}
         self.assertIn("synth", fams)
@@ -99,7 +97,7 @@ class TestPhraseList(_PhraseApiCase):
                     self.assertTrue(p["chords"])
                     self.assertGreater(p["beats"], 0)
 
-    def test_tc134_config_flag(self):
+    def test_config_flag(self):
         r = self.client.get("/config")
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIs(r.json().get("fx_phrases"), True)
@@ -107,7 +105,7 @@ class TestPhraseList(_PhraseApiCase):
 
 class TestPhraseRender(_PhraseApiCase):
 
-    def test_tc134_render_gives_file(self):
+    def test_render_gives_file(self):
         ph = self._first("drums")
         out = self._ok(phrase=ph["id"], chain=GAIN)
         for k in ("file", "cycle_sec", "clipped"):
@@ -125,7 +123,7 @@ class TestPhraseRender(_PhraseApiCase):
         out = self._ok(phrase=ph["id"], chain=GAIN, tempo=0.75)
         self.assertAlmostEqual(out["cycle_sec"], ph["cycle_sec"] / 0.75, delta=1e-3)
 
-    def test_tc134_repeat_same_file_not_recomputed(self):
+    def test_repeat_same_file_not_recomputed(self):
         ph = self._first("drums")
         a = self._ok(phrase=ph["id"], chain=GAIN)
         path = self._find(a["file"])
@@ -135,7 +133,7 @@ class TestPhraseRender(_PhraseApiCase):
         self.assertEqual(a["file"], b["file"])
         self.assertEqual(os.stat(path).st_mtime, old, "файл пересчитан при повторе")
 
-    def test_tc134_bypass_other_file(self):
+    def test_bypass_other_file(self):
         ph = self._first("drums")
         a = self._ok(phrase=ph["id"], chain=GAIN)["file"]
         b = self._ok(phrase=ph["id"], chain=GAIN, bypass=True)["file"]
@@ -151,14 +149,14 @@ class TestPhraseRender(_PhraseApiCase):
         }
         self.assertEqual(len(files), 4)
 
-    def test_tc137_perc_on_drum_phrase(self):
+    def test_perc_on_drum_phrase(self):
         ph = self._first("drums")
         hits = [{"t": i * 0.25, "d": 0.25, "vel": 0.9} for i in range(8)]
         out = self._ok(phrase=ph["id"], chain=[{"type": "perc", "voice": 1, "notes": hits}], stems=["perc"])
         _, (y, _) = self._wav(out["file"])
         self.assertGreater(float(abs(y).max()), 1e-3)
 
-    def test_tc137_synth_phrase_renders_sound(self):
+    def test_synth_phrase_renders_sound(self):
         ph = self._first("synth")
         notes = [{"t": 0.0, "d": 1.0, "midi": [60, 64, 67], "vel": 0.8}]
         for bypass in (False, True):
@@ -184,19 +182,17 @@ class TestPhraseRender(_PhraseApiCase):
                          "старейший файл не вытеснен (хранится больше 40)")
         self.assertEqual(self.client.get(f"/fx/phrase/files/{last}").status_code, 200)
 
-    # ---------- ошибки ----------
-
-    def test_tc134_unknown_phrase_404(self):
+    def test_unknown_phrase_404(self):
         r = self._post(phrase="no-such-phrase-xyz", chain=GAIN)
         self.assertEqual(r.status_code, 404, r.text)
 
-    def test_tc134_tempo_out_of_range_422(self):
+    def test_tempo_out_of_range_422(self):
         ph = self._first("drums")
         for t in (2, 0.4, 1.6):
             with self.subTest(tempo=t):
                 self.assertEqual(self._post(phrase=ph["id"], chain=GAIN, tempo=t).status_code, 422)
 
-    def test_tc134_stem_not_in_phrase_422(self):
+    def test_stem_not_in_phrase_422(self):
         ph = self._first("drums")
         r = self._post(phrase=ph["id"], chain=GAIN, stems=["vocals"])
         self.assertEqual(r.status_code, 422, r.text)
@@ -207,13 +203,13 @@ class TestPhraseRender(_PhraseApiCase):
             with self.subTest(chain=chain):
                 self.assertEqual(self._post(phrase=ph["id"], chain=chain).status_code, 422)
 
-    def test_tc134_engine_off_503(self):
+    def test_engine_off_503(self):
         ph = self._first("drums")
         self.assertLess(self.client.post("/config", json={"fx_engine": False}).status_code, 300)
         r = self._post(phrase=ph["id"], chain=GAIN)
         self.assertEqual(r.status_code, 503, r.text)
 
-    def test_tc134_bad_file_names_404(self):
+    def test_bad_file_names_404(self):
         ph = self._first("drums")
         self._ok(phrase=ph["id"], chain=GAIN)  # кэш не пуст
         (self.data / "x").write_text("secret", encoding="utf-8")

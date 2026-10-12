@@ -41,7 +41,7 @@ export function groupPresets(list, locale = 'ru') {
   return out
 }
 
-// Страница «Инструменты» (этап 12): два списка вместо стены кнопок — группа и инструмент в ней.
+// Страница «Инструменты»: два списка — группа и инструмент в ней.
 // groupOptions — пункты списка групп по порядку groupPresets; группа без подписи — firstLabel.
 export function groupOptions(groups, firstLabel = '') {
   return (groups || []).map((g) => ({ value: g.group, label: g.label || firstLabel }))

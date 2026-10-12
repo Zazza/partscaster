@@ -20,7 +20,6 @@ func (f *fakeHash) fn(root string) (string, error) {
 	return f.value, f.err
 }
 
-// fakeClock — управляемое время.
 type fakeClock struct{ t time.Time }
 
 func (c *fakeClock) now() time.Time { return c.t }

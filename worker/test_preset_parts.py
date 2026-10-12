@@ -1,10 +1,9 @@
-"""Тесты карточки internal-own-track, этап 8а: условия 67 и 68 (тест-кейс ТК100) — проверка рецепта
-пресета на воркере: громкость дорожки level_db и партии-рецепты parts.
+"""Тесты проверки рецепта пресета на воркере: громкость дорожки level_db и партии-рецепты parts.
 
-Контракт (из карточки):
-- условие 67: у записи пресета поле level_db (−40…+6) — громкость дорожки к треку после применения;
+Контракт:
+- у записи пресета поле level_db (−40…+6) — громкость дорожки к треку после применения;
   запись с level_db — одной дорожки (иначе 422); может быть без обработки ({stems [X], level_db});
-- условие 68: поле пресета parts (≤ 8): {kind synth|perc, engine — цепочка движка (первый блок synth
+- поле пресета parts (≤ 8): {kind synth|perc, engine — цепочка движка (первый блок synth
   у synth, perc у perc; notes в рецепте нет), style pad|arp|pulse|drone (synth), octave −2…2 (synth, 0),
   pattern fours|eighths|sixteenths|backbeat|offbeat (perc), swing 0…0,5, accent 0…1 (perc, 1),
   sections [имена частей песни] (пусто — все), place}; ошибка — 422 с причиной (PresetError).
@@ -12,13 +11,12 @@
 Проверяется чистая функция presets.validate(p, parse_engine) с настоящей проверкой цепочки движка
 (fx_engine.parse_chain): внешних границ нет, ничего не подменяется.
 
-Предположения (карточка не уточняет — см. отчёт test-author):
+Предположения:
 - в нормализованном рецепте level_db лежит в записи под тем же именем, parts — в поле "parts"
   результата; «сохранены как заданы» — каждое заданное поле части возвращается тем же значением
   (умолчания нормализация может дописать);
 - пресет из одних партий (specs пусты, финала и мастера нет) — не «пустой пресет».
 
-Запуск: cd worker && python3 -m unittest test_preset_parts -v
 Без окружения воркера (numpy/scipy для fx_engine) — пропуск.
 """
 import copy
@@ -62,7 +60,7 @@ def _preset(specs=None, parts=None):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestLevelDb(unittest.TestCase):
-    """Условие 67: level_db записи — −40…+6, одной дорожке, можно без обработки."""
+    """level_db записи — −40…+6, одной дорожке, можно без обработки."""
 
     def _ok(self, p):
         return presets.validate(p, fx_engine.parse_chain)
@@ -102,7 +100,7 @@ class TestLevelDb(unittest.TestCase):
             self.assertIn(sp.get(k), (None, "", []), f"запись «только громкость» получила {k}: {sp.get(k)!r}")
 
     def test_level_only_on_drum_part_accepted(self):
-        # ТК101 применяет level_db к hh: часть барабанов без обработки — только громкость
+        # часть барабанов без обработки — только громкость
         out = self._ok(_preset([{"stems": ["hh"], "level_db": -28}]))
         self.assertEqual(out["specs"][0]["level_db"], -28)
 
@@ -116,7 +114,7 @@ class TestLevelDb(unittest.TestCase):
         self.assertIn(out["specs"][0].get("level_db"), (None,), "level_db появился у записи без него")
 
     def test_level_with_place_rejected(self):
-        # ТК100а (условие 67а): пересборка места громкость не применяет — level_db у записи «место» = 422;
+        # пересборка места громкость не применяет — level_db у записи «место» = 422;
         # цель громкости — отдельной записью. Контроль: та же запись без level_db принимается.
         self._ok(_preset([{"stems": ["bass"], "place": {"pan": 0.3}}]))
         self._bad(_preset([{"stems": ["bass"], "place": {"pan": 0.3}, "level_db": -8}]))
@@ -124,7 +122,7 @@ class TestLevelDb(unittest.TestCase):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestParts(unittest.TestCase):
-    """Условие 68: партии-рецепты пресета."""
+    """Партии-рецепты пресета."""
 
     def _ok(self, p):
         return presets.validate(p, fx_engine.parse_chain)

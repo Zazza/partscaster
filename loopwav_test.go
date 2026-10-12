@@ -5,12 +5,10 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 13, условие 96 (тест-кейс ТК135):
 // loopWav(wav, phaseSec, totalSec) — WAV, начинающийся с отсчёта phase (по модулю круга)
 // и повторяющий круг до длины ≥ totalSec; целые кадры; заголовок верный (RIFF- и data-размер,
 // каналы, частота — как у входа); не WAV → ошибка.
 // Входной WAV собирается здесь; отсчёты — счётчик кадров, чтобы проверять порядок.
-// Написаны по карточке, без чтения реализации.
 
 // makeWav — PCM 16 бит; кадр i: канал c = sample(i, c).
 func makeWav(rate, channels, frames int, sample func(i, c int) int16) []byte {
@@ -134,7 +132,7 @@ func checkLoop(t *testing.T, out []byte, rate, channels, cycleFrames, phaseFrame
 	}
 }
 
-// ТК135: фаза 0, длина 2,5 круга → не короче 2,5 круга, круг повторяется подряд с начала.
+// Фаза 0, длина 2,5 круга → не короче 2,5 круга, круг повторяется подряд с начала.
 func TestLoopWavPhaseZeroRepeatsCycle(t *testing.T) {
 	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
@@ -145,7 +143,7 @@ func TestLoopWavPhaseZeroRepeatsCycle(t *testing.T) {
 	checkLoop(t, out, lwRate, 2, lwFrames, 0, lwFrames*5/2, stereoCounter)
 }
 
-// ТК135: первые отсчёты = отсчёты входа с phase, дальше — через конец круга в его начало.
+// Первые отсчёты = отсчёты входа с phase, дальше — через конец круга в его начало.
 func TestLoopWavStartsAtPhase(t *testing.T) {
 	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
@@ -161,7 +159,7 @@ func TestLoopWavStartsAtPhase(t *testing.T) {
 	}
 }
 
-// ТК135: фаза больше круга — по модулю круга.
+// Фаза больше круга — по модулю круга.
 func TestLoopWavPhaseModuloCycle(t *testing.T) {
 	t.Parallel()
 	in := makeWav(lwRate, 2, lwFrames, stereoCounter)
@@ -174,7 +172,7 @@ func TestLoopWavPhaseModuloCycle(t *testing.T) {
 	}
 }
 
-// Условие 96: каналы и частота — как у входа (не захардкожены 2 × 48000).
+// Каналы и частота — как у входа (не захардкожены 2 × 48000).
 func TestLoopWavKeepsFormatOfInput(t *testing.T) {
 	t.Parallel()
 	const rate, frames = 32000, 8000 // круг 0,25 с, моно
@@ -198,7 +196,6 @@ func TestLoopWavShorterThanCycle(t *testing.T) {
 	checkLoop(t, out, lwRate, 2, lwFrames, 6000, 3000, stereoCounter)
 }
 
-// ТК135: не WAV → ошибка.
 func TestLoopWavRejectsNonWav(t *testing.T) {
 	t.Parallel()
 	for name, b := range map[string][]byte{

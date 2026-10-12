@@ -7,11 +7,10 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-vocal-ride, условие 1: огибающая громкости.
+// Тесты огибающей громкости.
 // NormalizeEnvelope — чистка точек; EnvelopeGraph — граф для Run, громкость
 // кусочно-линейная в дБ между точками, до первой/после последней — дБ крайней.
 // Звук проверяется на синтетике (тон) через Run, а не по тексту графа.
-// Хелперы (needFFmpeg, genIn, decode, segRMS, dbfs, secs) — из inserts_test.go/chains_test.go.
 
 // sameEnv — точки равны побитово (NaN == NaN), чтобы сравнивать вход до/после.
 func sameEnv(a, b []EnvPoint) bool {
@@ -63,7 +62,6 @@ func TestEnvPointJSON(t *testing.T) {
 	}
 }
 
-// Условие: сортировка по T.
 func TestNormalizeEnvelopeSorts(t *testing.T) {
 	t.Parallel()
 	got := normOK(t, []EnvPoint{{T: 3, Db: -1}, {T: 1, Db: 2}, {T: 2, Db: 0}})
@@ -73,7 +71,7 @@ func TestNormalizeEnvelopeSorts(t *testing.T) {
 	}
 }
 
-// Условие: T<0 и NaN/Inf в T или Db — отбрасываются; T = 0 — допустимая точка.
+// T<0 и NaN/Inf в T или Db — отбрасываются; T = 0 — допустимая точка.
 func TestNormalizeEnvelopeDropsInvalid(t *testing.T) {
 	t.Parallel()
 	nan, inf := math.NaN(), math.Inf(1)
@@ -94,7 +92,7 @@ func TestNormalizeEnvelopeDropsInvalid(t *testing.T) {
 	}
 }
 
-// Условие: Db зажимается в [EnvMinDb, EnvMaxDb]; граничные значения — как есть.
+// Db зажимается в [EnvMinDb, EnvMaxDb]; граничные значения — как есть.
 func TestNormalizeEnvelopeClampsDb(t *testing.T) {
 	t.Parallel()
 	got := normOK(t, []EnvPoint{{T: 1, Db: 50}, {T: 2, Db: -100}, {T: 3, Db: 12}, {T: 4, Db: -30}, {T: 5, Db: -7.5}})
@@ -104,7 +102,7 @@ func TestNormalizeEnvelopeClampsDb(t *testing.T) {
 	}
 }
 
-// Условие: одинаковое T — остаётся последняя по входу.
+// Одинаковое T — остаётся последняя по входу.
 func TestNormalizeEnvelopeDuplicateTKeepsLast(t *testing.T) {
 	t.Parallel()
 	got := normOK(t, []EnvPoint{{T: 1, Db: -3}, {T: 2, Db: 0}, {T: 1, Db: -6}})
@@ -120,7 +118,7 @@ func TestNormalizeEnvelopeDuplicateTKeepsLast(t *testing.T) {
 	}
 }
 
-// Условие: пусто (в т.ч. после чистки) — ошибка.
+// Пусто (в т.ч. после чистки) — ошибка.
 func TestNormalizeEnvelopeEmptyIsError(t *testing.T) {
 	t.Parallel()
 	cases := map[string][]EnvPoint{
@@ -135,7 +133,7 @@ func TestNormalizeEnvelopeEmptyIsError(t *testing.T) {
 	}
 }
 
-// Условие: больше EnvMaxPoints — ошибка; ровно EnvMaxPoints — можно.
+// Больше EnvMaxPoints — ошибка; ровно EnvMaxPoints — можно.
 func TestNormalizeEnvelopeMaxPoints(t *testing.T) {
 	t.Parallel()
 	mk := func(n int) []EnvPoint {
@@ -153,7 +151,7 @@ func TestNormalizeEnvelopeMaxPoints(t *testing.T) {
 	}
 }
 
-// Условие: вход не мутируется (порядок, значения, невалидные точки — на месте).
+// Вход не мутируется (порядок, значения, невалидные точки — на месте).
 func TestNormalizeEnvelopeDoesNotMutateInput(t *testing.T) {
 	t.Parallel()
 	in := []EnvPoint{{T: 3, Db: 50}, {T: -1, Db: 0}, {T: 1, Db: math.NaN()}, {T: 1, Db: -100}, {T: 2, Db: 0}, {T: 3, Db: -2}}
@@ -171,8 +169,6 @@ func TestNormalizeEnvelopeDoesNotMutateInput(t *testing.T) {
 	}
 }
 
-// --- граф через ffmpeg ---
-
 // envRun — прогнать вход через EnvelopeGraph(pts), вернуть выход 16 кГц моно.
 func envRun(t *testing.T, in string, pts []EnvPoint) []float32 {
 	t.Helper()
@@ -188,7 +184,7 @@ func relDb(out, src []float32, from, to float64) float64 {
 	return dbfs(segRMS(out, from, to)) - dbfs(segRMS(src, from, to))
 }
 
-// Кейс карточки: {1:0},{3:−12} на постоянном тоне — до 1 с исходный уровень,
+// {1:0},{3:−12} на постоянном тоне — до 1 с исходный уровень,
 // в 2 с ≈ −6 дБ (линейно в дБ; линейно по амплитуде дало бы ≈ −4), после 3 с ≈ −12;
 // длина выхода = длине входа.
 func TestEnvelopeGraphRampInDb(t *testing.T) {
@@ -211,7 +207,7 @@ func TestEnvelopeGraphRampInDb(t *testing.T) {
 	}
 }
 
-// Условие: до первой точки — дБ первой (не 0): {2:−6},{4:0} — начало трека −6 дБ.
+// До первой точки — дБ первой (не 0): {2:−6},{4:0} — начало трека −6 дБ.
 func TestEnvelopeGraphBeforeFirstPointUsesFirstDb(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -228,7 +224,7 @@ func TestEnvelopeGraphBeforeFirstPointUsesFirstDb(t *testing.T) {
 	}
 }
 
-// Кейс карточки: одна точка +6 — весь трек +6 дБ, длина та же.
+// Одна точка +6 — весь трек +6 дБ, длина та же.
 func TestEnvelopeGraphSinglePointWholeTrack(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -244,7 +240,7 @@ func TestEnvelopeGraphSinglePointWholeTrack(t *testing.T) {
 	}
 }
 
-// Условие: без «пилы» — шаг громкости не грубее ~25 мс. На спаде 12 дБ за 2 с
+// Без «пилы» — шаг громкости не грубее ~25 мс. На спаде 12 дБ за 2 с
 // шаг 25 мс даёт ошибку ≤ 0.15 дБ; в каждом окне 20 мс уровень следует прямой
 // в дБ с точностью 0.4 дБ (грубые ступени или пила вылезут за допуск).
 func TestEnvelopeGraphSmoothRamp(t *testing.T) {
@@ -268,7 +264,7 @@ func TestEnvelopeGraphSmoothRamp(t *testing.T) {
 	}
 }
 
-// Ревью: настоящие треки — FLAC 44.1 кГц стерео, кадр декодера 4608 сэмплов
+// Настоящие треки — FLAC 44.1 кГц стерео, кадр декодера 4608 сэмплов
 // (~104 мс); громкость «раз на кадр» давала ступени ~3 дБ на крутом спаде.
 // Спад 30 дБ за 1 с: в каждом окне 10 мс уровень на прямой в дБ ± 1 дБ.
 func TestEnvelopeGraphSmoothOnTrackFlac(t *testing.T) {

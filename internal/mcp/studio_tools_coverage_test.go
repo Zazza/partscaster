@@ -13,7 +13,7 @@ import (
 	"yue-studio/internal/config"
 )
 
-// Спецификация инструментов MCP (docs/mcp.md, AGENTS.md):
+// Спецификация инструментов MCP:
 //   - dsp_variant_delete — деструктивный: без confirm=true вариант не удаляется (воркер не
 //     вызывается, ошибка просит подтверждения); с confirm — удаляется ровно указанный файл трека;
 //   - config_set: server_url — адрес воркера (без хвостового «/»), сохраняется в настройки
@@ -77,8 +77,6 @@ func newStudioCovServer(t *testing.T) (*Server, *studioCovFake) {
 	return s, fake
 }
 
-// ---------- dsp_variant_delete ----------
-
 func TestDspVariantDeleteWithoutConfirmDoesNothing(t *testing.T) {
 	for name, args := range map[string]map[string]any{
 		"нет confirm":   {"job_id": float64(5), "file": "dsp-warm.flac"},
@@ -111,8 +109,6 @@ func TestDspVariantDeleteWithConfirmDeletesExactFile(t *testing.T) {
 		t.Fatalf("удалено %v, want [5/dsp-warm.flac]", fake.dspDeleted)
 	}
 }
-
-// ---------- config_set ----------
 
 func TestConfigSetServerURLAppliedAndSaved(t *testing.T) {
 	s, fake := newStudioCovServer(t)
@@ -189,8 +185,6 @@ func TestConfigSetWorkerRefusalIsError(t *testing.T) {
 		t.Fatalf("причина потеряна: %s", out)
 	}
 }
-
-// ---------- make_stems ----------
 
 func TestMakeStemsPassesJobAndModel(t *testing.T) {
 	for _, tc := range []struct {

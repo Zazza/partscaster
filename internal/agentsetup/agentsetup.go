@@ -14,7 +14,6 @@ import (
 	"strings"
 )
 
-// ServerName — имя MCP-сервера в конфигах клиентов.
 const ServerName = "yue-studio"
 
 // MCPPath — yue-mcp рядом с исполняемым файлом приложения (так его кладёт релизный пакет,
@@ -33,7 +32,6 @@ func ClaudeAddArgs(mcpPath, url string) []string {
 	return []string{"mcp", "add", ServerName, "--scope", "user", "-e", "YUE_URL=" + url, "--", mcpPath}
 }
 
-// Snippets — фрагменты конфигурации для копирования.
 type Snippets struct {
 	ClaudeCode    string `json:"claude_code"`    // команда для терминала
 	ClaudeDesktop string `json:"claude_desktop"` // JSON для claude_desktop_config.json

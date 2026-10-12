@@ -1,7 +1,7 @@
-"""Тесты карточки internal-roformer-stems: разделение BS-Roformer-SW вместо
+"""Тесты разделения BS-Roformer-SW вместо
 htdemucs + барабаны по частям (DrumSep).
 
-Контракт (из карточки):
+Контракт:
 - основные stem-{drums,bass,other,vocals}.flac в сумме дают трек;
   stem-other = other + guitar + piano модели;
 - stem-guitar/stem-piano — подробные внутри «прочего», в сумму не входят;
@@ -20,7 +20,6 @@ htdemucs + барабаны по частям (DrumSep).
 сигналы и печатает JSON по контракту sep_run.py; demucs — stems._run_model.
 torch и веса моделей не нужны.
 
-Запуск: cd worker && python3 -m unittest test_roformer_stems -v
 Без numpy/soundfile классы разделения пропускаются; API-классы ещё и без
 fastapi/httpx (как соседние в test_pure.py).
 """
@@ -168,7 +167,7 @@ class FakeDemucs:
         return {s: (data * k).astype("float32") for s, k in ks.items()}
 
 
-RF = "roformer"  # выбор RoFormer (значение настройки/параметра по карточке)
+RF = "roformer"  # выбор RoFormer (значение настройки/параметра)
 
 
 class _SepEnv:
@@ -225,8 +224,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
     def _files(self):
         return sorted(p.name for p in self.out.iterdir())
 
-    # --- ТК1 ---------------------------------------------------------------
-    def test_tc1_main_and_detail_files_model_roformer(self):
+    def test_main_and_detail_files_model_roformer(self):
         res = self._separate()
         self.assertEqual(len(self.sep.calls), 1, "RoFormer не вызван")
         for n in MAIN + DETAIL:
@@ -234,7 +232,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         self.assertEqual(res.get("model"), "bs-roformer-sw")
         self.assertEqual(self.demucs.calls, [], "при рабочем RoFormer demucs не нужен")
 
-    def test_tc1_other_is_other_plus_guitar_plus_piano(self):
+    def test_other_is_other_plus_guitar_plus_piano(self):
         self._separate()
         x = _read(self.out / "stem-other.flac")
         for n in ("other", "guitar", "piano"):
@@ -243,7 +241,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         for n in ("drums", "bass", "vocals"):
             self.assertLess(_tone_amp(x, HZ[n]), 0.002, f"{n} попал в stem-other")
 
-    def test_tc1_main_stems_are_model_stems(self):
+    def test_main_stems_are_model_stems(self):
         self._separate()
         for n in ("drums", "bass", "vocals"):
             with self.subTest(stem=n):
@@ -252,13 +250,12 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
                 for other in set(HZ) - {n}:
                     self.assertLess(_tone_amp(x, HZ[other]), 0.002, f"{other} в stem-{n}")
 
-    def test_tc1_detail_stems_are_model_guitar_piano(self):
+    def test_detail_stems_are_model_guitar_piano(self):
         self._separate()
         for n in DETAIL:
             x = _read(self.out / f"stem-{n}.flac")
             self.assertAlmostEqual(_tone_amp(x, HZ[n]), AMP, delta=0.005, msg=f"stem-{n}")
 
-    # --- ТК2 ---------------------------------------------------------------
     def _assert_main_sum_is_input(self):
         import numpy as np
         ref = _read(self.audio)
@@ -270,12 +267,11 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         self.assertLess(20 * np.log10(resid / level + 1e-12), -40.0,
                         "сумма основных дорожек не совпадает с треком")
 
-    def test_tc2_main_stems_sum_to_input(self):
+    def test_main_stems_sum_to_input(self):
         self._separate()
         self._assert_main_sum_is_input()
 
-    # --- ТК3 ---------------------------------------------------------------
-    def test_tc3_detail_not_in_main_sum(self):
+    def test_detail_not_in_main_sum(self):
         import numpy as np
         self._separate()
         without_other = np.sum([_read(self.out / f"stem-{n}.flac") for n in ("drums", "bass", "vocals")], axis=0)
@@ -286,8 +282,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
             self.assertAlmostEqual(_tone_amp(full, HZ[n]), AMP, delta=0.005,
                                    msg=f"{n} в сумме основных не на уровне трека (удвоен/потерян)")
 
-    # --- ТК4 ---------------------------------------------------------------
-    def test_tc4_six_drum_part_files(self):
+    def test_six_drum_part_files(self):
         self._separate()
         for n in PARTS:
             with self.subTest(part=n):
@@ -295,15 +290,14 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
                 self.assertTrue(f.is_file(), f"нет {f.name}: {self._files()}")
                 self.assertAlmostEqual(_tone_amp(_read(f), PART_HZ[n]), PART_AMP, delta=0.003)
 
-    def test_tc4_drum_parts_not_in_main_stems(self):
+    def test_drum_parts_not_in_main_stems(self):
         import numpy as np
         self._separate()
         full = np.sum([_read(self.out / f"stem-{n}.flac") for n in MAIN], axis=0)
         for n in PARTS:
             self.assertLess(_tone_amp(full, PART_HZ[n]), 0.002, f"часть {n} попала в основные дорожки")
 
-    # --- ТК5 ---------------------------------------------------------------
-    def test_tc5_no_sep_python_demucs_path(self):
+    def test_no_sep_python_demucs_path(self):
         res = self._separate(sep_py_exists=False)  # RoFormer выбран, окружения нет; исключения нет
         self.assertEqual(self.sep.calls, [], "RoFormer вызван без окружения")
         self.assertEqual(res.get("model"), "htdemucs")
@@ -313,8 +307,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         for n in PARTS:
             self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"stem-{n}.flac без DrumSep")
 
-    # --- ТК6 ---------------------------------------------------------------
-    def test_tc6_subprocess_error_falls_back_with_log(self):
+    def test_subprocess_error_falls_back_with_log(self):
         with self.assertLogs("yue-worker", level="WARNING") as cm:
             res = self._separate(sep_mode="fail")
         self.assertEqual(len(self.sep.calls), 1)
@@ -325,25 +318,23 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
             self.assertFalse((self.out / f"stem-{n}.flac").exists())
         self.assertTrue(cm.records, "сбой RoFormer не записан в лог")
 
-    def test_tc6_subprocess_timeout_falls_back(self):
+    def test_subprocess_timeout_falls_back(self):
         with self.assertLogs("yue-worker", level="WARNING"):
             res = self._separate(sep_mode="raise")
         self.assertEqual(res.get("model"), "htdemucs")
         self.assertTrue((self.out / "stem-vocals.flac").is_file())
 
-    def test_tc6_fallback_main_stems_sum_to_input(self):
+    def test_fallback_main_stems_sum_to_input(self):
         self._separate(sep_mode="fail")
         self._assert_main_sum_is_input()
 
-    # --- ТК7 ---------------------------------------------------------------
-    def test_tc7_rollback_env_never_calls_roformer(self):
+    def test_rollback_env_never_calls_roformer(self):
         res = self._separate(rollback_env="demucs")  # RoFormer выбран и окружение есть
         self.assertEqual(self.sep.calls, [], "YUE_STEMS_MODEL=demucs, а RoFormer вызван")
         self.assertEqual(res.get("model"), "htdemucs")
         self.assertTrue((self.out / "stem-drums.flac").is_file())
 
-    # --- ТК8 ---------------------------------------------------------------
-    def test_tc8_drumsep_failure_keeps_main(self):
+    def test_drumsep_failure_keeps_main(self):
         res = self._separate(sep_mode="drum_fail")
         self.assertEqual(res.get("model"), "bs-roformer-sw")
         self.assertEqual(self.demucs.calls, [], "сбой DrumSep не повод уходить в demucs")
@@ -352,26 +343,24 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         for n in PARTS:
             self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"stem-{n}.flac при упавшем DrumSep")
 
-    # --- ТК9 ---------------------------------------------------------------
     def _broken(self, content: bytes, prefer):
         self.audio.write_bytes(content)
-        with self.assertRaises(Exception):  # noqa: B017 — тип ошибки карточкой не задан, важно «упало»
+        with self.assertRaises(Exception):  # noqa: B017 — тип ошибки не задан, важно «упало»
             self._separate(prefer=prefer)
         stems_left = [f for f in self._files() if f.startswith("stem-")]
         self.assertEqual(stems_left, [], f"частичные дорожки после сбоя: {stems_left}")
 
-    def test_tc9_empty_file_raises_without_stems(self):
+    def test_empty_file_raises_without_stems(self):
         for prefer in (RF, None):
             with self.subTest(prefer=prefer):
                 self._broken(b"", prefer)
 
-    def test_tc9_garbage_file_raises_without_stems(self):
+    def test_garbage_file_raises_without_stems(self):
         for prefer in (RF, None):
             with self.subTest(prefer=prefer):
                 self._broken(b"not an audio file at all" * 100, prefer)
 
-    # --- ТК11 --------------------------------------------------------------
-    def test_tc11_default_is_demucs_even_with_roformer_env(self):
+    def test_default_is_demucs_even_with_roformer_env(self):
         res = self._separate(prefer=None)
         self.assertEqual(self.sep.calls, [], "без выбора RoFormer вызван")
         self.assertEqual(res.get("model"), "htdemucs")
@@ -380,12 +369,12 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         for n in PARTS:
             self.assertFalse((self.out / f"stem-{n}.flac").exists())
 
-    def test_tc11_explicit_htdemucs(self):
+    def test_explicit_htdemucs(self):
         res = self._separate(prefer="htdemucs")
         self.assertEqual(self.sep.calls, [])
         self.assertEqual(res.get("model"), "htdemucs")
 
-    # --- demucs: основные из htdemucs, гитара/клавиши из htdemucs_6s -----------
+    # demucs: основные из htdemucs, гитара/клавиши из htdemucs_6s
     def _gain(self, name):
         """Доля входа в файле стема (FakeDemucs: источник = вход × k)."""
         import numpy as np
@@ -418,8 +407,8 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
 
 class TestRoformerAvailability(unittest.TestCase):
     """Без аудио-зависимостей: roformer_available отражает наличие файла
-    YUE_SEP_PY (ТК14); выбор RoFormer действует, только если он выбран, окружение
-    есть и нет отката YUE_STEMS_MODEL=demucs (ТК5, ТК7, ТК11)."""
+    YUE_SEP_PY; выбор RoFormer действует, только если он выбран, окружение
+    есть и нет отката YUE_STEMS_MODEL=demucs."""
 
     def _check(self, exists, prefer=None, rollback=None):
         import stems
@@ -498,15 +487,14 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    # ТК1 + условие 5
-    def test_tc1_stems_response_model_roformer(self):
+    def test_stems_response_model_roformer(self):
         self._setup_sep(Path(self._td.name))
         jid, _ = self._audio_job()
         r = self._stems(jid, RF)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json().get("model"), "bs-roformer-sw")
 
-    # ТК3 + минус при подробных дорожках: guitar/piano уже внутри «прочего» и в минус
+    # минус при подробных дорожках: guitar/piano уже внутри «прочего» и в минус
     # не добавляются (иначе гитара удвоится); kept — только основные имена
     def _six_stems_job(self):
         import numpy as np
@@ -521,7 +509,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
             c.execute("UPDATE jobs SET audio_file='audio.flac' WHERE id=?", (jid,))
         return jid, d
 
-    def test_tc3_minus_is_sum_of_main_stems_only(self):
+    def test_minus_is_sum_of_main_stems_only(self):
         for exclude in ("vocals", "other"):
             with self.subTest(exclude=exclude):
                 jid, d = self._six_stems_job()
@@ -537,8 +525,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
                 for n in (exclude,) + DETAIL:
                     self.assertLess(_tone_amp(x, HZ[n]) / ref, 0.02, f"{n} попал в минус без {exclude}")
 
-    # ТК4
-    def test_tc4_minus_without_drums_has_no_drum_parts(self):
+    def test_minus_without_drums_has_no_drum_parts(self):
         self._setup_sep(Path(self._td.name))
         jid, d = self._audio_job()
         self.assertEqual(self._stems(jid, RF).status_code, 200)
@@ -553,8 +540,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         for n in PARTS:
             self.assertLess(_tone_amp(x, PART_HZ[n]) / ref, 0.02, f"часть {n} вернула ударные в минус")
 
-    # ТК5
-    def test_tc5_no_sep_python_response_htdemucs(self):
+    def test_no_sep_python_response_htdemucs(self):
         self._setup_sep(Path(self._td.name), sep_py_exists=False)
         jid, d = self._audio_job()
         r = self._stems(jid, RF)
@@ -563,8 +549,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         for n in PARTS:
             self.assertFalse((d / f"stem-{n}.flac").exists())
 
-    # ТК6
-    def test_tc6_subprocess_error_200_htdemucs(self):
+    def test_subprocess_error_200_htdemucs(self):
         self._setup_sep(Path(self._td.name), sep_mode="fail")
         jid, d = self._audio_job()
         with self.assertLogs("yue-worker", level="WARNING"):
@@ -573,8 +558,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(r.json().get("model"), "htdemucs")
         self.assertTrue((d / "stem-vocals.flac").is_file())
 
-    # ТК7
-    def test_tc7_rollback_response_htdemucs(self):
+    def test_rollback_response_htdemucs(self):
         self._setup_sep(Path(self._td.name), rollback_env="demucs")
         self.assertLess(self.client.post("/config", json={"stems_model": RF}).status_code, 300)
         for model in (RF, None):  # ни разовый выбор, ни настройка не обходят откат
@@ -586,8 +570,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(self.sep.calls, [])
         self.assertEqual(self._config().get("stems_model"), "htdemucs")
 
-    # ТК8
-    def test_tc8_drumsep_failure_200_roformer(self):
+    def test_drumsep_failure_200_roformer(self):
         self._setup_sep(Path(self._td.name), sep_mode="drum_fail")
         jid, d = self._audio_job()
         r = self._stems(jid, RF)
@@ -596,8 +579,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         for n in PARTS:
             self.assertFalse((d / f"stem-{n}.flac").exists())
 
-    # ТК9
-    def test_tc9_broken_audio_500_separation_failed(self):
+    def test_broken_audio_500_separation_failed(self):
         self._setup_sep(Path(self._td.name))
         for model in (RF, None):
             for content in (b"", b"garbage" * 200):
@@ -609,8 +591,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
                     left = sorted(p.name for p in d.iterdir() if p.name.startswith("stem-"))
                     self.assertEqual(left, [], f"частичные дорожки: {left}")
 
-    # ТК11
-    def test_tc11_default_settings_use_demucs(self):
+    def test_default_settings_use_demucs(self):
         self._setup_sep(Path(self._td.name))  # окружение RoFormer есть
         self.assertFalse(self.settings.exists())
         jid, d = self._audio_job()
@@ -620,8 +601,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(self.sep.calls, [], "по умолчанию RoFormer вызван")
         self.assertTrue((d / "stem-vocals.flac").is_file())
 
-    # ТК12
-    def test_tc12_setting_roformer_used_by_default(self):
+    def test_setting_roformer_used_by_default(self):
         self._setup_sep(Path(self._td.name))
         r = self.client.post("/config", json={"stems_model": RF})
         self.assertLess(r.status_code, 300, r.text)
@@ -631,7 +611,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(r.json().get("model"), "bs-roformer-sw")
         self.assertEqual(len(self.sep.calls), 1)
 
-    def test_tc12_param_htdemucs_overrides_setting_once(self):
+    def test_param_htdemucs_overrides_setting_once(self):
         self._setup_sep(Path(self._td.name))
         self.assertLess(self.client.post("/config", json={"stems_model": RF}).status_code, 300)
         jid, _ = self._audio_job()
@@ -644,7 +624,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         jid2, _ = self._audio_job()
         self.assertEqual(self._stems(jid2).json().get("model"), "bs-roformer-sw")
 
-    def test_tc12_param_roformer_with_default_setting_once(self):
+    def test_param_roformer_with_default_setting_once(self):
         self._setup_sep(Path(self._td.name))
         jid, _ = self._audio_job()
         r = self._stems(jid, RF)
@@ -655,8 +635,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(self._stems(jid2).json().get("model"), "htdemucs")
         self.assertEqual(len(self.sep.calls), 1)
 
-    # ТК13
-    def test_tc13_unknown_model_param_422(self):
+    def test_unknown_model_param_422(self):
         self._setup_sep(Path(self._td.name))
         jid, d = self._audio_job()
         for bad in ("xyz", "ROFORMER", "demucs6"):
@@ -667,13 +646,13 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(self.demucs.calls, [])
         self.assertEqual([p.name for p in d.iterdir() if p.name.startswith("stem-")], [])
 
-    def test_tc13_unknown_config_value_422_keeps_pref(self):
+    def test_unknown_config_value_422_keeps_pref(self):
         self._setup_sep(Path(self._td.name))
         r = self.client.post("/config", json={"stems_model": "xyz"})
         self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual(self._config().get("stems_pref"), "htdemucs")
 
-    def test_tc13_config_roformer_persists(self):
+    def test_config_roformer_persists(self):
         import json as _json
         self._setup_sep(Path(self._td.name))
         self.assertEqual(self._config().get("stems_pref"), "htdemucs")  # по умолчанию
@@ -689,15 +668,14 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         self.assertEqual(self._config().get("stems_pref"), RF)
         self.assertEqual(_json.loads(saved).get("stems_model"), RF)
 
-    def test_tc13_config_back_to_htdemucs(self):
+    def test_config_back_to_htdemucs(self):
         self._setup_sep(Path(self._td.name))
         self.client.post("/config", json={"stems_model": RF})
         r = self.client.post("/config", json={"stems_model": "htdemucs"})
         self.assertLess(r.status_code, 300, r.text)
         self.assertEqual(self._config().get("stems_pref"), "htdemucs")
 
-    # ТК14
-    def test_tc14_config_effective_model_and_availability(self):
+    def test_config_effective_model_and_availability(self):
         cases = [
             # (выбор в настройке, окружение есть, ждём stems_model, ждём roformer_available)
             (None, True, "htdemucs", True),

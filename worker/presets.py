@@ -329,7 +329,7 @@ def _eq(*bands, highpass=0):
 ROOM = {"type": "reverb", "decay_s": 0.5, "predelay_ms": 5, "lowpass_hz": 7000, "wet": 0.12}
 
 
-# эквалайзер хэта набора osdk — как в «Хэт: набор» (fxPresets.js drums-hh-kit, этап 10)
+# эквалайзер хэта набора osdk — как в «Хэт: набор» (fxPresets.js drums-hh-kit)
 HH_KIT_EQ = {"type": "eq", "highpass_hz": 1000,
              "bands": [{"freq_hz": 1000, "gain_db": -6, "q": 0.7}, {"freq_hz": 10000, "gain_db": 8, "q": 0.7}]}
 
@@ -338,7 +338,6 @@ def _part(stem, sampler):
     return {"stems": [stem], "engine": [dict(sampler, type="sampler"), dict(ROOM)]}
 
 
-# встроенные пресеты: рецепты человека, собраны вручную через MCP и проверены на #376 и #383
 BUILTIN = [
     {
         "slug": "transmission", "name": "Пост-панк · голос и бас впереди", "family": "Рок", "reference_job_id": 376,
@@ -347,7 +346,7 @@ BUILTIN = [
         "specs": [
             {"stems": ["kick"], "engine": [{"type": "sampler", "kit": "osdk/kick", "output_db": 0}]},
             {"stems": ["snare"], "engine": [{"type": "sampler", "kit": "osdk/snare", "output_db": 2.5}]},
-            # бас ведёт атмосферу пост-панка: громче (прослушивание 2026-10-08: было −6 и −3 на 150 Гц — тихо)
+            # бас ведёт атмосферу пост-панка: при −6 дБ и −3 дБ на 150 Гц был тихим
             {"stems": ["bass"], "engine": [{"type": "bass", "kit": "growlybass/bass", "division": 2, "output_db": 0},
                                            _eq((800, 4), highpass=80), {"type": "comp"}]},
             {"stems": ["other"], "engine": [_eq((2500, -3), (1200, 3), (4000, 2)), {"type": "comp"}]},
@@ -380,7 +379,7 @@ BUILTIN = [
             _part("snare", {"kit": "osdk/snare", "floor_db": -20, "output_db": -2}),
             _part("toms", {"kit": "osdk/tom-small", "kit_mid": "osdk/tom-medium", "kit_low": "osdk/tom-large",
                            "floor_db": -18, "output_db": -2}),
-            # хэт — как «Хэт: набор»: сэмплы тусклые и с протечкой бочки/малого — eq ярче (этап 10)
+            # хэт — как «Хэт: набор»: сэмплы тусклые и с протечкой бочки/малого — eq ярче
             {"stems": ["hh"], "engine": [
                 {"type": "sampler", "kit": "osdk/hh-closed", "kit_open": "osdk/hh-half", "choke": 1,
                  "floor_db": -24, "output_db": 0}, dict(HH_KIT_EQ), dict(ROOM)]},
@@ -391,5 +390,5 @@ BUILTIN = [
         "final": [], "target_lufs": None,
     },
 ]
-# жанровые пресеты (этап 8б): стиль трека целиком из готовых цепочек студии — worker/genres.py
+# жанровые пресеты: стиль трека целиком из готовых цепочек студии — worker/genres.py
 BUILTIN += genres.build()

@@ -1,7 +1,4 @@
 """Тесты чистых функций воркера: llm, abcparse, media.encode_mp3.
-
-Запуск: python3 -m unittest worker.test_pure (из корня репозитория)
-или: cd worker && python3 -m unittest test_pure
 """
 import time
 import contextlib
@@ -72,8 +69,8 @@ class TestEncodeMp3(unittest.TestCase):
         self.assertEqual(out.shape[1], 2)
         rms_l = float(np.sqrt((out[:, 0] ** 2).mean()))
         rms_r = float(np.sqrt((out[:, 1] ** 2).mean()))
-        self.assertGreater(rms_l, 0.2)   # тон в левом
-        self.assertLess(rms_r, 0.02)     # справа тишина
+        self.assertGreater(rms_l, 0.2)
+        self.assertLess(rms_r, 0.02)
 
 
 ABC = """X:1
@@ -155,7 +152,7 @@ class TestStripMd(unittest.TestCase):
         self.assertEqual(llm.strip_md("  обычный текст  "), "обычный текст")
 
     def test_inner_fences_kept(self):
-        # spec: срезаются только заборы в начале/конце ответа модели
+        # срезаются только заборы в начале/конце ответа модели
         self.assertEqual(llm.strip_md("до ``` внутрь ``` после"), "до ``` внутрь ``` после")
 
     def test_empty(self):
@@ -190,7 +187,7 @@ class TestParseAbc(unittest.TestCase):
         self.assertEqual(self.r["voice_order"], ["Vocal", "Ins"])
 
     def test_bars_counted_by_pipes(self):
-        # spec: каждый | закрывает такт — по 2 такта на голос
+        # каждый | закрывает такт — по 2 такта на голос
         self.assertEqual(len(self.r["bars"]), 4)
         self.assertEqual([b["idx"] for b in self.r["bars"]], [0, 1, 2, 3])
 
@@ -206,7 +203,7 @@ class TestParseAbc(unittest.TestCase):
         self.assertEqual(self.r["bars"][0]["section"], "verse")
 
     def test_timeline_per_voice(self):
-        # spec: у каждого голоса свой ход часов — голоса звучат одновременно,
+        # у каждого голоса свой ход часов — голоса звучат одновременно,
         # хотя в тексте их такты идут последовательными блоками
         bars = self.r["bars"]
         self.assertEqual((bars[0]["start_sec"], bars[0]["end_sec"]), (0.0, 1.25))   # Vocal 1
@@ -216,7 +213,7 @@ class TestParseAbc(unittest.TestCase):
         self.assertEqual(self.r["duration_sec"], 2.75)
 
     def test_chords_not_counted_as_notes(self):
-        # spec: "Am" — аннотация, в такте 3 ноты: A2 B c2
+        # "Am" — аннотация, в такте 3 ноты: A2 B c2
         self.assertEqual(self.r["bars"][0]["voices"]["Vocal"], 3)
 
     def test_timing_math(self):
@@ -232,7 +229,7 @@ class TestParseAbc(unittest.TestCase):
         self.assertEqual(r["tempo_bpm"], 120.0)  # дефолт
 
 
-# мультипауза Z<n> = n тактов тишины (карточка internal-studio-insert-sync, п.8):
+# мультипауза Z<n> = n тактов тишины:
 # 4/4, L:1/16, Q=120 → такт 2 с. Секция A: Vocal 4 такта нот, Ins — Z4;
 # секция B: оба голоса по 2 такта нот. Оба голоса заканчиваются на 12 с.
 MULTIREST_ABC = """\
@@ -313,7 +310,6 @@ class TestParseAbcMultiRest(unittest.TestCase):
         self.assertAlmostEqual(bars[-1]["end_sec"], 4.0, places=6)
 
 
-# --- Спецификация 1.7: продолжение с места, версии песни (head) -------------
 # Воркер импортируется целиком: нужны fastapi/pydantic/numpy (+httpx для
 # TestClient). В CI их нет — классы пропускаются, как TestEncodeMp3.
 try:
@@ -522,8 +518,7 @@ class TestContinueJob(_WorkerApiCase):
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestContSteps(unittest.TestCase):
     """_cont_steps(cont_from, n_tokens): сыгранных шагов модели =
-    round(cont_from × 25), в пределах [1, n_tokens]. Функцию ещё предстоит
-    выделить из _continue_song — до этого тест красный."""
+    round(cont_from × 25), в пределах [1, n_tokens]."""
 
     def setUp(self):
         import tempfile
@@ -754,7 +749,6 @@ class TestListJobsWholeLibrary(_WorkerApiCase):
         self.assertEqual(len(got), 130)
 
 
-# --- Спецификация: высота голоса по тактам (vocal_contour) -----------------
 # Чистые функции живут в воркере, а его импорт требует fastapi/numpy —
 # поэтому тот же skipUnless, что у соседних классов. librosa не нужна.
 
@@ -987,8 +981,6 @@ class TestVocalContourRange(_WorkerApiCase):
             self.assertEqual(r.status_code, 422, q)
 
 
-# ---------- Волна громкости и спектрограмма ----------
-
 @unittest.skipUnless(_HAS_NUMPY, "нужен numpy (в CI ставится всегда)")
 class TestWaveformPeaks(unittest.TestCase):
     """Спецификация waveform.peaks_from_samples: [min, max] по окнам без
@@ -1159,7 +1151,6 @@ class TestSpectrumApi(_WorkerApiCase):
         self.assertEqual(r2.content, r.content)
 
 
-# --- Спецификация: «найти свист» — узкие тональные пики в спектре ----------
 # Чистая функция живёт в воркере (импорт требует fastapi/numpy), librosa не
 # нужна: спектр мощности собирается прямо в numpy.
 
@@ -1316,7 +1307,7 @@ class TestTonesEndpoint(_WorkerApiCase):
 class TestTonesStemParam(_WorkerApiCase):
     """GET /jobs/{id}/tones?stem=vocals|drums|bass|other — анализ стема
     jobs/<id>/stem-<stem>.flac: нет файла → 409 с подсказкой make_stems;
-    неизвестный stem → 422; без stem — как раньше (микс). Анализ аудио здесь
+    неизвестный stem → 422; без stem — микс. Анализ аудио здесь
     не вызывается: проверяются только отказы до него. Подробные дорожки
     guitar/piano (6-стемная модель) — так же."""
 
@@ -1368,7 +1359,7 @@ class TestTonesStemParam(_WorkerApiCase):
         self._assert_job_404(r)
 
     def test_without_stem_no_audio_as_before(self):
-        # без stem — прежнее поведение микса: нет audio → 404 «no audio»,
+        # без stem — микс: нет audio → 404 «no audio»,
         # а не 409 про стемы
         jid = self._job(duration=60.0, semantic=False)
         r = self.client.get(f"/jobs/{jid}/tones")
@@ -1376,8 +1367,6 @@ class TestTonesStemParam(_WorkerApiCase):
         self.assertIn("no audio", r.json().get("detail", "").lower())
         self.assertNotIn("make_stems", r.text)
 
-
-# ---------- Проверка изменённого плана (карточка internal-plan-check) ----------
 
 _PLAN_OLD = ("X:1\nM:4/4\nL:1/16\nQ:1/4=120\nK:C\n% verse\n"
              "V: Vocal\n\"C\"c4B4A4G4|\"G\"B4B4G4G4|\nV: Ins\nC16|G16|\n")
@@ -1459,7 +1448,6 @@ class TestPatchJob(_WorkerApiCase):
         self.assertEqual(r.status_code, 200, (body, r.text))
         return r.json()
 
-    # 1. title
     def test_title_renamed_and_trimmed(self):
         jid = self._job(semantic=False)
         body = self._set(jid, title="  Новое имя  ")
@@ -1480,7 +1468,6 @@ class TestPatchJob(_WorkerApiCase):
         self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual(self._get(jid)["title"], "x" * 200)
 
-    # 2. folder
     def test_folder_set_and_trimmed(self):
         jid = self._job(semantic=False)
         body = self._set(jid, folder="  Альбом  ")
@@ -1503,7 +1490,7 @@ class TestPatchJob(_WorkerApiCase):
         self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual(self._get(jid)["folder"], "f" * 60)
 
-    # 3. не переданное / null поле не меняется
+    # не переданное / null поле не меняется
     def test_omitted_field_unchanged(self):
         jid = self._job(semantic=False)
         self._set(jid, title="Имя", folder="Папка")
@@ -1528,7 +1515,7 @@ class TestPatchJob(_WorkerApiCase):
         self.assertEqual((body["title"], body["folder"]), ("Имя", "Папка"))
         self.assertEqual(self._get(jid), before)
 
-    # 4. ответ — трек целиком, как GET /jobs/{id}
+    # ответ — трек целиком, как GET /jobs/{id}
     def test_response_is_whole_track(self):
         jid = self._job(semantic=False)
         body = self._set(jid, title="Имя", folder="Папка")
@@ -1538,14 +1525,13 @@ class TestPatchJob(_WorkerApiCase):
         self.assertEqual(body["status"], "done")
         self.assertEqual(body, self._get(jid))
 
-    # 5. нет трека
     def test_missing_job_404(self):
         r = self.client.patch("/jobs/9999", json={"title": "Имя"})
         self.assertEqual(r.status_code, 404, r.text)
         r = self.client.patch("/jobs/9999", json={})
         self.assertEqual(r.status_code, 404, r.text)
 
-    # 6. новое значение видно в GET /jobs/{id} и GET /jobs
+    # новое значение видно в GET /jobs/{id} и GET /jobs
     def test_visible_in_get_and_list(self):
         jid = self._job(semantic=False)
         other = self._job(semantic=False)
@@ -1557,13 +1543,13 @@ class TestPatchJob(_WorkerApiCase):
         o = self._listed(other)
         self.assertEqual((o["title"], o["folder"]), ("t", ""))
 
-    # 7. у новых треков folder — "" (не null)
+    # у новых треков folder — "" (не null)
     def test_new_track_folder_empty_string(self):
         jid = self._job(semantic=False)
         self.assertEqual(self._get(jid)["folder"], "")
         self.assertEqual(self._listed(jid)["folder"], "")
 
-    # 8. 422 не меняет ничего, даже валидное второе поле
+    # 422 не меняет ничего, даже валидное второе поле
     def test_failed_request_changes_nothing(self):
         jid = self._job(semantic=False)
         self._set(jid, title="Имя", folder="Папка")
@@ -1797,7 +1783,6 @@ class TestJobLyricsEndpoint(_WorkerApiCase):
         self.assertEqual(self.calls, [])
 
 
-# --- Спецификация: POST /jobs/{id}/grid — сетка ударов окна трека ----------
 # Нужны soundfile (запись аудио в каталог джобы) и librosa (анализ).
 try:
     import librosa  # noqa: F401
@@ -1894,7 +1879,6 @@ class TestGridEndpoint(_WorkerApiCase):
                 self.assertNotEqual(r.json().get("detail"), "Not Found", "маршрута /grid нет")
 
 
-# --- «Голос в инструментале»: is_instrumental, vocal_leak, авто-стемы -------
 def _leak_stem(path, tone_at=25.4, sec=40.0, sr=44100):
     """stem-vocals.flac: шум −80 dBFS, тон RMS −20 dBFS 0.5 с с tone_at (None — без тона)."""
     import numpy as np
@@ -2155,7 +2139,6 @@ class TestUnloadOnOom(_WorkerApiCase):
         self.assertIsNone(self.w._pipe)
 
 
-# --- Спецификация: подпись микса (label) и число миксов (mixes) ------------
 # POST /jobs/{id}/dsp?label=… хранит подпись, GET /jobs/{id}/dsp её отдаёт
 # ("" — без подписи и у старых вариантов); label длиннее 300 → 422.
 # GET /jobs и /jobs/{id} отдают mixes — число overdub-inst-*.flac у джобы.
@@ -2299,14 +2282,12 @@ class TestTranscribeEndpoint(_WorkerApiCase):
     def _abc_col(self, jid):
         return self._row(jid)["abc_file"] or ""
 
-    # --- 1. нет джобы ---
     def test_missing_job_404(self):
         calls = self._ok()
         r = self.client.post("/jobs/9999/transcribe")
         self.assertEqual(r.status_code, 404, r.text)
         self.assertEqual(calls, [])
 
-    # --- 2. не done / нет аудио ---
     def test_not_done_409(self):
         for status in ("queued", "running", "error"):
             with self.subTest(status=status):
@@ -2326,7 +2307,6 @@ class TestTranscribeEndpoint(_WorkerApiCase):
         self.assertEqual(calls, [])
         self.assertEqual(self._abc_col(jid), "")
 
-    # --- 3. партитура уже есть ---
     def test_existing_score_409_not_overwritten(self):
         jid = self._track(abc_file="score.abc")
         score = self.jobs_dir / str(jid) / "score.abc"
@@ -2338,7 +2318,6 @@ class TestTranscribeEndpoint(_WorkerApiCase):
         self.assertEqual(score.read_text(), "X:1\nK:C\nold\n")
         self.assertEqual(self._abc_col(jid), "score.abc")
 
-    # --- 4. успех ---
     def test_success(self):
         jid = self._track()
         d = self.jobs_dir / str(jid)
@@ -2367,7 +2346,6 @@ class TestTranscribeEndpoint(_WorkerApiCase):
         self.assertEqual(calls[0][0].resolve(),
                          (self.jobs_dir / str(jid) / "import.mp3").resolve())
 
-    # --- 5. транскрипция упала ---
     def test_transcribe_raises_500(self):
         jid = self._track()
 
@@ -2380,7 +2358,6 @@ class TestTranscribeEndpoint(_WorkerApiCase):
         self.assertEqual(self._abc_col(jid), "")
         self.assertFalse((self.jobs_dir / str(jid) / "score.abc").exists())
 
-    # --- 6. пустой ABC ---
     def test_empty_abc_500(self):
         for abc in ("", "   \n\t "):
             with self.subTest(abc=repr(abc)):

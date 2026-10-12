@@ -16,12 +16,10 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-stem-fx, условие 5 (MCP): rebuild_sections — спека
+// rebuild_sections — спека
 // принимает chain/params; dsp_apply — необязательные stem/from/to (эффект на
 // дорожку через ту же пересборку); find_tones — stem. Воркер — fakeService
 // (server_test.go); звук — синтетика ffmpeg.
-
-// ---------- parseSectionSpecs: chain / params ----------
 
 func TestParseSectionSpecsChainParams(t *testing.T) {
 	t.Parallel()
@@ -39,7 +37,7 @@ func TestParseSectionSpecsChainParams(t *testing.T) {
 	want := []studio.SectionSpec{
 		{From: 176, To: 0, Stems: []string{"vocals"}, Chain: "dewhistle",
 			Params: map[string]float64{"freq": 2638, "freq2": 3628, "depth": 15}},
-		// без chain/params — как раньше: пустая цепочка, без параметров
+		// без chain/params — пустая цепочка, без параметров
 		{From: 1, To: 2, Stems: []string{"drums"}, Db: -100},
 	}
 	if len(got) != 2 {
@@ -53,8 +51,6 @@ func TestParseSectionSpecsChainParams(t *testing.T) {
 		t.Errorf("спека без цепочки: %+v, want Chain пустой, Params пустые, Db −100", got[1])
 	}
 }
-
-// ---------- find_tones: stem ----------
 
 func TestFindTonesPassesStem(t *testing.T) {
 	t.Parallel()
@@ -72,7 +68,7 @@ func TestFindTonesPassesStem(t *testing.T) {
 	}
 }
 
-// Без stem — микс, как раньше: клиенту уходит пустой stem.
+// Без stem — микс: клиенту уходит пустой stem.
 func TestFindTonesWithoutStemIsMix(t *testing.T) {
 	t.Parallel()
 	s, fake := newTestServer(t)
@@ -84,8 +80,6 @@ func TestFindTonesWithoutStemIsMix(t *testing.T) {
 		t.Fatalf("JobTones args: %+v, want {3 1 5 \"\"}", fake.tonesCalls)
 	}
 }
-
-// ---------- dsp_apply: stem / from / to ----------
 
 // С stem неизвестная цепочка — ошибка, ничего не загружено.
 func TestDspApplyStemUnknownChainIsError(t *testing.T) {

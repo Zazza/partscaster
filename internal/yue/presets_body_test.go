@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Карточка internal-own-track, уточнение 69б / ТК103б: тело запроса создания и правки пресета
+// Тело запроса создания и правки пресета
 // звука несёт master и parts как заданы; не заданы (nil) — пустые списки, а не null и не пропуск.
 
 func presetWithMasterParts() SoundPreset {

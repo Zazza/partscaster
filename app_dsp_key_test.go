@@ -10,11 +10,10 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Карточка internal-dsp-space 6.5 (путь приложения): цепочка с ключом (ducking,
+// Цепочка с ключом (ducking,
 // Key drums) не применяется на весь трек — понятная ошибка «только эффект на
 // дорожку» до скачивания звука и ffmpeg.
 
-// fetchCountService — fakeService, считающий запросы звука.
 type fetchCountService struct {
 	fakeService
 	fetched []string

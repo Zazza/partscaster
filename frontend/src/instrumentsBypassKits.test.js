@@ -1,5 +1,4 @@
-// Тесты карточки internal-own-track, этап 13б, условие 100 («bypass у цепочки с synth/perc — только эти блоки»)
-// и этап 14б, условие 118 («нет набора в приложении — докачка»): на странице «Инструменты» при выключенной
+// На странице «Инструменты» при выключенной
 // обработке (bypass) наборы докачиваются только для блоков synth/perc — их и играет воркер; наборы прочих
 // блоков (sampler и т.п.) в этом режиме не нужны и не качаются. kitChain(chain, bypass) из engineRun.js —
 // цепочка, которую страница передаёт в ensureKits перед расчётом фразы.
@@ -14,7 +13,7 @@ const chain = [
   { type: 'bass', kit: 'growlybass/bass' },
 ]
 
-describe('kitChain: bypass — наборы только для synth/perc (условия 100, 118)', () => {
+describe('kitChain: bypass — наборы только для synth/perc', () => {
   it('без обработки — только synth и perc, в порядке цепочки', () => {
     expect(kitChain(chain, true).map((b) => b.type)).toEqual(['synth', 'perc'])
   })

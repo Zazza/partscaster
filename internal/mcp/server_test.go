@@ -68,7 +68,6 @@ type tonesCall struct {
 	Stem     string
 }
 
-// peaksCall — аргументы одного вызова JobPeaks.
 type peaksCall struct {
 	id   int64
 	file string
@@ -392,8 +391,6 @@ func TestLibraryDataEmbedded(t *testing.T) {
 		}
 	}
 }
-
-// ---------- протокол (stdio JSON-RPC) ----------
 
 func rpcRoundTrip(t *testing.T, s *Server, reqs []string) []string {
 	t.Helper()

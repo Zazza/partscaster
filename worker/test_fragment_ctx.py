@@ -1,24 +1,20 @@
-"""Спецификация «честный „проверить кусок“» (карточка internal-own-track, условие 123, ТК149).
+"""«Проверить кусок».
 
 POST /jobs/{id}/continue с to_sec — кусок вместо продолжения до конца песни:
   - новая джоба role='fragment', cont_from=from_sec, max_tokens = round((to_sec + 2) · 25)
     (хвост FRAGMENT_TAIL_S = 2 с, 25 семантических токенов в секунду);
   - to_sec ≤ from_sec → 422, джоба не создаётся; to_sec за длиной трека + хвост → 4xx или обрезка;
-  - to_sec не число (NaN/inf) → 422, не 500 (уточнение 123г, ТК154);
-  - без to_sec — как раньше: role='continue', max_tokens 0;
+  - to_sec не число (NaN/inf) → 422, не 500;
+  - без to_sec — role='continue', max_tokens 0;
   - у родителя без шагов модели (нет semantic.npy) — 4xx, как у «продолжить».
 _run_job:
   - строка role='fragment' с cont_from идёт через _continue_song;
   - старый фрагмент без cont_from — обычный вызов пайплайна, _continue_song не зовётся.
 Бюджет внутри _continue_song (max_tokens − k, ≥ 200) снаружи не наблюдаем без библиотеки yue2 —
-тестом не покрыт (см. отчёт тест-автора).
-Кросс-ревью s15 r1 (123д, 123з, ТК155):
+тестом не покрыт.
   - бюджет куска — без общего минимума 500: в request["semantic_sampling"].max_tokens у фрагмента
     уходит max(200, max_tokens) (400 → 400); у обычной джобы минимум 500 остаётся (400 → 500);
   - название куска — с обрезанным концом (to_sec за концом трека → в названии длина трека).
-
-Написаны по карточке, без чтения реализации.
-Запуск из каталога worker: python -m unittest test_fragment_ctx -v
 """
 import sqlite3
 import sys
@@ -99,7 +95,7 @@ class TestFragmentSubmit(_WorkerApiCase):
         self.assertEqual(self._children(parent), [])
 
     def test_to_sec_not_finite_422(self):
-        # уточнение 123г (ТК154): to_sec не число (NaN/inf) → 422, не 500; джоба не создаётся.
+        # to_sec не число (NaN/inf) → 422, не 500; джоба не создаётся.
         # json.dumps не пишет NaN по стандарту JSON — тело строкой, как его могла бы прислать «кривая» сторона
         parent = self._job(duration=60.0)
         before = self._count()
@@ -193,7 +189,7 @@ class TestFragmentRun(_FragmentRunCase):
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestFragmentReviewR1(_FragmentRunCase):
-    """Кросс-ревью s15 r1: бюджет куска (123д) и название с обрезанным концом (123з)."""
+    """Бюджет куска и название с обрезанным концом."""
 
     def _capture_request(self):
         requests = []

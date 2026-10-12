@@ -182,7 +182,6 @@ func (c *Client) EnsureMp3(ctx context.Context, id int64) (map[string]any, error
 	return out, nil
 }
 
-// FetchAudio скачивает артефакт джобы; возвращает тело и Content-Type.
 func (c *Client) FetchAudio(ctx context.Context, id int64, file string) (io.ReadCloser, string, error) {
 	resp, err := c.fetchAudioResp(ctx, id, file, "")
 	if err != nil {

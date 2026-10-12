@@ -8,7 +8,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// ТК109 (карточка internal-own-track, ревью s8b, условие 74а): sound_presets без аргументов —
+// sound_presets без аргументов —
 // краткий список [{id, slug, name, family, note, builtin}] без рецептов; с id — полный пресет
 // (specs/parts/master), нет такого — ошибка. Воркер — presetFake (sound_presets_test.go).
 // Предположение: ответ — JSON (массив без id, объект с id), как отдаёт рецепт sound_preset_create.

@@ -1,7 +1,6 @@
-"""Спецификация чистой сборки рецепта трека: recipe.build_recipe (этап 19, условие 150).
+"""Спецификация чистой сборки рецепта трека: recipe.build_recipe.
 
-Что должно работать (карточка internal-own-track, «Договор интерфейсов этапа 19»;
-docs/track-recipe.md §4–§6 — дизайн, карточка главнее):
+Что должно работать:
 R1. build_recipe(jobs, ops, root_id, worker_model, stems_model, exported_at) → dict:
     format "yue-track-recipe", version 1, exported_at/worker_model/stems_model как
     переданы, track {title, folder, head}, root {id "n1", title, style, lyrics, seed,
@@ -20,7 +19,6 @@ R6. Отказ RecipeError: корень — черновик; корень — 
     (style «(импорт внешнего трека)»); в песне есть версия role=voice.
 
 jobs — строки таблицы jobs (столбцы как в БД), ops — строки журнала с params-объектом.
-Запуск из каталога worker: python -m unittest test_recipe -v
 """
 import copy
 import json
@@ -225,7 +223,7 @@ class TestRecipeForeignRefs(unittest.TestCase):
         self.assertTrue(r["warnings"])
 
     def test_edit_on_skipped_file_skipped_too(self):
-        # 150в/ТК182: splice с чужим куском пропущен → variant_track из его файла
+        # splice с чужим куском пропущен → variant_track из его файла
         # тоже пропущен с warning; правка другого файла того же трека остаётся
         jobs = [_job(3), _job(50, title="other"), _job(7, parent_id=3, role="variant"),
                 _job(8, parent_id=3, role="variant")]
@@ -297,7 +295,6 @@ class TestRecipeRefusals(unittest.TestCase):
         self._refuse(jobs, ops)
 
 
-# --- ТК180: сквозной рецепт (golden) -----------------------------------------
 # Фикстура общая с Go-тестом ведущего: он проигрывает её на фейке сервиса.
 GOLDEN = Path(__file__).resolve().parent.parent / "internal" / "studio" / "testdata" / "recipe_e2e.json"
 GOLDEN_ENV = "YUE_UPDATE_GOLDEN"
@@ -332,7 +329,7 @@ def _e2e_recipe():
 
 
 class TestRecipeGolden(unittest.TestCase):
-    """ТК180: build_recipe по сквозному журналу = фикстура recipe_e2e.json."""
+    """build_recipe по сквозному журналу = фикстура recipe_e2e.json."""
 
     def test_spec_properties(self):
         r = _e2e_recipe()

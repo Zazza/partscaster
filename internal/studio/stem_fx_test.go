@@ -9,12 +9,11 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-stem-fx, условие 1: спека «громкость дорожек» (ChildID 0)
+// Спека «громкость дорожек» (ChildID 0)
 // с Chain (+Params) — DSP-эффект применяется к дорожкам Stems трека в окне
 // [From, To) (To ≤ 0 — до конца); в трек добавляется разница «обработанная −
 // исходная» дорожка в окне (с фейдами на краях); остальные дорожки и звук вне
-// окна не меняются. Фейковый воркер (secFake) и синтетика — из sections_test.go,
-// звуковые хелперы — из helpers_test.go / mute_revoice_test.go.
+// окна не меняются.
 //
 // Синтетика: голос (vocals) — тон 3000 Гц, остальное (other) — тон 500 Гц,
 // трек = их сумма. Вырез — цепочка «Убрать свист» (dewhistle) на 3000 Гц; её
@@ -70,7 +69,7 @@ func relDiffDb(out, base []float32, from, to float64) float64 {
 	return 20 * math.Log10(d/b)
 }
 
-// Кейс карточки: в окне 2–4 с тон стема A (3000) ослаблен ≥ 15 дБ, тон стема B (500)
+// В окне 2–4 с тон стема A (3000) ослаблен ≥ 15 дБ, тон стема B (500)
 // не изменился (≤ 0.5 дБ); вне окна трек = исходный (разница ≤ −40 дБ); длина та же.
 func TestRebuildSectionsStemChainInWindow(t *testing.T) {
 	t.Parallel()
@@ -97,7 +96,7 @@ func TestRebuildSectionsStemChainInWindow(t *testing.T) {
 	}
 }
 
-// Кейс карточки: To = 0 — эффект до конца трека; до From трек исходный.
+// To = 0 — эффект до конца трека; до From трек исходный.
 func TestRebuildSectionsStemChainToZeroTillEnd(t *testing.T) {
 	t.Parallel()
 	f, base := fxSetup(t)
@@ -117,7 +116,7 @@ func TestRebuildSectionsStemChainToZeroTillEnd(t *testing.T) {
 	}
 }
 
-// Кейс карточки: неизвестная цепочка — ошибка, ничего не загружено.
+// Неизвестная цепочка — ошибка, ничего не загружено.
 func TestRebuildSectionsStemChainUnknownIsError(t *testing.T) {
 	t.Parallel()
 	f, _ := fxSetup(t)
@@ -131,7 +130,7 @@ func TestRebuildSectionsStemChainUnknownIsError(t *testing.T) {
 	}
 }
 
-// Кейс карточки: вместе с обычной заглушкой в одном вызове — применены обе:
+// Вместе с обычной заглушкой в одном вызове — применены обе:
 // в 2–4 с вырезан 3000 (голос), в 5–7 с заглушён other (500), остальное на месте.
 func TestRebuildSectionsStemChainWithMute(t *testing.T) {
 	t.Parallel()

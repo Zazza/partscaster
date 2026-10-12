@@ -1,21 +1,7 @@
 """Yue Studio worker — API вокруг резидентной YuE2Pipeline (:8091, 0.0.0.0).
 
 Держит модель загруженной между запросами; очередь задач живёт здесь же
-(SQLite), так что закрытие desktop-приложения не прерывает генерации.
-
-Эндпоинты:
-  GET  /health           — статус, загружена ли модель
-  GET  /stats            — сводка для статус-бара: VRAM, очередь, текущая джоба, очередь к GPU
-  POST /jobs             — постановка в очередь {title, style, lyrics, seed, cot, abc?}
-  GET  /jobs             — список последних задач
-  GET  /jobs/{id}        — статус задачи
-  POST /jobs/{id}/cancel — отмена (только queued)
-  POST /jobs/{id}/continue — продолжение с места {from_sec, seed?, abc?, style_add?} → новая джоба-вложение
-  POST /jobs/{id}/head   — основная версия песни {head_id} (сам трек или его потомок)
-  POST /plan             — только стадия плана: ABC до рендера {style, lyrics, seed, cot}
-  GET  /listen/{id}      — страница прослушивания
-  GET  /audio/{id}/{f}   — артефакты задачи (audio.flac, score.abc, request.abc, ...)
-"""
+(SQLite), так что закрытие desktop-приложения не прерывает генерации."""
 import contextlib
 import hashlib
 import html
@@ -242,11 +228,11 @@ def _migrate():
         cols = [r[1] for r in conn.execute("PRAGMA table_info(sound_presets)")]
         if "target_lufs" not in cols:
             conn.execute("ALTER TABLE sound_presets ADD COLUMN target_lufs REAL")
-        if "master" not in cols:   # мастер на воркере (этап 6): цепочка движка на весь микс
+        if "master" not in cols:   # мастер на воркере: цепочка движка на весь микс
             conn.execute("ALTER TABLE sound_presets ADD COLUMN master TEXT NOT NULL DEFAULT '[]'")
-        if "parts" not in cols:    # партии-рецепты (этап 8): синт по аккордам, перкуссия по сетке
+        if "parts" not in cols:    # партии-рецепты: синт по аккордам, перкуссия по сетке
             conn.execute("ALTER TABLE sound_presets ADD COLUMN parts TEXT NOT NULL DEFAULT '[]'")
-        if "family" not in cols:   # семья жанровых пресетов (этап 8б): Рок, Тяжёлое, Электроника, Поп и другое
+        if "family" not in cols:   # семья жанровых пресетов: Рок, Тяжёлое, Электроника, Поп и другое
             conn.execute("ALTER TABLE sound_presets ADD COLUMN family TEXT NOT NULL DEFAULT ''")
         # встроенные — upsert по slug: рецепт из кода (правка встроенного доходит до старой базы), id
         # прежний; пользователь их не меняет и не удаляет, свои пресеты (slug NULL) не трогаются
@@ -290,7 +276,7 @@ def _migrate():
             finished_at TEXT NOT NULL DEFAULT ''
         );
         """)
-        # свои инструменты страницы «Инструменты» (этап 13в): цепочка движка под своим именем
+        # свои инструменты страницы «Инструменты»: цепочка движка под своим именем
         conn.execute("""
         CREATE TABLE IF NOT EXISTS fx_instruments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -412,7 +398,7 @@ def _progress_watcher(job_id: int, counters: dict, t0: float, budget: int = 0):
             last = sem
             stage = counters["phase"]
             # семантика замерла, но пайплайн жив — это synthesize/decode:
-            # на длинном треке минуты тишины, UI висел «на 99%» без объяснения
+            # на длинном треке минуты тишины
             if stage == "semantic" and sem > 0 and time.time() - last_sem_move > 15:
                 stage = "decode"
             # честный процент есть только у семантики (самая длинная фаза):
@@ -479,8 +465,7 @@ def _continue_song(pipe, row, request):
         req = plan.request
     else:
         # стиль — из строки нового трека (стиль родителя + приписка «что изменить в
-        # звучании»); раньше брался из плана родителя, и приписка до модели не
-        # доходила (request.json #200 — без неё)
+        # звучании»)
         req = dataclasses.replace(saved.request, style=request.get("style") or saved.request.style,
                                   seed=int(request.get("seed") or saved.request.seed),
                                   cfg_scale=request.get("cfg_scale", saved.request.cfg_scale))
@@ -536,8 +521,6 @@ def _unload_pipe() -> None:
     except Exception:  # noqa: BLE001 - без torch/CUDA освобождать нечего
         pass
 
-
-# ---------- второй движок: yue2.cpp (ЭКСПЕРИМЕНТ, engine_cpp.py) ----------
 
 _cpp: "engine_cpp.CppServer | None" = None   # сервер yue2.cpp; ведётся под _pipe_lock, как _pipe
 
@@ -769,7 +752,7 @@ def _run_job(job_id: int):
                 truncated = any(truncated.values())
             audio = job_dir / "audio.flac"
             mp3, wav = _make_formats(job_dir)
-            # «переиграть»: громкость 0 — кавер, новый трек без смешивания (раньше 0 подменялся на 0,5 через `or`)
+            # «переиграть»: громкость 0 — кавер, новый трек без смешивания
             od_gain = 0.5 if row["overdub_gain"] is None else float(row["overdub_gain"])
             if row["overdub_of"] and od_gain > 0:
                 _mix_overdub(int(row["overdub_of"]), job_id, od_gain)
@@ -796,7 +779,6 @@ def _run_job(job_id: int):
 
 
 def _mark_failed(job_id: int, e: BaseException) -> None:
-    """Джоба упала: статус error и понятная пользователю причина."""
     with db_lock, db() as conn:
         conn.execute("UPDATE jobs SET status='error', error=?, finished_at=? WHERE id=?",
                      (friendly_error(e), time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
@@ -1354,7 +1336,6 @@ def submit(req: JobIn):
             raise HTTPException(422, str(e)) from e
         if not seed:
             # пусто — случайный, и он остаётся в треке: видно и повторяемо
-            # (раньше пустое поле давало всегда сид библиотеки — один и тот же трек)
             seed = random.randrange(1, 2**31)
         cur = conn.execute(
             "INSERT INTO jobs(title,status,style,lyrics,seed,cot,draft,"
@@ -1450,8 +1431,6 @@ def set_head(job_id: int, req: HeadIn):
         conn.execute("UPDATE jobs SET head_id=? WHERE id=?", (head, job_id))
     return {"id": job_id, "head_id": head}
 
-
-# ---------- пресеты звука ----------
 
 def _preset_dict(row) -> dict:
     return {"id": row["id"], "slug": row["slug"] or "", "name": row["name"], "note": row["note"],
@@ -1557,8 +1536,6 @@ def job_preset_state(job_id: int, preset_id: int, req: PresetStateIn):
     return items
 
 
-# ---------- сетка аккордов (синт по аккордам) ----------
-
 CHORD_HOP = 2048   # шаг хромы, сэмплов
 
 
@@ -1661,7 +1638,7 @@ def plan(req: PlanIn):
     """
     if req.cot == "off":
         raise HTTPException(422, "plan requires cot=full or cot=melody (off does not produce ABC)")
-    # пусто — случайный (раньше — всегда сид библиотеки); сид в ответе:
+    # пусто — случайный; сид в ответе:
     # трек по этому плану с тем же сидом споёт так же
     seed = req.seed or random.randrange(1, 2**31)
     with _pipe_lock, gpu_queue("plan"):
@@ -1870,8 +1847,6 @@ DSP_NAME_RE = re.compile(r"^(dsp|overdub|preview|stem)-[a-z0-9.-]+\.flac$")
 FX_FILE_RE = re.compile(r"^(dsp|overdub)-[a-z0-9.-]+\.flac$")
 
 
-# ---------- Лирика: whisper-распознавание и адаптация-перевод ----------
-
 # язык пения по первому слову стиля YuE («English, post-punk, …») → код whisper
 STYLE_LANGS = {"english": "en", "russian": "ru", "chinese": "zh", "mandarin": "zh", "cantonese": "yue",
                "japanese": "ja", "korean": "ko", "spanish": "es", "french": "fr", "german": "de",
@@ -1920,7 +1895,6 @@ def _whisper_lyrics(src: Path, language: str | None = None) -> tuple[str, str]:
 
 
 def _adapt_prompts(text: str, to: str) -> tuple[str, str]:
-    """Делегирует llm.adapt_prompts (чистая функция, покрыта тестами)."""
     return llm.adapt_prompts(text, to)
 
 
@@ -1969,10 +1943,7 @@ def adapt_lyrics(req: LyricsAdaptIn):
     return {"text": out.strip(), "seconds": round(time.time() - t0, 1)}
 
 
-# ---------- Remix: транскрипция трека (SheetSage2) ----------
-
 def _ss_transcribe_queued(src: Path, dst: Path) -> dict:
-    """SheetSage-транскрипция через общую очередь к GPU."""
     with gpu_queue(f"transcribe {src.name}"):
         return ss_transcribe(src, dst)
 
@@ -2024,8 +1995,6 @@ def transcribe_file(tid: str, fname: str):
         raise HTTPException(404, "not found")
     return FileResponse(path)
 
-
-# ---------- Пиано-ролл: расклад score.abc по тактам ----------
 
 def _job_row(job_id: int):
     with db_lock, db() as conn:
@@ -2108,7 +2077,6 @@ def job_score(job_id: int):
     return parsed
 
 
-# ---------- Высота голоса по тактам (проверка «спето ли по плану») ----------
 # Замер 2026-09-30: модель поёт мелодию Vocal плана нота в ноту — сверка контура
 # с планом показывает, дошла ли правка мелодии и не ушёл ли голос в писк.
 _NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -2195,7 +2163,6 @@ def vocal_contour(job_id: int, from_: float = Query(0.0, alias="from"), to: floa
     return {"bars": _contour_bars(f0, hop / sr, bars, from_, to_s), **_contour_summary(f0)}
 
 
-# ---------- «Найти свист»: узкие устойчивые тона в миксе ----------
 _TONE_NEIGH_HZ = 300    # окрестность пика для медианы фона, Гц
 _TONE_GUARD_BINS = 2    # сам пик (± бины) в медиану фона не входит
 
@@ -2294,8 +2261,6 @@ def _rms_sections(audio_path: Path, bars: list[dict]) -> list[dict]:
     return out
 
 
-# ---------- Волна громкости и спектрограмма (выбор места правки по звуку) ----------
-
 @app.get("/jobs/{job_id}/peaks")
 def job_peaks(job_id: int, file: str | None = None, bins: int | None = None):
     """Огибающая громкости артефакта: [min, max] по окнам (амплитуды [-1,1]).
@@ -2367,8 +2332,6 @@ def job_spectrum(job_id: int, file: str | None = None):
     return FileResponse(png, media_type="image/png")
 
 
-# ---------- Фрагментное превью: VAE-decode куска латентов ----------
-
 LATENT_HZ = 25.0  # латенты YuE2 — 25 кадров/сек (замерено: 1556 кадров = 62.2 с)
 
 
@@ -2417,8 +2380,6 @@ def job_previews(job_id: int):
     return [f.name for f in sorted(job_dir.glob("preview-*.flac"),
                                    key=lambda p: p.stat().st_mtime, reverse=True)]
 
-
-# ---------- Овердаб: партия поверх готового трека ----------
 
 class OverdubIn(BaseModel):
     style: str
@@ -2625,8 +2586,6 @@ def submit_overdub(job_id: int, req: OverdubIn):
     return {"id": child_id}
 
 
-# ---------- Стемы (demucs) ----------
-
 @app.post("/jobs/{job_id}/stems")
 def job_stems(job_id: int, model: str | None = None):
     """Разделить трек на дорожки. ?model=roformer|htdemucs — разово этой моделью,
@@ -2728,8 +2687,6 @@ def job_stems_list(job_id: int):
                     "metrics": json.loads(mp.read_text()) if mp.is_file() else None})
     return out
 
-
-# ---------- Профиль из корпуса ----------
 
 class CorpusIn(BaseModel):
     name: str
@@ -2916,8 +2873,6 @@ def corpus_tracks(cid: int):
     return out
 
 
-# ---------- Карточки голосов (примерочная) ----------
-
 def _voice_dir(vid: int) -> Path:
     return VOICES_DIR / str(vid)
 
@@ -3084,8 +3039,6 @@ def dsp_variants(job_id: int):
         out.append(item)
     return out
 
-
-# ---------- Звуковой движок: цепочка обработки дорожки (fx_engine) ----------
 
 FX_KINDS = {"amp": ("amps", ".nam"), "ir": ("irs", ".wav")}
 FX_UPLOAD_MAX = 50 * 1024 * 1024
@@ -3496,7 +3449,7 @@ def synth_window(chain: list, frm: float, win: float, track=None, sr: int = 0) -
         b = {k: v for k, v in b.items() if not k.startswith("_")}
         notes = []
         # сэмплы (kit) и FM звучат от начала ноты (позиция в сэмпле, спад глубины): переносить начало к окну нельзя —
-        # превью звучало бы иначе, чем тот же кусок в треке (перезапуск за 1 с до окна — громче на 5,8 дБ, ревью s7c)
+        # превью звучало бы иначе, чем тот же кусок в треке (перезапуск за 1 с до окна — громче на 5,8 дБ)
         whole = bool(b.get("kit")) or 5 in (b.get("osc1"), b.get("osc2"))
         for nt in b["notes"]:
             t, end = nt["t"] - frm, nt["t"] - frm + nt["d"]
@@ -3639,7 +3592,7 @@ def _fx_kit_tail(chain: list) -> float:
                     files = _kit_path(blk[key]).glob("*.wav")
                 except KeyError:
                     continue
-                # perc tone < 1 — сэмпл медленнее и длиннее (кросс-ревью: tone 0,5 обрывал хвост на 2 с раньше)
+                # perc tone < 1 — сэмпл медленнее и длиннее
                 speed = float(blk.get("tone", 1.0)) if blk.get("type") == "perc" else 1.0
                 for f in files:
                     try:
@@ -3759,10 +3712,8 @@ def fx_assets():
     return {"amps": amps, "irs": irs, "kits": _kit_list()}
 
 
-# ---------- Наборы сэмплов (блоки движка sampler — барабаны, bass — бас) ----------
-
 # каталог наборов, которые воркер качает сам по требованию: части → (каталог в репозитории, отбор
-# файлов). В поставку не входят; лицензия — у автора набора (docs/deployment.md)
+# файлов). В поставку не входят; лицензия — у автора набора
 VSCO_REF = "440300901dfe9275fd84e0b7763af1f8443ae62e"   # VSCO-2-CE, версия закреплена
 FX_KITS = {
     "osdk": {  # The Open Source Drum Kit (Real Music Media) — public domain
@@ -3974,8 +3925,6 @@ def _http_get(url: str, timeout: float = 60) -> bytes:
         return r.read()
 
 
-# ---------- фразы страницы «Инструменты»: круг через цепочку движка ----------
-
 FX_PHRASE_KEEP = 40       # кругов в кэше (каждый — секунды звука; старые вытесняются)
 FX_PHRASE_RE = re.compile(r"phrase-[0-9a-f]{12}\.wav")
 
@@ -4092,8 +4041,6 @@ def fx_phrase_file(file: str):
         raise HTTPException(404, "нет такого круга")
     return FileResponse(path, media_type="audio/wav")
 
-
-# ---------- свои инструменты (страница «Инструменты», выбор в студии) ----------
 
 def _instrument_row(r) -> dict:
     return {"id": r["id"], "name": r["name"], "base": r["base"], "group": r["grp"], "stems": json.loads(r["stems"]),
@@ -4267,8 +4214,6 @@ def fx_kits_progress():
     with _kit_progress_lock:
         return dict(list(_kit_progress.values())[-1]) if _kit_progress else {}   # последняя начатая
 
-
-# ---------- модели yue2.cpp: загрузка с проверкой суммы (условие 157) ----------
 
 _model_progress: dict[str, dict] = {}
 _model_progress_lock = threading.Lock()
@@ -4466,8 +4411,6 @@ def audio(job_id: int, fname: str):
         raise HTTPException(404, "not found")
     return FileResponse(path)
 
-
-# ---------- журнал правок и рецепт трека (docs/track-recipe.md) ----------
 
 class JobOpIn(BaseModel):
     op: str

@@ -16,7 +16,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Рецепт трека (docs/track-recipe.md): экспорт песни правилами в файл и импорт на этой установке.
+// Рецепт трека: экспорт песни правилами в файл и импорт на этой установке.
 
 // recipeTick — как часто приложение делает шаг импорта рецепта (генерации ждут на воркере)
 const recipeTick = 5 * time.Second
@@ -72,7 +72,6 @@ func (a *App) YueExportRecipe(jobID int64) (*RecipeExport, error) {
 	return &RecipeExport{Path: target, Warnings: head.Warnings}, nil
 }
 
-// recipeFileName — «Название.yue-track.json» без символов, которые не любят файловые системы.
 func recipeFileName(title string, id int64) string {
 	name := strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`/\:*?"<>|`, r) || r < 32 {
@@ -119,7 +118,6 @@ func (a *App) YueRecipeImportAction(id int64, action string) error {
 	return studio.RecipeImportAction(a.ctx, a.yue, id, action)
 }
 
-// YueRecipeImports — сессии импорта (прогресс в списке треков).
 func (a *App) YueRecipeImports() ([]yue.RecipeImport, error) {
 	return a.yue.RecipeImports(a.ctx)
 }

@@ -1,7 +1,6 @@
 """Тесты замера громкости dsp.loudness по EBU R128 / ITU-R BS.1770 —
 по спецификации (эталонные случаи EBU Tech 3341/3342), не по реализации.
 
-Запуск: cd worker && python3 -m unittest test_loudness
 Без numpy/scipy (CI-джоба только с ruff) класс пропускается, как в test_pure.
 """
 import json

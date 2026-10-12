@@ -14,8 +14,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 20, условие 164 (тест-кейс ТК194, MCP).
-// Написаны по карточке («Договор интерфейсов этапа 20»), без чтения реализации:
+// Спецификация:
 //   - config_set: engine, cpp_model, cpp_low_vram уходят воркеру в POST /config как заданы
 //     (cpp_low_vram — bool; false — тоже значение); отказ воркера — ошибка с его текстом;
 //   - config_get: показывает engine, cpp_model, cpp_low_vram из GET /config воркера;
@@ -23,7 +22,7 @@ import (
 //     печатает итог; ошибка воркера → ошибка инструмента с текстом воркера;
 //   - install_worker: engine, cpp_model; сухой прогон показывает выбор (--engine cpp
 //     --cpp-model q8 в команде install.sh); engine вне torch|cpp → ошибка до шагов;
-//     без engine — план как раньше (без --engine).
+//     без engine — план без --engine.
 // Внешняя граница — HTTP воркера: настоящий yue.Client против фейкового воркера (httptest),
 // инструментный слой не мокается.
 
@@ -104,8 +103,6 @@ func newEngineServer(t *testing.T) (*Server, *engineFakeWorker) {
 	RegisterInstallTools(s)
 	return s, fw
 }
-
-// ---------- config_set / config_get ----------
 
 func TestEngineConfigSetSendsEngineFields(t *testing.T) {
 	s, fw := newEngineServer(t)
@@ -208,8 +205,6 @@ func TestEngineConfigGetShowsEngineFields(t *testing.T) {
 	}
 }
 
-// ---------- engine_model_install ----------
-
 func TestEngineModelInstallPostsName(t *testing.T) {
 	s, fw := newEngineServer(t)
 	out, ok := call(t, s, "engine_model_install", map[string]any{"name": "q8"})
@@ -264,8 +259,6 @@ func TestEngineModelInstallWithoutNameIsError(t *testing.T) {
 	}
 }
 
-// ---------- install_worker: выбор движка ----------
-
 func TestEngineInstallWorkerDryRunShowsEngineChoice(t *testing.T) {
 	s, _ := newTestServer(t)
 	out, ok := call(t, s, "install_worker", map[string]any{"engine": "cpp", "cpp_model": "q8"})
@@ -282,7 +275,7 @@ func TestEngineInstallWorkerDryRunShowsEngineChoice(t *testing.T) {
 	}
 }
 
-// Без engine — как раньше: install.sh без --engine (по умолчанию torch решает install.sh).
+// Без engine — install.sh без --engine (по умолчанию torch решает install.sh).
 func TestEngineInstallWorkerDryRunWithoutEngineUnchanged(t *testing.T) {
 	s, _ := newTestServer(t)
 	out, ok := call(t, s, "install_worker", map[string]any{})
@@ -310,7 +303,7 @@ func TestEngineInstallWorkerUnknownEngineDryRunIsError(t *testing.T) {
 	}
 }
 
-// Уточнение 164а: cpp_model ∈ auto|bf16|q8|q6|q5, иное → ошибка до шагов; cpp_model без engine=cpp → ошибка.
+// cpp_model ∈ auto|bf16|q8|q6|q5, иное → ошибка до шагов; cpp_model без engine=cpp → ошибка.
 func TestEngineInstallWorkerBadCppModelIsError(t *testing.T) {
 	for name, args := range map[string]map[string]any{
 		"cpp_model=q4":         {"engine": "cpp", "cpp_model": "q4"},

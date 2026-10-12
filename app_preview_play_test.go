@@ -13,7 +13,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-guitar-pedals, условия 1.6 и 1.10 (путь приложения):
 // YuePlayPreview играет кусок превью по имени слота ("", "P", "A"–"D") и куска
 // (wet/dry/wet_solo/dry_solo), а не по произвольному пути; иное имя — ошибка, плеер
 // не трогается; допустимое имя, пока превью нет, — ошибка; после YueFxPreview —
@@ -23,7 +22,6 @@ import (
 var ppSlots = []string{"", "P", "A", "B", "C", "D"}
 var ppWhich = []string{"wet", "dry", "wet_solo", "dry_solo"}
 
-// recPlayer — fakePlayer, запоминающий загруженные байты.
 type recPlayer struct {
 	fakePlayer
 	data [][]byte
@@ -100,7 +98,7 @@ func ppApp(t *testing.T) (*App, *recPlayer) {
 
 func ppSteps() []dsp.Step { return []dsp.Step{{Chain: "eq", Params: map[string]float64{"high": -12}}} }
 
-// Карточка 1.6: превью ещё нет — любое допустимое имя слота/куска даёт ошибку,
+// Превью ещё нет — любое допустимое имя слота/куска даёт ошибку,
 // плеер не трогается.
 func TestPlayPreviewNotMadeIsError(t *testing.T) {
 	t.Parallel()
@@ -119,7 +117,7 @@ func TestPlayPreviewNotMadeIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.6 / 1.10: неизвестный слот или кусок — ошибка, плеер не трогается.
+// Неизвестный слот или кусок — ошибка, плеер не трогается.
 // Превью в слотах "" и "A" сделано (на дорожку — есть и соло), поэтому ошибка
 // может быть только из-за имени, а не из-за отсутствия превью.
 func TestPlayPreviewUnknownNameIsError(t *testing.T) {
@@ -146,7 +144,7 @@ func TestPlayPreviewUnknownNameIsError(t *testing.T) {
 	}
 }
 
-// Карточка 1.6: превью сделано в слоте — YuePlayPreview по имени загружает кусок
+// Превью сделано в слоте — YuePlayPreview по имени загружает кусок
 // в плеер и стартует с заданной секунды (Seek на неё либо кусок, начатый с неё).
 // Другие допустимые слоты, где превью не делалось, — по-прежнему ошибка.
 func TestPlayPreviewPlaysByNameFromSecond(t *testing.T) {
@@ -197,7 +195,7 @@ func TestPlayPreviewPlaysByNameFromSecond(t *testing.T) {
 	}
 }
 
-// Карточка 1.10: у превью на весь трек соло нет — wet_solo/dry_solo для него —
+// У превью на весь трек соло нет — wet_solo/dry_solo для него —
 // ошибка, плеер не трогается; wet/dry играются.
 func TestPlayPreviewWholeTrackHasNoSolo(t *testing.T) {
 	t.Parallel()

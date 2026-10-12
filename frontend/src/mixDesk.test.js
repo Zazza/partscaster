@@ -1,5 +1,4 @@
-// Тесты карточки internal-own-track, этап 6 «Сведение и мастер», условия 45–46 (тест-кейс ТК75):
-// чистая логика пульта mixDesk.js и «Сохранить правки как пресет».
+// Чистая логика пульта mixDesk.js и «Сохранить правки как пресет».
 //   placeLabel(place) — подпись места по-русски: «центр», «30 % вправо», «влево, ширина 1,4»;
 //   withStemPlace(list, stem, place) — новый реестр: запись «место» {stems:[stem], place, childId<0,
 //     from 0, to 0}, одна на дорожку (вторая заменяет), {pan 0, width 1} — убирает;
@@ -7,7 +6,6 @@
 //     from 0, to 0, stems: []}, новая заменяет прежнюю;
 //   presetFromEdits(applied) → {specs, skipped, master}: «место» → spec {stems, place, db: 0}
 //     (без engine/chain/steps), мастер → master (цепочка), добавление с place — place в spec.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { placeLabel, withStemPlace, withMaster, masterChain } from './mixDesk.js'
 import { presetFromEdits } from './soundPresets.js'
@@ -22,7 +20,7 @@ const insertRec = (over = {}) => ({ childId: 7, instId: 'i-a', from: 10, to: 20,
 const placeRecs = (list) => list.filter((r) => r.place && !r.master && !r.engine && !r.chain && !r.steps)
 const masters = (list) => list.filter((r) => r.master)
 
-describe('placeLabel (ТК75)', () => {
+describe('placeLabel', () => {
   it('центр и ширина 1 — «центр»', () => {
     expect(placeLabel({ pan: 0, width: 1 })).toBe('центр')
   })
@@ -38,7 +36,7 @@ describe('placeLabel (ТК75)', () => {
   })
 })
 
-describe('withStemPlace (ТК75, усл. 46а)', () => {
+describe('withStemPlace', () => {
   it('создаёт запись «место» {stems:[X], place, childId < 0, from 0, to 0}', () => {
     const list = [engineRec(), insertRec()]
     const out = withStemPlace(list, 'other', { pan: 0.3, width: 1.4 })
@@ -90,7 +88,7 @@ describe('withStemPlace (ТК75, усл. 46а)', () => {
   })
 })
 
-describe('withMaster (ТК75, усл. 46в)', () => {
+describe('withMaster', () => {
   it('одна запись мастера {master, engine, label, childId < 0, from 0, to 0, stems []}', () => {
     const out = withMaster([engineRec()], MASTER, 'Стриминг −14 LUFS')
     const m = masters(out)
@@ -119,7 +117,7 @@ describe('withMaster (ТК75, усл. 46в)', () => {
   })
 })
 
-describe('presetFromEdits: место и мастер (ТК75, усл. 45)', () => {
+describe('presetFromEdits: место и мастер', () => {
   it('запись «место» → spec {stems, place, db: 0} без engine/chain/steps, не пропущена', () => {
     const list = withStemPlace([], 'other', { pan: 0.3, width: 1.4 })
     const { specs, skipped } = presetFromEdits(list)
@@ -144,7 +142,7 @@ describe('presetFromEdits: место и мастер (ТК75, усл. 45)', () 
     expect(presetFromEdits([engineRec()]).master).toEqual([])
   })
 
-  it('запись-добавление (партия) в пресет не идёт — пропущена (усл. 45а)', () => {
+  it('запись-добавление (партия) в пресет не идёт — пропущена', () => {
     const add = engineRec({ childId: -3, stems: ['mix'], add: true, place: { pan: -0.3, width: 1.5 } })
     const { specs, skipped } = presetFromEdits([add])
     expect(specs).toEqual([])
@@ -152,10 +150,10 @@ describe('presetFromEdits: место и мастер (ТК75, усл. 45)', () 
   })
 })
 
-// ТК79д / усл. 46г: «изменить» мастер — limiter остаётся на своём месте со всеми параметрами;
+// «изменить» мастер — limiter остаётся на своём месте со всеми параметрами;
 // цель и потолок меняют только его target_lufs/ceiling_db; без цели и без галочки — убирается;
 // нет limiter, а цель есть — дописывается в конец.
-describe('masterChain (ТК79д, усл. 46г)', () => {
+describe('masterChain', () => {
   const GLUE = { type: 'glue', threshold_db: -18, ratio: 2 }
   const GAIN = { type: 'gain', gain_db: -1 }
 

@@ -1,22 +1,20 @@
-"""Тесты карточки internal-own-track, этап 14 «Оркестр» (условия 110–112, ТК142).
+"""Тесты «Оркестра»: наборы VSCO, высота сэмпла по имени, замена партии в любом регистре.
 
-Контракт (из карточки):
-- 110: FX_KITS — наборы VSCO-2 CE (repo sgossner/VSCO-2-CE, ref — 40 hex, коммит из карточки):
+Контракт:
+- FX_KITS — наборы VSCO-2 CE (repo sgossner/VSCO-2-CE, ref — 40 hex):
   vsco-violin (solo, ens, pizz, spic), vsco-viola/vsco-cello (ens, pizz, spic),
   vsco-contrabass (sus, pizz, spic), vsco-harp (harp), духовые и медь (sus, stac),
   vsco-mallets (glock, marimba, xylo); части — (каталог, regex), max_s 8.
   Каталог с пробелами («Solo Violin/Arco Vib») экранируется в запросе GitHub (%20).
-- 111: fx_engine.sample_midi — кроме «m<MIDI>» и имён, начинающихся с ноты, — нота-лексема
+- fx_engine.sample_midi — кроме «m<MIDI>» и имён, начинающихся с ноты, — нота-лексема
   внутри имени между «_» (или в конце); нижний регистр («a1_f_rr1») не нота → None. C4 = 60.
   _kit_notes берёт высоту из имени (named=True), если sample_midi её нашёл; иначе — по звуку.
-- 112: блок bass — параметры fmin_hz (умолч. 30, 20…1000) и fmax_hz (умолч. 400, 100…2000) —
+- блок bass — параметры fmin_hz (умолч. 30, 20…1000) и fmax_hz (умолч. 400, 100…2000) —
   диапазон поиска высоты входа; по умолчанию поведение прежнее; ноты сворачиваются по октавам
   в диапазон набора; подпись блока «Замена партии (набор)».
 
 Внешние границы: хранилище наборов (resources с kit()/kit_names() — фейк) и сеть
 (_http_get воркера подменяется). Сигналы (мелодия-синус, набор из синусов) — генерируются здесь.
-
-Запуск: cd worker && python3 -m unittest test_orchestra -v
 """
 import json
 import re
@@ -49,7 +47,7 @@ VSCO_PARTS = {
     "vsco-mallets": {"glock", "marimba", "xylo"},
 }
 
-# мелодия ТК142: 440/494/523 Гц восьмыми (120 BPM), нота 0,22 с из 0,25; 0,5 с тишины до и после
+# мелодия: 440/494/523 Гц восьмыми (120 BPM), нота 0,22 с из 0,25; 0,5 с тишины до и после
 BEAT = 0.5
 EIGHTH = BEAT / 2
 LEAD = 0.5
@@ -64,8 +62,6 @@ def _fx():
 def _midi_hz(m):
     return 440.0 * 2 ** ((m - 69) / 12)
 
-
-# ---------- фейк хранилища наборов ----------
 
 class FakeKitsNoNames:
     """resources по контракту движка: kit(name) → (сэмплы, sr); имён у хранилища нет."""
@@ -144,13 +140,10 @@ def _bass(**params):
     return {"type": "bass", "kit": params.pop("kit", "vsco-violin/solo"), **params}
 
 
-# ---------- условие 111: высота сэмпла по имени ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSampleMidiByName(unittest.TestCase):
 
     def test_note_token_inside_name(self):
-        # таблица условия 111
         for name, midi in (("LLVln_ArcoVib_A3_f", 57), ("BKCtbss_Pizz_A#0_v3_rr1", 22),
                            ("glock_medium_C5", 72), ("Oboe_Sus_A#2_v3_Main", 46),
                            ("Test_A4_v1", 69), ("X_C4", 60)):
@@ -163,7 +156,7 @@ class TestSampleMidiByName(unittest.TestCase):
                 self.assertEqual(_fx().sample_midi(name), midi)
 
     def test_no_note_is_none(self):
-        # нет ноты; нижний регистр — не нота (Karoryfer: высота по звуку, как раньше); пусто
+        # нет ноты; нижний регистр — не нота (Karoryfer: высота по звуку); пусто
         for name in ("Rode_Man3Open_01", "a1_f_rr1", "", "kick1", "snare-top12"):
             with self.subTest(name=name):
                 self.assertIsNone(_fx().sample_midi(name))
@@ -195,8 +188,6 @@ class TestKitNotesNamed(unittest.TestCase):
         self.assertIs(bool(got[0][4]), False)
 
 
-# ---------- условие 112: замена партии в любом регистре ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestBassAnyRegister(unittest.TestCase):
 
@@ -214,8 +205,8 @@ class TestBassAnyRegister(unittest.TestCase):
                 self.assertIsNotNone(f, "в ноте входа выход молчит")
                 self.assertLess(abs(f / hz - 1), 0.02, f"частота выхода {f:.1f} Гц, нужна {hz} Гц")
 
-    def test_tc142_melody_with_wide_range(self):
-        # ТК142: синус-мелодия 440/494/523, fmin 80 / fmax 1500, набор синусов с именами VSCO;
+    def test_melody_with_wide_range(self):
+        # синус-мелодия 440/494/523, fmin 80 / fmax 1500, набор синусов с именами VSCO;
         # B4 (494) в наборе нет — сдвиг ближайшего сэмпла
         kit = _named_kit((("G4", 67), ("A4", 69), ("C5", 72), ("E5", 76)))
         res = FakeKits({"vsco-violin/solo": kit})
@@ -273,7 +264,7 @@ class TestBassRangeParams(unittest.TestCase):
                 self.assertAlmostEqual(float(got["fmax_hz"]), fmax)
 
     def test_out_of_range_is_chain_error(self):
-        # ТК142: fmin_hz 10 / fmax_hz 3000 → ChainError; и прочие края за диапазоном
+        # fmin_hz 10 / fmax_hz 3000 → ChainError; и прочие края за диапазоном
         fx = _fx()
         for bad in ({"fmin_hz": 10}, {"fmax_hz": 3000}, {"fmin_hz": 19}, {"fmin_hz": 1001},
                     {"fmax_hz": 99}, {"fmax_hz": 2001}, {"fmin_hz": "80"}):
@@ -281,8 +272,6 @@ class TestBassRangeParams(unittest.TestCase):
                 with self.assertRaises(fx.ChainError):
                     fx.parse_chain([_bass(**bad)])
 
-
-# ---------- условие 110: наборы VSCO на воркере ----------
 
 try:
     import test_fx_kits as fk
@@ -295,7 +284,7 @@ except ImportError:   # окружение без fastapi и т.п. — клас
 @unittest.skipUnless(_KIT_OK, "нужно окружение воркера (fastapi/httpx/numpy/soundfile/librosa)")
 class TestVscoCatalog(_KitBase):
 
-    def test_tc142_vsco_kits(self):
+    def test_vsco_kits(self):
         kits = self.w.FX_KITS
         for name, parts in VSCO_PARTS.items():
             with self.subTest(kit=name):
@@ -314,7 +303,7 @@ class TestVscoCatalog(_KitBase):
                     self.assertTrue(folder, part)
                     re.compile(pattern)
 
-    def test_tc142_listing_url_encodes_spaces(self):
+    def test_listing_url_encodes_spaces(self):
         # каталог с пробелами: в URL запроса GitHub — %20, файл скачивается и кладётся в часть
         calls = []
         files = {"https://raw.githubusercontent.com/x/LLVln_ArcoVib_A3_f.wav": fk._wav(0.5)}
@@ -339,7 +328,7 @@ class TestVscoCatalog(_KitBase):
         self.assertTrue((self.kits / "vsco-test" / "solo" / "LLVln_ArcoVib_A3_f.wav").is_file())
 
     def test_every_vsco_part_requested_encoded(self):
-        # условие 115 (заменило запрос списка через API): у всех частей VSCO список закреплён, файлы качаются прямыми
+        # у всех частей VSCO список закреплён, файлы качаются прямыми
         # ссылками raw.githubusercontent.com с экранированным путём каталога; к API GitHub обращений нет
         for name in VSCO_PARTS:
             spec = self.w.FX_KITS.get(name)
@@ -366,7 +355,7 @@ class TestVscoCatalog(_KitBase):
 
 @unittest.skipUnless(_KIT_OK, "нужно окружение воркера (fastapi/httpx/numpy/soundfile/librosa)")
 class TestVscoInstallRenamesToMidi(unittest.TestCase):
-    """Условие 110 (уточнено): часть с поправкой октавы ставится под точной высотой m<MIDI>.wav."""
+    """Часть с поправкой октавы ставится под точной высотой m<MIDI>.wav."""
 
     def test_shift_renames(self):
         import tempfile

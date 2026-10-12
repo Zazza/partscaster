@@ -1,4 +1,3 @@
-// Тесты карточки internal-own-track, этап 4 «Синты», условие 22 (тест-кейс ТК46):
 // synthPart.js — ноты синт-партии по сетке аккордов трека.
 // Контракт: chordPcs(name) — классы высот аккорда (как chord_pcs воркера: основной тон,
 // терция, квинта, (септима); нераспознанный → null); partNotes(bars, {style, octave = 0,
@@ -8,7 +7,6 @@
 // такт; arp — 8 нот на такт по 1/8 такта по кругу трезвучия снизу вверх; pulse — основной
 // тон восьмыми; drone — основной тон + квинта, тянется, пока аккорд тот же. Такты вне
 // выбранных секций и с нераспознанным аккордом — без нот.
-// Написаны по карточке и контракту, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { chordPcs, partNotes } from './synthPart.js'
 
@@ -38,7 +36,7 @@ describe('chordPcs — классы высот аккорда', () => {
   })
 })
 
-describe('partNotes: pad (ТК46)', () => {
+describe('partNotes: pad', () => {
   const pad = (chord) => partNotes([bar(0, 2, chord)], { style: 'pad' })
 
   it('Dm, такт 0–2 с → одна нота {t 0, d 2, midi [62, 65, 69]}', () => {
@@ -84,7 +82,7 @@ describe('partNotes: pad (ТК46)', () => {
   })
 })
 
-describe('partNotes: arp (ТК46)', () => {
+describe('partNotes: arp', () => {
   it('такт 2 с → 8 нот по 0,25 с, по кругу трезвучия снизу', () => {
     const notes = partNotes([bar(0, 2, 'Dm')], { style: 'arp' })
     expect(notes.length).toBe(8)
@@ -105,7 +103,7 @@ describe('partNotes: arp (ТК46)', () => {
   })
 })
 
-describe('partNotes: pulse (ТК46)', () => {
+describe('partNotes: pulse', () => {
   it('A → 8 нот midi [45] (A2) восьмыми', () => {
     const notes = partNotes([bar(0, 2, 'A')], { style: 'pulse' })
     expect(notes.length).toBe(8)
@@ -123,7 +121,7 @@ describe('partNotes: pulse (ТК46)', () => {
   })
 })
 
-describe('partNotes: drone (ТК46)', () => {
+describe('partNotes: drone', () => {
   it('два такта Dm подряд → одна нота d 4, [62, 69]', () => {
     const notes = partNotes([bar(0, 2, 'Dm'), bar(2, 4, 'Dm')], { style: 'drone' })
     expect(notes.length).toBe(1)
@@ -141,7 +139,7 @@ describe('partNotes: drone (ТК46)', () => {
   })
 })
 
-describe('partNotes: октава, секции, нераспознанное (ТК46)', () => {
+describe('partNotes: октава, секции, нераспознанное', () => {
   it('octave +1 → все ноты на 12 выше', () => {
     for (const style of ['pad', 'arp', 'pulse', 'drone']) {
       const bars = [bar(0, 2, 'Dm'), bar(2, 4, 'Bb')]
@@ -193,7 +191,7 @@ describe('partNotes: октава, секции, нераспознанное (�
   })
 })
 
-// кросс-ревью s4: квинта бурдона — в том же регистре C4…B4 (Bb: F4 и Bb4, F#m: C#4 и F#4)
+// квинта бурдона — в том же регистре C4…B4 (Bb: F4 и Bb4, F#m: C#4 и F#4)
 describe('partNotes: drone — квинта в регистре', () => {
   const bar = (s, e, chord) => ({ start: s, end: e, chord, section: 'intro' })
   it('Bb → [65, 70], F#m → [61, 66]', () => {

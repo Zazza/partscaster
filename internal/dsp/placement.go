@@ -26,7 +26,7 @@ const (
 // по плану начало партии стоит на from − lead. Трек и партия держат сетку
 // плана до такта (замерено), поэтому поиск — в пределах четверти доли
 // (beatSec/4) вокруг плана: на полудоле восьмые хэта/гитары давали уверенный
-// ложный ответ (±240 мс, валидация в тасклоге задачи).
+// ложный ответ (±240 мс).
 func MeasureInsert(trackPath, partyPath string, from, to, lead, beatSec float64) (Placement, error) {
 	return measureInsert(trackPath, partyPath, from, to, lead, beatSec, insertMinRatio, insertMaxRatio)
 }

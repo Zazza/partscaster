@@ -7,7 +7,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// lyricsFake — fakeService + JobLyrics, записывающий id и язык.
 type lyricsFake struct {
 	*fakeService
 	ids   []int64

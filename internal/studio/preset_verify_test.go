@@ -12,10 +12,9 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 10, условия 86 и 86а (тест-кейсы ТК126, ТК126а): сверка по итогу.
-// Написаны по карточке, без чтения реализации.
+// Сверка по итогу.
 //
-// Контракт: пресет с целями level_db после прохода (пересборка → … → версия-трек V) разделяет V
+// Пресет с целями level_db после прохода (пересборка → … → версия-трек V) разделяет V
 // (MakeStemsWith(V, "roformer")), меряет уровни целевых дорожек к треку так же, как presetLevels
 // (rms_p95_db дорожки − сумма мощностей основных vocals/drums/bass/other из JobStems(V)); если хоть одна
 // дальше 1 дБ от цели — исправляющий проход: у каждой целевой записи поправка −ошибка (за проход не больше
@@ -29,9 +28,9 @@ import (
 // пересборки к исходному треку. Пересборки — загрузки с «mix» в имени, по порядку; число проходов —
 // число вызовов движка на гитару. Версии получают id 900, 901, 902 по порядку; у каждой своя ошибка гитары.
 //
-// Толкования: пресет без финала и мастера (условие говорит «после мастера» о месте сверки, не о его
-// наличии); замеры версии фейк отдаёт только после её разделения; ошибка у баса — ровно 0; разделение
-// последней версии после второго исправления не проверяется (условие его не требует).
+// Допущения: пресет без финала и мастера;
+// замеры версии фейк отдаёт только после её разделения; ошибка у баса — ровно 0; разделение
+// последней версии после второго исправления не проверяется.
 
 const (
 	vfTarget = -10.0
@@ -251,7 +250,7 @@ func vfRun(t *testing.T, id int64, errs map[int64]float64, fail ...int64) (*vfFa
 	return f, orig, res
 }
 
-// ТК126: гитара +3,6, после исправления у цели → 2 прохода, гитара −3,6, удалена V1, ответ V2.
+// Гитара +3,6, после исправления у цели → 2 прохода, гитара −3,6, удалена V1, ответ V2.
 func TestPresetVerifySecondPass(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 51, map[int64]float64{vfFirst: 3.6})
@@ -261,28 +260,28 @@ func TestPresetVerifySecondPass(t *testing.T) {
 	vfCheck(t, f, orig, res, []float64{-3.6}, []int64{vfFirst}, vfFirst+1)
 }
 
-// ТК126/86: ошибка 9 → поправка прохода зажата 6; после неё у цели → 2 прохода.
+// Ошибка 9 → поправка прохода зажата 6; после неё у цели → 2 прохода.
 func TestPresetVerifyClamp(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 52, map[int64]float64{vfFirst: 9})
 	vfCheck(t, f, orig, res, []float64{-6}, []int64{vfFirst}, vfFirst+1)
 }
 
-// ТК126а: +3,6 → +1,6 → третий проход: гитара = первый − 5,2; удалены V1 и V2; ответ V3.
+// +3,6 → +1,6 → третий проход: гитара = первый − 5,2; удалены V1 и V2; ответ V3.
 func TestPresetVerifyThirdPass(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 55, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6})
 	vfCheck(t, f, orig, res, []float64{-3.6, -5.2}, []int64{vfFirst, vfFirst + 1}, vfFirst+2)
 }
 
-// ТК126а: +9 и +9 (и +9 у третьей) → 2-й проход −6, 3-й — сумма зажата −9; четвёртого прохода нет.
+// +9 и +9 (и +9 у третьей) → 2-й проход −6, 3-й — сумма зажата −9; четвёртого прохода нет.
 func TestPresetVerifySumClamp(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 56, map[int64]float64{vfFirst: 9, vfFirst + 1: 9, vfFirst + 2: 9})
 	vfCheck(t, f, orig, res, []float64{-6, -9}, []int64{vfFirst, vfFirst + 1}, vfFirst+2)
 }
 
-// ТК126а: промах остаётся после двух исправлений → всё равно ≤ 3 пересборок.
+// Промах остаётся после двух исправлений → всё равно ≤ 3 пересборок.
 func TestPresetVerifyNoFourthPass(t *testing.T) {
 	t.Parallel()
 	f, _, _ := vfRun(t, 57, map[int64]float64{vfFirst: 3, vfFirst + 1: 3, vfFirst + 2: 3, vfFirst + 3: 3})
@@ -294,21 +293,21 @@ func TestPresetVerifyNoFourthPass(t *testing.T) {
 	}
 }
 
-// ТК126: все у цели (гитара +0,5 ≤ 1 дБ) → одна пересборка, ничего не удалено, ответ — первая версия.
+// Все у цели (гитара +0,5 ≤ 1 дБ) → одна пересборка, ничего не удалено, ответ — первая версия.
 func TestPresetVerifyAllOnTarget(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 53, map[int64]float64{vfFirst: 0.5})
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
 }
 
-// ТК126: сбой разделения первой версии → ответ первая версия, без ошибки, без второй пересборки.
+// Сбой разделения первой версии → ответ первая версия, без ошибки, без второй пересборки.
 func TestPresetVerifySplitError(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 54, map[int64]float64{vfFirst: 3.6}, vfFirst)
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
 }
 
-// ТК126а: сбой разделения второй версии → ответ вторая версия без ошибки, удалена только первая.
+// Сбой разделения второй версии → ответ вторая версия без ошибки, удалена только первая.
 func TestPresetVerifySplitErrorSecond(t *testing.T) {
 	t.Parallel()
 	f, orig, res := vfRun(t, 58, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6}, vfFirst+1)
@@ -318,7 +317,7 @@ func TestPresetVerifySplitErrorSecond(t *testing.T) {
 	vfCheck(t, f, orig, res, []float64{-3.6}, []int64{vfFirst}, vfFirst+1)
 }
 
-// ТК127 / 86б: level_db −10 и db +3 — цель сверки −7. Гитара версии на −7 → у цели, второго прохода нет.
+// level_db −10 и db +3 — цель сверки −7. Гитара версии на −7 → у цели, второго прохода нет.
 func TestPresetVerifyRespectsDbOnTarget(t *testing.T) {
 	t.Parallel()
 	f, orig := vfSetup(t, map[int64]float64{vfFirst: 3}) // гитара −10 + 3 = −7
@@ -326,7 +325,7 @@ func TestPresetVerifyRespectsDbOnTarget(t *testing.T) {
 	vfCheck(t, f, orig, res, nil, nil, vfFirst)
 }
 
-// ТК127 / 86б: level_db −10 и db +3, гитара версии на −10 → промах −3 к цели −7 → поправка +3 (не 0).
+// level_db −10 и db +3, гитара версии на −10 → промах −3 к цели −7 → поправка +3 (не 0).
 func TestPresetVerifyRespectsDbCorrects(t *testing.T) {
 	t.Parallel()
 	f, orig := vfSetup(t, map[int64]float64{vfFirst: 0, vfFirst + 1: 3}) // −10, после исправления −7
@@ -334,7 +333,7 @@ func TestPresetVerifyRespectsDbCorrects(t *testing.T) {
 	vfCheck(t, f, orig, res, []float64{3}, []int64{vfFirst}, vfFirst+1)
 }
 
-// ТК127 / 86в: нет замера у основной vocals (или у целевой гитары) при промахе гитары +3,6 →
+// Нет замера у основной vocals (или у целевой гитары) при промахе гитары +3,6 →
 // без поправок: одна пересборка, ничего не удалено, ответ — первая версия.
 func TestPresetVerifyIncompleteMetrics(t *testing.T) {
 	t.Parallel()

@@ -1,5 +1,5 @@
 <script setup>
-// «Переиграть в другом стиле» (бывший овердаб студии): YuE заново играет трек по его нотам в новом стиле — кавер
+// «Переиграть в другом стиле»: YuE заново играет трек по его нотам в новом стиле — кавер
 // новым треком или слой поверх оригинала. Запрос собирает replay.js (replayRequest), отправка — SubmitOverdub.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from './AppIcon.vue'

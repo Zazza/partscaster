@@ -1,8 +1,7 @@
 package mcp
 
-// Тесты карточки internal-own-track, уточнение 125а (ТК154): MCP overdub — gain не задан → 0,5;
+// MCP overdub — gain не задан → 0,5;
 // явный 0 → 0 (кавер без смешивания), значение доходит до Service.SubmitOverdub.
-// Написаны по карточке, без чтения реализации.
 
 import (
 	"context"

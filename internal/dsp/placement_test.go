@@ -87,7 +87,7 @@ const (
 	mPlan = mFrom - mLead // 4.0 — начало партии по плану
 )
 
-// Условие 1: партия отстаёт от плана на 80 мс → найдено с точностью ≤ 30 мс.
+// Партия отстаёт от плана на 80 мс → найдено с точностью ≤ 30 мс.
 func TestMeasureInsertLateParty(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -108,7 +108,7 @@ func TestMeasureInsertLateParty(t *testing.T) {
 	}
 }
 
-// Условие 2: партия раньше плана на 100 мс → найдено ±30 мс.
+// Партия раньше плана на 100 мс → найдено ±30 мс.
 func TestMeasureInsertEarlyParty(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -129,7 +129,7 @@ func TestMeasureInsertEarlyParty(t *testing.T) {
 	}
 }
 
-// Условие 3: истинный сдвиг 0.3 с — вне радиуса ±¼ доли (0.125). Поиск идёт только
+// Истинный сдвиг 0.3 с — вне радиуса ±¼ доли (0.125). Поиск идёт только
 // в радиусе, значит ложного ответа далеко от плана быть не должно: либо Aligned=false
 // и начало по плану, либо ответ в пределах радиуса вокруг плана.
 func TestMeasureInsertShiftOutsideRadius(t *testing.T) {
@@ -153,7 +153,7 @@ func TestMeasureInsertShiftOutsideRadius(t *testing.T) {
 	}
 }
 
-// Условие 4: партия — тишина → совпадение ненадёжно, стоит по плану, без ошибки.
+// Партия — тишина → совпадение ненадёжно, стоит по плану, без ошибки.
 func TestMeasureInsertSilentParty(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -175,7 +175,7 @@ func TestMeasureInsertSilentParty(t *testing.T) {
 	}
 }
 
-// Условие 5: нет файла (партии или опоры) → ошибка.
+// Нет файла (партии или опоры) → ошибка.
 func TestMeasureInsertMissingFile(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -189,7 +189,7 @@ func TestMeasureInsertMissingFile(t *testing.T) {
 	}
 }
 
-// Условие 6: PlaceInsert — звучит только кусок [from, to].
+// PlaceInsert — звучит только кусок [from, to].
 func TestPlaceInsert(t *testing.T) {
 	t.Parallel()
 	const eps = 1e-9

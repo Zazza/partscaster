@@ -1,8 +1,6 @@
 <script setup>
 // Студия, шаг «Звук»: синт-партия по аккордам трека — поверх трека, ничего не вычитая (разделение не нужно).
-// «Разобрать аккорды» — аккорды и секции плана по тактам звука (chord_grid); готовый синт (старые машины +
-// эффекты), стиль партии, октава, секции, громкость; «▶ стало / ▶ было» — кусок с партией и без; «в трек» —
-// правка в «Правках трека» (запись движка с add на «весь трек как вход»). Ноты — synthPart.js.
+// Ноты — synthPart.js.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
@@ -62,7 +60,7 @@ const styleOptions = computed(() => STYLES.map((s) => ({ value: s, label: t('syn
 const allSections = computed(() => [...new Set(((grid.value && grid.value.bars) || []).map((b) => b.section).filter(Boolean))])
 const notes = computed(() => (grid.value ? partNotes(grid.value.bars, { style: style.value, octave: octave.value, sections: sections.value }) : []))
 // громкость партии относительно трека — это rel_db блока synth: верхний ползунок и крутилка в редакторе цепочки —
-// один параметр, а не два (кросс-ревью: второй ничего не делал)
+// один параметр, а не два
 const db = computed({
   get: () => synthLevel(chain.value),
   set: (v) => { chain.value = chain.value.map((b) => (b.type === 'synth' ? { ...b, params: { ...b.params, rel_db: Number(v) } } : b)) },

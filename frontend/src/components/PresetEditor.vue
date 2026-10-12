@@ -1,8 +1,5 @@
 <script setup>
-// Редактор пресета звука (модалка из библиотеки): записи обработок дорожек из каталога с
-// предпрослушиванием (▶ на куске эталона — демо жанра или свой трек, «было/стало», соло),
-// тонкая правка цепочки записи, громкость/панорама/цель громкости, мастер с целью LUFS,
-// финал «как у другого пресета», применение черновика к эталону. Встроенный пресет открывается
+// Редактор пресета звука (модалка из библиотеки). Встроенный пресет открывается
 // как копия (сохранение создаёт свой); recipe-поля без правок (parts) пробрасываются как есть.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
@@ -36,7 +33,6 @@ const { t, locale } = useI18n()
 const { toggleArtifact, playBtn } = usePlayer()
 const demo = usePresetDemo()
 
-// --- модель: builtin открывается копией (пометка в имени), первое сохранение создаст свой ---
 const isCopy = ref(!props.preset || !!props.preset.builtin)
 const model = ref(props.preset ? toModel(props.preset) : newModel())
 if (props.preset && props.preset.builtin) {
@@ -47,18 +43,18 @@ if (props.preset && props.preset.builtin) {
 }
 
 const busy = ref('')               // превью, скачивание набора
-const action = ref('')             // 'save' | 'apply' — не сбрасывается концом превью (раньше кнопки включались посреди запроса)
+const action = ref('')             // 'save' | 'apply' — не сбрасывается концом превью
 let closed = false                 // окно закрыто — ждущее демо не применяет пресет молча
 const msg = ref('')
 const err = ref('')
 
-// --- эталон прослушивания: демо жанра (по семье пресета) или свой трек ---
+// эталон прослушивания: демо жанра (по семье пресета) или свой трек
 const refFamily = ref((props.preset && props.preset.family) || PRESET_FAMILIES[0])
 const ownJobId = ref(0)
 const ownJobs = ref([])
 const ownStems = ref(null)        // null — дорожки ещё не спрашивали
 const ownStemsBusy = ref(false)
-// сменили свой эталон — его дорожки спросим заново (раньше оставались дорожки прошлого трека)
+// сменили свой эталон — его дорожки спросим заново
 watch(ownJobId, () => { ownStems.value = null })
 const demoState = computed(() => demo.demos.value[refFamily.value] || {})
 const ownJob = computed(() => ownJobs.value.find((j) => j.id === ownJobId.value) || null)
@@ -127,7 +123,7 @@ async function ensureReference() {
 const refBusy = computed(() => ownStemsBusy.value
   || (!ownJobId.value && ['cooking', 'stems'].includes(demoState.value.status)))
 
-// --- прослушивание: «стало» — превью движка на дорожке эталона, «было» — тот же кусок без обработки ---
+// прослушивание: «стало» — превью движка на дорожке эталона, «было» — тот же кусок без обработки
 const solo = ref(false)
 const before = useWindowPlay('pe-before', () => t('instr.before'))
 
@@ -167,7 +163,6 @@ function playBefore() {
   }).catch((e) => { err.value = String(e) })
 }
 
-// --- каталог: табы дорожек, ▶ и «+», ритм-секция набором ---
 const target = ref('bass')
 const catalog = computed(() => editorCatalog(target.value, fxPresets, locale.value))
 
@@ -218,7 +213,7 @@ function syncEdit() {
 const kindIssues = computed(() => model.value.specs
   .filter((sp) => !specKindOk(sp.stems, specKind(sp))).map((sp) => specLine(sp)))
 
-// --- мастер: готовые чипы + тонкая правка + цель громкости (target_lufs пресета) ---
+// мастер: готовые чипы + тонкая правка + цель громкости (target_lufs пресета)
 const MASTERS = masterPresets(fxPresets)
 const masterPicked = ref('')
 const masterEdit = ref(props.preset && (props.preset.master || []).length ? fromWorkerChain(props.preset.master, BLOCKS) : [])
@@ -263,7 +258,7 @@ async function installKit(name) {
   try { await api.installFxKit(name) } catch (e) { err.value = String(e) } finally { busy.value = ''; loadAssets() }
 }
 
-// --- финал: «как у другого пресета» — копирует цепочку и цель громкости, как в студии ---
+// финал: «как у другого пресета» — копирует цепочку и цель громкости, как в студии
 const finalFrom = ref(0)
 const finalOptions = computed(() => [{ value: 0, label: t('preset.final.none') },
   ...presetOptions(props.presets.filter((p) => (p.final || []).length || p.target_lufs != null))
@@ -275,7 +270,6 @@ function pickFinal(id) {
   model.value.targetLufs = donor && donor.target_lufs != null ? donor.target_lufs : null
 }
 
-// --- сохранить / применить к эталону ---
 const canSave = computed(() => !busy.value && !action.value && model.value.name.trim().length > 0 && !kindIssues.value.length)
 async function save() {
   if (action.value) return
@@ -323,7 +317,7 @@ async function applyToRef() {
   } catch (e) { msg.value = ''; err.value = String(e) } finally { action.value = '' }
 }
 
-// закрытие: несохранённые правки — подтверждение (раньше × и «Отмена» теряли их молча)
+// закрытие: несохранённые правки — подтверждение
 const { askConfirm } = useConfirm()
 // сравнение для «несохранённых правок»: без раскрытой формы цепочки (edit) — раскрыть и закрыть не значит изменить
 // правка тонкой цепочки живёт в sp.edit (в engine — только при сохранении): снимок берёт её рабочую форму; id не
@@ -352,7 +346,6 @@ onBeforeUnmount(() => { closed = true })
         <input v-model="model.note" maxlength="500" :placeholder="t('preset.save.note')" class="preset-note" />
       </div>
 
-      <!-- Эталон прослушивания -->
       <div class="dsp-row preset-ref">
         <span class="muted" :title="t('preset.edit.ref.tip')">{{ t('preset.edit.ref') }}</span>
         <template v-for="fam in PRESET_FAMILIES" :key="fam">
@@ -372,7 +365,6 @@ onBeforeUnmount(() => { closed = true })
         <button class="ghost small-btn" @click="demo.reset(refFamily); demo.ensure(refFamily)">{{ t('preset.edit.demo.again') }}</button>
       </p>
 
-      <!-- Обработки дорожек -->
       <h3 class="muted">{{ t('preset.edit.tracks') }}</h3>
       <p v-if="!model.specs.length" class="muted">{{ t('preset.edit.empty') }}</p>
       <div v-for="sp in model.specs" :key="sp.uid" class="preset-spec">
@@ -402,11 +394,9 @@ onBeforeUnmount(() => { closed = true })
         </details>
       </div>
 
-      <!-- Каталог -->
       <PresetCatalog v-model:target="target" :groups="catalog" :assets="assets" :busy="refBusy || busy === 'preview'"
                      @preview="previewItem" @add="addItem" @rhythm="addRhythm" />
 
-      <!-- Мастер -->
       <h3 class="muted">{{ t('preset.edit.master') }}</h3>
       <div class="dsp-row">
         <button v-for="m in MASTERS" :key="m.id" class="ghost small-btn" :class="{ on: m.id === masterPicked }"
@@ -428,7 +418,6 @@ onBeforeUnmount(() => { closed = true })
                      @upload="uploadAsset" @install-kit="installKit" />
       </details>
 
-      <!-- Финал и партии -->
       <div class="dsp-row">
         <span class="muted">{{ t('preset.save.final') }}</span>
         <VSelect :model-value="finalFrom" :options="finalOptions" searchable style="max-width: 320px"

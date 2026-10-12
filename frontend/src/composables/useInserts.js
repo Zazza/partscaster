@@ -1,7 +1,7 @@
 // Слежение за вклейками инструментов (замены дорожек) — синглтон в module scope.
 // Жить должно НЕ в компоненте студии: пока очередь гоняет 3-4 джобы,
 // пользователь закрывает студию — компонент умирает, и готовые рендеры
-// кусков никто не микширует («пересборка вышла голой»). Этот сервис живёт всегда.
+// кусков никто не микширует. Этот сервис живёт всегда.
 import { ref } from 'vue'
 import { api } from '../api.js'
 import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
@@ -129,7 +129,6 @@ function mixFile(parentId) {
   return latestFile(parentId) || 'overdub-inst-0.flac'
 }
 
-// выбрать один из вариантов рендера вклейки (alts) и пересобрать трек
 async function selectAlt(parentId, childId, altId) {
   const it = appliedFor(parentId).find((x) => x.childId === childId)
   if (!it || !(it.alts || []).includes(altId)) return null
@@ -144,7 +143,7 @@ async function selectAlt(parentId, childId, altId) {
 async function addMute(parentId, item) {
   return addMutes(parentId, [item])
 }
-// несколько «громкостей дорожек» разом — одна пересборка (кнопка «куплеты реже»)
+// несколько «громкостей дорожек» разом — одна пересборка
 let muteSeq = 0
 async function addMutes(parentId, items) {
   const added = items.map(({ instId, from, to, stems, db = -100 }) => ({

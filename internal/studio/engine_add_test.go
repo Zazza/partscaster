@@ -8,13 +8,12 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 4 «Синты», условие 25 (ТК49): запись движка
+// Запись движка
 // с Add (SectionSpec.Add, json "add") — обработанный кусок кладётся ПОВЕРХ трека,
 // исходная дорожка не вычитается; дорожка mix разрешена только с Add (синт не требует
 // разделения). Запрос к воркеру для mix: ApplyFx(source mix, output solo, preview, pad).
-// Написаны по карточке и контракту задачи, без чтения реализации.
 //
-// Способ — как в engine_test.go: фейк engFake отдаёт известный «кусок» (1000 Гц первую
+// Фейк engFake отдаёт известный «кусок» (1000 Гц первую
 // секунду, дальше 1500 Гц) файлом от начала трека (pad); по тонам дорожек родителя
 // (vocals 3000, other 500, bass 200 Гц) видно, вычтено что-то из трека или нет.
 
@@ -50,7 +49,7 @@ func addSpec(stems []string, add bool) SectionSpec {
 	return SectionSpec{ChildID: 0, From: 2, To: 6, Stems: stems, Engine: synthChain(), Add: add}
 }
 
-// ТК49: Add с Engine на mix → один ApplyFx у родителя: source mix, output solo, preview, pad.
+// Add с Engine на mix → один ApplyFx у родителя: source mix, output solo, preview, pad.
 func TestRebuildSectionsAddMixRequest(t *testing.T) {
 	t.Parallel()
 	f, _ := addSetup(t)
@@ -63,7 +62,7 @@ func TestRebuildSectionsAddMixRequest(t *testing.T) {
 		t.Errorf("ApplyFx у джобы %d, want %d (родитель)", c.id, parentID)
 	}
 	r := c.req
-	// кросс-ревью s4: без Add воркер отдаёт «трек + (синт − кусок)» — края окна и хвост удваивали трек
+	// без Add воркер отдаёт «трек + (синт − кусок)» — края окна и хвост удваивали трек
 	if !r.Add {
 		t.Errorf("запрос без Add: воркер вернул бы трек вместе с партией")
 	}
@@ -89,7 +88,7 @@ func TestRebuildSectionsAddMixRequest(t *testing.T) {
 	}
 }
 
-// ТК49: в графе пересборки только +кусок — тоны трека в окне на месте, кусок звучит поверх.
+// В графе пересборки только +кусок — тоны трека в окне на месте, кусок звучит поверх.
 func TestRebuildSectionsAddMixOnlyPlusChunk(t *testing.T) {
 	t.Parallel()
 	f, base := addSetup(t)
@@ -116,7 +115,7 @@ func TestRebuildSectionsAddMixOnlyPlusChunk(t *testing.T) {
 	}
 }
 
-// ТК49: mix без Add → ошибка пересборки, к воркеру не ходили, ничего не загружено.
+// mix без Add → ошибка пересборки, к воркеру не ходили, ничего не загружено.
 func TestRebuildSectionsMixWithoutAddFails(t *testing.T) {
 	t.Parallel()
 	f, _ := addSetup(t)
@@ -135,7 +134,7 @@ func TestRebuildSectionsMixWithoutAddFails(t *testing.T) {
 	}
 }
 
-// ТК49: Add на дорожке bass → ApplyFx(source bass), +кусок, исходный bass НЕ вычтен.
+// Add на дорожке bass → ApplyFx(source bass), +кусок, исходный bass НЕ вычтен.
 func TestRebuildSectionsAddOnBassNoSubtract(t *testing.T) {
 	t.Parallel()
 	f, _ := addSetup(t)
@@ -151,7 +150,7 @@ func TestRebuildSectionsAddOnBassNoSubtract(t *testing.T) {
 	}
 }
 
-// Контроль: та же запись на bass без Add — по-прежнему замена (−bass): тест выше
+// Контроль: та же запись на bass без Add — замена (−bass): тест выше
 // отличает add от обычной записи движка.
 func TestRebuildSectionsBassWithoutAddSubtracts(t *testing.T) {
 	t.Parallel()

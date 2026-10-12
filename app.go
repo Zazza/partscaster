@@ -18,12 +18,9 @@ import (
 )
 
 const (
-	// maxUploadBytes — потолок загрузки своего трека на воркер.
 	maxUploadBytes = 200 << 20
-	// fanLimits — границы веера best-of-N.
 	fanMin, fanMax = 1, 10
-	// presetTick — как часто приложение ищет пресеты звука, выбранные при создании трека
-	presetTick = 10 * time.Second
+	presetTick     = 10 * time.Second
 	// loopSeconds — на сколько вперёд раскладывается круг фразы «Инструментов» (3 мин ≈ 35 МБ WAV);
 	// доиграл — страница запускает круг снова с начала
 	loopSeconds = 180.0
@@ -77,22 +74,18 @@ func (a *App) presetLoop(ctx context.Context) {
 	}
 }
 
-// YueSoundPresets — пресеты звука воркера (встроенные первыми).
 func (a *App) YueSoundPresets() ([]yue.SoundPreset, error) {
 	return a.yue.SoundPresets(a.ctx)
 }
 
-// YueSoundPresetCreate — сохранить свой пресет (правки студии «весь трек» + финал).
 func (a *App) YueSoundPresetCreate(p yue.SoundPreset) (*yue.SoundPreset, error) {
 	return a.yue.SoundPresetCreate(a.ctx, p)
 }
 
-// YueSoundPresetUpdate — заменить свой пресет (название, описание, рецепт).
 func (a *App) YueSoundPresetUpdate(id int64, p yue.SoundPreset) (*yue.SoundPreset, error) {
 	return a.yue.SoundPresetUpdate(a.ctx, id, p)
 }
 
-// YueSoundPresetDelete — удалить свой пресет.
 func (a *App) YueSoundPresetDelete(id int64) error {
 	return a.yue.SoundPresetDelete(a.ctx, id)
 }
@@ -171,7 +164,6 @@ func (a *App) YueStatus() (*yue.HealthInfo, error) {
 	return a.yue.Health(a.ctx)
 }
 
-// YueStats — сводка для футер-статусбара (VRAM, очередь, текущая джоба).
 func (a *App) YueStats() (*yue.StatsInfo, error) {
 	return a.yue.Stats(a.ctx)
 }
@@ -233,7 +225,6 @@ func (a *App) YueReferences() ([]yue.Reference, error) {
 	return a.yue.References(a.ctx)
 }
 
-// YueAddReference — диалог выбора аудио-файла, заливка на воркер и замер.
 func (a *App) YueAddReference() (*yue.Reference, error) {
 	data, name, err := a.readAudioFile("Референс для сравнения метрик")
 	if err != nil || data == nil {
@@ -242,7 +233,6 @@ func (a *App) YueAddReference() (*yue.Reference, error) {
 	return a.yue.AddReference(a.ctx, name, data)
 }
 
-// YueDspChains — пресеты эффектов (крутилки с дефолтами).
 func (a *App) YueDspChains() []dsp.Chain {
 	return dsp.All()
 }
@@ -266,7 +256,6 @@ func (a *App) YueRebuildSections(parentID int64, specs []studio.SectionSpec) (*s
 	return studio.RebuildSections(a.ctx, a.yue, parentID, specs)
 }
 
-// YueApplyDsp — применить цепочку к треку джобы и вернуть метрики варианта.
 func (a *App) YueApplyDsp(jobID int64, chainID string, params map[string]float64) (*yue.DspVariant, error) {
 	return a.runDsp(jobID, chainID, params)
 }
@@ -293,7 +282,6 @@ func (a *App) YueAudioURL(id int64, file string) string {
 	return a.yue.AudioURL(id, file)
 }
 
-// YueOpenExternal — скачать артефакт во temp-файл и открыть приложением ОС.
 func (a *App) YueOpenExternal(id int64, file string) error {
 	tmp, err := a.fetchTempFile(id, file, fmt.Sprintf("yue-%d-*%s", id, filepath.Ext(file)))
 	if err != nil {
@@ -356,8 +344,6 @@ func (a *App) YuePlayAudio(id int64) error {
 	return fmt.Errorf("job %d not found", id)
 }
 
-// YuePlayFile — воспроизведение любого аудио-артефакта джобы (стем, превью,
-// овердаб, DSP-вариант, основной трек) через встроенный плеер.
 // durSec — подсказка длительности для полосы позиции (0 = неизвестно).
 func (a *App) YuePlayFile(id int64, file string, durSec float64) error {
 	if file == "" {
@@ -404,7 +390,6 @@ func (a *App) YueAudioState() YuePlayerState {
 		JobID: id, Error: a.player.LastError()}
 }
 
-// YueSeekAudio — перемотка текущего трека к позиции (секунды).
 func (a *App) YueSeekAudio(posSec float64) error {
 	return a.player.Seek(time.Duration(posSec * float64(time.Second)))
 }
@@ -431,7 +416,6 @@ func (a *App) YueSetServerURL(url string) {
 	config.SaveSettings(config.Settings{ServerURL: url})
 }
 
-// YueWorkerConfig — настройки воркера (Ollama и пр.) для попапа настроек.
 func (a *App) YueWorkerConfig() (map[string]any, error) {
 	return a.yue.WorkerConfig(a.ctx)
 }
@@ -445,8 +429,6 @@ func (a *App) YueOllamaModels(url string) (map[string]any, error) {
 	return a.yue.OllamaModels(a.ctx, url)
 }
 
-// ---------- транскрипция, ролл, превью, овердаб, стемы, корпус ----------
-
 // YueImportTrack — диалог выбора своего трека → импорт как джобы (статус done):
 // в студии работают стемы, минус, эффекты, ролл (по транскрипции), овердаб.
 func (a *App) YueImportTrack() (map[string]any, error) {
@@ -457,7 +439,6 @@ func (a *App) YueImportTrack() (map[string]any, error) {
 	return a.yue.ImportTrack(a.ctx, title, data, true)
 }
 
-// YueTranscribeJob — повторить создание партитуры для трека без неё.
 func (a *App) YueTranscribeJob(id int64) (map[string]any, error) {
 	return a.yue.TranscribeJob(a.ctx, id)
 }
@@ -542,12 +523,10 @@ func (a *App) YueApplyFx(id int64, req yue.FxRequest) (*yue.DspVariant, error) {
 	return a.yue.ApplyFx(a.ctx, id, req)
 }
 
-// YueFxAssets — захваты NAM и IR, загруженные на воркер.
 func (a *App) YueFxAssets() (map[string]any, error) {
 	return a.yue.FxAssets(a.ctx)
 }
 
-// YueFxPhrases — фразы страницы «Инструменты» (гитара записями, бас и барабаны нотами).
 func (a *App) YueFxPhrases() ([]yue.FxPhrase, error) {
 	return a.yue.FxPhrases(a.ctx)
 }
@@ -579,22 +558,18 @@ func (a *App) YuePlayLoop(file string, phaseSec float64) error {
 	return a.player.Play()
 }
 
-// YueFxInstruments — свои инструменты (страница «Инструменты», выбор в студии).
 func (a *App) YueFxInstruments() ([]yue.FxInstrument, error) {
 	return a.yue.FxInstruments(a.ctx)
 }
 
-// YueFxInstrumentCreate — сохранить свой инструмент.
 func (a *App) YueFxInstrumentCreate(in yue.FxInstrument) (*yue.FxInstrument, error) {
 	return a.yue.FxInstrumentCreate(a.ctx, in)
 }
 
-// YueFxInstrumentUpdate — заменить поля своего инструмента.
 func (a *App) YueFxInstrumentUpdate(id int64, in yue.FxInstrument) (*yue.FxInstrument, error) {
 	return a.yue.FxInstrumentUpdate(a.ctx, id, in)
 }
 
-// YueFxInstrumentDelete — удалить свой инструмент.
 func (a *App) YueFxInstrumentDelete(id int64) error {
 	return a.yue.FxInstrumentDelete(a.ctx, id)
 }
@@ -717,7 +692,6 @@ func (a *App) YueVoiceDelete(id int64) (bool, error) {
 	return a.yue.VoiceDelete(a.ctx, id)
 }
 
-// YueDspVariantDelete — удалить вариант эффекта/вклейки.
 func (a *App) YueDspVariantDelete(id int64, fname string) (bool, error) {
 	return a.yue.DspVariantDelete(a.ctx, id, fname)
 }
@@ -737,7 +711,6 @@ func (a *App) YueRenameJob(jobID int64, title string) (*yue.Job, error) {
 	return a.yue.UpdateJob(a.ctx, jobID, &title, nil)
 }
 
-// YueRetryJob — «повторить» упавшую или отменённую джобу.
 func (a *App) YueRetryJob(jobID int64) error {
 	return a.yue.RetryJob(a.ctx, jobID)
 }

@@ -8,11 +8,10 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-splice, условия 1–2: Splice — новая версия из кусков
+// Splice — новая версия из кусков
 // аудио версий (audio.flac каждой джобы), куски [From, To) по порядку (To ≤ 0 —
 // до конца), соседние сшиты переходом crossfade (≤ 0 → 0.05 с), GainDb — громкость
 // куска; итог — вариант splice-<n>.flac у baseID. Ошибки — без загрузки.
-// Фейковый воркер (secFake) и звуковые хелперы — из sections_test.go / helpers_test.go.
 //
 // Синтетика (16 кГц моно, 6 с, амплитуда 0.3):
 //   A (джоба 11) — 440 Гц до 4 с, 550 Гц с 4 с (метка: кусок A 4–6 обязан быть 550);
@@ -88,7 +87,7 @@ func assertOnlyTone(t *testing.T, out []float32, from, to, want, amp float64, wh
 	}
 }
 
-// Кейс карточки: [A 0–3, B 2–5, A 4–6], crossfade 0.05 → длина 3+3+2 − 2·0.05 = 7.9;
+// [A 0–3, B 2–5, A 4–6], crossfade 0.05 → длина 3+3+2 − 2·0.05 = 7.9;
 // в середине первого куска только 440, второго — только 660 (B с 2 с, не с 0),
 // третьего — только 550 (A с 4 с). Внутри кусков уровень исходный.
 func TestSpliceLengthAndPieceContent(t *testing.T) {
@@ -109,7 +108,7 @@ func TestSpliceLengthAndPieceContent(t *testing.T) {
 	assertOnlyTone(t, out, 6.4, 7.4, 550, spliceAmp, "кусок 3 (A 4–6)")
 }
 
-// Кейс карточки: gain_db ±6 у куска → его уровень на ~столько же дБ выше/ниже (±1),
+// gain_db ±6 у куска → его уровень на ~столько же дБ выше/ниже (±1),
 // соседний кусок без gain_db не меняется.
 func TestSpliceGainDb(t *testing.T) {
 	t.Parallel()
@@ -130,7 +129,7 @@ func TestSpliceGainDb(t *testing.T) {
 	}
 }
 
-// Кейс карточки: To = 0 — кусок до конца файла: A 2–(конец 6) → длина 4 с,
+// To = 0 — кусок до конца файла: A 2–(конец 6) → длина 4 с,
 // в конце — 550 (A после 4 с).
 func TestSpliceToZeroTillEnd(t *testing.T) {
 	t.Parallel()
@@ -143,7 +142,7 @@ func TestSpliceToZeroTillEnd(t *testing.T) {
 	assertOnlyTone(t, out, 2.5, 3.5, 550, spliceAmp, "A 4.5–5.5 (хвост до конца)")
 }
 
-// Условие 1: crossfade ≤ 0 → по умолчанию 0.05 с: [A 0–3, B 2–5] → 5.95 с.
+// crossfade ≤ 0 → по умолчанию 0.05 с: [A 0–3, B 2–5] → 5.95 с.
 func TestSpliceDefaultCrossfade(t *testing.T) {
 	t.Parallel()
 	for _, xf := range []float64{0, -1} {
@@ -158,7 +157,7 @@ func TestSpliceDefaultCrossfade(t *testing.T) {
 	}
 }
 
-// Условие 2 на другом переходе: crossfade 1 с → 3+3 − 1 = 5 с.
+// crossfade 1 с → 3+3 − 1 = 5 с.
 func TestSpliceCustomCrossfadeLength(t *testing.T) {
 	t.Parallel()
 	f := spliceSetup(t)
@@ -171,7 +170,7 @@ func TestSpliceCustomCrossfadeLength(t *testing.T) {
 	}
 }
 
-// Кейсы карточки: ошибки — пустые parts, To ≤ From (To > 0), неизвестная джоба;
+// Ошибки — пустые parts, To ≤ From (To > 0), неизвестная джоба;
 // при ошибке ничего не загружено.
 func TestSpliceErrorsWithoutUpload(t *testing.T) {
 	t.Parallel()

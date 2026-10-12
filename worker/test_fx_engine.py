@@ -1,7 +1,6 @@
-"""Тесты карточки internal-sound-engine: звуковой движок воркера (fx_engine,
-fx_nam.measure_latency) — тест-кейсы 1–10 карточки.
+"""Тесты звукового движка воркера (fx_engine, fx_nam.measure_latency).
 
-Контракт (из карточки и контракта задачи):
+Контракт:
 - цепочка — список блоков gate|eq|comp|drive|amp|cab|reverb|delay|gain с параметрами,
   parse_chain проверяет и заполняет умолчания, ошибка — ChainError(ValueError);
 - process(audio, sr, chain, resources) — выход той же формы/длины, float32,
@@ -41,8 +40,6 @@ def _fx():
     import fx_engine
     return fx_engine
 
-
-# ---------- фейки внешних границ ----------
 
 class FakeAmp:
     """Фейк модели NAM: сдвигает сигнал на shift сэмплов (отрицательный — вперёд),
@@ -94,8 +91,6 @@ def _res(**kw):
     return FakeResources(amps=amps, **kw)
 
 
-# ---------- сигналы и замеры ----------
-
 def _impulse(n=2 * SR, pos=30011, ch=None):
     x = np.zeros(n if ch is None else (n, ch), dtype=np.float32)
     x[pos] = 1.0
@@ -139,11 +134,9 @@ def _default_block(t):
     return _block("amp", model="fake") if t == "amp" else _block(t)
 
 
-# ---------- ТК1, ТК2: без задержки ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestNoLatency(unittest.TestCase):
-    """Условие 1: длина та же, импульс → пик на том же сэмпле."""
+    """Длина та же, импульс → пик на том же сэмпле."""
 
     def _check(self, chain, x, pos, sr=SR, res=None):
         out = _fx().process(x, sr, chain, res if res is not None else _res())
@@ -153,45 +146,43 @@ class TestNoLatency(unittest.TestCase):
         self.assertEqual(_peak(out), pos)
         return out
 
-    # ТК1
-    def test_tc1_each_block_default_mono(self):
+    def test_each_block_default_mono(self):
         for t in BLOCKS:
             with self.subTest(block=t):
                 x, pos = _impulse()
                 self._check([_default_block(t)], x, pos)
 
-    def test_tc1_each_block_default_stereo(self):
+    def test_each_block_default_stereo(self):
         for t in BLOCKS:
             with self.subTest(block=t):
                 x, pos = _impulse(ch=2)
                 self._check([_default_block(t)], x, pos)
 
-    def test_tc1_each_block_odd_length(self):
+    def test_each_block_odd_length(self):
         # нечётная длина и импульс у края — длина не теряется на передискретизации/фильтрах
         for t in BLOCKS:
             with self.subTest(block=t):
                 x, pos = _impulse(n=SR + 7, pos=1234)
                 self._check([_default_block(t)], x, pos)
 
-    def test_tc1_eq_with_filters_and_band_zero_phase(self):
+    def test_eq_with_filters_and_band_zero_phase(self):
         x, pos = _impulse()
         chain = [_block("eq", highpass_hz=100, lowpass_hz=8000,
                         bands=[{"freq_hz": 1000, "gain_db": 6, "q": 1}])]
         self._check(chain, x, pos)
 
-    # ТК2
-    def test_tc2_chain_of_all_blocks_fake_amp_latency_5(self):
+    def test_chain_of_all_blocks_fake_amp_latency_5(self):
         x, pos = _impulse()
         chain = [_default_block(t) for t in BLOCKS]
         self.assertEqual([b["type"] for b in chain], list(BLOCKS))
         self._check(chain, x, pos)
 
-    def test_tc2_chain_of_all_blocks_stereo(self):
+    def test_chain_of_all_blocks_stereo(self):
         x, pos = _impulse(ch=2)
         self._check([_default_block(t) for t in BLOCKS], x, pos)
 
-    def test_tc2_amp_at_other_sample_rate(self):
-        # условие 9: дорожка 44,1 кГц, модель 48 кГц — передискретизация без сдвига
+    def test_amp_at_other_sample_rate(self):
+        # дорожка 44,1 кГц, модель 48 кГц — передискретизация без сдвига
         amp = FakeAmp(shift=5, sr=48000)
         sr = 44100
         x, pos = _impulse(n=2 * sr, pos=20011)
@@ -202,15 +193,13 @@ class TestNoLatency(unittest.TestCase):
         for n in amp.calls:
             self.assertLess(abs(n - want), 64, f"длина на входе модели {n}, ждали ≈{want:.0f}")
 
-    def test_tc2_amp_channels_one_by_one(self):
+    def test_amp_channels_one_by_one(self):
         # контракт: каналы — по отдельности (модель получает 1-D)
         amp = FakeAmp(shift=5)
         x, pos = _impulse(ch=2)
         self._check([_block("amp", model="m")], x, pos, res=FakeResources(amps={"m": amp}))
         self.assertEqual(len(amp.calls), 2)
 
-
-# ---------- ТК3: компенсация задержки NAM ----------
 
 def _shift_fn(n, gain=-0.5):
     """Функция 1-D → 1-D, задерживающая на n сэмплов (отрицательный — вперёд);
@@ -231,17 +220,17 @@ def _shift_fn(n, gain=-0.5):
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestNamLatency(unittest.TestCase):
 
-    def test_tc3_measure_latency(self):
+    def test_measure_latency(self):
         import fx_nam
         for n in (-2, 0, 8):
             with self.subTest(n=n):
                 self.assertEqual(fx_nam.measure_latency(_shift_fn(n), SR), n)
 
-    def test_tc3_measure_latency_other_sr(self):
+    def test_measure_latency_other_sr(self):
         import fx_nam
         self.assertEqual(fx_nam.measure_latency(_shift_fn(8, gain=0.3), 44100), 8)
 
-    def test_tc3_engine_compensates_latency(self):
+    def test_engine_compensates_latency(self):
         for n in (-2, 0, 8):
             with self.subTest(n=n):
                 x, pos = _impulse()
@@ -250,8 +239,8 @@ class TestNamLatency(unittest.TestCase):
                 self.assertEqual(out.shape, x.shape)
                 self.assertEqual(_peak(out), pos)
 
-    def test_tc3_impulse_at_tail_not_lost(self):
-        # регрессия кросс-ревью: задержка модели 8 сэмплов, импульс в последних
+    def test_impulse_at_tail_not_lost(self):
+        # задержка модели 8 сэмплов, импульс в последних
         # сэмплах короткого входа — компенсация не теряет хвост
         n = 2000
         for pos in (1999, 1995):
@@ -263,7 +252,7 @@ class TestNamLatency(unittest.TestCase):
                 self.assertGreater(float(np.max(np.abs(out))), 0.1, "выход нулевой")
                 self.assertEqual(_peak(out), pos)
 
-    def test_tc3_measured_latency_then_compensated(self):
+    def test_measured_latency_then_compensated(self):
         # связка как у воркера: замер на фейке → latency модели → сдвиг 0
         import fx_nam
         amp = FakeAmp(shift=8)
@@ -273,8 +262,6 @@ class TestNamLatency(unittest.TestCase):
         self.assertEqual(_peak(out), pos)
 
 
-# ---------- ТК4: EQ ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestEq(unittest.TestCase):
 
@@ -283,13 +270,13 @@ class TestEq(unittest.TestCase):
         y = _fx().process(x, SR, chain)
         return _db(_tone_amp(y, hz) / _tone_amp(x, hz))
 
-    def test_tc4_highpass_100_kills_30hz(self):
+    def test_highpass_100_kills_30hz(self):
         self.assertLessEqual(self._gain_db([_block("eq", highpass_hz=100)], 30), -20)
 
-    def test_tc4_highpass_100_passes_1k(self):
+    def test_highpass_100_passes_1k(self):
         self.assertAlmostEqual(self._gain_db([_block("eq", highpass_hz=100)], 1000), 0, delta=1)
 
-    def test_tc4_band_plus6_at_1k(self):
+    def test_band_plus6_at_1k(self):
         chain = [_block("eq", bands=[{"freq_hz": 1000, "gain_db": 6, "q": 1}])]
         self.assertAlmostEqual(self._gain_db(chain, 1000), 6, delta=1)
 
@@ -300,12 +287,10 @@ class TestEq(unittest.TestCase):
         np.testing.assert_allclose(y, x, atol=1e-4)
 
 
-# ---------- ТК5: gate ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestGate(unittest.TestCase):
 
-    def test_tc5_noise_below_threshold_suppressed(self):
+    def test_noise_below_threshold_suppressed(self):
         rng = np.random.default_rng(1)
         x = np.zeros(2 * SR, dtype=np.float32)
         # тишина, затем шум с пиком −60 дБFS — ниже порога −50
@@ -316,7 +301,7 @@ class TestGate(unittest.TestCase):
         rout = np.sqrt(np.mean(y[seg].astype(np.float64) ** 2))
         self.assertLessEqual(_db(rout / rin), -30, "шум ниже порога не подавлен")
 
-    def test_tc5_signal_above_threshold_keeps_attack(self):
+    def test_signal_above_threshold_keeps_attack(self):
         x = np.zeros(2 * SR, dtype=np.float32)
         onset = SR // 2
         a = 0.5  # −6 дБFS, выше порога
@@ -331,8 +316,6 @@ class TestGate(unittest.TestCase):
         self.assertLessEqual(float(np.max(np.abs(y[sl] - x[sl]))), 0.05 * a)
 
 
-# ---------- ТК6: comp ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestComp(unittest.TestCase):
 
@@ -343,21 +326,19 @@ class TestComp(unittest.TestCase):
         steady = np.abs(y[SR:].astype(np.float64))  # установившийся режим — вторая секунда
         return _db(float(steady.max()))
 
-    def test_tc6_formula_threshold_minus20_ratio4(self):
+    def test_formula_threshold_minus20_ratio4(self):
         # T + (A − T)/ratio = −20 + (−6 + 20)/4 = −16,5 дБ
         got = self._out_peak_db(-6, threshold_db=-20, ratio=4)
         self.assertAlmostEqual(got, -16.5, delta=1.5)
 
-    def test_tc6_makeup_added(self):
+    def test_makeup_added(self):
         got = self._out_peak_db(-6, threshold_db=-20, ratio=4, makeup_db=6)
         self.assertAlmostEqual(got, -10.5, delta=1.5)
 
-    def test_tc6_below_threshold_untouched(self):
+    def test_below_threshold_untouched(self):
         got = self._out_peak_db(-30, threshold_db=-20, ratio=4)
         self.assertAlmostEqual(got, -30, delta=1.0)
 
-
-# ---------- ТК7: drive ----------
 
 def _thd(y, f0, sr=SR, harmonics=20):
     a1 = _tone_amp(y, f0, sr)
@@ -373,16 +354,14 @@ class TestDrive(unittest.TestCase):
         y = _fx().process(x, SR, [_block("drive", gain_db=gain_db, mix=1)])
         return _thd(y, 480)
 
-    def test_tc7_harmonics_grow_with_gain(self):
+    def test_harmonics_grow_with_gain(self):
         t6, t20, t40 = self._thd_at(6), self._thd_at(20), self._thd_at(40)
         self.assertLess(t6, t20)
         self.assertLess(t20, t40)
 
-    def test_tc7_oversampling_keeps_distortion(self):
+    def test_oversampling_keeps_distortion(self):
         self.assertGreaterEqual(self._thd_at(20), 0.10, "перегруз при gain 20 дБ «съеден»")
 
-
-# ---------- ТК8: cab ----------
 
 def _lowpass_ir(cut_hz, sr, n=257, delay=None):
     """FIR низких частот (окно Хэмминга) с пиком в середине — не в нуле."""
@@ -397,7 +376,7 @@ def _lowpass_ir(cut_hz, sr, n=257, delay=None):
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestCab(unittest.TestCase):
 
-    def test_tc8_ir_peak_not_at_zero_is_aligned(self):
+    def test_ir_peak_not_at_zero_is_aligned(self):
         ir = np.zeros(512, dtype=np.float32)
         ir[40], ir[41], ir[90] = 1.0, 0.5, -0.3
         x, pos = _impulse()
@@ -405,14 +384,14 @@ class TestCab(unittest.TestCase):
         self.assertEqual(out.shape, x.shape)
         self.assertEqual(_peak(out), pos)
 
-    def test_tc8_ir_other_rate_aligned(self):
+    def test_ir_other_rate_aligned(self):
         ir = _lowpass_ir(4000, 96000, delay=30)
         x, pos = _impulse()
         out = _fx().process(x, SR, [_block("cab", ir="hi")], FakeResources(irs={"hi": (ir, 96000)}))
         self.assertEqual(out.shape, x.shape)
         self.assertEqual(_peak(out), pos)
 
-    def test_tc8_ir_other_rate_is_resampled(self):
+    def test_ir_other_rate_is_resampled(self):
         # IR — срез на 4 кГц при 96 кГц. Пересчитан → 3 кГц проходит, 6 кГц режется;
         # если сэмплы взять как 48 кГц, срез уедет на 2 кГц и 3 кГц срежется.
         ir = _lowpass_ir(4000, 96000)
@@ -457,8 +436,6 @@ class TestCab(unittest.TestCase):
             fx.process(x, SR, [_block("cab", ir="nope")], None)
 
 
-# ---------- ТК9: reverb / delay ----------
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestReverbDelay(unittest.TestCase):
 
@@ -474,14 +451,14 @@ class TestReverbDelay(unittest.TestCase):
         self.assertLessEqual(float(np.max(np.abs(out[:pos]))), 1e-4, "хвост раньше сигнала")
         return pos, out
 
-    def test_tc9_reverb_dry_in_place_tail_after(self):
+    def test_reverb_dry_in_place_tail_after(self):
         pos, out = self._dry_in_place(_block("reverb"))
         early = out[pos + SR // 50: pos + SR // 2].astype(np.float64)   # 20–500 мс
         late = out[pos + SR: pos + 3 * SR // 2].astype(np.float64)      # 1,0–1,5 с
         self.assertGreater(np.sqrt(np.mean(early ** 2)), 1e-4, "нет хвоста")
         self.assertGreater(np.sum(early ** 2), np.sum(late ** 2), "хвост не затухает")
 
-    def test_tc9_delay_dry_in_place_echo_after(self):
+    def test_delay_dry_in_place_echo_after(self):
         pos, out = self._dry_in_place(_block("delay", time_ms=375))
         a = np.abs(out.astype(np.float64))
         lo = pos + SR // 200  # после 5 мс
@@ -490,7 +467,7 @@ class TestReverbDelay(unittest.TestCase):
                              f"повтор на {(echo - pos) / SR * 1000:.1f} мс, ждали 375")
         self.assertGreater(a[echo], 1e-3)
 
-    def test_tc9_wet_zero_is_identity(self):
+    def test_wet_zero_is_identity(self):
         rng = np.random.default_rng(2)
         x = (0.3 * rng.standard_normal((SR, 2))).astype(np.float32)
         for t in ("reverb", "delay"):
@@ -498,8 +475,6 @@ class TestReverbDelay(unittest.TestCase):
                 y = _fx().process(x, SR, [_block(t, wet=0)])
                 np.testing.assert_allclose(y, x, atol=1e-6)
 
-
-# ---------- Условие 12: блок «громкость» (gain) ----------
 
 def _rms(y, t0=0.5, t1=2.5, sr=SR):
     y = np.asarray(y, dtype=np.float64)
@@ -564,7 +539,7 @@ class TestGain(unittest.TestCase):
                     self.assertEqual(_peak(y), pos)
 
     def test_after_narrow_eq_and_drive_raises_by_gain(self):
-        # опыт #617: после узкой полосы и перегруза звук тихий — gain поднимает на заданные дБ
+        # после узкой полосы и перегруза звук тихий — gain поднимает на заданные дБ
         x = self._noise(amp=0.1)
         base = [_block("eq", highpass_hz=800, lowpass_hz=1500), _block("drive")]
         quiet = _fx().process(x, SR, base, None)
@@ -575,8 +550,6 @@ class TestGain(unittest.TestCase):
                 self.assertAlmostEqual(_db(_rms(loud) / _rms(quiet)), g, delta=0.05)
 
 
-# ---------- Условие 14 (internal-studio-engine, этап 5а): блок «сэмплер» (sampler) ----------
-#
 # Контракт: вход — дорожка части барабанов; удары — начала нот во входе (моно-сумма),
 # пик удара — максимум |x| в 15 мс после начала; удары тише p95·10^(floor_db/20) (от
 # громких) отбрасываются; сила удара → слой набора по рангу (громкий удар — громкий
@@ -665,8 +638,6 @@ class TestSampler(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(out)))
         return out
 
-    # --- без сдвига ---
-
     def test_no_shift_mono(self):
         pos = _positions(8)
         n = pos[-1] + SR
@@ -726,7 +697,7 @@ class TestSampler(unittest.TestCase):
         self.assertLessEqual(abs(at - pos[1]), 1, f"пик выхода {at}, удар {pos[1]}")
 
     def test_click_at_input_edges_peak_in_place(self):
-        # регрессия кросс-ревью: удар у самых краёв входа (сэмпл 0, 20, последний,
+        # удар у самых краёв входа (сэмпл 0, 20, последний,
         # предпоследний) находится и ставится пиком на место (±1) — при 22,05 и 48 кГц
         for sr in (22050, 48000):
             n = sr + 7
@@ -741,8 +712,6 @@ class TestSampler(unittest.TestCase):
                     self.assertGreater(float(_mono(y).max()), 0, "удар у края не найден — выход тишина")
                     at = _peak(y)
                     self.assertLessEqual(abs(at - p), 1, f"пик выхода {at}, щелчок {p}")
-
-    # --- сила → слой ---
 
     def test_loud_hit_loud_layer_quiet_hit_quiet_layer(self):
         # самый громкий удар — из громких слоёв, самый тихий — из тихих (с учётом сдвига ±1)
@@ -796,8 +765,6 @@ class TestSampler(unittest.TestCase):
                 layer_amp = max(_tone_amp(y, f, t0=p / SR, t1=p / SR + 0.05) for f in LAYER_HZ)
                 self.assertLess(_tone_amp(y, HIT_HZ, t0=p / SR, t1=p / SR + 0.05), 0.1 * layer_amp)
 
-    # --- порог floor_db ---
-
     def test_floor_drops_quiet_leak_hits(self):
         # протечка соседних барабанов — удары на −24 дБ от громких: при −18 отсекаются
         loud, quiet = 0.8, 0.8 * 10 ** (-24 / 20)
@@ -828,8 +795,6 @@ class TestSampler(unittest.TestCase):
                     _, pk = _peak_near(y, p, before=0.002, after=0.05)
                     self.assertGreater(pk, 0.02 * top, "при floor_db −40 удар −24 дБ потерян")
 
-    # --- громкость ---
-
     def test_rms_matches_input(self):
         pos = _positions(8)
         x = _hits(pos, [0.9, 0.5, 0.7, 0.6, 0.9, 0.4, 0.8, 0.7], pos[-1] + SR)
@@ -848,8 +813,6 @@ class TestSampler(unittest.TestCase):
                 y = self._run(x, [_sampler(output_db=g)])
                 dur = len(x) / SR
                 self.assertAlmostEqual(_db(_rms(y, 0, dur) / _rms(base, 0, dur)), g, delta=0.05)
-
-    # --- края ---
 
     def test_no_hits_is_silence(self):
         for ch in (None, 2):
@@ -884,8 +847,6 @@ class TestSampler(unittest.TestCase):
         with self.assertRaises(fx.ChainError):
             fx.process(x, SR, [_sampler(kit="test/kick")], None)
 
-    # --- проверка блока ---
-
     def test_parse_defaults_and_bounds(self):
         fx = _fx()
         got = fx.parse_chain([{"type": "sampler", "kit": "osdk/kick"}])[0]
@@ -909,8 +870,6 @@ class TestSampler(unittest.TestCase):
                 self.assertIn("kit", str(cm.exception), "причина не называет поле kit")
 
 
-# ---------- Условие 14/ТК19: место удара sampler не зависит от начала окна ----------
-#
 # Удар с двумя почти равными пиками: вспышки 300 Гц длиной 5 мс (огибающая cos²) —
 # 0,95 на 6 мс и 1,0 на 28 мс от начала удара, дальше хвост 55 Гц. То же содержимое
 # режется окнами с началом 0, 137, 911, 1777, 2403 сэмпла; пик выхода у каждого удара —
@@ -941,7 +900,7 @@ def _kick_hits(positions, n, amp=0.8, sr=SR):
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSamplerWindowStart(unittest.TestCase):
 
-    def test_tc19_hit_place_independent_of_window_start(self):
+    def test_hit_place_independent_of_window_start(self):
         pos = _positions(8, start=0.3, step=0.35)
         n = pos[-1] + SR
         x = _kick_hits(pos, n)
@@ -959,8 +918,6 @@ class TestSamplerWindowStart(unittest.TestCase):
                                          f"удар {p}: пик выхода {at - p} сэмплов от начала удара, "
                                          f"главный пик на {KICK_PEAK2}")
 
-
-# ---------- ТК10: проверка цепочки ----------
 
 DEFAULTS = {
     "gate": {"threshold_db": -50, "range_db": -40, "attack_ms": 1, "release_ms": 100},
@@ -988,22 +945,22 @@ class TestParseChain(unittest.TestCase):
     def test_chain_error_is_value_error(self):
         self.assertTrue(issubclass(_fx().ChainError, ValueError))
 
-    def test_tc10_unknown_block(self):
+    def test_unknown_block(self):
         msg = self._bad([{"type": "fuzz"}])
         self.assertIn("fuzz", msg)
 
-    def test_tc10_missing_type(self):
+    def test_missing_type(self):
         self._bad([{"gain_db": 6}])
 
-    def test_tc10_empty_list(self):
+    def test_empty_list(self):
         self._bad([])
 
-    def test_tc10_not_a_list(self):
+    def test_not_a_list(self):
         for bad in ("gate", {"type": "gate"}, None, 5):
             with self.subTest(chain=bad):
                 self._bad(bad)
 
-    def test_tc10_param_out_of_range(self):
+    def test_param_out_of_range(self):
         cases = [
             [{"type": "gate", "threshold_db": 5}],
             [{"type": "gate", "range_db": -91}],
@@ -1027,23 +984,23 @@ class TestParseChain(unittest.TestCase):
             with self.subTest(chain=chain):
                 self._bad(chain)
 
-    def test_tc10_unknown_param(self):
+    def test_unknown_param(self):
         self._bad([{"type": "gate", "foo": 1}])
 
-    def test_tc10_wrong_type(self):
+    def test_wrong_type(self):
         for chain in ([{"type": "drive", "gain_db": "loud"}],
                       [{"type": "eq", "bands": "1k+6"}],
                       [{"type": "gate"}, "comp"]):
             with self.subTest(chain=chain):
                 self._bad(chain)
 
-    def test_tc10_type_not_a_string(self):
-        # регрессия кросс-ревью: нехэшируемый/нестроковый type — ChainError, не TypeError
+    def test_type_not_a_string(self):
+        # нехэшируемый/нестроковый type — ChainError, не TypeError
         for t in ([], {}, 5):
             with self.subTest(type=t):
                 self._bad([{"type": t}])
 
-    def test_tc10_amp_requires_model(self):
+    def test_amp_requires_model(self):
         self._bad([{"type": "amp"}])
 
     def test_bounds_inclusive(self):
@@ -1100,9 +1057,7 @@ class TestParseChain(unittest.TestCase):
             fx.process(x, SR, [{"type": "amp", "model": "nope"}], None)
 
 
-# ---------- Условие 15 (internal-studio-engine, этап 5б): блок «бас» (bass), ТК10–13 ----------
-#
-# Контракт (карточка): вход — басовая дорожка; ритм — сетка долей по самой дорожке,
+# Контракт: вход — басовая дорожка; ритм — сетка долей по самой дорожке,
 # division ячеек на долю (1…4, по умолчанию 2 = восьмые); на ячейке со звуком — нота
 # с частотой дорожки; тише p90·10^(floor_db/20) (по умолчанию −20) — тишина. Новый
 # щипок — только при смене ноты или новом ударе во входе, иначе нота тянется; начало
@@ -1259,13 +1214,13 @@ def _rms_db(y, t0, t1, sr=SR):
     return 10 * np.log10(max(float(np.mean(seg ** 2)), 1e-24))
 
 
-# ТК10: нота/пауза на восьмых (ноты — на долях), 120 BPM, A1/D2/E2; 0,5 с тишины до и после
+# нота/пауза на восьмых (ноты — на долях), 120 BPM, A1/D2/E2; 0,5 с тишины до и после
 LEAD = 0.5
-TK10_NOTES = (A1, D2, E2, A1, E2, D2, A1, E2)
+BASS_NOTES = (A1, D2, E2, A1, E2, D2, A1, E2)
 
 
-def _tk10_input(sr=SR):
-    ev = [(LEAD + i * BEAT, hz, 0.5, 0.22, 0.3) for i, hz in enumerate(TK10_NOTES)]
+def _bass_line_input(sr=SR):
+    ev = [(LEAD + i * BEAT, hz, 0.5, 0.22, 0.3) for i, hz in enumerate(BASS_NOTES)]
     return _bass_line(ev, LEAD + len(ev) * BEAT + 0.5, sr=sr)
 
 
@@ -1279,8 +1234,8 @@ class TestBassHelpers(unittest.TestCase):
                 y = _pluck(hz, 0.8, lead=500, dur=0.5)
                 self.assertLess(abs(_cents(_f0(y, 0.03, 0.25), hz)), 5)
                 self.assertLessEqual(abs(_onset(y, 500) - 500), 20)
-        x, hits = _tk10_input()
-        for p, hz in zip(hits, TK10_NOTES, strict=True):
+        x, hits = _bass_line_input()
+        for p, hz in zip(hits, BASS_NOTES, strict=True):
             self.assertLess(abs(_cents(_f0(x, p / SR + 0.02, p / SR + 0.2), hz)), 5)
             self.assertLessEqual(abs(_onset(x, p) - p), 40)
 
@@ -1292,9 +1247,7 @@ class TestBassHelpers(unittest.TestCase):
         self.assertEqual(len(_clicks(y, 0, 3, _hp_peak(y))), 3)
 
 
-# ---------- ТК44 (lead-ревью c36, Б-1): тот же NaN, что в 36a, — в блоке bass ----------
-#
-# Вход ТК10/ТК12 (ноты с паузами, ровно нулевые участки) → ни одного RuntimeWarning
+# Вход (ноты с паузами, ровно нулевые участки) → ни одного RuntimeWarning
 # (warnings как ошибки) по всем тестам блока bass; в паузах входа выход ≤ −40 дБ от пика
 # (с NaN обрезка конца ноты выключалась: бас звучал в паузах до −4,8 дБ).
 # «По всем тестам блока bass» — классы TestBass/TestBassOnsets/TestBassReview идут
@@ -1302,8 +1255,8 @@ class TestBassHelpers(unittest.TestCase):
 
 
 class _StrictWarnings:
-    """RuntimeWarning внутри теста — ошибка (карточка: «ни одного RuntimeWarning»).
-    UserWarning librosa pyin (fmin=25 Гц меньше двух периодов в кадре) — не предмет ТК44,
+    """RuntimeWarning внутри теста — ошибка.
+    UserWarning librosa pyin (fmin=25 Гц меньше двух периодов в кадре) — не предмет теста,
     в ошибку не превращается."""
 
     def setUp(self):
@@ -1325,13 +1278,11 @@ class TestBass(_StrictWarnings, unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(out)))
         return out
 
-    # --- ТК10 ---
-
-    def _check_tk10(self, x, hits, y, sr=SR):
+    def _check_bass_line(self, x, hits, y, sr=SR):
         a = _mono(y)
         loud = float(a.max())
         self.assertGreater(loud, 1e-3, "выход молчит")
-        for p, hz in zip(hits, TK10_NOTES, strict=True):
+        for p, hz in zip(hits, BASS_NOTES, strict=True):
             with self.subTest(note=hz, at=p / sr):
                 f = _f0(y, p / sr + 0.02, p / sr + 0.2, sr=sr)
                 self.assertIsNotNone(f, "в ячейке со звуком нет тона")
@@ -1350,44 +1301,42 @@ class TestBass(_StrictWarnings, unittest.TestCase):
                 self.assertLessEqual(_db(float(seg.max()) / loud), -60,
                                      "вход молчит, а выход звучит")
 
-    def test_tc10_pitch_onsets_silence(self):
-        x, hits = _tk10_input()
+    def test_pitch_onsets_silence(self):
+        x, hits = _bass_line_input()
         y = self._run(x, [_bass()])
-        self._check_tk10(x, hits, y)
+        self._check_bass_line(x, hits, y)
 
-    def test_tc10_stereo_input(self):
+    def test_stereo_input(self):
         # басовая дорожка — стерео-файл: форма выхода как у входа, ноты те же
-        x, hits = _tk10_input()
+        x, hits = _bass_line_input()
         xs = np.stack([x, x], axis=1)
         y = self._run(xs, [_bass()])
-        self._check_tk10(x, hits, y)
+        self._check_bass_line(x, hits, y)
 
-    def test_tc10_stereo_kit(self):
-        x, hits = _tk10_input()
+    def test_stereo_kit(self):
+        x, hits = _bass_line_input()
         y = self._run(x, [_bass()], res=_bass_res(ch=2))
-        self._check_tk10(x, hits, y)
+        self._check_bass_line(x, hits, y)
 
-    def test_tc10_kit_other_rate_pitch_from_sound(self):
+    def test_kit_other_rate_pitch_from_sound(self):
         # набор 44,1 кГц, дорожка 48 кГц: высота — из звука с учётом частоты набора
-        x, hits = _tk10_input()
+        x, hits = _bass_line_input()
         y = self._run(x, [_bass()], res=_bass_res(sr=44100))
-        self._check_tk10(x, hits, y)
+        self._check_bass_line(x, hits, y)
 
-    def test_tc10_silent_input_silent_output(self):
+    def test_silent_input_silent_output(self):
         for ch in (None, 2):
             with self.subTest(ch=ch):
                 x = np.zeros(3 * SR if ch is None else (3 * SR, ch), dtype=np.float32)
                 y = self._run(x, [_bass()])
                 self.assertTrue(np.all(y == 0))
 
-    # --- ТК11: долгая нота тянется, новый удар — новый щипок ---
-
     def _context(self, t_from, t_to, hz=E2):
         """Восьмые с ударом на каждой (для сетки по дорожке) на [t_from, t_to)."""
         n = int(round((t_to - t_from) / EIGHTH))
         return [(t_from + i * EIGHTH, hz, 0.5, EIGHTH, 0.12) for i in range(n)]
 
-    def _tc11_input(self, middle):
+    def _long_note_input(self, middle):
         # такт восьмых E2 | 4 доли A1 (middle) | такт восьмых E2
         t_mid = LEAD + 4 * BEAT
         t_end = t_mid + 4 * BEAT
@@ -1395,8 +1344,8 @@ class TestBass(_StrictWarnings, unittest.TestCase):
         x, _ = _bass_line(ev, t_end + 4 * BEAT + 0.5)
         return x, t_mid, t_end
 
-    def test_tc11_long_note_one_pluck(self):
-        x, t_mid, t_end = self._tc11_input(lambda t: [(t, A1, 0.5, 4 * BEAT, 1.5)])
+    def test_long_note_one_pluck(self):
+        x, t_mid, t_end = self._long_note_input(lambda t: [(t, A1, 0.5, 4 * BEAT, 1.5)])
         y = self._run(x, [_bass()])
         ref = _hp_peak(y)
         self.assertGreater(ref, 0, "в выходе нет щипков")
@@ -1408,8 +1357,8 @@ class TestBass(_StrictWarnings, unittest.TestCase):
         self.assertIsNotNone(f, "долгая нота оборвалась")
         self.assertLess(abs(_cents(f, A1)), 50)
 
-    def test_tc11_same_note_hit_every_eighth(self):
-        x, t_mid, t_end = self._tc11_input(
+    def test_same_note_hit_every_eighth(self):
+        x, t_mid, t_end = self._long_note_input(
             lambda t: [(t + i * EIGHTH, A1, 0.5, EIGHTH, 0.12) for i in range(8)])
         y = self._run(x, [_bass()])
         ref = _hp_peak(y)
@@ -1420,9 +1369,7 @@ class TestBass(_StrictWarnings, unittest.TestCase):
                 self.assertLessEqual(abs(p - int((t_mid + i * EIGHTH) * SR)),
                                      ONSET_TOL + int(0.002 * SR))
 
-    # --- ТК12: громкость следует за входом ---
-
-    def test_tc12_loudness_follows_input(self):
+    def test_loudness_follows_input(self):
         # 16 восьмых A1 с ударом на каждой: первые 8 — тихо, вторые 8 — на 12 дБ громче
         lo_amp = 0.1
         hi_amp = lo_amp * 10 ** (12 / 20)
@@ -1438,7 +1385,7 @@ class TestBass(_StrictWarnings, unittest.TestCase):
         self.assertAlmostEqual(dout, 12, delta=3, msg=f"вход +12 дБ, выход {dout:+.1f} дБ")
 
     def test_output_db_scales(self):
-        x, _ = _tk10_input()
+        x, _ = _bass_line_input()
         base = self._run(x, [_bass()])
         for g in (-6, 6):
             with self.subTest(output_db=g):
@@ -1464,11 +1411,9 @@ class TestBass(_StrictWarnings, unittest.TestCase):
                 else:
                     self.assertLessEqual(rel, -60, "нота тише floor_db не заглушена")
 
-    # --- ТК13: ошибки цепочки ---
-
-    def test_tc13_missing_kit_is_chain_error(self):
+    def test_missing_kit_is_chain_error(self):
         fx = _fx()
-        x, _ = _tk10_input()
+        x, _ = _bass_line_input()
         with self.assertRaises(fx.ChainError) as cm:
             fx.process(x, SR, [_bass(kit="growlybass/bass")], _bass_res())
         self.assertIn("growlybass/bass", str(cm.exception), "причина не называет набор")
@@ -1476,9 +1421,9 @@ class TestBass(_StrictWarnings, unittest.TestCase):
             with self.subTest(resources=res), self.assertRaises(fx.ChainError):
                 fx.process(x, SR, [_bass()], res)
 
-    def test_tc13_division_out_of_range(self):
+    def test_division_out_of_range(self):
         fx = _fx()
-        x, _ = _tk10_input()
+        x, _ = _bass_line_input()
         for bad in (0, 5, -1, 2.5, "2"):
             with self.subTest(division=bad):
                 with self.assertRaises(fx.ChainError):
@@ -1505,18 +1450,16 @@ class TestBass(_StrictWarnings, unittest.TestCase):
                 self.assertIn("kit", str(cm.exception), "причина не называет поле kit")
 
 
-# ---------- Условие 15, ТК16–18 (ревью c15): лишние/пропущенные щипки ----------
-#
-# Вход ТК16: тон + 2-я гармоника, атака линейно 1/5/10 мс, спад exp(−t/0,4), в конце
+# Вход: тон + 2-я гармоника, атака линейно 1/5/10 мс, спад exp(−t/0,4), в конце
 # ноты спад 5 мс; длина ноты 0,9 восьмой (пауза 10 %) или 1,0 (легато); ноты
 # A1 D2 E2 A1 B1 D2 A1 E2 ×2; темп 97 и 120 BPM. Щипки выхода — по щелчкам набора.
 
 B1 = 61.74
-TK16_NOTES = (A1, D2, E2, A1, B1, D2, A1, E2) * 2
+BASS_NOTES_16 = (A1, D2, E2, A1, B1, D2, A1, E2) * 2
 
 
 def _note2(hz, amp, dur, attack_ms, sr=SR, tau=0.4, phase=0.0):
-    """Нота ТК16: тон + 2-я гармоника, линейная атака attack_ms, спад tau, 5 мс в конце."""
+    """Нота: тон + 2-я гармоника, линейная атака attack_ms, спад tau, 5 мс в конце."""
     k = np.arange(int(round(dur * sr)))
     t = k / sr
     att = max(attack_ms * 0.001 * sr, 1.0)
@@ -1541,7 +1484,7 @@ def _line2(notes, eighth, frac, attack_ms, lead=LEAD, tail=0.5, amp=0.5, sr=SR):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestBassOnsets(_StrictWarnings, unittest.TestCase):
-    """ТК16–18: щипок — только на настоящем ударе или смене ноты; ни лишних, ни пропущенных."""
+    """Щипок — только на настоящем ударе или смене ноты; ни лишних, ни пропущенных."""
 
     _run = TestBass._run
 
@@ -1550,36 +1493,32 @@ class TestBassOnsets(_StrictWarnings, unittest.TestCase):
         self.assertGreater(ref, 0, "в выходе нет щипков")
         return _clicks(y, 0, len(y) / SR, ref)
 
-    # --- ТК16 ---
-
-    def test_tc16_gapped_notes_exactly_16_on_onsets(self):
+    def test_gapped_notes_exactly_16_on_onsets(self):
         for bpm in (97, 120):
             for att in (1, 5, 10):
                 with self.subTest(bpm=bpm, attack_ms=att):
-                    x, hits = _line2(TK16_NOTES, 30 / bpm, 0.9, att)
+                    x, hits = _line2(BASS_NOTES_16, 30 / bpm, 0.9, att)
                     got = self._plucks(self._run(x, [_bass()]))
                     self.assertEqual(len(got), 16, f"щипков {len(got)}, нот 16: {[g / SR for g in got]}")
                     for p, g in zip(hits, got, strict=True):
                         self.assertLessEqual(abs(g - p), ONSET_TOL,
                                              f"щипок на {g}, начало ноты {p} ({(g - p) / SR * 1000:+.1f} мс)")
 
-    def test_tc16_legato_exactly_16_within_minus5_plus10_ms(self):
+    def test_legato_exactly_16_within_minus5_plus10_ms(self):
         for bpm in (97, 120):
             for att in (1, 5, 10):
                 with self.subTest(bpm=bpm, attack_ms=att):
-                    x, hits = _line2(TK16_NOTES, 30 / bpm, 1.0, att)
+                    x, hits = _line2(BASS_NOTES_16, 30 / bpm, 1.0, att)
                     got = self._plucks(self._run(x, [_bass()]))
                     self.assertEqual(len(got), 16, f"щипков {len(got)}, нот 16: {[g / SR for g in got]}")
                     for p, g in zip(hits, got, strict=True):
                         d_ms = (g - p) / SR * 1000
                         self.assertTrue(-5 <= d_ms <= 10, f"щипок {d_ms:+.1f} мс от начала ноты")
 
-    # --- ТК17 ---
-
-    def test_tc17_window_starts_mid_note(self):
+    def test_window_starts_mid_note(self):
         # с первого сэмпла звучит A1 на полной громкости (без атаки), дальше удары каждую восьмую
         hits_n = 12
-        notes = TK16_NOTES[1:1 + hits_n]
+        notes = BASS_NOTES_16[1:1 + hits_n]
         x, hits = _line2(notes, EIGHTH, 0.9, 1, lead=EIGHTH)
         k = np.arange(int(round(0.9 * EIGHTH * SR)))
         env = np.exp(-k / SR / 0.4) * np.clip((len(k) - k) / (0.005 * SR), 0, 1)
@@ -1594,9 +1533,7 @@ class TestBassOnsets(_StrictWarnings, unittest.TestCase):
         self.assertLessEqual(abs(len(got) - strikes), 1,
                              f"щипков {len(got)}, ударов {strikes}: {[g / SR for g in got]}")
 
-    # --- ТК18 ---
-
-    def _tc18_input(self, second_hz, frac):
+    def _second_note_input(self, second_hz, frac):
         # такт восьмых E2 (сетка) | A1 удар | вторая нота без роста громкости | такт E2
         ev_ctx = [(LEAD + i * EIGHTH, E2) for i in range(8)]
         t1 = LEAD + 8 * EIGHTH
@@ -1604,7 +1541,7 @@ class TestBassOnsets(_StrictWarnings, unittest.TestCase):
         total = t1 + 6 * EIGHTH + 8 * EIGHTH + 0.5
         x = np.concatenate([x, np.zeros(int(round(total * SR)) - len(x), np.float32)])
         p1 = int(round(t1 * SR))
-        # frac: длина A1 в восьмых — 0,9 (пауза 10 %, как в ТК16) или 1,0 (легато)
+        # frac: длина A1 в восьмых — 0,9 (пауза 10 %) или 1,0 (легато)
         a = _note2(A1, 0.5, frac * EIGHTH, 1)
         x[p1:p1 + len(a)] += a
         end_level = 0.5 * np.exp(-frac * EIGHTH / 0.4)       # уровень A1 перед спадом 5 мс
@@ -1618,16 +1555,16 @@ class TestBassOnsets(_StrictWarnings, unittest.TestCase):
             x[p:p + len(n)] += n
         return x.astype(np.float32), p1, p2, int(round(ctx2 * SR))
 
-    def test_tc18_same_note_without_growth_sustains(self):
+    def test_same_note_without_growth_sustains(self):
         # легато: повтор без роста громкости (провал стыка ≤ 10 мс) — нота тянется
-        self._tc18_same(1.0, plucks=1)
+        self._check_same_note(1.0, plucks=1)
 
-    def test_tc18_same_note_after_pause_is_new_pluck(self):
-        # нота 0,9 восьмой: 25 мс тишины перед повтором — новый щипок «после тишины» (условие 15)
-        self._tc18_same(0.9, plucks=2)
+    def test_same_note_after_pause_is_new_pluck(self):
+        # нота 0,9 восьмой: 25 мс тишины перед повтором — новый щипок «после тишины»
+        self._check_same_note(0.9, plucks=2)
 
-    def _tc18_same(self, frac, plucks):
-        x, p1, p2, p_ctx = self._tc18_input(A1, frac)
+    def _check_same_note(self, frac, plucks):
+        x, p1, p2, p_ctx = self._second_note_input(A1, frac)
         # самопроверка: рост громкости < 2 дБ (RMS 20 мс перед спадом конца A1 против 20 мс
         # после атаки повтора)
         a_end = p1 + int(round(frac * EIGHTH * SR)) - int(0.005 * SR)
@@ -1645,31 +1582,29 @@ class TestBassOnsets(_StrictWarnings, unittest.TestCase):
         self.assertIsNotNone(f, "нота не тянется")
         self.assertLess(abs(_cents(f, A1)), 50)
 
-    def test_tc18_note_change_without_growth_plucks(self):
+    def test_note_change_without_growth_plucks(self):
         for frac in (0.9, 1.0):
             with self.subTest(note_len=frac):
-                self._tc18_change(frac)
+                self._check_note_change(frac)
 
-    def _tc18_change(self, frac):
-        x, p1, p2, p_ctx = self._tc18_input(D2, frac)
+    def _check_note_change(self, frac):
+        x, p1, p2, p_ctx = self._second_note_input(D2, frac)
         y = self._run(x, [_bass()])
         got = self._plucks(y)
         mid = [g for g in got if p1 - ONSET_TOL <= g < p_ctx - 2 * ONSET_TOL]
         self.assertEqual(len(mid), 2, f"A1 и смена на D2 — 2 щипка, получено {[g / SR for g in mid]}")
         d_ms = (mid[1] - p2) / SR * 1000
-        if frac < 1.0:   # после паузы — как ТК16 с паузой: ±128 сэмплов
+        if frac < 1.0:   # после паузы: ±128 сэмплов
             self.assertLessEqual(abs(mid[1] - p2), ONSET_TOL, f"щипок смены ноты {d_ms:+.1f} мс")
-        else:            # легато — предел ТК16/ТК18: −5…+10 мс
+        else:            # легато: −5…+10 мс
             self.assertTrue(-5 <= d_ms <= 10, f"щипок смены ноты {d_ms:+.1f} мс от начала ноты")
         f = _f0(y, p2 / SR + 0.1, p2 / SR + 0.4)
         self.assertIsNotNone(f)
         self.assertLess(abs(_cents(f, D2)), 50)
 
 
-# ---------- Условие 15, ТК20–23 (кросс-ревью c15) ----------
-
 A2 = 110.0
-TAG_HZ = tuple(1500 + 250 * j for j in range(16))   # метки сэмплов ТК23: щелчок своей частоты
+TAG_HZ = tuple(1500 + 250 * j for j in range(16))   # метки сэмплов: щелчок своей частоты
 
 
 def _pluck_tagged(hz, peak, tag_hz, seed, sr=SR, dur=2.0):
@@ -1701,25 +1636,21 @@ def _tag_of(y, p, sr=SR):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestBassReview(_StrictWarnings, unittest.TestCase):
-    """ТК20–23: начало окна с тишиной, легато-смена на октаву, долгая нота, разные дубли."""
+    """Начало окна с тишиной, легато-смена на октаву, долгая нота, разные дубли."""
 
     _run = TestBass._run
     _plucks = TestBassOnsets._plucks
 
-    # --- ТК20 ---
-
-    def test_tc20_window_starts_with_10ms_silence(self):
-        x, hits = _line2(TK16_NOTES[:8], EIGHTH, 0.9, 1, lead=0.01)
+    def test_window_starts_with_10ms_silence(self):
+        x, hits = _line2(BASS_NOTES_16[:8], EIGHTH, 0.9, 1, lead=0.01)
         self.assertTrue(np.all(x[:int(0.01 * SR)] == 0), "самопроверка: первые 10 мс — тишина")
         got = self._plucks(self._run(x, [_bass()]))
         self.assertEqual(len(got), 8, f"щипков {len(got)}, нот 8: {[g / SR for g in got]}")
         self.assertLessEqual(abs(got[0] - hits[0]), ONSET_TOL,
                              f"первый щипок на {got[0]}, начало первой ноты {hits[0]}")
 
-    # --- ТК21 ---
-
-    def test_tc21_legato_octave_change_plucks_a2(self):
-        x, p1, p2, p_ctx = TestBassOnsets._tc18_input(self, A2, 1.0)
+    def test_legato_octave_change_plucks_a2(self):
+        x, p1, p2, p_ctx = TestBassOnsets._second_note_input(self, A2, 1.0)
         a_end = p1 + int(round(EIGHTH * SR)) - int(0.005 * SR)
         before = _rms_db(x, (a_end - int(0.02 * SR)) / SR, a_end / SR)
         after = _rms_db(x, (p2 + int(0.005 * SR)) / SR, (p2 + int(0.025 * SR)) / SR)
@@ -1734,9 +1665,7 @@ class TestBassReview(_StrictWarnings, unittest.TestCase):
         self.assertIsNotNone(f)
         self.assertLess(abs(_cents(f, A2)), 50, f"после смены {f:.1f} Гц, нужно A2 {A2}")
 
-    # --- ТК22 ---
-
-    def test_tc22_long_note_sounds_to_the_end(self):
+    def test_long_note_sounds_to_the_end(self):
         # одна нота A1 6 с без новых ударов; в наборе — сэмплы A1 по 8 с с медленным спадом
         kit = [_pluck(A1, pk, dur=8.0, tau=4.0) for pk in BASS_LAYER_PEAK], SR
         res = FakeResources(kits={BASS_KIT: kit})
@@ -1750,9 +1679,7 @@ class TestBassReview(_StrictWarnings, unittest.TestCase):
         self.assertIsNotNone(f, "на 5–6 с нота не звучит")
         self.assertLess(abs(_cents(f, A1)), 50)
 
-    # --- ТК23 ---
-
-    def test_tc23_adjacent_plucks_never_same_sample(self):
+    def test_adjacent_plucks_never_same_sample(self):
         peaks = np.linspace(0.3, 1.0, 16)
         order = [11, 3, 14, 7, 0, 9, 5, 15, 2, 12, 8, 1, 13, 6, 10, 4]   # перемешано
         samples = [_pluck_tagged(A1, float(peaks[j]), TAG_HZ[j], seed=j) for j in order]
@@ -1774,9 +1701,7 @@ class TestBassReview(_StrictWarnings, unittest.TestCase):
                                     f"соседние щипки {i - 1} и {i} — один сэмпл (метка {used[i]}); все: {used}")
 
 
-# ---------- Условие 26 (этап 5в): хэт и тарелки — kit_open и choke, ТК27–29 ----------
-#
-# Контракт (из карточки): у sampler необязательные kit_open (строка, "" = нет) и choke (0/1,
+# Контракт: у sampler необязательные kit_open (строка, "" = нет) и choke (0/1,
 # по умолчанию 0). Вид удара — по тому, сколько он звучит во входе: время спада на −20 дБ
 # от пика, не дольше чем до следующего удара; граница — среднее геометрическое медиан
 # времён спада сэмплов kit и kit_open, замеренных по самим сэмплам. Короткие удары — kit,
@@ -1855,9 +1780,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
             return "open"
         return None
 
-    # --- ТК27 ---
-
-    def test_tc27_short_hits_kit_long_hits_kit_open(self):
+    def test_short_hits_kit_long_hits_kit_open(self):
         # граница = √(100 мс · 400 мс) = 200 мс; удары 60 мс — kit, 300 мс — kit_open;
         # до следующего удара 1 с (хвост открытого сэмпла к нему −50 дБ — не сдвигает пик)
         kinds = "SLSSLLSL"
@@ -1873,7 +1796,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
                 at, _ = _peak_near(y, p)
                 self.assertLessEqual(abs(at - p), 1, f"пик выхода {at}, удар {p}")
 
-    def test_tc27_long_hit_cut_by_next_hit_is_kit(self):
+    def test_long_hit_cut_by_next_hit_is_kit(self):
         # удар со спадом 300 мс, но следующий через 100 мс → звучал 100 мс < 200 → kit
         q = int(0.3 * SR) + 23
         ev = [(q, 0.8, 0.3), (q + int(0.1 * SR), 0.8, 0.06), (q + int(0.8 * SR), 0.8, 0.3)]
@@ -1883,7 +1806,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
         # контроль: тот же удар без соседа рядом — kit_open
         self.assertEqual(self._kind(y, ev[2][0]), "open")
 
-    def test_tc27_threshold_from_kit_samples_not_fixed(self):
+    def test_threshold_from_kit_samples_not_fixed(self):
         # ручного порога нет: граница — по сэмплам наборов. Удар 300 мс при наборах
         # 400 мс / 1600 мс (граница 800 мс) — уже «закрытый»; при 100/400 — «открытый».
         p = int(0.3 * SR) + 11
@@ -1893,9 +1816,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
         self.assertEqual(self._kind(self._run(x, [_hh(kit_open=HH_OPEN)], res=slow), p), "closed")
         self.assertEqual(self._kind(self._run(x, [_hh(kit_open=HH_OPEN)]), p), "open")
 
-    # --- ТК28 ---
-
-    def _tc28(self, choke):
+    def _choke_pair(self, choke):
         # наборы: kit спад 10 мс, kit_open 800 мс (граница ≈ 89 мс); удар 1 звучит 120 мс
         # (→ kit_open), удар 2 через 150 мс, короткий (→ kit, другой тон)
         res = _hat_res(closed_t20=(0.01, 0.01, 0.01), open_t20=(0.8, 0.8, 0.8),
@@ -1910,16 +1831,16 @@ class TestSamplerOpenChoke(unittest.TestCase):
         after = _band_amp(y, OPEN_HZ, p2 / SR, p2 / SR + 0.01)
         return _db(before / ref), _db(after / ref)
 
-    def test_tc28_choke_1_silences_previous_sample(self):
-        before, after = self._tc28(choke=1)
+    def test_choke_1_silences_previous_sample(self):
+        before, after = self._choke_pair(choke=1)
         self.assertGreater(before, -12, f"за 10 мс до следующего удара сэмпл уже заглушен ({before:.1f} дБ)")
         self.assertLessEqual(after, -40, f"к началу следующего удара сэмпл звучит {after:.1f} дБ от пика")
 
-    def test_tc28_choke_0_keeps_ringing(self):
-        _, after = self._tc28(choke=0)
+    def test_choke_0_keeps_ringing(self):
+        _, after = self._choke_pair(choke=0)
         self.assertGreater(after, -12, f"choke=0, а сэмпл заглушен ({after:.1f} дБ)")
 
-    def test_tc28_choke_default_is_0(self):
+    def test_choke_default_is_0(self):
         res = _hat_res()
         p1 = int(0.3 * SR) + 17
         p2 = p1 + int(0.15 * SR)
@@ -1928,9 +1849,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
         b = self._run(x, [_hh(kit_open=HH_OPEN, choke=0)], res=res)
         np.testing.assert_allclose(a, b, atol=1e-6)
 
-    # --- ТК29 ---
-
-    def test_tc29_missing_kit_open_is_chain_error(self):
+    def test_missing_kit_open_is_chain_error(self):
         fx = _fx()
         x = _hat_hits([(1000, 0.8, 0.06)], SR)
         with self.assertRaises(fx.ChainError) as cm:
@@ -1941,7 +1860,7 @@ class TestSamplerOpenChoke(unittest.TestCase):
             fx.process(x, SR, [_hh(kit_open=HH_OPEN)], only_closed)
         self.assertIn(HH_OPEN, str(cm.exception))
 
-    def test_tc29_empty_kit_open_same_as_without(self):
+    def test_empty_kit_open_same_as_without(self):
         pos = _positions(6, start=0.2, step=0.6)
         ev = [(p, 0.8, (0.06, 0.3)[i % 2]) for i, p in enumerate(pos)]
         x = _hat_hits(ev, pos[-1] + SR)
@@ -1953,8 +1872,8 @@ class TestSamplerOpenChoke(unittest.TestCase):
         only_closed = FakeResources(kits={HH_CLOSED: _hat_kit(CLOSED_HZ, (0.09, 0.1, 0.11), 0.4)})
         self._run(x, [_hh(kit_open="")], res=only_closed)
 
-    def test_tc29_without_kit_open_all_hits_from_kit(self):
-        # без kit_open — как этап 5а: и длинные удары получают сэмплы kit
+    def test_without_kit_open_all_hits_from_kit(self):
+        # без kit_open — и длинные удары получают сэмплы kit
         pos = _positions(4, start=0.2, step=0.6)
         ev = [(p, 0.8, 0.3) for p in pos]
         y = self._run(_hat_hits(ev, pos[-1] + SR), [_hh()])
@@ -1978,12 +1897,10 @@ class TestSamplerOpenChoke(unittest.TestCase):
                 fx.parse_chain([{"type": "sampler", "kit": "osdk/hh-closed", **bad}])
 
 
-# ---------- Условие 26, ТК34 (кросс-ревью c26): choke глушит к началу атаки сэмпла ----------
-#
 # Сэмплы с атакой 2 мс (пик не в начале) и длинным хвостом. choke=1: к НАЧАЛУ АТАКИ сэмпла
 # следующего удара (не к его пику) звучание предыдущего ≤ −40 дБ от его пика; пик выхода у
 # второго удара — на пике удара (±1). Часть «удары ближе 10 мс» тестом не покрыта: удары ближе
-# 40 мс сэмплер сливает в один (место удара — главный пик в первых 40 мс, ТК19), choke не на что.
+# 40 мс сэмплер сливает в один (место удара — главный пик в первых 40 мс), choke не на что.
 
 ATT2 = int(0.002 * SR)     # атака 2 мс: пик сэмпла на 96-м отсчёте
 
@@ -2004,7 +1921,7 @@ class TestSamplerChokeAttack(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(out)))
         return out
 
-    def _tc34(self, choke):
+    def _choke_attack_pair(self, choke):
         # kit — «закрытый» (спад 5 мс), kit_open — «открытый» (800 мс), граница ≈ 63 мс;
         # удар 1 (пик 0,8) звучит 100 мс → kit_open, удар 2 через 150 мс (пик 0,08) → kit
         res = FakeResources(kits={
@@ -2020,35 +1937,23 @@ class TestSamplerChokeAttack(unittest.TestCase):
         self.assertGreater(o, 3 * c, "первый удар не из kit_open — проверка choke невозможна")
         return y, p1, p2
 
-    def test_tc34_silenced_by_attack_start_of_next_sample(self):
-        y, p1, p2 = self._tc34(choke=1)
+    def test_silenced_by_attack_start_of_next_sample(self):
+        y, p1, p2 = self._choke_attack_pair(choke=1)
         ref = _band_amp(y, OPEN_HZ, p1 / SR, p1 / SR + 0.01)
         a = p2 - ATT2                                   # начало атаки сэмпла второго удара
         during = _band_amp(y, OPEN_HZ, a / SR, p2 / SR)
         self.assertLessEqual(_db(during / ref), -40,
                              f"на атаке сэмпла следующего удара предыдущий звучит {_db(during / ref):.1f} дБ")
 
-    def test_tc34_second_hit_peak_in_place(self):
-        y, _, p2 = self._tc34(choke=1)
+    def test_second_hit_peak_in_place(self):
+        y, _, p2 = self._choke_attack_pair(choke=1)
         at, _ = _peak_near(y, p2, before=0.003, after=0.004)
         self.assertLessEqual(abs(at - p2), 1, f"пик выхода у второго удара на {at - p2} от пика удара")
 
 
-# ---------- Условие 36 (закрытие хвостов), ТК37–39, ТК41 ----------
-#
-# 36a: _env5 (sampler) без NaN/RuntimeWarning на тишине и крохах после сглаживания —
-#      проверяется через вход: process с warnings как ошибки, выход конечен.
-# 36b: поиск ударов — кадр 256 (было 128), точность места удара прежняя (пик по сэмплам).
-#      Размер кадра снаружи не виден: тест охраняет точность (±1) на некруглых отсчётах
-#      вокруг границ кадров 128/256 и у краёв входа — зелёный и до, и после правки.
-# 36c: не больше 16 блоков и 12 полос эквалайзера — больше → ChainError с причиной.
-# 36e: задержка модели NAM (в т.ч. отрицательная) больше длины входа → ChainError
-#      с текстом про захват, не другое исключение (500).
-
-
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestTailsSamplerQuiet(unittest.TestCase):
-    """ТК37 (36a): тишина, ровно нулевые участки и крохи не дают RuntimeWarning/NaN."""
+    """Тишина, ровно нулевые участки и крохи не дают RuntimeWarning/NaN."""
 
     def _run_strict(self, x, chain, res):
         import warnings
@@ -2078,21 +1983,21 @@ class TestTailsSamplerQuiet(unittest.TestCase):
             "stereo_rare": np.stack([rare, np.zeros_like(rare)], axis=1),
         }
 
-    def test_tc37_kit_open_no_runtime_warning(self):
+    def test_kit_open_no_runtime_warning(self):
         for name, x in self._inputs().items():
             with self.subTest(input=name):
                 self._run_strict(x, [_hh(kit_open=HH_OPEN)], _hat_res())
 
-    def test_tc37_kit_open_choke_no_runtime_warning(self):
+    def test_kit_open_choke_no_runtime_warning(self):
         for name, x in self._inputs().items():
             with self.subTest(input=name):
                 self._run_strict(x, [_hh(kit_open=HH_OPEN, choke=1)], _hat_res())
 
-    def test_tc37_silence_gives_silence(self):
+    def test_silence_gives_silence(self):
         y = self._run_strict(np.zeros(3 * SR, dtype=np.float32), [_hh(kit_open=HH_OPEN)], _hat_res())
         self.assertEqual(float(np.abs(y).max()), 0.0, "на тишине сэмплер что-то сыграл")
 
-    def test_tc37_rare_hits_still_found(self):
+    def test_rare_hits_still_found(self):
         # контроль: строгий режим не «лечится» тишиной на выходе — удары на месте
         x = self._inputs()["rare_hits_zero_stretches"]
         y = self._run_strict(x, [_hh(kit_open=HH_OPEN)], _hat_res())
@@ -2105,13 +2010,13 @@ class TestTailsSamplerQuiet(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestTailsSamplerFrame(unittest.TestCase):
-    """ТК38 (36b): место удара ±1 на некруглых отсчётах вокруг границ кадров 128/256
-    и у краёв входа. Охранный тест: должен быть зелёным до и после смены кадра."""
+    """Место удара ±1 на некруглых отсчётах вокруг границ кадров 128/256
+    и у краёв входа."""
 
     # смещения от кратного 256: по обе стороны границ кадров 128 и 256
     OFFSETS = (1, 3, 63, 127, 128, 129, 191, 254, 255, 257, 383, 511)
 
-    def test_tc38_peak_in_place_around_frame_bounds(self):
+    def test_peak_in_place_around_frame_bounds(self):
         for sr in (44100, 48000):
             pos = [int((0.25 + 0.3 * i) * sr) // 256 * 256 + off for i, off in enumerate(self.OFFSETS)]
             n = pos[-1] + sr
@@ -2123,7 +2028,7 @@ class TestTailsSamplerFrame(unittest.TestCase):
                     at, _ = _peak_near(y, p, sr=sr)
                     self.assertLessEqual(abs(at - p), 1, f"пик выхода {at}, удар {p}")
 
-    def test_tc38_edges_with_other_hits(self):
+    def test_edges_with_other_hits(self):
         # удары у краёв (0, 20, последний) вместе с ударами внутри входа — все найдены
         sr = SR
         n = 2 * SR + 131
@@ -2145,17 +2050,17 @@ class TestTailsSamplerFrame(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestTailsChainLimits(unittest.TestCase):
-    """ТК39 (36c): не больше 16 блоков и 12 полос эквалайзера."""
+    """Не больше 16 блоков и 12 полос эквалайзера."""
 
     @staticmethod
     def _band(i):
         return {"freq_hz": 100 + 150 * i, "gain_db": 1, "q": 1}
 
-    def test_tc39_16_blocks_ok(self):
+    def test_16_blocks_ok(self):
         chain = [{"type": "gain", "gain_db": 0}] * 16
         self.assertEqual(len(_fx().parse_chain(chain)), 16)
 
-    def test_tc39_17_blocks_chain_error(self):
+    def test_17_blocks_chain_error(self):
         fx = _fx()
         with self.assertRaises(fx.ChainError) as cm:
             fx.parse_chain([{"type": "gain", "gain_db": 0}] * 17)
@@ -2163,11 +2068,11 @@ class TestTailsChainLimits(unittest.TestCase):
         self.assertIn("16", msg, f"причина не называет предел: {msg!r}")
         self.assertIn("блок", msg.lower(), f"причина не про блоки: {msg!r}")
 
-    def test_tc39_12_bands_ok(self):
+    def test_12_bands_ok(self):
         got = _fx().parse_chain([{"type": "eq", "bands": [self._band(i) for i in range(12)]}])
         self.assertEqual(len(got[0]["bands"]), 12)
 
-    def test_tc39_13_bands_chain_error(self):
+    def test_13_bands_chain_error(self):
         fx = _fx()
         with self.assertRaises(fx.ChainError) as cm:
             fx.parse_chain([{"type": "eq", "bands": [self._band(i) for i in range(13)]}])
@@ -2175,7 +2080,7 @@ class TestTailsChainLimits(unittest.TestCase):
         self.assertIn("12", msg, f"причина не называет предел: {msg!r}")
         self.assertIn("полос", msg.lower(), f"причина не про полосы: {msg!r}")
 
-    def test_tc39_limits_per_eq_block(self):
+    def test_limits_per_eq_block(self):
         # предел полос — на блок: два eq по 12 полос в одной цепочке допустимы
         eq = {"type": "eq", "bands": [self._band(i) for i in range(12)]}
         self.assertEqual(len(_fx().parse_chain([eq, eq])), 2)
@@ -2183,9 +2088,9 @@ class TestTailsChainLimits(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestTailsNamLatencyTooLong(unittest.TestCase):
-    """ТК41 (36e): задержка захвата больше длины входа → ChainError про захват."""
+    """Задержка захвата больше длины входа → ChainError про захват."""
 
-    def test_tc41_latency_longer_than_input(self):
+    def test_latency_longer_than_input(self):
         fx = _fx()
         n = 2000
         x, _ = _impulse(n=n, pos=500)
@@ -2196,7 +2101,7 @@ class TestTailsNamLatencyTooLong(unittest.TestCase):
                     fx.process(x, SR, [_block("amp", model="m")], res)
                 self.assertIn("захват", str(cm.exception).lower(), f"причина не про захват: {cm.exception}")
 
-    def test_tc41_stereo_and_other_sr(self):
+    def test_stereo_and_other_sr(self):
         # стерео вход и модель с другой частотой: задержка в сэмплах модели всё равно больше входа
         fx = _fx()
         n = 4410
@@ -2207,7 +2112,7 @@ class TestTailsNamLatencyTooLong(unittest.TestCase):
                 with self.assertRaises(fx.ChainError):
                     fx.process(x, 44100, [_block("amp", model="m")], res)
 
-    def test_tc41_latency_within_input_still_ok(self):
+    def test_latency_within_input_still_ok(self):
         # контроль: обычная задержка (меньше входа) по-прежнему компенсируется
         for lat in (8, -2):
             with self.subTest(latency=lat):
@@ -2219,7 +2124,7 @@ class TestTailsNamLatencyTooLong(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestBassPausesQuiet(_StrictWarnings, unittest.TestCase):
-    """ТК44: ноты с паузами (ровно ноль во входе) → в паузах выход ≤ −40 дБ от пика."""
+    """Ноты с паузами (ровно ноль во входе) → в паузах выход ≤ −40 дБ от пика."""
 
     PAUSE_DB = -40
 
@@ -2246,29 +2151,29 @@ class TestBassPausesQuiet(_StrictWarnings, unittest.TestCase):
         out.append((starts[-1] + note_dur + 0.05, total))
         return out
 
-    def _tk10(self):
-        x, hits = _tk10_input()
+    def _bass_line_pauses(self):
+        x, hits = _bass_line_input()
         self.assertEqual(float(np.abs(x[int((hits[0] / SR + 0.23) * SR):hits[1] - 1]).max()), 0.0,
                          "самопроверка: пауза входа не ровно ноль")
         starts = [p / SR for p in hits]
         return x, self._pauses(starts, 0.22, len(x) / SR)
 
-    def test_tc44_tk10_input_pauses_quiet(self):
-        x, pauses = self._tk10()
+    def test_bass_line_input_pauses_quiet(self):
+        x, pauses = self._bass_line_pauses()
         self._check_pauses(self._run(x), pauses)
 
-    def test_tc44_tk10_stereo_input(self):
-        x, pauses = self._tk10()
+    def test_bass_line_stereo_input(self):
+        x, pauses = self._bass_line_pauses()
         self._check_pauses(self._run(np.stack([x, x], axis=1)), pauses)
 
-    def test_tc44_tk10_stereo_kit_and_other_rate(self):
-        x, pauses = self._tk10()
+    def test_bass_line_stereo_kit_and_other_rate(self):
+        x, pauses = self._bass_line_pauses()
         for name, res in (("stereo_kit", _bass_res(ch=2)), ("kit_44k", _bass_res(sr=44100))):
             with self.subTest(kit=name):
                 self._check_pauses(self._run(x, res=res), pauses)
 
-    def test_tc44_tk12_loud_quiet_with_pauses(self):
-        # вход ТК12 (тихая половина и на 12 дБ громче), но ноты — 0,6 восьмой, дальше ровно ноль
+    def test_loud_quiet_with_pauses(self):
+        # вход (тихая половина и на 12 дБ громче), но ноты — 0,6 восьмой, дальше ровно ноль
         lo_amp = 0.1
         hi_amp = lo_amp * 10 ** (12 / 20)
         dur = 0.6 * EIGHTH
@@ -2278,9 +2183,7 @@ class TestBassPausesQuiet(_StrictWarnings, unittest.TestCase):
         self._check_pauses(y, self._pauses([p / SR for p in hits], dur, len(x) / SR))
 
 
-# ---------- internal-own-track, этап 2, условие 15: тамы по высоте — kit_mid/kit_low, ТК32–35 ----------
-#
-# Контракт (из карточки): у sampler необязательные строки kit_mid и kit_low (по умолчанию "").
+# Контракт: у sampler необязательные строки kit_mid и kit_low (по умолчанию "").
 # Задана хоть одна — удары делятся по высоте: высота удара — частота максимума спектра
 # 50–500 Гц первых 60 мс после пика; группы — по возрастанию высоты, соседние с отношением
 # высот < 1,12 сливаются; групп не больше, чем наборов. Самая высокая группа → kit, самая
@@ -2339,15 +2242,13 @@ class TestSamplerTomsByPitch(unittest.TestCase):
             with self.subTest(hit=p, hz=f):
                 self.assertEqual(self._kit_at(y, p), want[f], f"удар {f} Гц — ждали набор {want[f]}")
 
-    # --- ТК32 ---
-
-    def test_tc32_three_toms_three_kits(self):
+    def test_three_toms_three_kits(self):
         freqs = [220, 140, 90] * 3
         x, pos = _tom_hits(freqs)
         y = self._run(x, [_toms(kit_mid=TOM_MID, kit_low=TOM_LOW)])
         self._check(y, pos, freqs, {220: TOM_HI, 140: TOM_MID, 90: TOM_LOW})
 
-    def test_tc32_hit_peak_in_place(self):
+    def test_hit_peak_in_place(self):
         # деление по высоте не сдвигает удары: пик выхода на пике удара (±1), как у sampler
         freqs = [220, 140, 90] * 2
         x, pos = _tom_hits(freqs)
@@ -2357,30 +2258,26 @@ class TestSamplerTomsByPitch(unittest.TestCase):
                 at, _ = _peak_near(y, p)
                 self.assertLessEqual(abs(at - p), 1, f"пик выхода {at}, удар {p}")
 
-    # --- ТК33 ---
-
-    def test_tc33_two_toms_three_kits_high_and_low(self):
+    def test_two_toms_three_kits_high_and_low(self):
         freqs = [200, 100] * 4
         x, pos = _tom_hits(freqs)
         y = self._run(x, [_toms(kit_mid=TOM_MID, kit_low=TOM_LOW)])
         self._check(y, pos, freqs, {200: TOM_HI, 100: TOM_LOW})
 
-    def test_tc33_single_pitch_goes_to_kit_mid(self):
+    def test_single_pitch_goes_to_kit_mid(self):
         freqs = [150] * 6
         x, pos = _tom_hits(freqs)
         y = self._run(x, [_toms(kit_mid=TOM_MID, kit_low=TOM_LOW)])
         self._check(y, pos, freqs, {150: TOM_MID})
 
-    def test_tc33_close_pitches_merge_into_one_group(self):
+    def test_close_pitches_merge_into_one_group(self):
         # 160/150 ≈ 1,067 < 1,12 (меньше 2 полутонов) — одна группа → kit_mid
         freqs = [150, 160] * 4
         x, pos = _tom_hits(freqs)
         y = self._run(x, [_toms(kit_mid=TOM_MID, kit_low=TOM_LOW)])
         self._check(y, pos, freqs, {150: TOM_MID, 160: TOM_MID})
 
-    # --- ТК34 ---
-
-    def test_tc34_only_kit_low(self):
+    def test_only_kit_low(self):
         freqs = [220, 90] * 4
         x, pos = _tom_hits(freqs)
         y = self._run(x, [_toms(kit_low=TOM_LOW)])
@@ -2405,7 +2302,7 @@ class TestSamplerTomsByPitch(unittest.TestCase):
                 with self.subTest(hit=p, hz=f):
                     self.assertIn(self._kit_at(y, p), (TOM_HI, TOM_LOW))
 
-    def test_tc34_kit_open_with_kit_mid_or_low_is_chain_error(self):
+    def test_kit_open_with_kit_mid_or_low_is_chain_error(self):
         fx = _fx()
         for extra in ({"kit_mid": TOM_MID}, {"kit_low": TOM_LOW}, {"kit_mid": TOM_MID, "kit_low": TOM_LOW}):
             with self.subTest(extra=extra):
@@ -2425,8 +2322,6 @@ class TestSamplerTomsByPitch(unittest.TestCase):
         fx = _fx()
         fx.parse_chain([_toms(kit_open="", kit_mid=TOM_MID)])
 
-    # --- проверка блока ---
-
     def test_parse_kit_mid_kit_low(self):
         fx = _fx()
         got = fx.parse_chain([{"type": "sampler", "kit": "osdk/tom-small"}])[0]
@@ -2441,15 +2336,13 @@ class TestSamplerTomsByPitch(unittest.TestCase):
                 fx.parse_chain([{"type": "sampler", "kit": "osdk/tom-small", **bad}])
 
 
-# --- ТК35: без kit_mid/kit_low выход sampler прежний ---
-#
-# Отпечаток выхода снят с реализации ДО этапа 2 (коммит 41a1cee) на фиксированных входе и
+# Отпечаток выхода снят с реализации коммита 41a1cee на фиксированных входе и
 # наборе: сумма, сумма квадратов, «центр тяжести» Σ n·y / N и место максимума |y|.
 
-TC35_FINGERPRINT = (9.856788797315026, 497.798102510382, 3.2186065272887605, 9617)
+SAMPLER_FINGERPRINT = (9.856788797315026, 497.798102510382, 3.2186065272887605, 9617)
 
 
-def _tc35_input():
+def _sampler_input():
     pos = _positions(8)
     return _hits(pos, [0.9, 0.5, 0.7, 0.6, 0.9, 0.4, 0.8, 0.7], pos[-1] + SR)
 
@@ -2457,17 +2350,17 @@ def _tc35_input():
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSamplerWithoutPitchKitsUnchanged(unittest.TestCase):
 
-    def test_tc35_same_as_before_stage2(self):
-        y = np.asarray(_fx().process(_tc35_input(), SR, [_sampler(floor_db=-30)], _kit_res()), dtype=np.float64)
+    def test_same_as_before_pitch_kits(self):
+        y = np.asarray(_fx().process(_sampler_input(), SR, [_sampler(floor_db=-30)], _kit_res()), dtype=np.float64)
         n = np.arange(len(y))
         got = (float(y.sum()), float((y * y).sum()), float((n * y).sum() / len(y)))
-        for name, g, w in zip(("сумма", "сумма квадратов", "центр"), got, TC35_FINGERPRINT[:3], strict=True):
+        for name, g, w in zip(("сумма", "сумма квадратов", "центр"), got, SAMPLER_FINGERPRINT[:3], strict=True):
             with self.subTest(part=name):
                 self.assertAlmostEqual(g, w, delta=1e-7 * max(1.0, abs(w)), msg=f"{name}: {g!r}, было {w!r}")
-        self.assertEqual(int(np.argmax(np.abs(y))), TC35_FINGERPRINT[3])
+        self.assertEqual(int(np.argmax(np.abs(y))), SAMPLER_FINGERPRINT[3])
 
-    def test_tc35_empty_strings_bitwise_same_as_absent(self):
-        x = _tc35_input()
+    def test_empty_strings_bitwise_same_as_absent(self):
+        x = _sampler_input()
         fx = _fx()
         base = fx.process(x, SR, [_sampler(floor_db=-30)], _kit_res())
         empty = fx.process(x, SR, [_sampler(floor_db=-30, kit_mid="", kit_low="")], _kit_res())
@@ -2495,7 +2388,7 @@ GONE_TOM_PITCHES = [
 @unittest.skipUnless(_HAS_DEPS, "нужны numpy/scipy/librosa")
 class TestTomGroupsWithLeak(unittest.TestCase):
     """Находка на живой дорожке «Gone» (#488): удары с протечкой заполняют промежуток между двумя тамами
-    (~89 и ~157 Гц); раньше группы склеивались цепочкой в одну (314 ударов из 315)."""
+    (~89 и ~157 Гц)."""
 
     def test_real_toms_two_groups(self):
         import fx_engine as fe
@@ -2508,13 +2401,13 @@ class TestTomGroupsWithLeak(unittest.TestCase):
         self.assertGreater(float(np.median(high)), 140)
 
     def test_short_fill_three_toms_three_groups(self):
-        # кросс-ревью 15а: короткая сбивка — по удару на там — три группы (по 33 %), не одна
+        # короткая сбивка — по удару на там — три группы (по 33 %), не одна
         import fx_engine as fe
         grp, ng = fe._pitch_groups([220.0, 140.0, 90.0], 3)
         self.assertEqual((ng, grp), (3, [2, 1, 0]))
 
     def test_dominant_pitch_keeps_middle_tom(self):
-        # кросс-ревью 15а: 80 % ударов одной высоты — средний там не пропадает (пустой группы нет)
+        # 80 % ударов одной высоты — средний там не пропадает (пустой группы нет)
         import fx_engine as fe
         p = [90.0] * 80 + [140.0] * 10 + [220.0] * 10
         grp, ng = fe._pitch_groups(p, 3)
@@ -2523,7 +2416,7 @@ class TestTomGroupsWithLeak(unittest.TestCase):
 
 
     def test_edge_outlier_does_not_eat_middle_tom(self):
-        # ревью 15а круг 2: три тама 90/140/220 и один удар на краю (50 или 480 Гц — граница измерения) —
+        # три тама 90/140/220 и один удар на краю (50 или 480 Гц — граница измерения) —
         # три группы, выброс не отнимает группу у среднего тама
         import fx_engine as fe
         for out in (50.0, 480.0):
@@ -2534,9 +2427,7 @@ class TestTomGroupsWithLeak(unittest.TestCase):
                 self.assertEqual({grp[0], grp[100], grp[160]}, {0, 1, 2})
 
 
-# ---------- Карточка internal-own-track, этап 4 «Синты»: блок synth (условие 23, ТК47) ----------
-#
-# Контракт (карточка и контракт задачи; реализацию не читали): блок {"type": "synth",
+# Контракт: блок {"type": "synth",
 # "notes": [{t, d, midi: [..], vel 0..1}], osc1/osc2 0..4 (0 пила, 1 квадрат, 2 пульс,
 # 3 треугольник, 4 синус), osc2_semi −24…24, osc_mix 0…1, unison 1…4, detune_cents 0…50,
 # sub, noise, pwm 0…1, cutoff_hz 80…16000, resonance 0…1, env_amount 0…1, f_attack_s,
@@ -2544,7 +2435,7 @@ class TestTomGroupsWithLeak(unittest.TestCase):
 # lfo_cutoff 0…1, output_db}. Вход — только длина (содержимое не влияет); t нот — от
 # начала окна; нота звучит до t+d, затем release (не дальше конца окна); без нот —
 # тишина; пик выхода −6 дБFS + output_db; неверные ноты → ChainError; нот ≤ 5000.
-# «Без фильтра» в тестах — cutoff_hz 16000, resonance 0, env_amount 0 (контракт задачи).
+# «Без фильтра» в тестах — cutoff_hz 16000, resonance 0, env_amount 0.
 
 SYNTH_BLOCKS = ("synth", "chorus", "phaser", "flanger", "tape", "spring")
 
@@ -2603,13 +2494,13 @@ def _blocks_json():
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthPitch(unittest.TestCase):
-    """ТК47: высота нот, несколько нот, юнисон."""
+    """Высота нот, несколько нот, юнисон."""
 
-    def test_tk47_a4_sine_440(self):
+    def test_a4_sine_440(self):
         y = _synth([_snote(0.1, 1.0, [69])])
         self.assertAlmostEqual(_dominant_hz(y, 0.3, 1.0), 440.0, delta=2)
 
-    def test_tk47_two_notes_both_frequencies(self):
+    def test_two_notes_both_frequencies(self):
         # две ноты одновременно: A4 и E5 — обе частоты в спектре, ничего громче их
         y = _synth([_snote(0.1, 1.5, [69]), _snote(0.1, 1.5, [76])])
         fr, S = _spectrum(y, 0.4, 1.4)
@@ -2623,7 +2514,7 @@ class TestSynthPitch(unittest.TestCase):
         self.assertGreater(a, top * 0.3, "A4 (440 Гц) не слышна")
         self.assertGreater(e, top * 0.3, "E5 (659 Гц) не слышна")
 
-    def test_tk47_chord_in_one_note(self):
+    def test_chord_in_one_note(self):
         # midi — список: аккорд одной нотой даёт все высоты
         y = _synth([_snote(0.1, 1.5, [60, 64, 67])])
         fr, S = _spectrum(y, 0.4, 1.4)
@@ -2633,7 +2524,7 @@ class TestSynthPitch(unittest.TestCase):
                 sel = np.abs(fr - _hz(m)) <= 3
                 self.assertGreater(float(S[sel].max()), top * 0.3)
 
-    def test_tk47_unison_3_detune_20_three_peaks_within_20_cents(self):
+    def test_unison_3_detune_20_three_peaks_within_20_cents(self):
         y = _synth([_snote(0.0, 4.0, [69])], n=4 * SR, unison=3, detune_cents=20)
         fr, S = _spectrum(y, 0.5, 3.5, pad=8)
         lo, hi = 440 * 2 ** (-21 / 1200), 440 * 2 ** (21 / 1200)
@@ -2648,7 +2539,7 @@ class TestSynthPitch(unittest.TestCase):
             self.assertTrue(lo <= f <= hi, f"пик {f:.2f} Гц вне ±20 центов от 440")
 
     def test_saw_110_no_aliasing(self):
-        # ТК47 «пила без фс-зеркал»: у пилы 110 Гц при 48 кГц зеркала (гармоники выше
+        # у пилы 110 Гц при 48 кГц зеркала (гармоники выше
         # Найквиста, отражённые вниз) ложатся МЕЖДУ гармониками 110·k (48000/110 не целое).
         # Энергия вне гармоник (дальше 8 Гц от 110·k) ниже 20 кГц < −40 дБ от всей:
         # наивная пила даёт ≈ −27 дБ, PolyBLEP ≈ −47 дБ (проверено прототипом).
@@ -2666,9 +2557,9 @@ class TestSynthPitch(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthTimeAndLevel(unittest.TestCase):
-    """ТК47 и условие 23: время нот, release, тишина без нот, громкость выхода."""
+    """Время нот, release, тишина без нот, громкость выхода."""
 
-    def test_tk47_silence_after_release(self):
+    def test_silence_after_release(self):
         y = _synth([_snote(0.1, 0.5, [69])], release_s=0.2)
         peak = float(np.abs(y).max())
         self.assertGreater(peak, 0)
@@ -2705,11 +2596,11 @@ class TestSynthTimeAndLevel(unittest.TestCase):
                 self.assertEqual(y.dtype, np.float32)
                 self.assertTrue(np.all(np.isfinite(y)))
 
-    def test_tk47_empty_notes_silence(self):
+    def test_empty_notes_silence(self):
         y = _synth([])
         self.assertLess(float(np.abs(y).max()), 1e-6)
 
-    def test_tk47_peak_minus6_dbfs(self):
+    def test_peak_minus6_dbfs(self):
         for notes in ([_snote(0.1, 1.0, [69], vel=1.0)],
                       [_snote(0.1, 1.0, [69], vel=0.2)],
                       [_snote(0.1, 1.0, [48, 52, 55, 60, 64, 67], vel=1.0)]):
@@ -2721,10 +2612,9 @@ class TestSynthTimeAndLevel(unittest.TestCase):
         y = _synth([_snote(0.1, 1.0, [69])], output_db=-6)
         self.assertAlmostEqual(_db(float(np.abs(y).max())), -12, delta=0.5)
 
-    # условие 29 (прослушивание #681: пэд по пику −6 тонул в плотном припеве): громкость синта — от трека.
-    # Прежний тест «вход не влияет» заменён: условие изменилось по прослушиванию, не под код.
-    def test_tk53_level_relative_to_input(self):
-        # усл. 78 (этап 9): уровень «на ухо» — A-уровень партии к A-уровню входа (кривая сверена в test_synth_level)
+    # громкость синта — от трека.
+    def test_level_relative_to_input(self):
+        # уровень «на ухо» — A-уровень партии к A-уровню входа (кривая сверена в test_synth_level)
         fx = _fx()
         t = np.arange(2 * SR) / SR
         x = (10 ** (-20 / 20) * np.sqrt(2) * np.sin(2 * np.pi * 100 * t)).astype(np.float32)   # RMS −20 дБFS
@@ -2737,14 +2627,14 @@ class TestSynthTimeAndLevel(unittest.TestCase):
                 a = 20 * np.log10(np.sqrt(np.mean(seg ** 2)))
                 self.assertAlmostEqual(a - ref, rel, delta=1.0)
 
-    def test_tk53_silent_input_peak_mode(self):
+    def test_silent_input_peak_mode(self):
         y = _synth([_snote(0.1, 1.0, [69])], rel_db=-10)          # вход по умолчанию — тишина
         self.assertAlmostEqual(20 * np.log10(np.abs(y).max()), -6.0, delta=0.5)
 
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthParse(unittest.TestCase):
-    """Условие 23: проверка нот и параметров (ChainError → 422)."""
+    """Проверка нот и параметров (ChainError → 422)."""
 
     def _bad(self, block):
         fx = _fx()
@@ -2753,7 +2643,7 @@ class TestSynthParse(unittest.TestCase):
         with self.assertRaises(fx.ChainError):
             fx.parse_chain([block])
 
-    def test_tk47_midi_200_chain_error(self):
+    def test_midi_200_chain_error(self):
         self._bad(_synth_block([_snote(0, 1, [200])]))
 
     def test_bad_notes(self):
@@ -2781,7 +2671,7 @@ class TestSynthParse(unittest.TestCase):
         self.assertEqual(len(fx.parse_chain([_synth_block([_snote(0, 1, [0, 127])])])), 1)
 
     def test_param_bounds(self):
-        bad = [{"osc1": 6}, {"osc1": -1}, {"osc2": 6}, {"osc2_semi": 25}, {"osc2_semi": -25},  # 5 — FM (этап 7в)
+        bad = [{"osc1": 6}, {"osc1": -1}, {"osc2": 6}, {"osc2_semi": 25}, {"osc2_semi": -25},  # 5 — FM
                {"osc_mix": 1.1}, {"unison": 0}, {"unison": 5}, {"detune_cents": 51},
                {"sub": 1.1}, {"noise": -0.1}, {"pwm": 1.1}, {"cutoff_hz": 79},
                {"cutoff_hz": 16001}, {"resonance": 1.1}, {"env_amount": 1.1},
@@ -2799,8 +2689,6 @@ class TestSynthParse(unittest.TestCase):
             with self.subTest(param=p):
                 self.assertEqual(len(fx.parse_chain([_synth_block([], **p)])), 1)
 
-
-# ---------- Условие 24, ТК48: эффекты для синтов ----------
 
 FX_DRY = {  # «сухой» вариант каждого эффекта: mix/wet 0
     "chorus": {"mix": 0},
@@ -2822,9 +2710,9 @@ def _dual_mono(x):
 
 @unittest.skipUnless(_HAS_DEPS, _SKIP)
 class TestSynthEffects(unittest.TestCase):
-    """ТК48: chorus/phaser/flanger/tape/spring."""
+    """Chorus/phaser/flanger/tape/spring."""
 
-    def test_tk48_length_equals_input(self):
+    def test_length_equals_input(self):
         for t in ("chorus", "phaser", "flanger", "tape", "spring"):
             for x in (_noise(SR + 7), _noise(SR + 7, ch=2)):
                 with self.subTest(block=t, shape=x.shape):
@@ -2833,7 +2721,7 @@ class TestSynthEffects(unittest.TestCase):
                     self.assertEqual(y.dtype, np.float32)
                     self.assertTrue(np.all(np.isfinite(y)))
 
-    def test_tk48_mix_wet_zero_is_identity(self):
+    def test_mix_wet_zero_is_identity(self):
         for t, p in FX_DRY.items():
             for x in (_noise(), _noise(ch=2)):
                 with self.subTest(block=t, shape=x.shape):
@@ -2853,7 +2741,7 @@ class TestSynthEffects(unittest.TestCase):
                 lags = correlation_lags(len(y), len(x), mode="full")
                 self.assertEqual(int(lags[int(np.argmax(xc))]), 0)
 
-    def test_tk48_chorus_phaser_spread_dual_mono(self):
+    def test_chorus_phaser_spread_dual_mono(self):
         # моно-вход (одинаковые каналы) → L и R разные (разная фаза LFO)
         x = _dual_mono(_noise())
         for t in ("chorus", "phaser"):
@@ -2863,7 +2751,7 @@ class TestSynthEffects(unittest.TestCase):
                 ref = np.sqrt(np.mean(y ** 2))
                 self.assertGreater(_db(diff / ref), -30, f"{t}: L и R одинаковы")
 
-    def test_tk48_tape_wow_pitch_drifts(self):
+    def test_tape_wow_pitch_drifts(self):
         from scipy.signal import hilbert
         wow_max = next(p["max"] for p in _blocks_json()["tape"]["params"] if p["id"] == "wow")
 
@@ -2881,7 +2769,7 @@ class TestSynthEffects(unittest.TestCase):
         self.assertLess(spread(y0), 1.0, "без wow частота уже плавает — замер не о wow")
         self.assertGreater(spread(y1), 1.0, "wow > 0: частота 1 кГц не плавает")
 
-    def test_tk48_spring_tail_longer_than_03s(self):
+    def test_spring_tail_longer_than_03s(self):
         x, pos = _impulse(n=2 * SR, pos=SR // 4)
         y = _smono(_fx().process(x, SR, [_block("spring", wet=0.5)]))
         tail = float(np.abs(y[pos + int(0.3 * SR):pos + int(0.5 * SR)]).max())
@@ -2903,7 +2791,7 @@ class TestSynthEffects(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_DEPS, "нужны numpy/scipy/librosa")
 class TestSynthLimitsAndEdges(unittest.TestCase):
-    """Кросс-ревью и безопасность этапа 4: лимиты нот, края окна без щелчка."""
+    """Лимиты нот, края окна без щелчка."""
 
     def _syn(self, notes, **kw):
         return {"type": "synth", "osc1": 4, "cutoff_hz": 16000, "notes": notes, **kw}
@@ -2925,7 +2813,7 @@ class TestSynthLimitsAndEdges(unittest.TestCase):
 
 
     def test_until_huge_is_harmless(self):
-        # кросс-ревью s4 r3: внешний _until 1e308 — не 500 (переполнение при пересчёте в сэмплы)
+        # внешний _until 1e308 — не 500 (переполнение при пересчёте в сэмплы)
         import fx_engine as fe
         sr = 48000
         y = fe.process(np.zeros((sr, 1)), sr, [self._syn([{"t": 0, "d": 0.5, "midi": [69], "vel": 1}], _until=1e308)])

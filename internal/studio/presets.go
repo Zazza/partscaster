@@ -81,7 +81,7 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, fmt.Errorf("версия трека: %w", err)
 	}
-	// сверка по итогу (усл. 86, 86а): цель ставится до мастера, а мастер и остатки старых дорожек сдвигают баланс
+	// сверка по итогу: цель ставится до мастера, а мастер и остатки старых дорожек сдвигают баланс
 	// (#725: гитара −5,9 при цели −9,5) — итог разделяется и меряется как эталоны; при промахе — исправляющий проход,
 	// поправки копятся; один проход исправлял ~половину (#728: −5,9 → −7,2), поэтому их до presetVerifyPasses
 	total2 := map[int]float64{}
@@ -127,7 +127,7 @@ func presetVerify(ctx context.Context, svc yue.Service, child int64, specs []yue
 	for i, s := range specs {
 		if s.LevelDb != nil && len(s.Stems) == 1 {
 			if _, ok := before[s.Stems[0]]; ok {
-				// цель сверки — с ручной громкостью записи (db «на этот раз»): правка человека не отменяется (86б)
+				// цель сверки — с ручной громкостью записи (db «на этот раз»): правка человека не отменяется
 				targets[i] = *s.LevelDb + s.Db
 			}
 		}
@@ -144,7 +144,7 @@ func presetVerify(ctx context.Context, svc yue.Service, child int64, specs []yue
 		log.Printf("пресет: сверка #%d — замер: %v", child, err)
 		return nil
 	}
-	// неполный замер (у основной или целевой дорожки нет rms_p95_db) — сумма неверна, промах был бы ложным (86в)
+	// неполный замер (у основной или целевой дорожки нет rms_p95_db) — сумма неверна, промах был бы ложным
 	for _, n := range presetMainStems {
 		if _, ok := got[n]; !ok {
 			log.Printf("пресет: сверка #%d — нет замера дорожки %s", child, n)

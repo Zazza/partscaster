@@ -1,11 +1,9 @@
-// Тесты карточки internal-own-track, этап 10: условие 84 (тест-кейс ТК125 — часть фронта).
 //   fxPresets.js: готовая цепочка «Хэт: набор» (drums-hh-kit) — sampler (output_db 0) → eq: срез низа ≥ 800 Гц,
 //   полоса около 10 кГц ≥ +6 дБ, около 1 кГц ≤ −3 дБ. Хэты драм-машин (drums-hh-<машина>) не меняются —
 //   только sampler.
-//   Сторож (ревью этапа 10): хэт драм-машин — прежний удар, как на коммите fdc7a59: sampler floor_db −24,
+//   Хэт драм-машин: sampler floor_db −24,
 //   output_db 4 — и в готовых цепочках drums-hh-<машина>, и в «ритм-секции набором» (trackDesk.rhythmSection).
 // Толкование: «около» — 10 кГц = 8–12,5 кГц, 1 кГц = 0,8–1,25 кГц.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
 import { rhythmSection } from './trackDesk.js'
@@ -22,7 +20,7 @@ function expectBrightEq(eq) {
   expect(near(800, 1250).some((b) => b.gain_db <= -3), `нет полосы ~1 кГц ≤ −3: ${JSON.stringify(bands)}`).toBe(true)
 }
 
-describe('ТК125: хэт набора ярче (drums-hh-kit)', () => {
+describe('хэт набора ярче (drums-hh-kit)', () => {
   it('цепочка sampler (output_db 0) → eq', () => {
     const p = byId('drums-hh-kit')
     expect(p).toBeTruthy()
@@ -48,12 +46,12 @@ describe('ТК125: хэт набора ярче (drums-hh-kit)', () => {
   })
 })
 
-// значения хэта машин до этапа 10 (fdc7a59): floor_db −24, output_db 4, закрытый/открытый набора, глушение
+// значения хэта машин: floor_db −24, output_db 4, закрытый/открытый набора, глушение
 const OLD_MACHINE_HH = (m) => ({ type: 'sampler', floor_db: -24, output_db: 4,
   kit: `${m}/hh-closed`, kit_open: `${m}/hh-open`, choke: 1 })
 
-describe('ТК125 (сторож): хэт драм-машин не меняется', () => {
-  it.each(MACHINES)('drums-hh-%s: sampler как до этапа 10 (output_db 4)', (m) => {
+describe('хэт драм-машин не меняется', () => {
+  it.each(MACHINES)('drums-hh-%s: sampler прежний (output_db 4)', (m) => {
     const p = byId(`drums-hh-${m}`)
     expect(p, `нет drums-hh-${m}`).toBeTruthy()
     expect(p.chain).toEqual([OLD_MACHINE_HH(m)])

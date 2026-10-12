@@ -1,29 +1,26 @@
-"""Тесты карточки internal-own-track, этап 14б «Наборы: надёжная загрузка и прогресс»
-(условия 115–118, тест-кейсы ТК144, ТК146). Написаны по карточке, без чтения реализации.
+"""Наборы: надёжная загрузка и прогресс.
 
-Контракт (из карточки):
-- 115: закреплённые списки {набор: {часть: [имена файлов]}} (worker/fx_kit_files.json, читается
+Контракт:
+- закреплённые списки {набор: {часть: [имена файлов]}} (worker/fx_kit_files.json, читается
   через yue_worker._kit_pinned_files()); есть список — файлы качаются прямыми ссылками
   raw.githubusercontent.com/<repo>/<ref>/<каталог>/<имя> (пробел → %20, «#» → %23), API GitHub
-  не вызывается; нет списка — как раньше (API contents). Файл ставится установщиком и deploy.sh.
-- 116: каждый файл — до 3 попыток (паузы 1, 2 с); уже скачанные в <часть>.part файлы при
+  не вызывается; нет списка — API contents. Файл ставится установщиком и deploy.sh.
+- каждый файл — до 3 попыток (паузы 1, 2 с); уже скачанные в <часть>.part файлы при
   повторной установке не качаются заново; каталог части публикуется только целиком;
   ошибка — 502 с причиной (набор/часть/файл).
-- 117: GET /fx/kits/progress → {name, part, done, total, bytes} идущей установки, нет — {}.
-- 118: worker/kits_install.py — main(argv) ставит все наборы FX_KITS; ошибка одного не
+- GET /fx/kits/progress → {name, part, done, total, bytes} идущей установки, нет — {}.
+- worker/kits_install.py — main(argv) ставит все наборы FX_KITS; ошибка одного не
   останавливает остальные; код выхода 1 при ошибке, 0 без; вывод — имена наборов, итог «… МБ».
 
 Внешние границы: сеть (_http_get воркера подменяется; сокеты мимо urllib запрещены базой
 _KitCase), паузы ретраев (time.sleep подменяется — тест быстрый), список закреплённых файлов
 (_kit_pinned_files подменяется своим словарём). Хранилище — своё на тест (<data> из _FxApiCase).
 
-Допущения (сверить с постановщиком, если тест красный не по делу):
+Допущения:
 - сбой загрузки моделируется так, как его отдаёт urllib: _http_get бросает URLError;
 - прогресс ведёт _fx_kit_install (а не только обёртка эндпоинта); done между файлами считается
   либо законченными файлами (0..total−1), либо текущим (1..total) — допустимы оба;
 - в kits_install наборы ставятся через fx_kit_install(name) (эндпоинт воркера), его и подменяем.
-
-Запуск: cd worker && python3 -m unittest test_kit_download -v
 """
 import contextlib
 import io
@@ -125,9 +122,9 @@ class _PinnedCase(_KitBase):
 
 
 class TestPinnedDirectLinks(_PinnedCase):
-    """Условие 115, ТК144: есть закреплённый список — прямые raw-ссылки, API не вызывается."""
+    """Есть закреплённый список — прямые raw-ссылки, API не вызывается."""
 
-    def test_tc144_raw_urls_escaped_no_api(self):
+    def test_raw_urls_escaped_no_api(self):
         fake_get, _ = self._net()
         got = self._install(fake_get)
         self.assertEqual(got["parts"], {PART: len(FILES)})
@@ -156,9 +153,9 @@ class TestPinnedDirectLinks(_PinnedCase):
                     self.assertTrue(all(isinstance(n, str) and n for n in names), f"{kit}/{part}")
 
     def test_deploy_and_installer_ship_list_and_run_kits_install(self):
-        # условие 115: список закреплённых файлов уезжает в архиве воркера (все worker/*.json — правилом,
+        # список закреплённых файлов уезжает в архиве воркера (все worker/*.json — правилом,
         # проверка поведением: test_fx_kits_synth.TestDeployShipsImports, test_worker_archive);
-        # условие 118 (143): kits_install запускает install.sh архива — им ставят и deploy.sh, и install_worker
+        # kits_install запускает install.sh архива — им ставят и deploy.sh, и install_worker
         pieces = {"install.sh": ("kits_install",)}
         for path in (ROOT / "worker" / "install.sh",):
             text = path.read_text(encoding="utf-8")
@@ -168,9 +165,9 @@ class TestPinnedDirectLinks(_PinnedCase):
 
 
 class TestRetries(_PinnedCase):
-    """Условие 116, ТК144: до 3 попыток на файл, паузы 1 и 2 с; 3 падения — 502, части нет."""
+    """До 3 попыток на файл, паузы 1 и 2 с; 3 падения — 502, части нет."""
 
-    def test_tc144_two_failures_then_success(self):
+    def test_two_failures_then_success(self):
         flaky = FILES[1]
         fake_get, tries = self._net(fail=lambda name, n: name == flaky and n <= 2)
         got = self._install(fake_get)
@@ -180,7 +177,7 @@ class TestRetries(_PinnedCase):
         self.assertIn(1.0, self.sleeps, f"нет паузы 1 с: {self.sleeps}")
         self.assertIn(2.0, self.sleeps, f"нет паузы 2 с: {self.sleeps}")
 
-    def test_tc144_three_failures_is_502_and_no_part(self):
+    def test_three_failures_is_502_and_no_part(self):
         bad = FILES[1]
         fake_get, tries = self._net(fail=lambda name, n: name == bad)
         with self.assertRaises(self.w.HTTPException) as cm:
@@ -194,9 +191,9 @@ class TestRetries(_PinnedCase):
 
 
 class TestResume(_PinnedCase):
-    """Условие 116, ТК144: повтор после падения не качает уже скачанные файлы (.part)."""
+    """Повтор после падения не качает уже скачанные файлы (.part)."""
 
-    def test_tc144_resume_skips_downloaded(self):
+    def test_resume_skips_downloaded(self):
         last = FILES[-1]
         fake_get, tries = self._net(fail=lambda name, n: name == last)
         with self.assertRaises(self.w.HTTPException):
@@ -216,7 +213,7 @@ class TestResume(_PinnedCase):
 
 
 class TestProgress(_PinnedCase):
-    """Условие 117, ТК144: GET /fx/kits/progress во время установки — растущий done; после — {}."""
+    """GET /fx/kits/progress во время установки — растущий done; после — {}."""
 
     def _progress(self):
         r = self.client.get("/fx/kits/progress")
@@ -226,7 +223,7 @@ class TestProgress(_PinnedCase):
     def test_idle_is_empty(self):
         self.assertEqual(self._progress(), {})
 
-    def test_tc144_progress_grows_then_empty(self):
+    def test_progress_grows_then_empty(self):
         seen = []
         inner, _ = self._net()
 
@@ -258,7 +255,7 @@ class TestProgress(_PinnedCase):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestKitsInstall(_ApiBase):
-    """Условие 118, ТК146: kits_install.main ставит каждый набор каталога, ошибка одного — не стоп."""
+    """kits_install.main ставит каждый набор каталога, ошибка одного — не стоп."""
 
     def _run(self, fail=(), exc=None):
         import kits_install
@@ -283,7 +280,7 @@ class TestKitsInstall(_ApiBase):
             code = kits_install.main([])
         return code, called, out.getvalue()
 
-    def test_tc146_all_kits_ok(self):
+    def test_all_kits_ok(self):
         code, called, out = self._run()
         self.assertEqual(code, 0, out)
         self.assertEqual(sorted(called), sorted(self.w.FX_KITS), "поставлены не все наборы каталога")
@@ -291,7 +288,7 @@ class TestKitsInstall(_ApiBase):
             self.assertIn(name, out, f"в выводе нет набора {name}")
         self.assertIn("МБ", out, f"нет итога в МБ: {out}")
 
-    def test_tc146_one_failure_does_not_stop_others(self):
+    def test_one_failure_does_not_stop_others(self):
         names = list(self.w.FX_KITS)
         bad = names[0]
         code, called, out = self._run(fail={bad})

@@ -7,7 +7,6 @@ import (
 	"yue-studio/internal/buildinfo"
 )
 
-// staleInterval — как часто MCP сверяет свой отпечаток с исходниками.
 const staleInterval = 30 * time.Minute
 
 // staleWarning — приписка к ответу инструмента, когда MCP собран раньше, чем
@@ -28,7 +27,6 @@ type staleChecker struct {
 	stale   bool
 }
 
-// SetBuildInfo — отпечаток исходников, вшитый при сборке, и каталог репозитория.
 func (s *Server) SetBuildInfo(buildHash, srcDir string) {
 	s.stale = &staleChecker{buildHash: buildHash, srcDir: srcDir, hash: buildinfo.SourceHash, now: time.Now}
 }

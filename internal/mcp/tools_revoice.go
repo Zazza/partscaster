@@ -218,8 +218,6 @@ func registerRevoiceTools(s *Server) {
 	})
 }
 
-// ---------- склейка кусков версий ----------
-
 func registerSpliceTools(s *Server) {
 	s.Register(Tool{
 		Name: "splice",
@@ -283,8 +281,6 @@ func registerSpliceTools(s *Server) {
 	})
 }
 
-// ---------- проверка изменённого плана ----------
-
 func registerPlanTools(s *Server) {
 	s.Register(Tool{
 		Name: "plan_check",
@@ -333,7 +329,6 @@ func dash(s string) string {
 	return s
 }
 
-// formatPlanCheck — сводка проверки плана для человека/агента.
 func formatPlanCheck(pc *yue.PlanCheck) string {
 	var b strings.Builder
 	voices := make([]string, 0, len(pc.Bars))
@@ -362,8 +357,6 @@ func formatPlanCheck(pc *yue.PlanCheck) string {
 	}
 	return b.String()
 }
-
-// ---------- «Убрать свист» ----------
 
 func registerToneTools(s *Server) {
 	s.Register(Tool{

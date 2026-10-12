@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Карточка internal-own-track, этап 19, 151а / ТК179 (MCP): recipe_export с path — только *.yue-track.json;
+// recipe_export с path — только *.yue-track.json;
 // иной суффикс → ошибка инструмента, файл не создан. Корректный path → файл с рецептом.
 
 type recipeFake struct {

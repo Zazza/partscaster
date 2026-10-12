@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Спецификация версий воркера (internal-own-track, условия 137–139, 141; ТК160, ТК161):
+// Спецификация версий воркера:
 //   - GET /version → VersionInfo (version, api, source_hash, model, components, stems_model);
 //   - совместимость — чистая функция CompatWarning: нет /version (404) или api < WorkerAPI →
 //     «обновите воркер»; api > WorkerAPI → «обновите приложение»; api == WorkerAPI → тихо;

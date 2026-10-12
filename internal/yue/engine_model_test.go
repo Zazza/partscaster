@@ -9,8 +9,7 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 20, условие 164 (тест-кейс ТК194, клиент Go).
-// Написаны по карточке («Договор интерфейсов этапа 20»), без чтения реализации:
+// Спецификация:
 //   - yue.Service: InstallEngineModel(ctx, name) (map[string]any, error) →
 //     POST /engine/models/install?name=<имя>; ответ воркера — как есть;
 //     статус ≥ 400 → ошибка, в тексте — деталь воркера;
@@ -39,7 +38,7 @@ func engineWorker(t *testing.T, status int, body string) (*httptest.Server, *[]e
 	return srv, got
 }
 
-// Методы входят в интерфейс yue.Service (паритет условия 164), а не только в *Client.
+// Методы входят в интерфейс yue.Service (паритет), а не только в *Client.
 func TestEngineModelMethodsInService(t *testing.T) {
 	t.Parallel()
 	var s Service = New("http://127.0.0.1:1")

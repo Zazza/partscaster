@@ -44,7 +44,7 @@ describe('chainDefaults — крутилки цепочки по умолчан�
   })
 })
 
-// Карточка internal-dsp-space 10.4: «найти сетку» — у всех цепочек с параметром bpm;
+// «Найти сетку» — у всех цепочек с параметром bpm;
 // цепочка с key (ducking, ключ — барабаны) сама выбирает «прочее», весь трек ей недоступен.
 const gate = { id: 'gate', name: 'Гейт', params: [{ id: 'bpm', default: 120 }, { id: 'div', default: 2 }] }
 const delay = { id: 'delay', name: 'Дилей в темп', params: [{ id: 'bpm', default: 120 }, { id: 'wet', default: 0.5 }] }

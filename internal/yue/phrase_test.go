@@ -10,11 +10,9 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 13, условия 95–96 (тест-кейс ТК135, клиент):
 // FxPhrases — GET /fx/phrases → [{id, family, name{ru,en}, bpm, cycle_sec}];
 // FxPhrase — POST /fx/phrase {phrase, tempo, chain, stems, bypass} → {file, cycle_sec, clipped};
 // FetchPhraseAudio — GET /fx/phrase/files/{file} → тело WAV.
-// Написаны по карточке, без чтения реализации.
 
 func TestFxPhrasesListsCatalog(t *testing.T) {
 	t.Parallel()

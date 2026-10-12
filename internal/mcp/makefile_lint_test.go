@@ -9,9 +9,9 @@ import (
 	"testing"
 )
 
-// ТК111 (карточка internal-own-track, «Мелкие долги этапов 7–8», условие 75): цель lint-worker
+// Цель lint-worker
 // в Makefile при отсутствии ruff — ошибка, а не «пропущено»: сообщение «ruff не установлен —
-// pip install ruff» и код ≠ 0. Написаны по карточке, без чтения реализации.
+// pip install ruff» и код ≠ 0.
 // Предположение: рецепт lint-worker — строки с табом сразу после «lint-worker:».
 
 func repoRoot(t *testing.T) string {

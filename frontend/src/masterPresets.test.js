@@ -1,12 +1,10 @@
-// Тесты карточки internal-own-track, этап 6, условие 46 (тест-кейс ТК76): готовые мастера и
-// место по умолчанию у готовых партий в fxPresets.js.
+// Готовые мастера и место по умолчанию у готовых партий в fxPresets.js.
 //   мастера — stems ['master']: «Стриминг −14 LUFS», «Громко −11 LUFS» (последний блок limiter,
 //   target_lufs −14 / −11), «Мягкая склейка» — без громкости (без limiter);
 //   перкуссии хэт/шейкер/бубен/ковбелл/райд — place.pan от центра (0,2 ≤ |pan| ≤ 0,4);
 //   бочка/хлопки/римшот — центр; пэды — place.width 1,5.
 // Название мастера ищется по вхождению (без учёта регистра): приставка вроде «Мастер: » допустима.
 // Цепочки мастеров проверяются по описанию блоков (fxBlocks.json — копия worker/fx_blocks.json).
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import blocks from './fxBlocks.json'
 import { fxPresets } from './fxPresets.js'
@@ -21,8 +19,8 @@ function inRange(v, spec) {
   return v >= spec.min && v <= spec.max
 }
 
-describe('готовые мастера (ТК76)', () => {
-  it('три мастера со stems [master], по одному на название карточки', () => {
+describe('готовые мастера', () => {
+  it('три мастера со stems [master], по одному на каждое название', () => {
     expect(masters.length).toBe(3)
     for (const p of masters) expect(p.stems, p.id).toEqual(['master'])
     for (const n of NAMES) expect(byName(n).length, n).toBe(1)
@@ -63,7 +61,7 @@ describe('готовые мастера (ТК76)', () => {
   })
 })
 
-describe('место готовых партий по умолчанию (ТК76, усл. 46б)', () => {
+describe('место готовых партий по умолчанию', () => {
   const percs = fxPresets.filter((p) => (p.stems || []).includes('perc'))
   const pads = fxPresets.filter((p) => (p.stems || []).includes('synth') && p.style === 'pad')
   const SIDE = /хэт|шейкер|бубен|ковбелл|райд/i

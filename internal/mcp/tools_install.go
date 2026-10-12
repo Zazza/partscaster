@@ -339,7 +339,6 @@ func withEngine(plan string, steps []step, engine, cppModel string) (string, []s
 	return plan, steps
 }
 
-// stemsLabel — модель дорожек для плана установки
 var stemsLabel = map[string]string{"htdemucs": "Demucs (быстро)", "roformer": "RoFormer (чище)"}
 
 func planText(whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir string) string {

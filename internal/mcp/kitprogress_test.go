@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 14б, условие 117 (тест-кейс ТК145, MCP):
 // инструмент fx_kit_progress зарегистрирован и показывает прогресс воркера (FxKitProgress).
-// Воркер — kitProgressFake поверх fakeService (server_test.go). Написаны по карточке, без чтения реализации.
+// Воркер — kitProgressFake поверх fakeService (server_test.go).
 
 type kitProgressFake struct {
 	*fakeService

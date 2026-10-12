@@ -14,8 +14,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 1 «Пресеты звука», условия 3 и 4,
-// тест-кейсы ТК18–ТК21 (+ ТК20а — наборы сэмплов).
+// Пресеты звука.
 //
 // ApplySoundPreset(ctx, svc, jobID, preset) → {ChildID, File}:
 //   (а) дорожки из specs должны быть у трека; нет — разделение (части барабанов —
@@ -26,12 +25,12 @@ import (
 //   (в) final (без off) → граф на F → вариант dsp-preset-<id>.flac с подписью-именем → F2;
 //   (г) VariantToTrack(jobID, F2, "<название трека> · <имя пресета>") → ChildID.
 //
-// Воркер — psFake: engFake (engine_test.go: secFake + ApplyFx + WorkerConfig) и
+// Воркер — psFake: engFake (secFake + ApplyFx + WorkerConfig) и
 // недостающие внешние границы (список джоб, стемы, разделение, наборы, версия-трек).
 // Загруженный вариант фейк хранит у джобы, как воркер: его можно скачать.
 //
 // Звук трека (16 кГц моно, 10 с): vocals — 3000 Гц, other — 500 Гц, drums/bass — тишина.
-// Движок фейка отдаёт «обработанный кусок» 1000/1500 Гц (engine_test.go), поэтому
+// Движок фейка отдаёт «обработанный кусок» 1000/1500 Гц, поэтому
 // 1500 Гц в итоге — след пересборки, которого в исходном звуке нет.
 
 const (
@@ -65,7 +64,7 @@ type psFake struct {
 	promoteErr error
 	deleted    []string // любые удаления (их быть не должно)
 
-	// этап 1б (условие 11): замеры громкости, которые отдаёт воркер
+	// замеры громкости, которые отдаёт воркер
 	uploadMetrics map[string]any // Metrics варианта из UploadDsp (nil — замера нет)
 	analyze       map[string]any // ответ AnalyzeJob (nil — замера нет)
 	analyzed      []int64        // у каких джоб звали AnalyzeJob
@@ -138,7 +137,7 @@ func (f *psFake) UploadDsp(ctx context.Context, id int64, fname, label string, d
 	return v, err
 }
 
-// AnalyzeJob — метрики трека (этап 1б: LUFS трека, когда правок дорожек нет).
+// AnalyzeJob — метрики трека (LUFS трека, когда правок дорожек нет).
 func (f *psFake) AnalyzeJob(_ context.Context, id int64) (map[string]any, error) {
 	f.analyzed = append(f.analyzed, id)
 	f.log = append(f.log, fmt.Sprintf("analyze:%d", id))
@@ -200,13 +199,11 @@ func psStemFile(t *testing.T, name, expr string) string {
 	return lavfi(t, aeval(expr, psDur), filepath.Join(t.TempDir(), "split-"+name+".flac"))
 }
 
-// --- пресеты тестов ---
-
 func psAmpEngine() []map[string]any {
 	return []map[string]any{{"type": "amp", "model": "JCM2000.nam", "input_db": -6.0}}
 }
 
-// psFinal — финал из карточки (Transmission): ширина → громкость.
+// psFinal — финал (Transmission): ширина → громкость.
 func psFinal() []yue.PresetStep {
 	return []yue.PresetStep{
 		{Chain: "width", Params: map[string]float64{"width": 1.1, "bass": 120}},
@@ -255,12 +252,10 @@ func psCount(log []string, prefix string) int {
 	return n
 }
 
-// psTrackTitle — название версии по условию 3 (г).
+// psTrackTitle — название версии.
 func psTrackTitle(p yue.SoundPreset) string { return psTitle + " · " + p.Name }
 
-// ---------- ТК18: specs + final, стемы есть ----------
-
-// ТК18: движок на бас и эффект на голос + финал (ширина, громкость). Пересборка
+// Движок на бас и эффект на голос + финал (ширина, громкость). Пересборка
 // всеми записями окном «весь трек», финал — на РЕЗУЛЬТАТЕ пересборки (а не на
 // исходном звуке), вариант dsp-preset-<id>.flac с подписью-именем пресета,
 // версия-трек из него с названием «<трек> · <пресет>»; ChildID — id версии.
@@ -297,7 +292,7 @@ func TestApplySoundPresetSpecsAndFinal(t *testing.T) {
 		t.Errorf("окно движка до %v, want до конца трека %.0f с", deref(c.req.To), psDur)
 	}
 
-	// результат пересборки — у трека своим файлом (не «микс с правками» студии overdub-inst-0 — ревью s1),
+	// результат пересборки — у трека своим файлом (не «микс с правками» студии overdub-inst-0),
 	// затем вариант финала, затем версия
 	rebuilt := fmt.Sprintf("dsp-preset-%d-mix.flac", p.ID)
 	if _, ok := f.uploads["overdub-inst-0.flac"]; ok {
@@ -343,9 +338,7 @@ func TestApplySoundPresetSpecsAndFinal(t *testing.T) {
 	}
 }
 
-// ---------- ТК19: дорожек не хватает ----------
-
-// ТК19: нет kick (часть барабанов) → MakeStemsWith(id, "roformer"), после
+// Нет kick (часть барабанов) → MakeStemsWith(id, "roformer"), после
 // разделения kick есть → применение продолжается.
 func TestApplySoundPresetSplitsRoformerForDrumParts(t *testing.T) {
 	t.Parallel()
@@ -364,7 +357,7 @@ func TestApplySoundPresetSplitsRoformerForDrumParts(t *testing.T) {
 	}
 }
 
-// ТК19: нет только guitar (не часть барабанов) → MakeStems (разделение по настройке, не roformer).
+// Нет только guitar (не часть барабанов) → MakeStems (разделение по настройке, не roformer).
 func TestApplySoundPresetSplitsDefaultForGuitar(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
@@ -383,7 +376,7 @@ func TestApplySoundPresetSplitsDefaultForGuitar(t *testing.T) {
 	}
 }
 
-// ТК19: после разделения kick и snare так и нет → ошибка с именами дорожек,
+// После разделения kick и snare так и нет → ошибка с именами дорожек,
 // пересборки нет (ни движка, ни загрузок), версии нет.
 func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
 	t.Parallel()
@@ -414,9 +407,7 @@ func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
 	}
 }
 
-// ---------- ТК20: только final / только specs / final весь off ----------
-
-// ТК20: specs пусты → финал на исходном звуке трека, пересборки нет; вариант и версия из него.
+// specs пусты → финал на исходном звуке трека, пересборки нет; вариант и версия из него.
 func TestApplySoundPresetFinalOnly(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
@@ -451,7 +442,7 @@ func TestApplySoundPresetFinalOnly(t *testing.T) {
 	}
 }
 
-// ТК20: final пуст → без варианта финала, версия прямо из файла пересборки.
+// final пуст → без варианта финала, версия прямо из файла пересборки.
 // Final из одних off — то же самое.
 func TestApplySoundPresetSpecsOnly(t *testing.T) {
 	t.Parallel()
@@ -491,9 +482,7 @@ func TestApplySoundPresetSpecsOnly(t *testing.T) {
 	}
 }
 
-// ---------- ТК20а: наборы сэмплов движка ----------
-
-// ТК20а: kits = [osdk/kick]; sampler osdk/kick и bass growlybass/bass (+ ещё запись
+// kits = [osdk/kick]; sampler osdk/kick и bass growlybass/bass (+ ещё запись
 // с тем же набором growlybass) → InstallFxKit("growlybass") ровно один раз, до
 // работы движка; osdk не ставится.
 func TestApplySoundPresetInstallsMissingKits(t *testing.T) {
@@ -519,7 +508,7 @@ func TestApplySoundPresetInstallsMissingKits(t *testing.T) {
 	}
 }
 
-// ТК20а: все наборы есть (в т.ч. kit_open) → InstallFxKit не вызывается.
+// Все наборы есть (в т.ч. kit_open) → InstallFxKit не вызывается.
 func TestApplySoundPresetKitsPresentNoInstall(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, map[string]string{"snare": "0.5*lt(mod(t\\,0.5)\\,0.02)"})
@@ -537,7 +526,7 @@ func TestApplySoundPresetKitsPresentNoInstall(t *testing.T) {
 	}
 }
 
-// ---------- условие 3: ошибка шага — ошибка функции, ничего не удаляется ----------
+// Ошибка шага — ошибка функции, ничего не удаляется.
 
 func TestApplySoundPresetStepErrors(t *testing.T) {
 	t.Parallel()
@@ -568,8 +557,6 @@ func TestApplySoundPresetStepErrors(t *testing.T) {
 		}
 	})
 }
-
-// ---------- ТК21: PresetRunner.Tick ----------
 
 type rnState struct {
 	jobID, presetID int64
@@ -657,7 +644,7 @@ func rnRunner(f *rnFake, err error) (*PresetRunner, *[]rnApply) {
 	return r, &calls
 }
 
-// ТК21: есть джоба queued или running → тик ничего не делает (видеокарта занята).
+// Есть джоба queued или running → тик ничего не делает (видеокарта занята).
 func TestPresetRunnerBusyWorkerDoesNothing(t *testing.T) {
 	t.Parallel()
 	for _, busy := range []string{"queued", "running"} {
@@ -679,7 +666,7 @@ func TestPresetRunnerBusyWorkerDoesNothing(t *testing.T) {
 	}
 }
 
-// ТК21: очередь пуста → первая по id готовая джоба с pending-пресетом: захват
+// Очередь пуста → первая по id готовая джоба с pending-пресетом: захват
 // (running), Apply с пресетом из списка, state done с child_id. Один пресет за тик.
 func TestPresetRunnerAppliesFirstPending(t *testing.T) {
 	t.Parallel()
@@ -720,7 +707,7 @@ func TestPresetRunnerAppliesFirstPending(t *testing.T) {
 	}
 }
 
-// ТК21: ошибка Apply → state error с причиной; done не пишется.
+// Ошибка Apply → state error с причиной; done не пишется.
 func TestPresetRunnerApplyErrorMarksError(t *testing.T) {
 	t.Parallel()
 	f := &rnFake{
@@ -743,7 +730,7 @@ func TestPresetRunnerApplyErrorMarksError(t *testing.T) {
 	}
 }
 
-// ТК21: пресета нет в списке (удалён) → захват, затем state error «пресет удалён»; Apply не зовётся.
+// Пресета нет в списке (удалён) → захват, затем state error «пресет удалён»; Apply не зовётся.
 func TestPresetRunnerDeletedPreset(t *testing.T) {
 	t.Parallel()
 	f := &rnFake{
@@ -765,7 +752,7 @@ func TestPresetRunnerDeletedPreset(t *testing.T) {
 	}
 }
 
-// ТК21: захват ответил 409 (пресет уже взят) → Apply не зовётся, done/error не пишется.
+// Захват ответил 409 (пресет уже взят) → Apply не зовётся, done/error не пишется.
 func TestPresetRunnerCaptureConflictSkips(t *testing.T) {
 	t.Parallel()
 	f := &rnFake{
@@ -786,7 +773,7 @@ func TestPresetRunnerCaptureConflictSkips(t *testing.T) {
 	}
 }
 
-// ТК21: draft-джоба (и не done) пропускается, даже если её id меньше.
+// draft-джоба (и не done) пропускается, даже если её id меньше.
 func TestPresetRunnerSkipsDraft(t *testing.T) {
 	t.Parallel()
 	f := &rnFake{
@@ -810,7 +797,7 @@ func TestPresetRunnerSkipsDraft(t *testing.T) {
 	}
 }
 
-// ТК21 / условие 4: ошибка списка джоб или пресетов — тик тихо выходит, без паники и без state.
+// Ошибка списка джоб или пресетов — тик тихо выходит, без паники и без state.
 func TestPresetRunnerListErrorsAreQuiet(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -839,7 +826,7 @@ func TestPresetRunnerListErrorsAreQuiet(t *testing.T) {
 	}
 }
 
-// ТК21: нечего применять (pending нет) → ничего.
+// Нечего применять (pending нет) → ничего.
 func TestPresetRunnerNothingPending(t *testing.T) {
 	t.Parallel()
 	f := &rnFake{
@@ -856,7 +843,7 @@ func TestPresetRunnerNothingPending(t *testing.T) {
 	}
 }
 
-// Кросс-ревью s1: эффект ffmpeg на части барабанов пересборка молча пропускала бы — ошибка до работы.
+// Эффект ffmpeg на части барабанов пересборка молча пропускала бы — ошибка до работы.
 func TestApplySoundPresetFfmpegOnDrumPartIsError(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
@@ -870,13 +857,9 @@ func TestApplySoundPresetFfmpegOnDrumPartIsError(t *testing.T) {
 	}
 }
 
-// ---------- Этап 1б. ТК29: целевая громкость пресета (условие 11 → изменено условием 45) ----------
-//
-// Этап 6, условие 45: target_lufs — блок limiter мастера на воркере (истинный пик, потолок
-// −1 dBTP); шага level на ПК для цели больше нет, замер LUFS микса на ПК не нужен. Прежние
-// случаи ТК29 (level +2 дБ по Metrics пересборки, AnalyzeJob без правок, зажим ±12, граф
-// «финал → level», ошибка «нет замера громкости») противоречат условию 45 и сняты; цель
-// проверяет ТК73 (presets_master_test.go). Здесь — общие помощники и случай без цели.
+// target_lufs — блок limiter мастера на воркере (истинный пик, потолок
+// −1 dBTP); шага level на ПК для цели нет, замер LUFS микса на ПК не нужен.
+// Цель — в presets_master_test.go; здесь — общие помощники и случай без цели.
 
 func psTarget(v float64) *float64 { return &v }
 
@@ -897,7 +880,7 @@ func psFinalAmp(t *testing.T, f *psFake, id int64) float64 {
 
 func psDb(a, ref float64) float64 { return 20 * math.Log10(a/ref) }
 
-// ТК29: target nil — поведение прежнее: замеры не нужны (их нет — не ошибка), AnalyzeJob
+// target nil — замеры не нужны (их нет — не ошибка), AnalyzeJob
 // не зовётся; финал пуст → без варианта финала, версия из пересборки.
 func TestApplySoundPresetNoTargetNeedsNoMetrics(t *testing.T) {
 	t.Parallel()
@@ -931,7 +914,7 @@ func TestApplySoundPresetNoTargetNeedsNoMetrics(t *testing.T) {
 	})
 }
 
-// Кросс-ревью этапа 2: kit_mid/kit_low тамов — тоже наборы для автоустановки.
+// kit_mid/kit_low тамов — тоже наборы для автоустановки.
 func TestApplySoundPresetInstallsTomKits(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, map[string]string{"kick": "0.5*lt(mod(t\\,0.5)\\,0.02)"})

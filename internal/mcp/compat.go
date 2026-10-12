@@ -9,7 +9,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// compatInterval — как часто MCP сверяет версию API воркера со своей.
 const compatInterval = 30 * time.Minute
 
 // compatChecker — приписка к ответам инструментов, когда воркер и MCP разных поколений API

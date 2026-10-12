@@ -14,7 +14,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// RegisterStudioTools — настройка адреса, Ollama, DSP, стемы, корпуса.
 func RegisterStudioTools(s *Server) {
 	registerRevoiceTools(s)
 	registerFxTools(s)
@@ -107,8 +106,6 @@ func RegisterStudioTools(s *Server) {
 			return fmt.Sprintf("модель %s скачана. Включить: config_set engine=cpp cpp_model=%s\n%s", name, name, toJSON(out)), nil
 		},
 	})
-
-	// ---------- DSP и метрики ----------
 
 	s.Register(Tool{
 		Name: "dsp_chains",
@@ -322,8 +319,6 @@ func RegisterStudioTools(s *Server) {
 			return "сохранено: " + path, nil
 		},
 	})
-
-	// ---------- стемы / минус / овердаб / импорт ----------
 
 	s.Register(Tool{
 		Name: "make_stems",
@@ -652,8 +647,6 @@ func RegisterStudioTools(s *Server) {
 		},
 	})
 
-	// ---------- корпуса (профили исполнителей) ----------
-
 	s.Register(Tool{
 		Name:        "corpus_list",
 		Description: "Список корпусов (профили исполнителей из 3–10 треков).",
@@ -742,8 +735,6 @@ func RegisterStudioTools(s *Server) {
 			return toJSON(out), nil
 		},
 	})
-
-	// ---------- голоса (примерочная) ----------
 
 	s.Register(Tool{
 		Name: "voices_list",

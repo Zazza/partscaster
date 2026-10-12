@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-own-track, этап 14б, условие 117 (тест-кейс ТК145, клиент):
 // FxKitProgress — GET /fx/kits/progress; ответ {name, part, done, total, bytes} — как есть;
-// нет установки — {} (пустой ответ без ошибки); 500 — ошибка. Написаны по карточке, без чтения реализации.
+// нет установки — {} (пустой ответ без ошибки); 500 — ошибка.
 
 func TestFxKitProgressGetsProgress(t *testing.T) {
 	t.Parallel()

@@ -7,10 +7,9 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// ТК112 (карточка internal-own-track, «Мелкие долги этапов 7–8», условие 76): sound_preset_update
+// sound_preset_update
 // без parts сохраняет прежние партии пресета; с parts [] — снимает их. Проверяется тело
 // SoundPresetUpdate, которое уходит воркеру (presetFake из sound_presets_test.go).
-// Написаны по карточке, без чтения реализации.
 
 func ownPartsPreset() []yue.PresetPart {
 	return []yue.PresetPart{

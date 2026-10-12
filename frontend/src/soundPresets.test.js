@@ -1,7 +1,3 @@
-// Тесты карточки internal-own-track, этап 1 «Пресеты звука», условия 6–7 (тест-кейсы
-// ТК23–ТК25): чистая логика пресетов звука во фронте — правки студии → записи пресета,
-// строка статуса пресета в карточке трека, выбор пресетов чипами в форме нового трека.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { presetFromEdits, presetLine, togglePreset, withLevels } from './soundPresets.js'
 
@@ -19,7 +15,7 @@ const muteRec = (over = {}) => base(-4, ['drums'], { instId: 'mute-drums', db: -
 const envRec = (over = {}) => base(-5, ['vocals'], { instId: 'env', envelope: [{ t: 0, db: 0 }, { t: 10, db: -6 }], ...over })
 const insertRec = (over = {}) => ({ childId: 7, instId: 'i-a', from: 0, to: 0, lead: 0, beat: 0.5, db: -6, ...over })
 
-describe('presetFromEdits — правки студии → пресет (ТК23)', () => {
+describe('presetFromEdits — правки студии → пресет', () => {
   it('запись движка «весь трек» → {stems, engine, db}', () => {
     const { specs, skipped } = presetFromEdits([engineRec()])
     expect(specs).toEqual([{ stems: ['bass'], engine: ENGINE, db: -3 }])
@@ -109,7 +105,7 @@ describe('presetFromEdits — правки студии → пресет (ТК23
   })
 })
 
-describe('presetLine — строка пресета в карточке трека (ТК24)', () => {
+describe('presetLine — строка пресета в карточке трека', () => {
   const st = (status, over = {}) => ({ id: 3, status, child_id: null, error: '', ...over })
 
   it('pending → «X» ждёт очереди, без повтора', () => {
@@ -121,7 +117,7 @@ describe('presetLine — строка пресета в карточке тре�
     expect(line.retry).toBe(false)
   })
 
-  // ревью s1: приложение закрыли посреди применения — статус застрял, повтор нужен и здесь
+  // приложение закрыли посреди применения — статус застрял, повтор нужен и здесь
   it('running → «X» применяется, с повтором', () => {
     const line = presetLine(st('running'), 'Transmission')
     expect(line.icon.length).toBeGreaterThan(0)
@@ -152,7 +148,7 @@ describe('presetLine — строка пресета в карточке тре�
   })
 })
 
-describe('togglePreset — выбор пресетов чипами (ТК25)', () => {
+describe('togglePreset — выбор пресетов чипами', () => {
   it('добавляет в конец, в порядке выбора', () => {
     let ids = []
     ids = togglePreset(ids, 5)
@@ -191,9 +187,9 @@ describe('togglePreset — выбор пресетов чипами (ТК25)', (
   })
 })
 
-// Этап 1б, условие 12 (ТК31): withLevels(preset, levels) — копия пресета с громкостью
+// withLevels(preset, levels) — копия пресета с громкостью
 // записей из ползунков студии; levels {индекс записи: дБ}, зажим −24…24; исходный не меняется.
-describe('withLevels — громкость записей пресета при применении (ТК31)', () => {
+describe('withLevels — громкость записей пресета при применении', () => {
   const preset = () => ({
     id: 7, name: 'Пост-панк', builtin: true, target_lufs: -13,
     specs: [

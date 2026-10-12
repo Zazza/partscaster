@@ -1,5 +1,5 @@
-// Условие 136 (internal-own-track, этап 17): хелперы mixDesk без прямых тестов.
-//   normPlace / isCenter — место дорожки {pan −1…1, width 0…2} (docs/api.md, specs.place); ширина не
+// Хелперы mixDesk без прямых тестов.
+//   normPlace / isCenter — место дорожки {pan −1…1, width 0…2} (specs.place); ширина не
 //     задана — 1 «как есть» (не 0 «моно»), как Place.UnmarshalJSON в Go; мусор — умолчания;
 //   isPlaceRecord — запись реестра «только место»: одна дорожка, без обработки, без рендера;
 //   isMasterRecord — запись мастера (master + цепочка движка);

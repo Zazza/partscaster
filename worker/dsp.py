@@ -171,7 +171,6 @@ def analyze_file(path) -> dict:
 
     m: dict = {"duration_sec": round(len(y) / sr, 1)}
 
-    # Темп
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo = float(np.atleast_1d(librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)[0])[0])
     m["tempo_bpm"] = round(tempo, 1)
@@ -180,14 +179,12 @@ def analyze_file(path) -> dict:
     chroma_mean = librosa.feature.chroma_cqt(y=y, sr=sr).mean(axis=1)
     m["key"] = NOTES[int(np.argmax(chroma_mean))]
 
-    # Динамика
     rms_db = 20 * np.log10(librosa.feature.rms(y=y)[0] + 1e-9)
     p95, p50, p10 = (float(v) for v in np.percentile(rms_db, [95, 50, 10]))
     m["rms_p95_db"], m["rms_median_db"], m["rms_p10_db"] = round(p95, 1), round(p50, 1), round(p10, 1)
     m["dyn_range_db"] = round(p95 - p10, 1)
     m["crest_db"] = round(p95 - p50, 1)
 
-    # Клиппинг/перегруз
     m["peak"] = round(float(np.abs(y).max()), 3)
     m["clip_pct"] = round(float(np.mean(np.abs(y) > 0.98)) * 100, 3)
 
@@ -217,7 +214,6 @@ def analyze_file(path) -> dict:
     m["flatness_median"] = round(float(np.median(flat)), 3)
     m["flatness_loud"] = round(float(np.median(flat[rms_db > np.percentile(rms_db, 75)])), 3)
 
-    # Стерео
     try:
         y_full, _ = librosa.load(str(path), sr=44100, mono=False)
     except Exception:  # noqa: BLE001

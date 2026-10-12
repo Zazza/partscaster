@@ -1,9 +1,7 @@
-// Тесты карточки internal-instruments-page (страница «Инструменты»), тест-кейсы 1–2:
 // fxChain.js — чистая логика редактируемой цепочки движка без DOM.
 // Редактируемая цепочка — массив {type, on, params}; у eq в params ещё bands.
 // Описание блоков — fxBlocks.json (копия worker/fx_blocks.json): умолчания, границы,
 // zero_off, строки (model/ir), bands. Все функции возвращают новый массив, вход не меняют.
-// Написаны по карточке и контракту, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import blocks from './fxBlocks.json'
 import { fxPresets } from './fxPresets.js'
@@ -46,9 +44,8 @@ describe('описание блоков (fxBlocks.json)', () => {
     expect(Object.keys(blocks).slice(0, TYPES.length)).toEqual(TYPES)
   })
 
-  // карточка internal-own-track, этап 4 (условия 23–24): за прежними — блоки синтов, этап 5 (условие 30) — perc;
-  // их порядок карточка не задаёт
-  it('за прежними типами — synth и эффекты синтов, perc, tremolo (этап 7а), мастер (glue, limiter)', () => {
+  // за прежними — блоки синтов и perc, их порядок не задан
+  it('за прежними типами — synth и эффекты синтов, perc, tremolo, мастер (glue, limiter)', () => {
     expect([...Object.keys(blocks).slice(TYPES.length)].sort())
       .toEqual(['chorus', 'flanger', 'glue', 'limiter', 'perc', 'phaser', 'spring', 'synth', 'tape', 'tremolo'])
   })
@@ -269,7 +266,7 @@ describe('fromWorkerChain', () => {
   })
 })
 
-// ---------- ТК2: из пресета и обратно — тот же JSON ----------
+// из пресета и обратно — тот же JSON
 
 // заполнение умолчаний блока воркера (как parse_chain): числа, строки, полосы eq
 function fill(b) {
@@ -289,7 +286,7 @@ function fill(b) {
 const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === 'object' && !Array.isArray(x)
   ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x))
 
-describe('ТК2: пресет → редактируемая цепочка → JSON', () => {
+describe('пресет → редактируемая цепочка → JSON', () => {
   it('пресеты есть', () => {
     expect(fxPresets.length).toBeGreaterThan(0)
   })
@@ -318,7 +315,6 @@ describe('ТК2: пресет → редактируемая цепочка → 
   })
 })
 
-// Условие 14 (internal-studio-engine, этап 5а), регрессия кросс-ревью:
 // missingKits(workerChain, kits) — какие наборы надо скачать перед расчётом.
 // workerChain — цепочка для воркера ({type, ...параметры}); kits — список из
 // GET /fx/assets ([{name: '<набор>/<часть>', samples}]). Ответ — имена наборов
@@ -377,7 +373,7 @@ describe('missingKits: недостающие наборы sampler', () => {
   })
 })
 
-// Условие 15 (internal-studio-engine, этап 5б), ТК15: автоскачивание набора — и для блока bass.
+// автоскачивание набора — и для блока bass.
 describe('missingKits: недостающие наборы bass', () => {
   it('bass с kit growlybass/bass, набора нет → [\'growlybass\']', () => {
     const chain = deepFreeze([{ type: 'bass', kit: 'growlybass/bass', division: 2, floor_db: -20, output_db: 0 }])
@@ -403,7 +399,7 @@ describe('missingKits: недостающие наборы bass', () => {
   })
 })
 
-// Условие 26 (internal-studio-engine, этап 5в), ТК31: автоскачивание набора — и по kit_open
+// автоскачивание набора — и по kit_open
 // блока sampler (второй набор, «открытые» удары хэта).
 describe('missingKits: набор из kit_open', () => {
   const kits = () => deepFreeze([{ name: 'osdk/hh-closed', samples: 20 }])
@@ -433,7 +429,7 @@ describe('missingKits: набор из kit_open', () => {
   })
 })
 
-// Кросс-ревью этапа 2: тамы по высоте — kit_mid/kit_low тоже наборы, которые воркер должен скачать.
+// тамы по высоте — kit_mid/kit_low тоже наборы, которые воркер должен скачать.
 describe('missingKits: тамы по высоте', () => {
   it('kit_mid и kit_low из другого пакета — пакет в списке на скачивание', () => {
     const chain = [{ type: 'sampler', kit: 'osdk/tom-small', kit_mid: 'other/tom-m', kit_low: 'third/tom-l' }]

@@ -1,4 +1,4 @@
-"""Спецификация версии воркера (internal-own-track, условие 137, ТК160).
+"""Спецификация версии воркера.
 
 Что должно работать:
 V1. GET /version → {version: str, api: int, source_hash: str (12 hex), model: str,
@@ -11,8 +11,6 @@ V4. source_hash — 12 hex sha256 по коду воркера: *.py (кроме
     test_*.py и прочих файлов.
 V5. components и stems_model — та же правда, что /config (whisper_available,
     seedvc_available, roformer_available, stems_model).
-
-Запуск из каталога worker: python -m unittest test_version -v
 """
 import re
 import shutil

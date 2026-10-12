@@ -6,17 +6,14 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-dsp-space, разделы 1–3: реверб, дилей в темп, стерео
-// (ширина, Хаас). Хелперы nc* — из newchains_test.go.
+// Тесты реверба, дилея в темп, стерео (ширина, Хаас).
 
 var ncReverbIDs = []string{"reverb-room", "reverb-hall", "reverb-plate", "reverb-spring"}
-
-// --- 1. Реверб ---
 
 // ncToneThenSilence — тон 440 Гц амплитуды 0.5 первую секунду, затем тишина.
 const ncToneThenSilence = "0.5*sin(2*PI*440*t)*lt(t\\,1)"
 
-// Карточка 1 (параметры): size/predelay/tone/wet/width у всех ревербов; диапазоны size.
+// size/predelay/tone/wet/width у всех ревербов; диапазоны size.
 func TestReverbParams(t *testing.T) {
 	t.Parallel()
 	sizes := map[string][3]float64{
@@ -55,7 +52,7 @@ func TestReverbParams(t *testing.T) {
 	}
 }
 
-// Карточка 1.1 (изменена 2026-10-04): вход — шумовой всплеск 1 с, wet 0.5, predelay 0:
+// Вход — шумовой всплеск 1 с, wet 0.5, predelay 0:
 // в окне 0–0.1 с после конца звука хвост > −40 дБFS; окна по 0.2 с монотонно падают
 // (пока уровень > −70 дБ); скорость спада ≈ 60 дБ за size (±40 %) — наклон (МНК) по
 // окнам 50 мс выше −70 дБ.
@@ -114,9 +111,8 @@ func TestReverbTailAudibleAndDecays(t *testing.T) {
 	}
 }
 
-// Карточка 1.2: больший size → громче хвост через 1 с после конца звука.
-// В карточке «size 2.5 vs 0.6 у зала-диапазона», но минимум size у зала — 1
-// (0.6 зажмётся до 1), поэтому сравнение у зала 2.5 vs 1.
+// Больший size → громче хвост через 1 с после конца звука.
+// Минимум size у зала — 1 (0.6 зажмётся до 1), поэтому сравнение у зала 2.5 vs 1.
 func TestReverbBiggerSizeLongerTail(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -129,8 +125,8 @@ func TestReverbBiggerSizeLongerTail(t *testing.T) {
 	}
 }
 
-// Карточка 1.3: predelay N мс — мокрый сигнал (wet 1, вход — щелчок) появляется не
-// раньше N − 5 мс после щелчка. Мокрый = выход − вход (сухой не убавляется, 1.6).
+// predelay N мс — мокрый сигнал (wet 1, вход — щелчок) появляется не
+// раньше N − 5 мс после щелчка. Мокрый = выход − вход (сухой не убавляется).
 func TestReverbPredelay(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -156,7 +152,7 @@ func TestReverbPredelay(t *testing.T) {
 	}
 }
 
-// Карточка 1.4: tone — доля энергии > 5 кГц в хвосте при tone 2 кГц меньше, чем при
+// tone — доля энергии > 5 кГц в хвосте при tone 2 кГц меньше, чем при
 // 12 кГц, на ≥ 6 дБ. Вход — всплеск белого шума 1 с.
 func TestReverbToneDarkensTail(t *testing.T) {
 	t.Parallel()
@@ -174,7 +170,7 @@ func TestReverbToneDarkensTail(t *testing.T) {
 	}
 }
 
-// Карточка 1.5: wet 0 → выход = вход (оба канала).
+// wet 0 → выход = вход (оба канала).
 func TestReverbWetZeroIsDry(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -191,7 +187,7 @@ func TestReverbWetZeroIsDry(t *testing.T) {
 	}
 }
 
-// Карточка 1.5: width 0 → в хвосте L ≈ R (корреляция > 0.95); width 1 → < 0.5.
+// width 0 → в хвосте L ≈ R (корреляция > 0.95); width 1 → < 0.5.
 func TestReverbWidth(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -210,7 +206,7 @@ func TestReverbWidth(t *testing.T) {
 	}
 }
 
-// Карточка 1.6 (изменена 2026-10-04 решением человека): во время звучания сухой не
+// Во время звучания сухой не
 // ослаблен — на широкополосном шуме уровень в середине звучания (0.8–1.4 с, хвост уже
 // набрался) ≥ входа − 1 дБ в каждом канале; параметры по умолчанию; 44.1 и 48 кГц.
 func TestReverbDryNotAttenuated(t *testing.T) {
@@ -231,7 +227,7 @@ func TestReverbDryNotAttenuated(t *testing.T) {
 	}
 }
 
-// Карточка 1.7: TailSec = size + predelay/1000.
+// TailSec = size + predelay/1000.
 func TestReverbTailSec(t *testing.T) {
 	t.Parallel()
 	for _, id := range ncReverbIDs {
@@ -260,8 +256,6 @@ func TestReverbTailSec(t *testing.T) {
 	}
 }
 
-// --- 2. Дилей ---
-
 var ncDelayMult = map[int]float64{1: 1, 2: 0.5, 3: 0.75, 4: 0.25, 5: 1.5}
 
 func ncDelaySec(bpm float64, div int) float64 { return 60 / bpm * ncDelayMult[div] }
@@ -285,7 +279,7 @@ func ncEchoOnset(s []float32, rate int, at float64) (onset, amp float64) {
 	return -1, amp
 }
 
-// Карточка 2 (параметры): bpm/div/feedback/pingpong/cut/wet с диапазонами и дефолтами.
+// bpm/div/feedback/pingpong/cut/wet с диапазонами и дефолтами.
 func TestDelayParams(t *testing.T) {
 	t.Parallel()
 	c := ByID("delay")
@@ -315,7 +309,7 @@ func TestDelayParams(t *testing.T) {
 	}
 }
 
-// Карточка 2.1: повторы щелчка на k·d (k = 1, 2, 3) ±2 мс, d = 60/bpm × доля.
+// Повторы щелчка на k·d (k = 1, 2, 3) ±2 мс, d = 60/bpm × доля.
 func TestDelayEchoTiming(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -342,7 +336,7 @@ func TestDelayEchoTiming(t *testing.T) {
 	}
 }
 
-// Карточка 2.1: на непрерывном материале пик автокорреляции выхода — на задержке d.
+// На непрерывном материале пик автокорреляции выхода — на задержке d.
 func TestDelayAutocorrPeak(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -356,7 +350,7 @@ func TestDelayAutocorrPeak(t *testing.T) {
 	}
 }
 
-// Карточка 2.2: амплитуда k-го повтора ≈ wet·feedback^(k−1) от сухого (±2 дБ), затухают.
+// Амплитуда k-го повтора ≈ wet·feedback^(k−1) от сухого (±2 дБ), затухают.
 func TestDelayEchoAmplitude(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -381,7 +375,7 @@ func TestDelayEchoAmplitude(t *testing.T) {
 	}
 }
 
-// Карточка 2.3: pingpong 1, моно-щелчок — нечётные повторы в L (R тише ≥ 20 дБ),
+// pingpong 1, моно-щелчок — нечётные повторы в L (R тише ≥ 20 дБ),
 // чётные — в R; pingpong 0 — в обоих каналах поровну.
 func TestDelayPingPong(t *testing.T) {
 	t.Parallel()
@@ -415,7 +409,7 @@ func TestDelayPingPong(t *testing.T) {
 	}
 }
 
-// Карточка 2.4: cut 2 кГц — доля > 5 кГц в первом повторе ≥ 10 дБ ниже, чем в сухом.
+// cut 2 кГц — доля > 5 кГц в первом повторе ≥ 10 дБ ниже, чем в сухом.
 func TestDelayCutDarkensRepeats(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -430,8 +424,8 @@ func TestDelayCutDarkensRepeats(t *testing.T) {
 	}
 }
 
-// Карточка 2.5: TailSec = d × число повторов (до уровня < 1 %, не больше 16).
-// Карточка не уточняет, считается ли уровень с учётом wet и включается ли первый
+// TailSec = d × число повторов (до уровня < 1 %, не больше 16).
+// Не задано, считается ли уровень с учётом wet и включается ли первый
 // повтор ниже 1 % — проверяется то, что следует однозначно: кратность d, один
 // повтор без обратной связи, потолок 16 при feedback 0.9 и рост с feedback.
 func TestDelayTailSec(t *testing.T) {
@@ -470,8 +464,6 @@ func TestDelayTailSec(t *testing.T) {
 	}
 }
 
-// --- 3. Стерео ---
-
 // ncCorrStereo — стерео шум: L = n1 + 0.5·n2, R = n1 − 0.5·n2 (корреляция 0.6).
 func ncCorrStereo(t *testing.T, dur float64) string {
 	t.Helper()
@@ -480,7 +472,7 @@ func ncCorrStereo(t *testing.T, dur float64) string {
 		"[a][b]amerge=inputs=2,pan=stereo|c0=c0+0.5*c1|c1=c0-0.5*c1[out0]", dur))
 }
 
-// Карточка 3.1: width 0 → L = R; width 1, bass 0 → выход ≈ вход; width 2 → корреляция
+// width 0 → L = R; width 1, bass 0 → выход ≈ вход; width 2 → корреляция
 // L/R ниже входной.
 func TestWidthChain(t *testing.T) {
 	t.Parallel()
@@ -506,7 +498,7 @@ func TestWidthChain(t *testing.T) {
 	}
 }
 
-// Карточка 3.2: bass N при width 2 — низ ниже N Гц в моно: корреляция L/R полосы
+// bass N при width 2 — низ ниже N Гц в моно: корреляция L/R полосы
 // < N/2 Гц > 0.95.
 func TestWidthBassMono(t *testing.T) {
 	t.Parallel()
@@ -519,7 +511,7 @@ func TestWidthBassMono(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: Хаас на моно-входе — пик взаимной корреляции L/R на лаге delay мс
+// Хаас на моно-входе — пик взаимной корреляции L/R на лаге delay мс
 // ±1 мс; side выбирает, какой канал позже.
 func TestHaasDelaySide(t *testing.T) {
 	t.Parallel()
@@ -538,7 +530,7 @@ func TestHaasDelaySide(t *testing.T) {
 	}
 }
 
-// Карточка 1.5 на стерео-входе с независимыми L/R (кросс-ревью): width 0 → в хвосте
+// На стерео-входе с независимыми L/R: width 0 → в хвосте
 // L ≈ R (корреляция > 0.95), width 1 → < 0.5. Вход — шумовой всплеск 1 с, разные
 // зёрна в каналах, 44.1 кГц.
 func TestReverbWidthStereoInput(t *testing.T) {

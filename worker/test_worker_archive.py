@@ -1,4 +1,4 @@
-"""Спецификация архива воркера tools/worker-tar.sh (internal-own-track, условие 142, ТК163).
+"""Спецификация архива воркера tools/worker-tar.sh.
 
 Что должно работать:
 A1. `tools/worker-tar.sh OUTDIR [VERSION]` создаёт OUTDIR/worker-<VERSION>.tar.gz и печатает
@@ -8,8 +8,6 @@ A3. В архиве: модули воркера *.py (кроме test_*), *.jso
     install.sh, VERSION (= версии), phrases/ (как worker/phrases), units/yue-worker.service.
 A4. Список — одним правилом: каждый локальный модуль, который импортирует код воркера,
     есть в архиве (вычисляется по исходникам); тестов и __pycache__ в архиве нет.
-
-Запуск из каталога worker: python -m unittest test_worker_archive -v
 """
 import ast
 import shutil

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Тесты цепочки «Ритм-гейт» (gate) по спецификации: громкость открывается и
+// Тесты цепочки «Ритм-гейт» (gate): громкость открывается и
 // закрывается по сетке ударов период 60/(bpm·div) с, начало ударов offset + k·период
 // (сетка тянется и назад, до offset). Внутри удара первые duty·период — открыто
 // (усиление 1), остаток — уровень 1−depth, края — линейные рампы smooth мс.
@@ -56,7 +56,7 @@ func checkGateHits(t *testing.T, out, src []float32, offset, period, duty, smoot
 	}
 }
 
-// Условие 1: bpm 120, div 4, duty 0.5, depth 1, offset 0.1 — открытые половины ≈ вход,
+// bpm 120, div 4, duty 0.5, depth 1, offset 0.1 — открытые половины ≈ вход,
 // закрытые глушатся (< −40 дБ); подряд несколько ударов.
 func TestGateOpenClosedHalves(t *testing.T) {
 	t.Parallel()
@@ -68,7 +68,7 @@ func TestGateOpenClosedHalves(t *testing.T) {
 	checkGateHits(t, out, src, 0.1, 60.0/(120*4), 0.5, 5, []int{0, 1, 2, 3, 4, 5, 6, 7, 10, 13}, -40, -1)
 }
 
-// Условие 2: depth 0.5 — между ударами уровень 1−0.5 = −6 дБ (±1).
+// depth 0.5 — между ударами уровень 1−0.5 = −6 дБ (±1).
 func TestGateDepthHalf(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -79,7 +79,7 @@ func TestGateDepthHalf(t *testing.T) {
 	checkGateHits(t, out, src, 0.1, 0.125, 0.5, 5, []int{1, 2, 3, 6, 9}, dbfs(0.5), 1)
 }
 
-// Условие 3: duty 0.25 — открыта первая четверть удара, остальное закрыто
+// duty 0.25 — открыта первая четверть удара, остальное закрыто
 // (включая вторую четверть, которая при duty 0.5 была бы открыта).
 func TestGateDutyQuarter(t *testing.T) {
 	t.Parallel()
@@ -100,7 +100,7 @@ func TestGateDutyQuarter(t *testing.T) {
 	}
 }
 
-// Условие 4: период следует bpm/div: bpm 138, div 2 → удары на offset + k·60/276.
+// Период следует bpm/div: bpm 138, div 2 → удары на offset + k·60/276.
 // Сдвиг фазы от неверного периода накапливается, поэтому меряем и дальние удары.
 func TestGatePeriodFollowsBpmDiv(t *testing.T) {
 	t.Parallel()
@@ -112,7 +112,7 @@ func TestGatePeriodFollowsBpmDiv(t *testing.T) {
 	checkGateHits(t, out, src, 0.1, 60.0/276, 0.5, 5, []int{0, 1, 2, 5, 8, 11, 12}, -40, -1)
 }
 
-// Условие 5: сетка до offset — на [0, offset) гейт работает в той же фазе
+// Сетка до offset — на [0, offset) гейт работает в той же фазе
 // (удары offset − k·период).
 func TestGateGridBeforeOffset(t *testing.T) {
 	t.Parallel()
@@ -128,7 +128,7 @@ func TestGateGridBeforeOffset(t *testing.T) {
 	checkGateHits(t, out, src, off, 0.125, 0.5, 5, []int{0, 1, 3}, -40, -1)
 }
 
-// Условие 6: from=1.0 — до 0.9 с выход равен входу, после 1.1 с гейт работает.
+// from=1.0 — до 0.9 с выход равен входу, после 1.1 с гейт работает.
 func TestGateFromKeepsAudioBefore(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -143,7 +143,7 @@ func TestGateFromKeepsAudioBefore(t *testing.T) {
 	checkGateHits(t, out, src, 0.1, 0.125, 0.5, 5, []int{8, 9, 10, 12, 15}, -40, -1)
 }
 
-// Условие 7: длина выхода = длине входа (некруглая длительность, допуск 1 мс на кодек).
+// Длина выхода = длине входа (некруглая длительность, допуск 1 мс на кодек).
 func TestGateKeepsLength(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -159,7 +159,7 @@ func TestGateKeepsLength(t *testing.T) {
 	}
 }
 
-// Условие 8: gate есть в All(), это не голосовая цепочка; крутилки и дефолты по спеке.
+// gate есть в All(), это не голосовая цепочка; крутилки и дефолты по спеке.
 func TestGateRegistered(t *testing.T) {
 	t.Parallel()
 	var g *Chain
@@ -200,7 +200,7 @@ func TestGateRegistered(t *testing.T) {
 	}
 }
 
-// Условие 9: offset принимает до 600 с — сетка тянется назад от далёкого offset:
+// offset принимает до 600 с — сетка тянется назад от далёкого offset:
 // offset 300.1 при периоде 0.125 (300 = 2400 периодов) даёт в первых 2 с ту же фазу,
 // что offset 0.1 (открытые/закрытые окна в те же моменты).
 func TestGateLargeOffsetSamePhase(t *testing.T) {

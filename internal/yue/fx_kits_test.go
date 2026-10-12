@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// internal-studio-engine, условие 14 (этап 5а): InstallFxKit — POST /fx/kits/install?name=
+// InstallFxKit — POST /fx/kits/install?name=
 // без тела; ответ воркера {name, parts, downloaded} — как есть; 422 — ошибка с причиной.
 
 func TestInstallFxKitPostsName(t *testing.T) {

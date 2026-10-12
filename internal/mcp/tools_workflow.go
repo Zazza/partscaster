@@ -12,7 +12,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// RegisterWorkflowTools — генерация: статусы, отправка, план, артефакты.
 func RegisterWorkflowTools(s *Server) {
 	s.Register(Tool{
 		Name:        "status",
@@ -333,7 +332,6 @@ func RegisterWorkflowTools(s *Server) {
 
 var errConfirm = fmt.Errorf("требуется подтверждение: спроси пользователя и передай confirm=true")
 
-// download скачивает артефакт джобы в каталог загрузок, возвращает путь.
 func (s *Server) download(id int64, file string) (string, error) {
 	body, _, err := s.client.FetchAudio(context.Background(), id, file)
 	if err != nil {

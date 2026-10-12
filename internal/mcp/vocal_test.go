@@ -13,7 +13,7 @@ import (
 )
 
 // Тесты инструментов «голос по частям» (revoice_start / revoice_apply),
-// rebuild_sections и vocal_contour — по спецификации задачи. Воркер —
+// rebuild_sections и vocal_contour. Воркер —
 // fakeService (внешняя граница); свои функции не мокаются.
 
 func pid(v int64) *int64 { return &v }
@@ -27,8 +27,6 @@ func jsonArgs(t *testing.T, s string) map[string]any {
 	}
 	return m
 }
-
-// ---------- revoice_start ----------
 
 func TestRevoiceStartUsesVoiceSourceOfVariant(t *testing.T) {
 	t.Parallel()
@@ -144,8 +142,6 @@ func TestRevoiceStartTakesOutOfRange(t *testing.T) {
 	}
 }
 
-// ---------- revoice_apply ----------
-
 func TestRevoiceApplyRejectsTakeNotDone(t *testing.T) {
 	t.Parallel()
 	for _, status := range []string{"queued", "running", "error", "canceled"} {
@@ -179,8 +175,6 @@ func TestRevoiceApplyRejectsMissingTake(t *testing.T) {
 		t.Fatalf("пересборка вызвана: fetched %v", fake.fetched)
 	}
 }
-
-// ---------- rebuild_sections / parseSectionSpecs ----------
 
 func TestParseSectionSpecsFromJSON(t *testing.T) {
 	t.Parallel()
@@ -254,8 +248,6 @@ func TestRebuildSectionsEmptySpecsIsError(t *testing.T) {
 	}
 }
 
-// ---------- vocal_contour ----------
-
 func TestVocalContourPrintsSummaryAndBars(t *testing.T) {
 	t.Parallel()
 	s, fake := newTestServer(t)
@@ -322,8 +314,6 @@ func TestVocalContourPropagatesClientError(t *testing.T) {
 		t.Fatalf("текст ошибки потерян: %s", out)
 	}
 }
-
-// ---------- тип yue.VocalContour: JSON-контракт воркера ----------
 
 func TestVocalContourJSONTags(t *testing.T) {
 	t.Parallel()

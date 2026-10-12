@@ -1,9 +1,8 @@
-// Карточка internal-own-track, этап 15, условия 119–121, тест-кейс 147.
-// 119: чистая логика активной дорожки — targetFor (цель правок по дорожке)
+// Чистая логика активной дорожки — targetFor (цель правок по дорожке)
 // и stemForTarget (какую дорожку сделать активной при ручном выборе цели).
-// 120: одна активная дорожка в студии — targetChoice (ручной выбор цели: какую дорожку сделать активной и
+// Одна активная дорожка в студии — targetChoice (ручной выбор цели: какую дорожку сделать активной и
 // какую цель поставить; «весь трек» сбрасывает цели), PedalBoard принимает активную дорожку и сообщает свой выбор.
-// Подпись галочки «волна сверху» (121) — общий тест i18n.test.js.
+// Подпись галочки «волна сверху» — общий тест i18n.test.js.
 import { describe, expect, test, vi } from 'vitest'
 import { renderHtml } from './testkit/sfc.js'
 import { targetFor, stemForTarget, targetChoice } from './activeTrack.js'
@@ -16,7 +15,7 @@ const { default: PedalBoard } = await import('./components/PedalBoard.vue')
 const DRUM_PARTS = ['kick', 'snare', 'toms', 'hh', 'ride', 'crash']
 const MAIN_STEMS = ['vocals', 'drums', 'bass', 'other', 'guitar', 'piano']
 
-describe('targetFor — цель правок дорожки (условие 119)', () => {
+describe('targetFor — цель правок дорожки', () => {
   test.each(DRUM_PARTS)('часть барабанов %s → drums', (part) => {
     expect(targetFor(part)).toBe('drums')
   })
@@ -34,7 +33,7 @@ describe('targetFor — цель правок дорожки (условие 119
   })
 })
 
-describe('stemForTarget — активная дорожка по выбранной цели (условие 119)', () => {
+describe('stemForTarget — активная дорожка по выбранной цели', () => {
   const stems = ['vocals', 'drums', 'bass', 'other', 'kick', 'snare']
 
   test('пустая цель → весь трек, даже при активной дорожке', () => {
@@ -67,7 +66,7 @@ describe('stemForTarget — активная дорожка по выбранн�
   })
 })
 
-describe('targetChoice — ручной выбор цели правок («на что») (условия 119–120, 120б)', () => {
+describe('targetChoice — ручной выбор цели правок («на что»)', () => {
   const stems = ['vocals', 'drums', 'bass', 'other', 'kick', 'snare']
 
   test('трек без дорожек: цель держится как выбрана, активная дорожка не меняется', () => {
@@ -95,7 +94,7 @@ describe('targetChoice — ручной выбор цели правок («на
 
 // PedalBoard: активная дорожка — входом (prop active), выбор на доске — наружу (emit stem). Контракт компонента
 // берётся из собранного SFC, видимая дорожка — серверной отрисовкой при данном active.
-describe('PedalBoard — активная дорожка общая (условие 120)', () => {
+describe('PedalBoard — активная дорожка общая', () => {
   test('принимает prop active и объявляет событие stem', () => {
     expect(Object.keys(PedalBoard.props)).toContain('active')
     expect(PedalBoard.emits).toContain('stem')

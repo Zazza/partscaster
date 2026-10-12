@@ -14,10 +14,9 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 8а, условие 68 (тест-кейсы ТК102, ТК103): партии-рецепты пресета.
-// Написаны по карточке, без чтения реализации.
+// Партии-рецепты пресета.
 //
-// Сигнатуры Go (выбраны test-author: карточка задаёт имена и смысл, не типы):
+// Сигнатуры Go:
 //
 //	type PartOpts struct { Style string; Octave int; Sections []string }          // Sections nil/пусто — все такты
 //	type PartNote struct { T, D float64; Midi []float64(или []int); Vel float64 } // json: t, d, midi, vel
@@ -29,19 +28,17 @@ import (
 //
 // Результаты сравниваются через JSON (поля t/d/midi/vel), поэтому тип Midi и точные имена полей Go свободны.
 //
-// ТК102 — паритет с JS: эталоны testdata/parts_golden.json генерирует frontend/src/partsGolden.test.js
+// Паритет с JS: эталоны testdata/parts_golden.json генерирует frontend/src/partsGolden.test.js
 // (WRITE_GOLDEN=1 npx vitest run src/partsGolden.test.js); сравнение ±1e-9. Опции в эталоне полные.
-// Расхождение карточки и JS: у partNotes sections [] — «ни одного такта», условие 68 — «пусто — все»;
-// эталон такой случай не содержит, Go проверяется отдельно по условию (TestPartNotesEmptySectionsAll).
+// Расхождение с JS: у partNotes sections [] — «ни одного такта», в Go — «пусто — все»;
+// эталон такой случай не содержит, Go проверяется отдельно (TestPartNotesEmptySectionsAll).
 //
-// ТК103 — применение: yue.SoundPreset.Parts []yue.PresetPart (json "parts": kind, engine, style, octave,
+// Применение: yue.SoundPreset.Parts []yue.PresetPart (json "parts": kind, engine, style, octave,
 // pattern, swing, accent, sections, place). Такты — ChordGrid трека; synth — ноты PartNotes, perc — удары
 // PercHits; без аккордов perc — по BarsFromBeat(JobGrid, длина трека, 0), synth пропускается; ноты — в первый
 // блок цепочки (поле notes); в пересборку — запись {stems [mix], add, engine, place}: виден как ApplyFx с
 // source mix и Add. Нет нот — партия пропускается без ошибки. Наборы kit партий докачиваются (InstallFxKit).
-// Воркер — psFake (presets_test.go) + ChordGrid/JobGrid: внешние границы, своё не подменяется.
-
-// ---------- ТК102: паритет с JS ----------
+// Воркер — psFake + ChordGrid/JobGrid: внешние границы, своё не подменяется.
 
 type ppGoldenSynth struct {
 	Name string         `json:"name"`
@@ -150,7 +147,7 @@ func ppSameValue(g, w any) string {
 	return ""
 }
 
-// ТК102: PartNotes = synthPart.partNotes на эталонах (стили, октавы, секции, трудные аккорды и такты).
+// PartNotes = synthPart.partNotes на эталонах (стили, октавы, секции, трудные аккорды и такты).
 func TestPartNotesGolden(t *testing.T) {
 	t.Parallel()
 	for _, c := range ppLoadGolden(t).PartNotes {
@@ -164,7 +161,7 @@ func TestPartNotesGolden(t *testing.T) {
 	}
 }
 
-// ТК102: PercHits = percPart.percHits на эталонах (рисунки, swing, accent, секции, трудные такты).
+// PercHits = percPart.percHits на эталонах (рисунки, swing, accent, секции, трудные такты).
 func TestPercHitsGolden(t *testing.T) {
 	t.Parallel()
 	for _, c := range ppLoadGolden(t).PercHits {
@@ -179,7 +176,7 @@ func TestPercHitsGolden(t *testing.T) {
 	}
 }
 
-// ТК102: BarsFromBeat = percPart.barsFromBeat на эталонах (неполный последний такт, shift, пределы).
+// BarsFromBeat = percPart.barsFromBeat на эталонах (неполный последний такт, shift, пределы).
 func TestBarsFromBeatGolden(t *testing.T) {
 	t.Parallel()
 	for _, c := range ppLoadGolden(t).BarsFromBeat {
@@ -193,7 +190,7 @@ func TestBarsFromBeatGolden(t *testing.T) {
 	}
 }
 
-// Условие 68: sections пусто — все такты (как nil), и у синта, и у перкуссии.
+// sections пусто — все такты (как nil), и у синта, и у перкуссии.
 func TestPartNotesEmptySectionsAll(t *testing.T) {
 	t.Parallel()
 	bars := ppBars()
@@ -208,11 +205,9 @@ func TestPartNotesEmptySectionsAll(t *testing.T) {
 	}
 }
 
-// ---------- ТК103: партии пресета в пересборке ----------
-
 const ppKitInstalled = "ppkit" // набор, который «есть» на воркере
 
-// ppBars — ChordGrid ТК103: 4 такта по 2 с, такты 3–4 — припев.
+// ppBars — ChordGrid: 4 такта по 2 с, такты 3–4 — припев.
 func ppBars() []yue.ChordBar {
 	return []yue.ChordBar{
 		{Start: 0, End: 2, Chord: "Am", Section: "verse"},
@@ -262,7 +257,7 @@ func ppSetup(t *testing.T, dur float64, bars []yue.ChordBar) *ppFake {
 		beat: &yue.BeatGrid{BPM: 120, Offset: 0, Strength: 0.9, Source: "drums"}}
 }
 
-// ppPreset — пресет из одних партий: JSON как у воркера (поля частей — по карточке).
+// ppPreset — пресет из одних партий: JSON как у воркера.
 func ppPreset(t *testing.T, id int64, partsJSON string) yue.SoundPreset {
 	t.Helper()
 	var p yue.SoundPreset
@@ -276,14 +271,14 @@ func ppPreset(t *testing.T, id int64, partsJSON string) yue.SoundPreset {
 	return p
 }
 
-// партии ТК103: synth pad только в припеве (+ eq после синта), perc backbeat на все такты; наборы — новые
-const ppPartsTK103 = `[
+// партии: synth pad только в припеве (+ eq после синта), perc backbeat на все такты; наборы — новые
+const ppPartsPadPerc = `[
  {"kind": "synth", "engine": [{"type": "synth", "osc1": 4, "kit": "pianokit/piano"}, {"type": "eq", "highpass_hz": 200}],
   "style": "pad", "sections": ["chorus"]},
  {"kind": "perc", "engine": [{"type": "perc", "voice": 0, "kit": "clapkit/clap"}], "pattern": "backbeat"}
 ]`
 
-// ppPartsOf — партии пресета: поле SoundPreset.Parts типа []yue.PresetPart (условие 69).
+// ppPartsOf — партии пресета: поле SoundPreset.Parts типа []yue.PresetPart.
 func ppPartsOf(p yue.SoundPreset) []yue.PresetPart { return p.Parts }
 
 type ppNote struct {
@@ -336,12 +331,12 @@ func ppApply(t *testing.T, f *ppFake, p yue.SoundPreset) {
 	}
 }
 
-// ТК103: трек с ChordGrid из 4 тактов (2 — припев): synth pad — ноты только в тактах припева,
+// Трек с ChordGrid из 4 тактов (2 — припев): synth pad — ноты только в тактах припева,
 // perc backbeat — 4×2 удара; обе — записи пересборки на mix с add; наборы партий докачаны.
 func TestPresetPartsWithChords(t *testing.T) {
 	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
-	ppApply(t, f, ppPreset(t, 41, ppPartsTK103))
+	ppApply(t, f, ppPreset(t, 41, ppPartsPadPerc))
 
 	syn := ppCall(t, f, "synth")
 	if syn == nil {
@@ -382,12 +377,12 @@ func TestPresetPartsWithChords(t *testing.T) {
 	}
 }
 
-// ТК103: трек без аккордов (ChordGrid пуст, JobGrid 120 BPM offset 0, длина 8 с) — synth пропущена,
+// Трек без аккордов (ChordGrid пуст, JobGrid 120 BPM offset 0, длина 8 с) — synth пропущена,
 // perc — по 4 тактам BarsFromBeat; ошибки нет.
 func TestPresetPartsWithoutChords(t *testing.T) {
 	t.Parallel()
 	f := ppSetup(t, 8, nil)
-	ppApply(t, f, ppPreset(t, 42, ppPartsTK103))
+	ppApply(t, f, ppPreset(t, 42, ppPartsPadPerc))
 
 	if r := ppCall(t, f, "synth"); r != nil {
 		t.Errorf("synth-партия ушла в пересборку (%d нот), want пропуск: у трека нет аккордов", len(ppNotes(t, r)))
@@ -411,7 +406,7 @@ func TestPresetPartsWithoutChords(t *testing.T) {
 	}
 }
 
-// Условие 68: нет нот (секция, которой нет в песне) — партия пропускается, не ошибка; другая партия идёт.
+// Нет нот (секция, которой нет в песне) — партия пропускается, не ошибка; другая партия идёт.
 func TestPresetPartsNoNotesSkipped(t *testing.T) {
 	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
@@ -434,7 +429,7 @@ func TestPresetPartsNoNotesSkipped(t *testing.T) {
 	}
 }
 
-// Условие 68: октава и accent из рецепта доходят до нот/ударов (octave −1 у pulse, accent 0 — все .9).
+// Октава и accent из рецепта доходят до нот/ударов (octave −1 у pulse, accent 0 — все .9).
 func TestPresetPartsOptionsApplied(t *testing.T) {
 	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
@@ -479,7 +474,7 @@ func ppAt(n []ppNote, i int) any {
 	return nil
 }
 
-// Условие 68/69: поля партии в JSON (воркер ↔ приложение) читаются в yue.PresetPart.
+// Поля партии в JSON (воркер ↔ приложение) читаются в yue.PresetPart.
 func TestPresetPartJSON(t *testing.T) {
 	t.Parallel()
 	p := ppPreset(t, 45, `[{"kind": "perc", "engine": [{"type": "perc"}], "pattern": "offbeat", "swing": 0.3,
@@ -520,13 +515,13 @@ type ppChordErrFake struct {
 
 func (f *ppChordErrFake) ChordGrid(context.Context, int64) (*yue.ChordGrid, error) { return nil, f.err }
 
-// ТК103а (условие 68а): ChordGrid → 404 (у трека нет плана) — это «аккордов нет», не ошибка пресета:
+// ChordGrid → 404 (у трека нет плана) — это «аккордов нет», не ошибка пресета:
 // synth пропущена, perc — по сетке долей JobGrid.
 func TestPresetPartsChordGrid404NoChords(t *testing.T) {
 	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 404, Msg: "yue /chords: 404 Not Found: no plan"}}
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 45, ppPartsTK103)); err != nil {
+	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 45, ppPartsPadPerc)); err != nil {
 		t.Fatalf("ApplySoundPreset при ChordGrid 404: %v, want без ошибки (404 = аккордов нет)", err)
 	}
 	if r := ppCall(t, f.ppFake, "synth"); r != nil {
@@ -545,12 +540,12 @@ func TestPresetPartsChordGrid404NoChords(t *testing.T) {
 	}
 }
 
-// ТК103а (условие 68а): прочие ошибки ChordGrid (500) — ошибка ApplySoundPreset, как раньше.
+// Прочие ошибки ChordGrid (500) — ошибка ApplySoundPreset.
 func TestPresetPartsChordGrid500Error(t *testing.T) {
 	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 500, Msg: "yue /chords: 500 Internal Server Error: boom"}}
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 46, ppPartsTK103)); err == nil {
+	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 46, ppPartsPadPerc)); err == nil {
 		t.Fatal("ApplySoundPreset при ChordGrid 500 без ошибки, want ошибку")
 	}
 }
@@ -569,7 +564,7 @@ func (f *ppKitFailFake) InstallFxKit(ctx context.Context, name string) (map[stri
 	return f.ppFake.InstallFxKit(ctx, name)
 }
 
-// ТК103в (условие 68б): synth-партия только в секции solo (такой нет) с набором badkit, установка которого
+// synth-партия только в секции solo (такой нет) с набором badkit, установка которого
 // падает, + perc-партия: пропущенная партия набор не качает и пресет не роняет; perc идёт в пересборку.
 func TestPresetPartsSkippedPartKitNotInstalled(t *testing.T) {
 	t.Parallel()

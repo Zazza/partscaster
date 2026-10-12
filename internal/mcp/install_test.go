@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Тесты установщика написаны по спецификации задачи (не по реализации):
+// Тесты установщика:
 // сухой прогон ничего не выполняет, must-шаг останавливает установку,
 // реальная установка требует confirm и явного выбора whisper/seedvc.
 
@@ -171,7 +171,7 @@ func diskNumbers(t *testing.T, steps []step) []float64 {
 	return nums
 }
 
-// --- internal-own-track, условие 145: install_worker ставит воркер архивом ---
+// install_worker ставит воркер архивом.
 //
 // План: проверки GPU/места → (при host) локальный шаг scp архива на машину → распаковка →
 // install.sh --no-start --hf-home <раскрытый путь> → прежние шаги компонентов, настройка,
@@ -505,8 +505,6 @@ func dummyArchive(t *testing.T) string {
 	return p
 }
 
-// --- песочница выполнения шагов (host="") ---
-
 // installSandbox — HOME во временном каталоге, заглушки внешних программ в PATH и
 // настоящий архив воркера, в котором install.sh — заглушка: пишет свои аргументы в
 // журнал и создаёт то, что создал бы настоящий (каталоги и пустой worker.env).
@@ -730,7 +728,7 @@ func shellQuoteTest(p string) string {
 	return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
 }
 
-// --- internal-roformer-stems, тест-кейс 15: RoFormer ставится только по выбору ---
+// RoFormer ставится только по выбору.
 
 func TestInstallPlanRoformerOnlyWhenChosen(t *testing.T) {
 	t.Parallel()
@@ -794,7 +792,7 @@ func TestInstallWorkerRequiresExplicitRoformer(t *testing.T) {
 	}
 }
 
-// --- internal-roformer-stems, тест-кейс 16: каталог RoFormer sep_dir ---
+// Каталог RoFormer sep_dir.
 
 // sepEnvSteps — шаги, которые пишут пути RoFormer в worker.env.
 func sepEnvSteps(steps []step) []step {
@@ -932,8 +930,6 @@ func TestInstallNoSepDirDefaults(t *testing.T) {
 	}
 }
 
-// --- internal-roformer-stems, тест-кейсы 17 и 18: пути установщика в shell ---
-//
 // Пути (sep_dir, hf_home, seedvc_dir) уходят в shell-команды одним словом:
 // спецсимволы передаются буквально и не выполняются, «~/» раскрывается в
 // $HOME; отклоняются только перевод строки и нулевой байт.
@@ -1098,7 +1094,7 @@ func TestInstallWorkerAcceptsSpecialCharPaths(t *testing.T) {
 					if !dry {
 						args["dry_run"] = false
 						args["confirm"] = true
-						args["stems_model"] = "htdemucs" // при roformer=true установка требует выбора (условие 11)
+						args["stems_model"] = "htdemucs" // при roformer=true установка требует выбора
 					}
 					out, ok := call(t, s, "install_worker", args)
 					if !ok {
@@ -1141,7 +1137,7 @@ func TestInstallWorkerRejectsNewlineAndNUL(t *testing.T) {
 	}
 }
 
-// --- internal-roformer-stems, тест-кейс 19: шаги установки корректны для bash ---
+// Шаги установки корректны для bash.
 
 func TestInstallAllStepsBashSyntax(t *testing.T) {
 	t.Parallel()
@@ -1217,7 +1213,7 @@ func TestInstallSystemdStepFallbackHint(t *testing.T) {
 	}
 }
 
-// --- internal-studio-engine, условие 11: модель дорожек по умолчанию при установке ---
+// Модель дорожек по умолчанию при установке.
 //
 // stems_model (htdemucs | roformer): при roformer=true и установке обязателен —
 // агент спрашивает пользователя; roformer без roformer=true — ошибка; без
@@ -1672,7 +1668,7 @@ func noCurlPath(t *testing.T) string {
 	return dir
 }
 
-// ТК178 (условие 143ж): на машине без curl шаг health проверяет /health python-ом из venv
+// На машине без curl шаг health проверяет /health python-ом из venv
 // воркера (~/yue/.venv/bin/python).
 func TestInstallHealthStepWithoutCurlUsesVenvPython(t *testing.T) {
 	sb := newInstallSandbox(t)

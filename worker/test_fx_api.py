@@ -1,7 +1,7 @@
-"""Тесты карточки internal-sound-engine: HTTP воркера — POST /jobs/{id}/fx,
-GET/POST /fx/assets, флаг fx_engine в /config (тест-кейсы 11–14 карточки).
+"""Тесты HTTP воркера: POST /jobs/{id}/fx,
+GET/POST /fx/assets, флаг fx_engine в /config.
 
-Контракт (из карточки и контракта задачи):
+Контракт:
 - POST /jobs/{id}/fx {source, chain, from?, to?, output?, label?}: source — mix или
   дорожка; output mix — трек − дорожка + обработанная (для source=mix — обработанный
   трек), solo — только обработанная дорожка; окно from/to — вне окна (за кроссфейдом
@@ -11,7 +11,7 @@ GET/POST /fx/assets, флаг fx_engine в /config (тест-кейсы 11–14 
 - ресурсы — yue_worker.fx_resources() (тесты подменяют), цепочка с amp —
   внутри yue_worker.gpu_queue(...), без amp — очередь не берётся;
 - GET /fx/assets → {amps: [{name, latency}], irs: [{name, sr, seconds}],
-  kits: [{name, samples}]} (kits — internal-studio-engine, условие 14);
+  kits: [{name, samples}]};
   POST /fx/assets?kind=amp|ir&name=... — сырые байты; 422 на неверное, 413 > 50 МБ;
   хранение <data>/fx/amps, <data>/fx/irs;
 - /config: fx_engine (по умолчанию да), POST сохраняет, YUE_FX_ENGINE=0 выключает.
@@ -20,7 +20,6 @@ GET/POST /fx/assets, флаг fx_engine в /config (тест-кейсы 11–14 
 захвата fx_nam.load_nam (torch), demucs (stems._run_model). Дорожки кладутся
 файлами stem-*.flac заранее.
 
-Запуск: cd worker && python3 -m unittest test_fx_api -v
 Без окружения воркера (fastapi/httpx/numpy/scipy/soundfile/librosa) — пропуск.
 """
 import json
@@ -161,12 +160,10 @@ class _FxApiCase(tp._WorkerApiCase):
         return sorted(p.name for p in d.glob("dsp-fx-*.flac"))
 
 
-# ---------- ТК11: эндпоинт ----------
-
 @unittest.skipUnless(_OK, _SKIP)
 class TestFxEndpoint(_FxApiCase):
 
-    def test_tc11_mix_by_stem_replaces_stem(self):
+    def test_mix_by_stem_replaces_stem(self):
         jid, d = self._audio_job()
         out = self._ok(jid, source="vocals", chain=CUT_1K, output="mix")
         y, sr = _read(d / out["file"])
@@ -178,7 +175,7 @@ class TestFxEndpoint(_FxApiCase):
         for k in ("drums", "bass", "other"):
             self.assertAlmostEqual(_db(_amp(y, HZ[k]) / AMP), 0, delta=1, msg=k)
 
-    def test_tc11_mix_is_track_minus_stem_plus_processed(self):
+    def test_mix_is_track_minus_stem_plus_processed(self):
         import fx_engine
         jid, d = self._audio_job()
         chain = [{"type": "drive", "gain_db": 20, "output_db": -12}]
@@ -198,13 +195,13 @@ class TestFxEndpoint(_FxApiCase):
         self.assertEqual(y.shape, track.shape)
         self.assertLessEqual(_residual_db(y, track), -60)
 
-    def test_tc11_output_defaults_to_mix(self):
+    def test_output_defaults_to_mix(self):
         jid, d = self._audio_job()
         out = self._ok(jid, source="vocals", chain=CUT_1K)
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(_db(_amp(y, HZ["drums"]) / AMP), 0, delta=1)
 
-    def test_tc11_solo_only_stem(self):
+    def test_solo_only_stem(self):
         jid, d = self._audio_job()
         out = self._ok(jid, source="vocals", chain=IDENTITY, output="solo")
         y, _ = _read(d / out["file"])
@@ -213,7 +210,7 @@ class TestFxEndpoint(_FxApiCase):
         for k in ("drums", "bass", "other"):
             self.assertLess(_db(_amp(y, HZ[k]) / AMP), -40, k)
 
-    def test_tc11_source_mix_processes_whole_track(self):
+    def test_source_mix_processes_whole_track(self):
         jid, d = self._audio_job()
         out = self._ok(jid, source="mix", chain=CUT_1K)
         self.assertTrue(NAME_RE.match(out["file"]), out["file"])
@@ -223,7 +220,7 @@ class TestFxEndpoint(_FxApiCase):
         for k in ("drums", "bass", "other"):
             self.assertAlmostEqual(_db(_amp(y, HZ[k]) / AMP), 0, delta=1, msg=k)
 
-    def test_tc11_window_outside_bitwise_same(self):
+    def test_window_outside_bitwise_same(self):
         import numpy as np
         jid, d = self._audio_job()
         out = self._ok(jid, source="vocals", chain=CUT_1K, **{"from": 1.0, "to": 2.0})
@@ -238,7 +235,7 @@ class TestFxEndpoint(_FxApiCase):
         self.assertLess(_db(_amp(y, 1000, 1.1, 1.9) / AMP), -18)
         self.assertAlmostEqual(_db(_amp(y, HZ["drums"], 1.1, 1.9) / AMP), 0, delta=1)
 
-    def test_tc11_detail_stem_source(self):
+    def test_detail_stem_source(self):
         # подробная дорожка (часть барабанов) — тоже источник
         jid, d = self._audio_job(extra={"kick": _tone(60, amp=0.05)})
         out = self._ok(jid, source="kick", chain=IDENTITY, output="solo")
@@ -302,8 +299,6 @@ class TestFxEndpoint(_FxApiCase):
         stem, _ = _read(d / "stem-vocals.flac")
         self.assertLessEqual(_residual_db(y, stem), -60)
 
-    # ---------- ошибки ----------
-
     def test_job_not_found_404(self):
         r = self._fx(9999, source="mix", chain=CUT_1K)
         self.assertEqual(r.status_code, 404, r.text)
@@ -313,7 +308,7 @@ class TestFxEndpoint(_FxApiCase):
         r = self._fx(jid, source="mix", chain=CUT_1K)
         self.assertEqual(r.status_code, 404, r.text)
 
-    def test_tc10_bad_chain_422_with_reason(self):
+    def test_bad_chain_422_with_reason(self):
         jid, d = self._audio_job()
         for chain, word in (([{"type": "fuzz"}], "fuzz"),
                             ([{"type": "gate", "threshold_db": 5}], "threshold_db"),
@@ -327,7 +322,7 @@ class TestFxEndpoint(_FxApiCase):
         self.assertEqual(self._fx_files(d), [])
 
     def test_chain_type_not_a_string_422(self):
-        # регрессия кросс-ревью: type — список/объект/число → 422, не 500
+        # type — список/объект/число → 422, не 500
         jid, d = self._audio_job()
         for t in ([], {}, 5):
             with self.subTest(type=t):
@@ -353,8 +348,6 @@ class TestFxEndpoint(_FxApiCase):
         self.assertEqual(self._fx_files(d), [])
 
 
-# ---------- ТК12: флаг fx_engine ----------
-
 @unittest.skipUnless(_OK, _SKIP)
 class TestFxEngineFlag(_FxApiCase):
 
@@ -363,10 +356,10 @@ class TestFxEngineFlag(_FxApiCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tc12_default_on(self):
+    def test_default_on(self):
         self.assertIs(self._config().get("fx_engine"), True)
 
-    def test_tc12_disabled_by_setting_503(self):
+    def test_disabled_by_setting_503(self):
         jid, d = self._audio_job()
         r = self.client.post("/config", json={"fx_engine": False})
         self.assertLess(r.status_code, 300, r.text)
@@ -381,7 +374,7 @@ class TestFxEngineFlag(_FxApiCase):
         self.assertIs(self._config().get("fx_engine"), True)
         self._ok(jid, source="vocals", chain=CUT_1K)
 
-    def test_tc12_env_forces_off(self):
+    def test_env_forces_off(self):
         jid, d = self._audio_job()
         self.assertLess(self.client.post("/config", json={"fx_engine": True}).status_code, 300)
         os.environ["YUE_FX_ENGINE"] = "0"
@@ -390,8 +383,6 @@ class TestFxEngineFlag(_FxApiCase):
         self.assertEqual(r.status_code, 503, r.text)
         self.assertEqual(self._fx_files(d), [])
 
-
-# ---------- ТК13: захваты и IR ----------
 
 NAM_OK = json.dumps({"version": "0.5.4", "architecture": "WaveNet", "config": {},
                      "weights": [0.1, -0.2, 0.3], "sample_rate": 48000}).encode()
@@ -431,7 +422,7 @@ class TestFxAssets(_FxApiCase):
     def test_empty_list(self):
         self.assertEqual(self._assets(), {"amps": [], "irs": [], "kits": []})
 
-    def test_tc13_amp_not_in_store_422(self):
+    def test_amp_not_in_store_422(self):
         jid, d = self._audio_job()
         self.resources = FakeResources()  # захватов нет
         r = self._fx(jid, source="vocals", chain=[{"type": "amp", "model": "Plexi"}])
@@ -458,25 +449,25 @@ class TestFxAssets(_FxApiCase):
         self.assertEqual(irs[0]["sr"], 48000)
         self.assertAlmostEqual(irs[0]["seconds"], 0.5, delta=0.01)
 
-    def test_tc13_bad_amp_content_422(self):
+    def test_bad_amp_content_422(self):
         for data in (b"not json at all", b"", json.dumps({"architecture": "WaveNet"}).encode(),
                      json.dumps({"weights": [1, 2]}).encode(), b"[1, 2, 3]"):
             with self.subTest(data=data[:30]):
                 self.assertEqual(self._upload("amp", "x.nam", data).status_code, 422)
         self.assertEqual(self._assets()["amps"], [])
 
-    def test_tc13_wrong_extension_422(self):
+    def test_wrong_extension_422(self):
         for kind, name, data in (("amp", "x.txt", NAM_OK), ("amp", "x.json", NAM_OK),
                                  ("ir", "x.nam", _wav_bytes()), ("ir", "x.mp3", _wav_bytes())):
             with self.subTest(kind=kind, name=name):
                 self.assertEqual(self._upload(kind, name, data).status_code, 422)
         self.assertEqual(self._assets(), {"amps": [], "irs": [], "kits": []})
 
-    def test_tc13_bad_ir_content_422(self):
+    def test_bad_ir_content_422(self):
         self.assertEqual(self._upload("ir", "x.wav", b"RIFF....garbage").status_code, 422)
         self.assertEqual(self._assets()["irs"], [])
 
-    def test_tc13_bad_name_422(self):
+    def test_bad_name_422(self):
         for name in ("a/b.nam", "../x.nam", "..\\x.nam", "a\\b.nam", "..", "/etc/x.nam"):
             with self.subTest(name=name):
                 self.assertEqual(self._upload("amp", name, NAM_OK).status_code, 422)
@@ -485,7 +476,7 @@ class TestFxAssets(_FxApiCase):
         self.assertFalse((self.data / "fx" / "x.nam").exists())
 
     def test_upload_ir_uppercase_ext_normalized_and_found(self):
-        # регрессия кросс-ревью: «Room.WAV» сохраняется как «Room.wav», цепочка
+        # «Room.WAV» сохраняется как «Room.wav», цепочка
         # находит IR по обоим написаниям (настоящее хранилище, не фейк ресурсов)
         r = self._upload("ir", "Room.WAV", _wav_bytes(0.5, 48000))
         self.assertEqual(r.status_code, 200, r.text)
@@ -506,7 +497,7 @@ class TestFxAssets(_FxApiCase):
         self.assertEqual(r.status_code, 422, r.text)
 
     def test_bad_name_detail_lists_allowed(self):
-        # регрессия кросс-ревью: причина отказа по имени — с перечнем допустимого
+        # причина отказа по имени — с перечнем допустимого
         for name in ("a/b.wav", "../x.wav"):
             with self.subTest(name=name):
                 r = self._upload("ir", name, _wav_bytes())
@@ -525,8 +516,6 @@ class TestFxAssets(_FxApiCase):
         self.assertEqual(r.status_code, 413, r.text[:200])
         self.assertEqual(self._assets()["amps"], [])
 
-
-# ---------- ТК14: очередь GPU только для amp ----------
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestFxGpuQueue(_FxApiCase):
@@ -559,13 +548,13 @@ class TestFxGpuQueue(_FxApiCase):
 
         self.resources = FakeResources(amps={"fake": _Wrap(model, self.amp_model)})
 
-    def test_tc14_chain_without_amp_no_gpu_queue(self):
+    def test_chain_without_amp_no_gpu_queue(self):
         jid, _ = self._audio_job()
         self._ok(jid, source="mix", chain=[{"type": t} for t in
                                            ("gate", "eq", "comp", "drive", "cab", "reverb", "delay")])
         self.assertEqual(self.gpu_calls, [])
 
-    def test_tc14_chain_with_amp_takes_gpu_queue(self):
+    def test_chain_with_amp_takes_gpu_queue(self):
         jid, _ = self._audio_job()
         self._ok(jid, source="mix", chain=[{"type": "eq"}, {"type": "amp", "model": "fake"}])
         self.assertTrue(self.gpu_calls, "amp прошёл мимо gpu_queue")
@@ -585,19 +574,17 @@ class _Wrap:
         return self._fn(x)
 
 
-# ---------- Условие 36 (закрытие хвостов): ТК39 (422), ТК40 (36d), ТК41 (36e) ----------
-#
-# 36d: замер задержки захвата привязан к версии файла .nam (mtime_ns и размер): файл
+# Замер задержки захвата привязан к версии файла .nam (mtime_ns и размер): файл
 #      заменили на диске без загрузки через API — при следующем использовании замер
 #      заново. Граница torch/NAM — fx_nam.load_nam(path, latency): latency=None — «замерить»
 #      (фейк ставит задержку, которую сейчас «показывает» модель), число — взять как есть.
 #      Хранилище настоящее: <data>/fx/amps/<name>.nam, ресурсы — yue_worker.fx_resources().
-# 36e/36c: ошибки цепочки по HTTP — 422 с понятной причиной, не 500.
+# Ошибки цепочки по HTTP — 422 с понятной причиной, не 500.
 
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestNamLatencyVersion(_FxApiCase):
-    """ТК40 (36d): заменили файл захвата на диске — замер делается заново."""
+    """Заменили файл захвата на диске — замер делается заново."""
 
     def setUp(self):
         super().setUp()
@@ -629,14 +616,14 @@ class TestNamLatencyVersion(_FxApiCase):
             os.utime(path, ns=(mtime_ns, mtime_ns))
         return path
 
-    def test_tc40_unchanged_file_keeps_saved_measurement(self):
+    def test_unchanged_file_keeps_saved_measurement(self):
         # охрана: файл не трогали — замер не повторяется, даже если модель «показала бы» другое
         self._put("Plexi.nam", NAM_OK)
         self.assertEqual(self._latency("Plexi.nam"), 7)
         self.true_shift = 11
         self.assertEqual(self._latency("Plexi.nam"), 7, "файл тот же, а замер сделан заново")
 
-    def test_tc40_replaced_file_remeasured(self):
+    def test_replaced_file_remeasured(self):
         other = NAM_OK.replace(b"0.3]", b"0.25]")      # другой захват: другой размер
         self.assertNotEqual(len(other), len(NAM_OK))
         path = self._put("Plexi.nam", NAM_OK)
@@ -649,7 +636,7 @@ class TestNamLatencyVersion(_FxApiCase):
         self.true_shift = 3
         self.assertEqual(self._latency("Plexi.nam"), 11)
 
-    def test_tc40_same_size_new_mtime_remeasured(self):
+    def test_same_size_new_mtime_remeasured(self):
         other = NAM_OK.replace(b"0.1,", b"0.2,")        # тот же размер, другое содержимое
         self.assertEqual(len(other), len(NAM_OK))
         path = self._put("Lead.nam", NAM_OK)
@@ -659,7 +646,7 @@ class TestNamLatencyVersion(_FxApiCase):
         self._put("Lead.nam", other, mtime_ns=st.st_mtime_ns + 5 * 10**9)
         self.assertEqual(self._latency("Lead.nam"), 13, "mtime другой — замер должен повториться")
 
-    def test_tc40_same_mtime_new_size_remeasured(self):
+    def test_same_mtime_new_size_remeasured(self):
         other = NAM_OK.replace(b"0.3]", b"0.333]")      # другой размер, mtime вернули прежний
         path = self._put("Crunch.nam", NAM_OK)
         self.assertEqual(self._latency("Crunch.nam"), 7)
@@ -669,7 +656,7 @@ class TestNamLatencyVersion(_FxApiCase):
         self.assertEqual(path.stat().st_mtime_ns, st.st_mtime_ns)
         self.assertEqual(self._latency("Crunch.nam"), 9, "размер другой — замер должен повториться")
 
-    def test_tc40_replaced_file_used_by_chain_with_new_latency(self):
+    def test_replaced_file_used_by_chain_with_new_latency(self):
         # путь запроса: цепочка с amp на настоящих ресурсах после замены файла —
         # модель получает новую задержку (импульсный вход: пик выхода на месте)
         import numpy as np
@@ -686,33 +673,33 @@ class TestNamLatencyVersion(_FxApiCase):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestTailsChainErrors422(_FxApiCase):
-    """ТК39/ТК41 по HTTP: 422 с причиной, не 500."""
+    """Ошибки цепочки по HTTP: 422 с причиной, не 500."""
 
     def _detail(self, r):
         d = r.json().get("detail")
         return d if isinstance(d, str) else json.dumps(d, ensure_ascii=False)
 
-    def test_tc39_17_blocks_422(self):
+    def test_17_blocks_422(self):
         jid, d = self._audio_job()
         r = self._fx(jid, source="vocals", chain=[{"type": "gain"}] * 17, output="solo")
         self.assertEqual(r.status_code, 422, r.text)
         self.assertIn("16", self._detail(r))
         self.assertEqual(self._fx_files(d), [])
 
-    def test_tc39_13_bands_422(self):
+    def test_13_bands_422(self):
         jid, _ = self._audio_job()
         bands = [{"freq_hz": 100 + 150 * i, "gain_db": 1, "q": 1} for i in range(13)]
         r = self._fx(jid, source="vocals", chain=[{"type": "eq", "bands": bands}], output="solo")
         self.assertEqual(r.status_code, 422, r.text)
         self.assertIn("12", self._detail(r))
 
-    def test_tc39_16_blocks_12_bands_ok(self):
+    def test_16_blocks_12_bands_ok(self):
         jid, _ = self._audio_job()
         bands = [{"freq_hz": 100 + 150 * i, "gain_db": 0, "q": 1} for i in range(12)]
         chain = [{"type": "eq", "bands": bands}] + [{"type": "gain"}] * 15
         self._ok(jid, source="vocals", chain=chain, output="solo")
 
-    def test_tc41_latency_longer_than_input_422(self):
+    def test_latency_longer_than_input_422(self):
         jid, d = self._audio_job()
         n_model = int(DUR * 48000)                       # вход 4 с; задержка в сэмплах модели 48 кГц
         for lat in (n_model + 4800, -(n_model + 4800)):
@@ -724,12 +711,10 @@ class TestTailsChainErrors422(_FxApiCase):
         self.assertEqual(self._fx_files(d), [])
 
 
-# ---------- Карточка internal-own-track, этап 4, условие 25 (ТК50): synth в /fx ----------
-#
 # Контракт: POST /jobs/{id}/fx {source: "mix", output: "solo", preview: true, from, to,
 # chain: [synth]} — ноты synth в запросе от начала ТРЕКА; воркер сдвигает их на окно:
 # нота t звучит в превью через t − from; нота до окна не звучит. output solo — в файле
-# только синт (тонов трека нет). Реализацию не читали.
+# только синт (тонов трека нет).
 
 SYN_DUR = 16.0
 SYN_TRACK_HZ = 100            # тон трека: в solo-файле его быть не должно
@@ -745,7 +730,7 @@ def _synth_chain(notes):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestSynthWindowShift(_FxApiCase):
-    """ТК50: from = 10 — нота t = 12 в превью на 2 с, нота t = 5 не звучит."""
+    """from = 10 — нота t = 12 в превью на 2 с, нота t = 5 не звучит."""
 
     def _long_job(self):
         import numpy as np
@@ -765,7 +750,7 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def test_tk50_note_in_window_shifted_by_from(self):
+    def test_note_in_window_shifted_by_from(self):
         import numpy as np
         jid, d = self._long_job()
         out = self._preview(jid, [{"t": 12.0, "d": 1.0, "midi": [69], "vel": 1.0}])
@@ -774,14 +759,14 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertAlmostEqual(len(y) / SR, 4.0, delta=0.01)       # окно 10–14 с, без хвоста
         a = np.abs(y).max(axis=1)
         peak = float(a.max())
-        # усл. 78 (этап 9): уровень «на ухо» — к тону трека 100 Гц (A ≈ −19 дБ) синус 440 Гц встаёт на ~15 дБ тише по
-        # простому уровню, чем было по RMS; тест — про сдвиг окна, порог «синт есть» ниже
+        # уровень «на ухо»: к тону трека 100 Гц (A ≈ −19 дБ) синус 440 Гц встаёт на ~15 дБ тише по
+        # простому уровню, чем по RMS; тест — про сдвиг окна, порог «синт есть» ниже
         self.assertGreater(peak, 0.02, "в превью нет синта")
         # до 2 с (12 − 10) — тишина, нота звучит на 2,1–2,9 с
         self.assertLess(_db(float(a[:int(1.98 * SR)].max()) / peak), -60, "нота не на t − from")
         self.assertGreater(_amp(y, 440, 2.1, 2.9), 0.02, "нота A4 не звучит через 2 с от начала окна")
 
-    def test_tk50_solo_without_track(self):
+    def test_solo_without_track(self):
         jid, d = self._long_job()
         out = self._preview(jid, [{"t": 12.0, "d": 1.0, "midi": [69], "vel": 1.0}])
         y, _ = _read(d / out["file"])
@@ -789,7 +774,7 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertLess(_amp(y, SYN_TRACK_HZ, 0.0, 1.9), 1e-3)
         self.assertLess(_amp(y, SYN_TRACK_HZ, 2.0, 3.0), 1e-3)
 
-    def test_tk50_note_before_window_silent(self):
+    def test_note_before_window_silent(self):
         import numpy as np
         jid, d = self._long_job()
         out = self._preview(jid, [{"t": 5.0, "d": 1.0, "midi": [69], "vel": 1.0}])
@@ -797,7 +782,7 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertLess(float(np.abs(y).max()), 1e-4, "нота до окна звучит в превью")
 
     def test_note_after_window_not_played(self):
-        # кросс-ревью s4: нота после окна не звучит даже в хвосте реверба (партия — только в выделении)
+        # нота после окна не звучит даже в хвосте реверба (партия — только в выделении)
         import numpy as np
         jid, d = self._long_job()
         chain = _synth_chain([{"t": 14.5, "d": 1.0, "midi": [69], "vel": 1.0}]) + [{"type": "reverb", "wet": 0.3}]
@@ -808,14 +793,14 @@ class TestSynthWindowShift(_FxApiCase):
         self.assertLess(float(np.abs(y).max()), 1e-4, "нота за окном прозвучала в хвосте")
 
     def test_add_without_preview_422(self):
-        # кросс-ревью s4: add — только у превью (вариант на весь трек заменил бы трек синтом)
+        # add — только у превью (вариант на весь трек заменил бы трек синтом)
         jid, _ = self._long_job()
         chain = _synth_chain([{"t": 12.0, "d": 1.0, "midi": [69], "vel": 1.0}])
         r = self._fx(jid, source="mix", output="mix", add=True, chain=chain, **{"from": 10.0, "to": 14.0})
         self.assertEqual(r.status_code, 422, r.text)
 
     def test_synth_silent_after_window_even_with_tail(self):
-        # кросс-ревью s4 r2: длинная нота с долгим затуханием — синт молчит после края окна (хвост — только
+        # длинная нота с долгим затуханием — синт молчит после края окна (хвост — только
         # эффекта; delay с wet 0 даёт буфер хвоста без самого эффекта)
         import numpy as np
         jid, d = self._long_job()
@@ -839,7 +824,7 @@ class TestSynthWindowShift(_FxApiCase):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestSynthWindowPrep(unittest.TestCase):
-    """Кросс-ревью s4 r2: подготовка нот партии к окну превью (synth_window) — давние ноты не ломают превью."""
+    """Подготовка нот партии к окну превью (synth_window) — давние ноты не ломают превью."""
 
     def test_old_notes_dropped_long_start_clamped(self):
         import yue_worker as w
@@ -858,8 +843,8 @@ class TestSynthWindowPrep(unittest.TestCase):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestSynthRefLevel(unittest.TestCase):
-    """Кросс-ревью условия 29: уровень синта — от громкости трека по ВСЕМ нотам партии, одинаково для превью
-    любого окна и для пересборки (было: по окну — тихий куплет и весь трек давали разницу до 18 дБ)."""
+    """Уровень синта — от громкости трека по ВСЕМ нотам партии, одинаково для превью
+    любого окна и для пересборки (по окну — тихий куплет и весь трек давали разницу до 18 дБ)."""
 
     def test_ref_same_for_any_window(self):
         import numpy as np
@@ -872,13 +857,13 @@ class TestSynthRefLevel(unittest.TestCase):
         a = w.synth_window(chain, 0.0, 15.0, track, sr)[0]["_ref_rms"]
         b = w.synth_window(chain, 0.0, 40.0, track, sr)[0]["_ref_rms"]
         self.assertAlmostEqual(a, b)
-        # усл. 78: опора — уровень трека «на ухо» (A) на нотах партии
+        # опора — уровень трека «на ухо» (A) на нотах партии
         want = float(np.sqrt(np.mean(fx_engine.a_weight(track, sr)[2 * sr:32 * sr] ** 2)))
         self.assertAlmostEqual(a, want, places=6)
 
 
     def test_window_level_equals_full(self):
-        # кросс-ревью r2: тихая нота (vel 0,1) в окне превью звучит так же, как в полном рендере (было +17 дБ)
+        # тихая нота (vel 0,1) в окне превью звучит так же, как в полном рендере
         import numpy as np
         import fx_engine
         import yue_worker as w
@@ -897,7 +882,7 @@ class TestSynthRefLevel(unittest.TestCase):
 
 
     def test_late_window_in_long_slow_note(self):
-        # кросс-ревью r3: окно с 20 с внутри длинной ноты с медленной атакой/спадом — уровень как в полном рендере
+        # окно с 20 с внутри длинной ноты с медленной атакой/спадом — уровень как в полном рендере
         import numpy as np
         import fx_engine
         import yue_worker as w
@@ -915,7 +900,7 @@ class TestSynthRefLevel(unittest.TestCase):
 
 
     def test_private_fields_from_request_ignored(self):
-        # кросс-ревью r4: присланные _until/_ref_rms/_syn_rms не меняют уровень партии
+        # присланные _until/_ref_rms/_syn_rms не меняют уровень партии
         import yue_worker as w
         import numpy as np
         sr = 8000
@@ -928,13 +913,11 @@ class TestSynthRefLevel(unittest.TestCase):
             self.assertAlmostEqual(dirty[k], clean[k], msg=k)
 
 
-# ---------- Карточка internal-own-track, этап 5, условие 31 (ТК57): perc в /fx ----------
-#
 # Контракт: POST /jobs/{id}/fx {source: "mix", output: "solo", preview: true, add: true, from, to,
 # chain: [perc]} — удары perc в запросе от начала ТРЕКА; воркер сдвигает их на окно (как synth):
 # удар t звучит в превью через t − from; отзвучавший до окна — не звучит; уровень партии — по ВСЕМ
 # ударам (превью любого окна и полный рендер дают одну громкость удара ±1 дБ); служебные поля
-# (_ref_rms и т. п.) из запроса выбрасываются. Реализацию не читали.
+# (_ref_rms и т. п.) из запроса выбрасываются.
 
 PERC_DUR = 30.0
 
@@ -947,7 +930,7 @@ def _perc_chain(times, **extra):
 
 @unittest.skipUnless(_OK, _SKIP)
 class TestPercWindow(_FxApiCase):
-    """ТК57: превью perc с from = 10 — удар t = 12 на 2 с, удар t = 5 не звучит, громкость как в полном."""
+    """Превью perc с from = 10 — удар t = 12 на 2 с, удар t = 5 не звучит, громкость как в полном."""
 
     def _job30(self):
         # трек 30 с: первые 10 с тихо (тон 0,01), дальше громко (0,3) — уровень «по окну» и «по всем
@@ -972,7 +955,7 @@ class TestPercWindow(_FxApiCase):
         self.assertEqual(sr, SR)
         return y
 
-    def test_tk57_hit_shifted_by_from(self):
+    def test_hit_shifted_by_from(self):
         import numpy as np
         jid, d = self._job30()
         y = self._preview(jid, d, _perc_chain([12.0]), 10.0, 14.0)
@@ -983,13 +966,13 @@ class TestPercWindow(_FxApiCase):
         first = int(np.argmax(a >= 0.1 * peak)) / SR
         self.assertAlmostEqual(first, 2.0, delta=0.002, msg="удар не через 2 с от начала окна")
 
-    def test_tk57_hit_before_window_silent(self):
+    def test_hit_before_window_silent(self):
         import numpy as np
         jid, d = self._job30()
         y = self._preview(jid, d, _perc_chain([5.0]), 10.0, 14.0)
         self.assertLess(float(np.abs(y).max()), 1e-4, "удар до окна звучит в превью")
 
-    def test_tk57_window_level_equals_full(self):
+    def test_window_level_equals_full(self):
         # окно [10, 25) против полного рендера [0, 30): пик удара t = 12 совпадает ±1 дБ
         import numpy as np
         jid, d = self._job30()
@@ -1001,7 +984,7 @@ class TestPercWindow(_FxApiCase):
         self.assertGreater(pf, 1e-4)
         self.assertAlmostEqual(_db(pw / pf), 0, delta=1)
 
-    def test_tk57_sent_ref_rms_ignored(self):
+    def test_sent_ref_rms_ignored(self):
         import numpy as np
         jid, d = self._job30()
         clean = self._preview(jid, d, _perc_chain([12.0]), 10.0, 14.0)
@@ -1011,19 +994,17 @@ class TestPercWindow(_FxApiCase):
         self.assertAlmostEqual(_db(pd / pc), 0, delta=0.1, msg="присланный _ref_rms изменил громкость")
 
 
-# ---------- Карточка internal-own-track, уточнение 31а (ТК64–ТК65): perc в превью окна ----------
-
 @unittest.skipUnless(_OK, _SKIP)
 class TestPercWindowCarry(TestPercWindow):
-    """ТК64: удар до окна, ещё звучащий, в превью — как в полном рендере; ТК65: нет набора → 422."""
+    """Удар до окна, ещё звучащий, в превью — как в полном рендере; нет набора → 422."""
 
-    # тесты ТК57 наследуются только ради хелперов — здесь их не повторяем
-    test_tk57_hit_shifted_by_from = None
-    test_tk57_hit_before_window_silent = None
-    test_tk57_window_level_equals_full = None
-    test_tk57_sent_ref_rms_ignored = None
+    # тесты родителя наследуются только ради хелперов — здесь их не повторяем
+    test_hit_shifted_by_from = None
+    test_hit_before_window_silent = None
+    test_window_level_equals_full = None
+    test_sent_ref_rms_ignored = None
 
-    def test_tk64_ringing_hit_before_window_sounds_as_full(self):
+    def test_ringing_hit_before_window_sounds_as_full(self):
         # ковбелл decay 3, удар t = 8,9 — до окна [10, 12), но ещё звучит: первые 0,1 с превью
         # совпадают по пику с [10; 10,1) полного рендера [0, 30)
         import numpy as np
@@ -1037,7 +1018,7 @@ class TestPercWindowCarry(TestPercWindow):
         self.assertGreater(pw, 1e-4, "звучащий удар до окна выброшен из превью")
         self.assertAlmostEqual(_db(pw / pf), 0, delta=1, msg="хвост удара в превью не как в полном рендере")
 
-    def test_tk65_missing_kit_422(self):
+    def test_missing_kit_422(self):
         jid, d = self._job30()
         chain = [{"type": "perc", "voice": 0, "kit": "nosuch/kick", "humanize_ms": 0,
                   "notes": [{"t": 12.0, "d": 0.5, "vel": 1.0}]}]

@@ -1,11 +1,4 @@
-// Тесты карточки internal-own-track, этап 7в «Клавиши и синты»: условия 63–64 (тест-кейс ТК98).
-//   ТК98 — synth-пресеты (stems ['synth'] с блоком synth): у каждого group из PRESET_GROUPS — одна из
-//     synth-pad, synth-organ, synth-keys, synth-lead, synth-toy; синтов не меньше 20; среди них — с kit
-//     «salamander/piano» и «salamander/piano-soft», с osc1 5 (FM) не меньше 4, с tremolo stereo > 0 (Leslie)
-//     не меньше 1; прежние 8 id на месте; groupPresets по синтам даёт 5 групп.
-//   Условие 63: указание автора набора Salamander (Alexander Holm, CC-BY) — в подсказке пресета с этим набором.
-// Диапазоны параметров всех пресетов проверяет fxPresets.test.js (describe.each по fxPresets).
-// Написаны по карточке, без чтения реализации.
+// Указание автора набора Salamander (Alexander Holm, CC-BY) — в подсказке пресета с этим набором.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
 import { PRESET_GROUPS, groupPresets } from './presetGroups.js'
@@ -16,11 +9,11 @@ const OLD_IDS = ['synth-solina', 'synth-juno', 'synth-moog-bass', 'synth-moog-le
 
 const synthBlock = (p) => p.chain.find((b) => b.type === 'synth')
 const synths = fxPresets.filter((p) => JSON.stringify(p.stems) === JSON.stringify(['synth']) && synthBlock(p))
-  // оркестр (этап 14, группы orch-*) — партии по аккордам тем же блоком synth, но не синты: свои группы
+  // оркестр (группы orch-*) — партии по аккордам тем же блоком synth, но не синты: свои группы
   .filter((p) => !String(p.group || '').startsWith('orch-'))
 const withKit = (kit) => synths.filter((p) => synthBlock(p).kit === kit)
 
-describe('ТК98: группы синтов (условие 64)', () => {
+describe('группы синтов', () => {
   it.each(SYNTH_GROUPS)('группа %s есть в PRESET_GROUPS с подписями ru/en', (g) => {
     expect(PRESET_GROUPS[g]).toBeDefined()
     expect(PRESET_GROUPS[g].ru).toBeTruthy()
@@ -49,7 +42,7 @@ describe('ТК98: группы синтов (условие 64)', () => {
   })
 })
 
-describe('ТК98: состав синтов (условия 61–64)', () => {
+describe('состав синтов', () => {
   it.each(['salamander/piano', 'salamander/piano-soft'])('есть синт с kit %s', (kit) => {
     expect(withKit(kit).length).toBeGreaterThanOrEqual(1)
   })
@@ -64,7 +57,7 @@ describe('ТК98: состав синтов (условия 61–64)', () => {
   })
 })
 
-describe('Условие 63: автор набора Salamander в подсказке пресета', () => {
+describe('автор набора Salamander в подсказке пресета', () => {
   const pianos = synths.filter((p) => String(synthBlock(p).kit || '').startsWith('salamander/'))
 
   it('пресеты с набором salamander есть', () => {

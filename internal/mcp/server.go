@@ -17,7 +17,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Tool — регистрируемый MCP-инструмент.
 type Tool struct {
 	Name        string
 	Description string
@@ -83,8 +82,6 @@ func prop(desc, typ string, extra ...map[string]any) map[string]any {
 	}
 	return p
 }
-
-// ---------- JSON-RPC / MCP протокол ----------
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -218,8 +215,6 @@ func (s *Server) dispatch(req rpcRequest) rpcResponse {
 	return rpcResponse{JSONRPC: "2.0", ID: req.ID,
 		Error: &rpcError{Code: errMethodNotFound, Message: "method not found: " + req.Method}}
 }
-
-// ---------- утилиты разбора аргументов ----------
 
 func argString(args map[string]any, key string) string {
 	v, _ := args[key].(string)

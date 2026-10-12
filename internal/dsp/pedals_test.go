@@ -10,20 +10,16 @@ import (
 	"testing"
 )
 
-// Тесты карточки internal-guitar-pedals, этап 3 (условия 3.1–3.3): гитарные педали.
-// Написаны по карточке, без чтения реализации: проверяется звук на синтетике через
+// Тесты гитарных педалей.
+// Проверяется звук на синтетике через
 // граф цепочки (Run / ffmpeg с тем же графом), а не текст графа.
 //
-// ID крутилок педалей в контракте карточки не названы — карточка говорит
+// ID крутилок педалей в контракте не названы — названы роли:
 // «перегруз», «тон», «громкость», «частота», «скорость». Крутилка ищется по ID из
 // списка привычных имён, затем по подписи (Label); не нашлась — тест падает с
 // понятным сообщением (это пробел контракта, а не повод подгонять тест).
-//
-// Хелперы nc* — из newchains_test.go, needFFmpeg/decode/toneAmpAt/segRMS — из
-// inserts_test.go, dbfs/hasParam — из chains_test.go, ncGainProfile/ncMeanAbsDiff —
-// из modfilter_test.go, ncStepLevels/ncStepDiff — из dynamics_test.go.
 
-// pdPedalIDs — новые цепочки-педали карточки 3.1 с названиями из карточки.
+// pdPedalIDs — новые цепочки-педали с ожидаемыми названиями.
 var pdPedalIDs = []struct{ id, name string }{
 	{"od-ts", "Овердрайв (Tube Screamer)"},
 	{"fuzz-muff", "Фузз (Big Muff)"},
@@ -37,13 +33,13 @@ var pdPedalIDs = []struct{ id, name string }{
 	{"cab", "Кабинет"},
 }
 
-// pdOldPedalIDs — существующие цепочки, которые тоже получают флаг Pedal (3.1).
+// pdOldPedalIDs — существующие цепочки, которые тоже получают флаг Pedal.
 var pdOldPedalIDs = []string{
 	"chorus", "flanger", "phaser", "tremolo", "autowah", "octaver", "delay",
 	"reverb-room", "reverb-hall", "reverb-plate", "reverb-spring", "eq",
 }
 
-// pdDriveIDs — перегрузы (3.2): «перегруз», «тон», «громкость».
+// pdDriveIDs — перегрузы: «перегруз», «тон», «громкость».
 var pdDriveIDs = []string{"od-ts", "fuzz-muff", "dist-rat"}
 
 // pdKnob — найти крутилку цепочки по одному из ID, иначе по подстроке подписи.
@@ -124,9 +120,7 @@ func pdRun(t *testing.T, id, in string, p map[string]float64) []float32 {
 	return pdMono(ncDecode2(t, ncRun(t, id, in, p), ncSR))
 }
 
-// --- 3.1 ---
-
-// Карточка 3.1: новые педали есть в dsp.All(), с флагом Pedal и названием из карточки.
+// Новые педали есть в dsp.All(), с флагом Pedal и ожидаемым названием.
 func TestPedalChainsRegistered(t *testing.T) {
 	t.Parallel()
 	inAll := map[string]*Chain{}
@@ -155,7 +149,7 @@ func TestPedalChainsRegistered(t *testing.T) {
 	}
 }
 
-// Карточка 3.1: существующие chorus/flanger/phaser/tremolo/autowah/octaver/delay/
+// Существующие chorus/flanger/phaser/tremolo/autowah/octaver/delay/
 // reverb-*/eq тоже с флагом Pedal.
 func TestOldChainsMarkedPedal(t *testing.T) {
 	t.Parallel()
@@ -166,7 +160,7 @@ func TestOldChainsMarkedPedal(t *testing.T) {
 			continue
 		}
 		if !c.Pedal {
-			t.Errorf("%s: Pedal = false, want true (карточка 3.1)", id)
+			t.Errorf("%s: Pedal = false, want true", id)
 		}
 	}
 }
@@ -185,7 +179,7 @@ func TestChainPedalJSON(t *testing.T) {
 	if !strings.Contains(string(b), `"pedal":true`) {
 		t.Errorf("json od-ts без \"pedal\":true: %s", b)
 	}
-	// «Убрать свист» — ремонт голоса, не гитарная педаль (в списке 3.1 её нет)
+	// «Убрать свист» — ремонт голоса, не гитарная педаль
 	w := ByID("dewhistle")
 	if w == nil {
 		t.Fatal("dewhistle не найдена")
@@ -199,8 +193,6 @@ func TestChainPedalJSON(t *testing.T) {
 	}
 }
 
-// --- 3.2 ---
-
 const pdF = 220.0 // тон «струны» для перегрузов
 
 func pdToneIn(t *testing.T, amp float64) string {
@@ -208,9 +200,8 @@ func pdToneIn(t *testing.T, amp float64) string {
 	return ncGen(t, fmt.Sprintf("%g*sin(2*PI*%g*t)", amp, pdF), 3, ncSR)
 }
 
-// Карточка 3.2: больше «перегруза» → больше гармоник: доля энергии выше 2f у тона f
-// растёт (порог ≥ 3 дБ между минимумом и максимумом крутилки — выбран тестом,
-// карточка говорит «растёт»).
+// Больше «перегруза» → больше гармоник: доля энергии выше 2f у тона f
+// растёт (порог ≥ 3 дБ между минимумом и максимумом крутилки выбран тестом).
 func TestOverdriveMoreDriveMoreHarmonics(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -233,7 +224,7 @@ func TestOverdriveMoreDriveMoreHarmonics(t *testing.T) {
 	}
 }
 
-// Карточка 3.2: «тон» ниже → меньше верха: доля энергии выше 2 кГц при тоне в
+// «тон» ниже → меньше верха: доля энергии выше 2 кГц при тоне в
 // минимуме меньше, чем в максимуме (порог ≥ 3 дБ выбран тестом).
 func TestOverdriveToneDarkens(t *testing.T) {
 	t.Parallel()
@@ -256,7 +247,7 @@ func TestOverdriveToneDarkens(t *testing.T) {
 	}
 }
 
-// Карточка 3.2: «громкость» — уровень выхода: максимум крутилки громче минимума
+// «громкость» — уровень выхода: максимум крутилки громче минимума
 // (порог ≥ 6 дБ выбран тестом: крутилка с меньшим ходом бесполезна), середина — между.
 func TestOverdriveLevelSetsOutput(t *testing.T) {
 	t.Parallel()
@@ -283,7 +274,7 @@ func TestOverdriveLevelSetsOutput(t *testing.T) {
 	}
 }
 
-// Карточка 3.2: пик ≤ 0 дБFS даже при громком входе и всех крутилках в максимуме.
+// Пик ≤ 0 дБFS даже при громком входе и всех крутилках в максимуме.
 // Выход — float-WAV (иначе целочисленный формат сам обрезал бы пик и тест был бы
 // пустым); допуск 0.01 дБ на округление.
 func TestOverdrivePeakNotAboveZeroDbfs(t *testing.T) {
@@ -316,9 +307,7 @@ func TestOverdrivePeakNotAboveZeroDbfs(t *testing.T) {
 	}
 }
 
-// --- 3.3 ---
-
-// Карточка 3.3: октавный фузз — у тона f появляется 2f не тише −20 дБ к f.
+// Октавный фузз — у тона f появляется 2f не тише −20 дБ к f.
 func TestFuzzOctaveAddsOctave(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -334,7 +323,7 @@ func TestFuzzOctaveAddsOctave(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: кольцевой модулятор (mix 1) — у тона f появляются f±fm, сам f
+// Кольцевой модулятор (mix 1) — у тона f появляются f±fm, сам f
 // подавлен ≥ 20 дБ к входу. Боковые не тише −20 дБ к исходному f (порог выбран
 // тестом: у идеального кольцевого они по −6 дБ).
 func TestRingmodSidebands(t *testing.T) {
@@ -349,7 +338,7 @@ func TestRingmodSidebands(t *testing.T) {
 		t.Fatalf("ringmod: частота модуляции %g не ниже тона %g — тест не построить", fm, f)
 	}
 	if !hasParam(c, "mix") {
-		t.Fatalf("ringmod: нет крутилки mix (карточка: «с mix 1»)")
+		t.Fatalf("ringmod: нет крутилки mix")
 	}
 	in := ncGen(t, fmt.Sprintf("0.3*sin(2*PI*%g*t)", f), 3, ncSR)
 	src := pdMono(ncDecode2(t, in, ncSR)) // тем же путём, что и выход (pdRun)
@@ -365,7 +354,7 @@ func TestRingmodSidebands(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: Uni-Vibe — спектр качается во времени: на белом шуме АЧХ в окне
+// Uni-Vibe — спектр качается во времени: на белом шуме АЧХ в окне
 // 0–0.5 с отличается от окна через полпериода качания (≥ 1 дБ в среднем — как у
 // chorus/flanger/phaser).
 func TestUnivibeSpectrumMoves(t *testing.T) {
@@ -390,7 +379,7 @@ func TestUnivibeSpectrumMoves(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: гейт от шума — между нотами тишина < −50 дБ (к уровню нот), ноты
+// Гейт от шума — между нотами тишина < −50 дБ (к уровню нот), ноты
 // целы (±1 дБ — порог выбран тестом). Вход: ноты 440 Гц по 0.5 с через 1 с и
 // постоянный фон (гул 1234 Гц) на −40 дБ к нотам. Паузы меряются с отступом 0.4 с
 // от конца ноты (время отпускания гейта), ноты — с отступом 50 мс от начала.
@@ -413,7 +402,7 @@ func TestNoiseGateSilencesBetweenNotes(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: компрессор-педаль — разница громких и тихих нот сжимается. Вход —
+// Компрессор-педаль — разница громких и тихих нот сжимается. Вход —
 // тон 1000 Гц: секунды −30 и −6 дБFS по очереди; перепад на выходе меньше входного
 // (порог ≥ 3 дБ выбран тестом, у multiband — ≥ 6 дБ при amount 1).
 func TestCompPedalSquashesDynamics(t *testing.T) {
@@ -428,7 +417,7 @@ func TestCompPedalSquashesDynamics(t *testing.T) {
 	}
 }
 
-// Карточка 3.3: кабинет — на белом шуме энергия выше 6 кГц падает ≥ 12 дБ, ниже
+// Кабинет — на белом шуме энергия выше 6 кГц падает ≥ 12 дБ, ниже
 // 4 кГц меняется ≤ 3 дБ.
 func TestCabCutsHighs(t *testing.T) {
 	t.Parallel()

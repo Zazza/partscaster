@@ -1,7 +1,4 @@
 /* global process */
-// Тесты сервиса вклеек (useInserts) по контракту: очередь ожидающих спек,
-// реестр применённых вклеек, пересборки строго по одной, зажим громкости,
-// перенос вклеек на новую версию трека (carryTo).
 // Модуль — синглтон: читает localStorage и заводит setInterval при импорте,
 // поэтому каждый тест импортирует его заново после vi.resetModules().
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -43,7 +40,6 @@ function report(specs, extra = {}) {
 const A = { childId: 1, instId: 'i-a', from: 0, to: 10, lead: 0, beat: 0.5, db: -6 }
 const specB = { parent: 'P', childId: 2, instId: 'i-b', from: 5, to: 15, lead: 0.1, beat: 0.5, db: -6, srcJob: 'P' }
 
-// Подготовить окружение и импортировать свежий экземпляр модуля.
 async function load({ queue = [], applied = {}, jobs = [], rebuildSections }) {
   vi.resetModules()
   globalThis.localStorage = new MemStorage()
@@ -397,8 +393,6 @@ describe('flush: ошибка списка джоб и перекрытие с �
   })
 })
 
-// ---- замена дорожек по стемам: stems/fadeIn/fadeOut едут до api.rebuildSections ----
-
 describe('пересборка по стемам (rebuildSections)', () => {
   const specS = {
     parent: 'P', childId: 5, instId: 'bass', from: 8, to: 16, lead: 2, beat: 0.5, db: -3, srcJob: 'P',
@@ -439,7 +433,7 @@ describe('пересборка по стемам (rebuildSections)', () => {
   })
 })
 
-// ---- сбивка: у старых барабанов вычитается только низ (keepHighHz → keep_high_hz) ----
+// сбивка: у старых барабанов вычитается только низ (keepHighHz → keep_high_hz)
 
 describe('keepHighHz вклейки доходит до api (keep_high_hz)', () => {
   const specK = {
@@ -762,9 +756,8 @@ describe('addStemEnvelope — громкость по волне на дорож
   })
 })
 
-// Карточка internal-studio-engine, тест-кейс 9 (условие 4): цепочка звукового движка
-// на дорожку — запись реестра (instId 'engine', engine: chain), в api уходит полем
-// engine; подпись — label записи.
+// Цепочка звукового движка на дорожку — запись реестра (instId 'engine', engine: chain),
+// в api уходит полем engine; подпись — label записи.
 describe('addStemEngine — цепочка движка на дорожку через пересборку', () => {
   const chain = [
     { type: 'amp', model: 'JCM2000.nam', input_db: -6 },
@@ -869,10 +862,7 @@ describe('addStemEngine — цепочка движка на дорожку че
   })
 })
 
-// Карточка internal-own-track, этап 2, условие 16 (тест-кейс ТК38): addStemEngines(parentId, items) —
-// несколько записей движка (каждая как в addStemEngine) одной пересборкой. Написаны по
-// карточке, без чтения реализации.
-describe('addStemEngines — несколько цепочек движка одной пересборкой (ТК38)', () => {
+describe('addStemEngines — несколько цепочек движка одной пересборкой', () => {
   const smp = kit => [{ type: 'sampler', kit }]
   const items = [
     { stem: 'kick', chain: smp('osdk/kick'), from: 0, to: 0, label: 'Бочка: набор' },
@@ -939,11 +929,11 @@ describe('addStemEngines — несколько цепочек движка од
   })
 })
 
-// Карточка internal-own-track, этап 0, условие 1 (тест-кейсы ТК1–ТК7): реестр правок —
+// Реестр правок: выключить (setOff), удалить (remove), заменить цепочку движка (replaceEngine);
 // выключить (setOff), удалить (remove), заменить цепочку движка (replaceEngine);
 // пересборка без активных записей не зовёт воркер; latestFile — только по активным;
-// off переживает перезапуск и переносится carryTo. Написаны по карточке, без реализации.
-describe('реестр правок: выключить, удалить, заменить (internal-own-track)', () => {
+// off переживает перезапуск и переносится carryTo.
+describe('реестр правок: выключить, удалить, заменить', () => {
   // записи-эффекты в форме реестра (как их кладёт addStemFx): childId < 0, в api — child_id 0
   const fxRec = (childId, over = {}) => ({
     childId, instId: 'fx-soften', from: 0, to: 0, lead: 0, beat: 0, db: 0,
@@ -970,8 +960,7 @@ describe('реестр правок: выключить, удалить, зам�
     return mod.useInserts()
   }
 
-  // ---- ТК1 ----
-  describe('setOff (ТК1)', () => {
+  describe('setOff', () => {
     it('выключенная запись остаётся в реестре с off: true, в пересборку уходит только вторая', async () => {
       const ins = await load({ applied: { P: [E1, E2] } })
       await ins.setOff('P', -11, true)
@@ -1007,8 +996,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК2 ----
-  describe('все записи выключены (ТК2)', () => {
+  describe('все записи выключены', () => {
     it('setOff единственной → воркер не вызван, результат { empty: true }', async () => {
       const ins = await load({ applied: { P: [E1] } })
       const res = await ins.setOff('P', -11, true)
@@ -1033,8 +1021,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК3 ----
-  describe('remove (ТК3)', () => {
+  describe('remove', () => {
     it('удалённой записи нет в реестре, пересборка без неё', async () => {
       const ins = await load({ applied: { P: [E1, E2] } })
       await ins.remove('P', -11)
@@ -1080,8 +1067,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК4 ----
-  describe('remove вклейки с ожидающей спекой в очереди (ТК4)', () => {
+  describe('remove вклейки с ожидающей спекой в очереди', () => {
     it('после remove и тика очереди (рендер done) запись не возвращается в реестр', async () => {
       const ins = await load({
         applied: { P: [A, B] },
@@ -1114,8 +1100,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК5 ----
-  describe('replaceEngine (ТК5)', () => {
+  describe('replaceEngine', () => {
     it('у записи движка новая цепочка и подпись; окно и дорожка прежние; пересборка с новой engine', async () => {
       const ins = await load({ applied: { P: [A, ENG] } })
       await ins.replaceEngine('P', -21, { chain: newChain, label: 'Реверб' })
@@ -1160,8 +1145,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК6 ----
-  describe('latestFile и выключенные вклейки (ТК6)', () => {
+  describe('latestFile и выключенные вклейки', () => {
     it('последняя выключена → файл именует последняя активная вклейка', async () => {
       const ins = await load({ applied: { P: [A, { ...B, off: true }] } })
       expect(ins.latestFile('P')).toBe('overdub-inst-1.flac')
@@ -1180,8 +1164,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- ТК7 ----
-  describe('off переживает перезапуск и переносится carryTo (ТК7)', () => {
+  describe('off переживает перезапуск и переносится carryTo', () => {
     it('выключенная запись сохраняется в localStorage и после перезапуска модуля остаётся выключенной', async () => {
       const ins = await load({ applied: { P: [E1, E2] } })
       await ins.setOff('P', -11, true)
@@ -1202,7 +1185,7 @@ describe('реестр правок: выключить, удалить, зам�
       expect(specs[0].chain).toBe('dewhistle')
     })
 
-    // этап 1, условие 10: записи без рендера (childId < 0) переносятся сразу в реестр
+    // записи без рендера (childId < 0) переносятся сразу в реестр
     // новой версии, а не в очередь — off проверяется там
     it('carryTo переносит off как есть: выключенная — выключенной, включённая — включённой', async () => {
       const ins = await load({ applied: { P: [{ ...E1, off: true }, E2] } })
@@ -1213,7 +1196,6 @@ describe('реестр правок: выключить, удалить, зам�
       expect(regQ.find(s => s.childId === -12).off || false).toBe(false)
     })
 
-    // находка ревью s0: тик собирал перенесённую вклейку в реестр новой версии без off — включённой
     it('выключенная вклейка после carryTo и тика остаётся выключенной в реестре новой версии', async () => {
       const ins = await load({ applied: { P: [{ ...A, off: true }] }, jobs: [{ id: 1, status: 'done' }] })
       ins.carryTo('P', 'Q', 'P')
@@ -1225,8 +1207,7 @@ describe('реестр правок: выключить, удалить, зам�
     })
   })
 
-  // ---- кросс-ревью s0, круг 1 ----
-  describe('гонки с тиком очереди и идущей пересборкой (кросс-ревью s0)', () => {
+  describe('гонки с тиком очереди и идущей пересборкой', () => {
     it('remove во время тика: удалённая вклейка из очереди не возвращается в реестр', async () => {
       // тик ждёт пересборку первой вклейки; в это время пользователь удаляет вторую
       const d = deferred()
@@ -1268,10 +1249,10 @@ describe('реестр правок: выключить, удалить, зам�
   })
 })
 
-// Этап 1 «Пресеты звука», условие 10 (ТК26): carryTo кладёт записи без рендера
+// carryTo кладёт записи без рендера
 // (эффект, педали, движок, громкость, линия; childId < 0) сразу в реестр новой версии —
 // в очереди ожидания тик не находит их джобу и теряет. Вклейки (childId > 0) — через очередь.
-describe('carryTo: правки без рендера — сразу в реестр новой версии (ТК26)', () => {
+describe('carryTo: правки без рендера — сразу в реестр новой версии', () => {
   const FX = {
     childId: -31, instId: 'fx-soften', from: 0, to: 0, lead: 0, beat: 0, db: 0,
     stems: ['vocals'], fadeIn: 0, fadeOut: 0, keepHighHz: 0, chain: 'soften', params: { strength: 0.6 }, off: true,
@@ -1363,10 +1344,9 @@ describe('carryTo: правки без рендера — сразу в реес
   })
 })
 
-// Карточка internal-own-track, этап 4 «Синты», условие 25 (тест-кейс ТК51): addStemEngine
-// с add — синт поверх трека: в rebuildSections уходит add: true и stems ['mix'];
-// без add поле не уходит (или false). Написаны по карточке, без чтения реализации.
-describe('addStemEngine с add — синт поверх трека (ТК51)', () => {
+// addStemEngine с add — синт поверх трека: в rebuildSections уходит add: true и stems ['mix'];
+// без add поле не уходит (или false).
+describe('addStemEngine с add — синт поверх трека', () => {
   const synth = [{ type: 'synth', notes: [{ t: 12, d: 2, midi: [62, 65, 69], vel: 0.8 }], osc1: 0 },
     { type: 'chorus', mix: 0.5 }]
   const syn = (over = {}) => ({ stem: 'mix', chain: synth, from: 10, to: 30, label: 'Синт: пэд', add: true, ...over })

@@ -107,7 +107,6 @@ type FxPhraseResult struct {
 	Clipped  bool    `json:"clipped"`
 }
 
-// FxPhrases — каталог фраз воркера.
 func (c *Client) FxPhrases(ctx context.Context) ([]FxPhrase, error) {
 	var out []FxPhrase
 	if err := c.get(ctx, "/fx/phrases", &out); err != nil {

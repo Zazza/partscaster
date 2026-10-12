@@ -82,11 +82,8 @@ const statusLabelC = computed(() => ({
   queued: t('queue.status.queued'), running: t('queue.status.running'), done: t('queue.status.done'),
   error: t('queue.status.error'), canceled: t('queue.status.canceled'),
 }))
-// короткая метка группы строки стиля: жанр, ритм, голос и т.д.
 const styleTagLabel = (slot) => t('style.tag.' + slot)
 const { askConfirm } = useConfirm()
-
-// ---------- Форма новой композиции ----------
 
 const slots = ref({
   language: 'Russian',
@@ -288,15 +285,12 @@ function onLibGroupChange() { libStyle.value = '' }
 function onLibStyleChange() { if (currentItem.value) applyPreset(currentItem.value, 'slots') }
 function onLibExact() { if (currentItem.value) applyPreset(currentItem.value, 'line') }
 
-// ---------- Джобы: очередь, статусы, действия ----------
-
 const jobs = ref([])
 const health = ref(null)
 const compat = useWorkerCompat()   // плашка «воркер/приложение разных версий»
 const stats = ref(null)
 let timer = null
 
-// фильтры и пейджер списка треков (логика — jobFilter.js, там же тесты)
 const qf = ref(defaultJobFilter())
 const qPage = ref(1)
 // производные треки (куски для вклеек, пересборки, варианты) — под родителем
@@ -313,12 +307,10 @@ function toggleOpenJob(id) {
 // открытые треки на текущей странице: «свернуть все» и приглушение закрытых строк
 const openOnPage = computed(() => queuePage.value.filter((j) => openJobs.value.has(j.id)).length)
 function collapseAllJobs() { openJobs.value = new Set() }
-// выпадающее меню на <details>: выбор пункта его закрывает
 function closeMenu(e) {
   const d = e.target.closest('details')
   if (d) d.open = false
 }
-// клик мимо открытого меню «⤓ скачать» / «⋯» — закрыть его
 function closeMenusOutside(e) {
   for (const d of document.querySelectorAll('details.menu-pop[open]')) if (!d.contains(e.target)) d.open = false
 }
@@ -409,7 +401,6 @@ function fmtWhen(s) {
   return `${m[3]}.${m[2]}${year} ${m[4]}:${m[5]}`
 }
 const kidMaterial = (id) => (grouped.value.children[id] || []).filter((k) => !isResultJob(k))
-// ключ плеера для микса-вклейки
 function mixKey(parentId, v) { return `mix${parentId}:${v.file}` }
 // подпись микса: по реестру вклеек, иначе сохранённая воркером (микс из MCP)
 function mixName(parentId, v) {
@@ -576,8 +567,6 @@ async function saveAudio(j, file) {
   if (f) await api.saveAudio(j.id, f)
 }
 
-// ---------- Страницы ----------
-
 const settingsPage = ref(false)
 const libraryPage = ref(false)
 const corpusPage = ref(false)
@@ -586,7 +575,7 @@ const instrumentsPage = ref(false)   // «Инструменты»: дорожк
 const presetsPage = ref(false)       // «Пресеты звука»: библиотека пресетов
 const recipeImport = ref(false)      // окно «Импорт рецепта»
 const imports = ref([])             // импорты рецептов: ход над списком треков
-const replayJob = ref(null)          // «переиграть в другом стиле» (бывший овердаб студии): трек или null
+const replayJob = ref(null)          // «переиграть в другом стиле»: трек или null
 const studioJob = ref(null)
 // главная — список треков; форма нового трека — отдельная страница
 const newTrackPage = ref(false)
@@ -649,7 +638,6 @@ function navGo(page) {
   }
 }
 
-// импорт своего трека (кнопка на странице «свои треки»)
 async function onImported(r) {
   await refresh()
   const j = (jobs.value || []).find((x) => x.id === r.id)
@@ -711,8 +699,6 @@ function onVoicePick() {
     applyVoice({ vocals: voiceDescriptor(p), seed: v.seed })
   } catch { /* битые params карточки — молча пропускаем */ }
 }
-
-// ---------- Редактор плана (ABC) ----------
 
 const planOpen = ref(false)
 const planBusy = ref(false)
@@ -807,12 +793,8 @@ async function transcribeFromTrack() {
   } finally { planBusy.value = false }
 }
 
-// ---------- Копайтер ----------
-
 const copOpen = ref(false)
 function onCopInsert(text) { lyrics.value = text }
-
-// ---------- Лирика: whisper-распознавание и адаптация-перевод ----------
 
 const lyrBusy = ref(false) // 'rec' | 'adapt' | ''
 const lyrErr = ref('')
@@ -841,8 +823,6 @@ async function adaptLyrics() {
     lyrBusy.value = ''
   }
 }
-
-// ---------- Метрики ----------
 
 const metricsModal = ref(null)
 function openMetrics(j, preset) {
@@ -904,7 +884,6 @@ function onWindowClick(e) {
       </span>
     </div>
     <span class="spacer"></span>
-    <!-- справа, у меню -->
     <button class="primary new-track-btn" :class="{ on: newTrackPage }"
             :title="t('nav.new.tip')" @click="openNewTrack"><AppIcon name="plus" /><span class="new-track-txt"> {{ t('nav.new.short') }}</span></button>
     <div class="nav-wrap">
@@ -959,8 +938,6 @@ function onWindowClick(e) {
         <div v-if="queuePage.length" class="job-table" :class="{ 'has-open': openOnPage }">
         <article v-for="j in queuePage" :key="j.id" class="job"
                  :class="[j.status, { playing: songPlaying(j), open: openJobs.has(j.id) }]">
-        <!-- строка трека: плоский список как в альбомном буклете — номер моно, круглая
-             play-кнопка, крупное название, справа лёгкая моно-мета; клик — разворот -->
         <div class="job-row" :class="{ open: openJobs.has(j.id) }" @click="toggleOpenJob(j.id)">
           <span class="tl-num" :title="'#' + j.id">{{ j.id }}</span>
           <span class="tl-play-cell">
@@ -977,7 +954,6 @@ function onWindowClick(e) {
             <span v-else-if="j.status === 'error'" class="status" :class="j.status">{{ statusLabelC[j.status] || j.status }}</span>
             <span v-else-if="j.status === 'queued'" class="status" :class="j.status">{{ statusLabelC[j.status] || j.status }}</span>
             <span v-else-if="j.status === 'done' && headOf(j).vocal_leak" class="badge warn" :title="leakTip(headOf(j))"><AppIcon name="alert" /></span>
-            <!-- идущая джоба: прогресс прямо в строке -->
             <span v-if="j.status === 'running'" class="job-progress" :title="progressTip(j)">
               <span class="progress-track slim" :class="{ indet: j.progress_pct == null }">
                 <span v-if="j.progress_pct != null" class="progress-fill" :style="{ width: j.progress_pct + '%' }"></span>
@@ -997,7 +973,6 @@ function onWindowClick(e) {
           <span v-if="(j.folder || '').trim()" class="tl-pill job-folder">{{ j.folder.trim() }}</span>
           <button class="ghost icon job-caret" :title="t('queue.details.tip')">{{ openJobs.has(j.id) ? '▾' : '▸' }}</button>
         </div>
-        <!-- разворот: служебное, стиль, версии, действия — всё, что было в карточке -->
         <div v-if="openJobs.has(j.id)" class="job-detail">
           <!-- мета трека: сид, характер, свой ABC, head — одной приглушённой строкой;
                название и переименование живут в строке списка, здесь их нет -->
@@ -1027,7 +1002,6 @@ function onWindowClick(e) {
           <div class="job-body">
             <!-- действия без подписи: играть — в строке, здесь студия/скачать/меню -->
             <div v-if="j.status === 'done' && j.audio_file" class="job-actions">
-            <!-- всё на карточке — про основную версию песни: играть, скачать, ноты -->
             <button v-if="j.status === 'done'" class="ghost" @click="studioJob = headOf(j)">{{ t('queue.studio') }}</button>
             <details class="menu-pop">
               <summary class="ghost-btn">{{ t('queue.download') }}</summary>
@@ -1050,7 +1024,6 @@ function onWindowClick(e) {
               </ul>
             </details>
           </div>
-            <!-- стиль — всегда таблица тегов «что где», без сворачивания -->
             <div v-if="j.style" class="job-style">
               <div class="style-tags" :title="j.style">
                 <template v-for="[slot, parts] in styleRows(j.style)" :key="slot">
@@ -1064,7 +1037,6 @@ function onWindowClick(e) {
                  Кнопки-заголовка нет — счётчик уже в строке трека, ширина вся списку -->
             <div v-if="kidCount(j) || (kidMixes[j.id] || []).length || kidMaterial(j.id).length" class="job-kids">
                 <div v-for="v in [j, ...kidResults(j.id)]" :key="v.id" class="job-kid" :class="{ current: headOf(j).id === v.id, playing: isPlaying('m' + v.id) }">
-                  <!-- как в строке трека: круглая play-кнопка или точка-статус -->
                   <span class="tl-play-cell">
                     <button v-if="v.status === 'done' && v.audio_file" class="tl-play"
                             :class="{ 'is-playing': isPlaying('m' + v.id) }" :disabled="playBusy['m' + v.id]"
@@ -1072,7 +1044,6 @@ function onWindowClick(e) {
                       <AppIcon :name="isPlaying('m' + v.id) ? 'stop' : 'play'" /></button>
                     <span v-else class="status-mini" :class="v.status" :title="statusLabelC[v.status] || v.status"></span>
                   </span>
-                  <!-- основная версия — залитая звезда, остальные — серый контур; клик = сделать основной -->
                   <button v-if="v.status === 'done'" class="kid-star" :class="{ head: headOf(j).id === v.id }"
                           :title="headOf(j).id === v.id ? t('queue.head.main') : t('queue.head.make.tip')"
                           :disabled="headOf(j).id === v.id" @click="makeHead(j, v)">
@@ -1085,11 +1056,9 @@ function onWindowClick(e) {
                   <span class="spacer"></span>
                   <span v-if="v.duration_sec" class="tl-meta">{{ fmtDur(v.duration_sec) }}</span>
                   <button v-if="v.status === 'done'" class="ghost small-btn" @click="studioJob = v">студия →</button>
-                  <!-- подсказка — причина падения версии, если она есть -->
                   <button v-if="v.id !== j.id && canRetry(v)" class="ghost small-btn" :title="v.error || t('queue.retry.tip')" @click="retry(v)">{{ t('queue.retry') }}</button>
                   <button v-if="v.id !== j.id && v.status !== 'running'" class="ghost icon del" :title="t('queue.delete.tip')" @click="deleteJob(v)"><AppIcon name="x" /></button>
                 </div>
-                <!-- миксы-вклейки: те же строки, плей в начале; свежий помечен -->
                 <div v-for="(v, n) in kidMixes[j.id] || []" :key="'mx' + v.file" class="job-kid" :class="{ playing: isPlaying(mixKey(j.id, v.file)) }">
                   <span class="tl-play-cell">
                     <button class="tl-play" :class="{ 'is-playing': isPlaying(mixKey(j.id, v.file)) }"
@@ -1103,7 +1072,6 @@ function onWindowClick(e) {
                   <span class="spacer"></span>
                   <span v-if="fmtWhen(v.created_at)" class="tl-meta" :title="v.created_at">{{ fmtWhen(v.created_at) }}</span>
                 </div>
-                <!-- материал: овердабы и прочие вложения -->
                 <div v-for="k in kidMaterial(j.id)" :key="k.id" class="job-kid" :class="{ playing: isPlaying('m' + k.id) }">
                   <span class="tl-play-cell">
                     <button v-if="k.status === 'done' && k.audio_file" class="tl-play"
@@ -1112,7 +1080,6 @@ function onWindowClick(e) {
                       <AppIcon :name="isPlaying('m' + k.id) ? 'stop' : 'play'" /></button>
                     <span v-else class="status-mini" :class="k.status" :title="statusLabelC[k.status] || k.status"></span>
                   </span>
-                  <!-- материал — те же действия: сделать основной, студия -->
                   <button v-if="k.status === 'done'" class="kid-star" :class="{ head: headOf(j).id === k.id }"
                           :title="headOf(j).id === k.id ? t('queue.head.main') : t('queue.head.make.tip')"
                           :disabled="headOf(j).id === k.id" @click="makeHead(j, k)">
@@ -1144,15 +1111,13 @@ function onWindowClick(e) {
   </main>
   </div>
 
-  <!-- плеер — единственный внизу: транспорт стабилен, что бы ни было открыто;
-       статус воркера переехал в шапку -->
+  <!-- плеер — единственный внизу: транспорт стабилен, что бы ни было открыто -->
   <footer class="playerbar-footer">
     <PlayerBar :jobs="jobs" @play-job="togglePlay" @refresh="refresh" />
   </footer>
 
   <!-- страницы-модалки поверх основного контента: ✕/Esc/клик по фону закрывают -->
   <!-- библиотека — после формы нового трека: открывается поверх неё, закрылась — форма на месте -->
-  <!-- новый трек — такая же страница-модалка, как голоса и свои треки -->
   <div v-if="newTrackPage" class="modal-backdrop page-backdrop">
     <section class="panel page-modal form newtrack-modal">
       <div class="page-modal-head">
@@ -1263,7 +1228,6 @@ function onWindowClick(e) {
           </label>
         </div>
 
-        <!-- редкие настройки свёрнуты; изменённое видно в заголовке, чтобы не забыть -->
         <details class="form-advanced">
           <summary>{{ t('form.advanced') }}<span v-if="advancedSummary" class="muted"> · {{ advancedSummary }}</span></summary>
           <div class="row">
@@ -1503,8 +1467,7 @@ h2 {
 .set-info { font-size: 11px; line-height: 1.6; word-break: break-all; }
 .set-actions { display: flex; gap: 8px; margin-top: 8px; }
 .ok { color: var(--ok); font-size: 12px; }
-/* плеер — гибкая часть шапки: всё место между левыми кнопками и «＋ Новый трек»
-   (раньше — абсолютный центр фиксированной ширины: полоса короткая, по краям пусто) */
+/* плеер — гибкая часть шапки: всё место между левыми кнопками и «＋ Новый трек» */
 /* узкое окно: меньше промежутки, короче громкость и название, у «＋ Новый трек» — только «＋» */
 @media (max-width: 1150px) {
   header { gap: 8px; padding: 8px 12px; }
@@ -1531,8 +1494,7 @@ h2 {
 }
 .playerbar .vol { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 .playerbar .vol input { width: 80px; }
-/* название — фиксированной ширины: длина названия не двигает полосу прокрутки;
-   длинное бежит строкой (две копии подряд, сдвиг на половину — без шва) */
+/* длинное бежит строкой (две копии подряд, сдвиг на половину — без шва) */
 /* ширина по названию (не больше 220 px, длиннее — бегущая строка): короткое «#523» не оставляет дыры */
 .playerbar .now { flex: 0 1 auto; max-width: 220px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .playerbar .now-track { display: inline-flex; }
@@ -1707,9 +1669,8 @@ button.toggle.on { border-color: var(--accent); color: var(--accent); font-weigh
 .status-mini.running { background: var(--run); animation: trickpulse 1.2s ease-in-out infinite; }
 .status-mini.error { background: var(--err); }
 .status-mini.queued { background: var(--muted); }
-/* разворот — вложенная карточка: отступ слева по линии названия (12px поля строки +
-   30px колонки ▶), своя рамка и фон — видно, к какой строке относится, и
-   несколько открытых треков не сливаются с соседями */
+/* разворот: отступ слева по линии названия (12px поля строки +
+   30px колонки ▶) */
 .job-detail { display: flex; flex-direction: column;
   margin: 0 12px 10px 42px; padding: 2px 0 6px;
   border-left: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
@@ -1869,14 +1830,12 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .cop-form input[type="text"], .cop-form input:not([type]) { flex: 1; min-width: 220px; }
 .cop-example { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 
-/* стойка */
 .rack { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .rack-gname { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 4px; }
 .rack-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
 .rack-pick { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
 .rack-item select { font-size: 12px; }
 
-/* профили корпуса */
 .corpus-new { display: flex; gap: 8px; }
 .corpus-new input { flex: 1; }
 .corpus-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding: 8px 0 4px; margin-top: 8px; font-size: 13px; }
@@ -1891,8 +1850,7 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .corpus-track { font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .corpus-track .track-lyrics { width: 100%; margin: 0; color: var(--muted); font-style: italic; opacity: .8; }
 
-/* пиано-ролл */
-/* контейнер секций студии (бывшая рамка-«форма» убрана: блоки на фоне страницы).
+/* контейнер секций студии.
    min-width: 0 — иначе минимальная ширина ролл-сетки (сотни тактов) растягивает
    студию шире окна вместо прокрутки внутри roll-scroll */
 /* clip, а не auto: auto делал блок контейнером прокрутки, и «волна сверху» (sticky) прилипала к нему, а не к странице;
@@ -1968,7 +1926,7 @@ details.studio-box[open] > .studio-box-head { margin-bottom: 0; }
 .roll-cell.off { opacity: .3; }
 .roll-chord { font-size: 9px; color: var(--muted); text-align: center; overflow: hidden; }
 
-/* волна громкости (первая канва проекта): сетка/выделение/курсор рисует
+/* волна громкости: сетка/выделение/курсор рисует
    canvas, спектрограмма — <img> воркера под ним, ось X у обоих 0..длительность */
 /* студия: секции-блоки .studio-box выше; зум ролла — вправо в шапке секции */
 .roll-zoom { margin-left: auto; display: inline-flex; gap: 4px; }
@@ -1999,12 +1957,10 @@ details.studio-box[open] > .studio-box-head { margin-bottom: 0; }
 .roll-scroll::-webkit-scrollbar-track { background: var(--panel); border-radius: 5px; }
 .roll-scroll::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 5px; }
 
-/* овердаб */
 .od-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .od-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .od-style { flex: 1; min-width: 240px; }
 .od-gain { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 
-/* стемы */
 .stem-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 </style>

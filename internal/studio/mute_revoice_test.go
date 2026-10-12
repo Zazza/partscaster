@@ -7,11 +7,7 @@ import (
 	"testing"
 )
 
-// Тесты карточки 1.4 (громкость дорожек, гейн новой дорожки после провала) и
-// 1.6 (Revoice — «перепеть»). Фейковый воркер и синтетика — из sections_test.go,
-// звуковые хелперы — из helpers_test.go.
-
-// --- 1.4 muteInserts: «громкость дорожек» (ChildID 0) ---
+// Громкость дорожек, гейн новой дорожки после провала и Revoice («перепеть»).
 
 func muteSpec(stems []string, db float64) SectionSpec {
 	return SectionSpec{ChildID: 0, From: 4, To: 8, Stems: stems, Db: db}
@@ -93,8 +89,7 @@ func TestMuteInsertsCoverWindow(t *testing.T) {
 	}
 }
 
-// To = 0 — до конца трека (как у эффекта на дорожку и у dsp_apply): раньше
-// окно выходило отрицательным, и пересборка молча ничего не меняла (#459).
+// To = 0 — до конца трека (как у эффекта на дорожку и у dsp_apply).
 func TestMuteInsertsToZeroMeansEnd(t *testing.T) {
 	t.Parallel()
 	var inputs []string
@@ -130,7 +125,7 @@ func TestMuteInsertsNothingToDo(t *testing.T) {
 	}
 }
 
-// uploadedOnly — единственная загрузка (имя файла у «громкости дорожек» карточкой не задано).
+// uploadedOnly — единственная загрузка (имя файла у «громкости дорожек» не задано).
 func uploadedOnly(t *testing.T, f *secFake) []float32 {
 	t.Helper()
 	if len(f.uploads) != 1 {
@@ -193,8 +188,6 @@ func TestRebuildSectionsMuteLouderAndZero(t *testing.T) {
 	}
 }
 
-// --- 1.4 stemGain: опора громкости при провале в окне ---
-
 // dipFiles — старая дорожка 16 с: тон 0.5 везде, кроме окна 8–12 с, где уровень inWin;
 // новая — тон 0.25 длиной 8 с, в треке с 6 с (start).
 func dipFiles(t *testing.T, inWin string) (oldPath, newPath string) {
@@ -231,7 +224,7 @@ func TestStemGainMatchesWindow(t *testing.T) {
 	}
 }
 
-// Карточка: в окне старой дорожки тишина → опора — уровень перед окном: gain не ~0,
+// В окне старой дорожки тишина → опора — уровень перед окном: gain не ~0,
 // новая дорожка выходит примерно на уровень до окна (0.25 × gain ≈ 0.5).
 func TestStemGainSilentWindowUsesLevelBefore(t *testing.T) {
 	t.Parallel()
@@ -282,8 +275,6 @@ func TestStemGainAccentNotQuieterThanBefore(t *testing.T) {
 		t.Errorf("accent, окно громче: новая дорожка %+.1f дБ к уровню окна, want ≈ 0 ± 1.5", d)
 	}
 }
-
-// --- 1.6 Revoice ---
 
 const (
 	exprVoxParent = "0.3*sin(2*PI*550*t)"  // голос родителя
@@ -350,7 +341,7 @@ func TestRebuildSectionsNoRevoiceKeepsVocals(t *testing.T) {
 }
 
 // Громкость дорожки с KeepHighHz меняет только низ: заглушить речь в голосе и
-// оставить тарелки, которые demucs отнёс к голосу (#258: «дыры» на месте речи).
+// оставить тарелки, которые demucs отнёс к голосу.
 func TestRebuildSectionsMuteKeepHigh(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -373,7 +364,7 @@ func TestRebuildSectionsMuteKeepHigh(t *testing.T) {
 	}
 }
 
-// Импортированный трек: звук лежит как audio.mp3 (#257) — пересборка берёт его,
+// Импортированный трек: звук лежит как audio.mp3 — пересборка берёт его,
 // а не падает на отсутствующем audio.flac.
 func TestRebuildSectionsImportedMp3Base(t *testing.T) {
 	t.Parallel()

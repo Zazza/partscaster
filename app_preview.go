@@ -38,7 +38,6 @@ func (a *App) fxCache() *studio.Cache {
 	return a.fx
 }
 
-// fxCleanup — удалить кэш превью (окно закрыто).
 func (a *App) fxCleanup() {
 	if a.fxDir != "" {
 		_ = os.RemoveAll(a.fxDir) // временный каталог; не удалился — уберёт ОС
@@ -114,7 +113,6 @@ func (a *App) YueApplySteps(jobID int64, steps []dsp.Step, label string) (*yue.D
 	return studio.ApplySteps(a.ctx, a.yue, jobID, steps, label)
 }
 
-// YueDspPresets — готовые наборы педалей.
 func (a *App) YueDspPresets() []dsp.Preset {
 	return dsp.Presets()
 }

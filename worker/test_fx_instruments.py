@@ -1,6 +1,6 @@
-"""Тесты карточки internal-own-track, этап 13в, условие 103 (тест-кейс ТК139): свои инструменты на воркере.
+"""Свои инструменты на воркере.
 
-Контракт (из карточки, без чтения реализации):
+Контракт:
 - таблица fx_instruments (id, name, base — id готового, group, stems, chain, extra — style/octave/pattern/
   swing/accent/amp_hint/place);
 - GET /fx/instruments → список по id; POST → созданный {id, name, base, group, stems, chain, extra};
@@ -10,14 +10,12 @@
   piano kick snare toms hh ride crash synth perc); group ≤ 40 символов; нет id → 404;
 - сохраняется как пришло: chain без нормализации (умолчания блоков не дописываются).
 
-Допущения тестов (карточка их не называет):
+Допущения тестов:
 - POST отвечает 200 или 201; PUT/DELETE — 200;
 - имя хранится уже обрезанным (и в ответе create, и в списке);
-- проверки условия 103 действуют и на PUT (пустое имя при правке → 422).
+- проверки действуют и на PUT (пустое имя при правке → 422).
 
 Внешних границ нет (ни GPU, ни сети) — ничего не подменяется. БД и каталог данных — временные (_WorkerApiCase).
-
-Запуск: cd worker && python3 -m unittest test_fx_instruments -v
 Без окружения воркера (fastapi/httpx/numpy) — пропуск.
 """
 import copy

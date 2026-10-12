@@ -1,9 +1,5 @@
-// Тесты карточки internal-own-track, этап 12, условия 90–91 (тест-кейс ТК130): страница «Инструменты» —
-// два списка (группа → инструмент) вместо стены кнопок пресетов.
-// presetGroups.js: groupOptions(groups, firstLabel) → [{value, label}], itemOptions(group, locale) →
-// [{value, label, title}], groupOf(groups, id) → group. groups — выход groupPresets.
 // Страница: раскладка — деревом разбора шаблона InstrumentsPage.vue, поведение списков — скриптом страницы
-// (mountSetup, api подменён). Написаны по карточке, без чтения реализации.
+// (mountSetup, api подменён).
 import { describe, it, expect, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { templateAst, findElements, dir, attr, mountSetup } from './testkit/sfc.js'
@@ -21,7 +17,7 @@ const p = (id, group, extra = {}) => ({
 // [a{G1}, b{G2}, c{G1}, d{без группы}] → G1:[a,c], G2:[b], '':[d]
 const list = () => [p('a', G1), p('b', G2), p('c', G1), p('d')]
 
-describe('groupOptions (условие 90, ТК130)', () => {
+describe('groupOptions', () => {
   it('value — group по порядку groupPresets, label — подпись группы', () => {
     const groups = groupPresets(list(), 'en')
     expect(groupOptions(groups, 'First')).toEqual([
@@ -57,7 +53,7 @@ describe('groupOptions (условие 90, ТК130)', () => {
   })
 })
 
-describe('itemOptions (условие 90, ТК130)', () => {
+describe('itemOptions', () => {
   it('value = id, label = name[locale], title = note[locale] — по порядку пунктов группы (en)', () => {
     const g1 = groupPresets(list(), 'en')[0]
     expect(itemOptions(g1, 'en')).toEqual([
@@ -97,7 +93,7 @@ describe('itemOptions (условие 90, ТК130)', () => {
   })
 })
 
-describe('groupOf (условие 90, ТК130)', () => {
+describe('groupOf', () => {
   const groups = () => groupPresets(list(), 'en')
 
   it('нашёл → группа, где лежит пресет', () => {
@@ -121,8 +117,6 @@ describe('groupOf (условие 90, ТК130)', () => {
   })
 })
 
-// ---- страница по исходнику (условие 91) ----
-
 vi.hoisted(() => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
   globalThis.window = { addEventListener() {}, removeEventListener() {} }   // клавиши страницы — в onMounted
@@ -133,7 +127,7 @@ vi.mock('./api.js', () => ({
 }))
 const { default: InstrumentsPage } = await import('./components/InstrumentsPage.vue')
 
-describe('InstrumentsPage: два списка вместо кнопок (условие 91, ТК130)', () => {
+describe('InstrumentsPage: два списка вместо кнопок', () => {
   const root = templateAst('components/InstrumentsPage.vue')
   const selects = findElements(root, (n) => n.tag === 'VSelect')
   const byOptions = (name) => selects.filter((x) => dir(x.node, 'bind', 'options') === name)

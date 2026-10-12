@@ -1,8 +1,7 @@
-"""Тесты карточки internal-instruments-page (этап 3 звукового движка): режим превью
-POST /jobs/{id}/fx (тест-кейсы 4–6) и единый источник описания блоков
-worker/fx_blocks.json (тест-кейс 7).
+"""Тесты режима превью POST /jobs/{id}/fx и единого источника описания блоков
+worker/fx_blocks.json.
 
-Контракт (из карточки и контракта задачи):
+Контракт:
 - поле запроса preview (по умолчанию false); при true обязательны from и to, иначе 422;
 - хвост tail = 3 с, если в цепочке есть reverb или delay, иначе 0;
   end = min(to + tail, длина трека);
@@ -14,14 +13,12 @@ worker/fx_blocks.json (тест-кейс 7).
 - на джобу не больше 8 файлов preview-fx-*.flac (старейшие по mtime удаляются),
   dsp-* и preview-* не от движка не трогаются;
 - движок выключен → 503;
-- fx_engine.SPEC / STR_SPEC / BAND_SPEC строятся из worker/fx_blocks.json, умолчания
-  и границы — те же, что на этапе 2; копии frontend/src/fxBlocks.json и
+- fx_engine.SPEC / STR_SPEC / BAND_SPEC строятся из worker/fx_blocks.json; копии
+  frontend/src/fxBlocks.json и
   internal/mcp/fx_blocks.json побайтно равны источнику.
 
 Внешние границы подменяются так же, как в test_fx_api: fx_resources — фейк,
 NAM не нужен (в цепочках превью нет amp). torch, GPU и сеть не нужны.
-
-Запуск: cd worker && python3 -m unittest test_fx_preview -v
 """
 import json
 import os
@@ -44,9 +41,9 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 BLOCKS_JSON = Path(__file__).resolve().with_name("fx_blocks.json")
 TYPES = ("gate", "eq", "comp", "drive", "amp", "cab", "reverb", "delay", "gain", "sampler", "bass")
-SYNTH_TYPES = ("synth", "chorus", "phaser", "flanger", "tape", "spring", "perc")   # perc — этап 5
-MASTER_TYPES = ("glue", "limiter")   # этап 6: склейка и ограничитель мастера
-GUITAR_TYPES = ("tremolo",)   # этап 7а: готовые гитары
+SYNTH_TYPES = ("synth", "chorus", "phaser", "flanger", "tape", "spring", "perc")
+MASTER_TYPES = ("glue", "limiter")
+GUITAR_TYPES = ("tremolo",)
 PREVIEW_RE = re.compile(r"^preview-fx-[0-9a-f]{8}\.flac$")
 TAIL = 3.0
 MAX_PREVIEWS = 8
@@ -57,8 +54,6 @@ ECHO = [{"type": "delay", "time_ms": 500, "feedback": 0.3, "wet": 0.5}]
 def _preview_files(d):
     return sorted(p.name for p in d.glob("preview-fx-*.flac"))
 
-
-# ---------- ТК4–6: режим превью ----------
 
 @unittest.skipUnless(fa._OK, fa._SKIP)
 class _PreviewCase(fa._FxApiCase):
@@ -97,9 +92,9 @@ class _PreviewCase(fa._FxApiCase):
 
 
 class TestPreviewFile(_PreviewCase):
-    """ТК4: файл превью — кусок окна (+ хвост), содержимое — обработка этого куска."""
+    """файл превью — кусок окна (+ хвост), содержимое — обработка этого куска."""
 
-    def test_tc4_response_name_and_no_metrics(self):
+    def test_response_name_and_no_metrics(self):
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo")
         self.assertTrue(PREVIEW_RE.match(out.get("file", "")), out)
@@ -109,7 +104,7 @@ class TestPreviewFile(_PreviewCase):
         self.assertIsInstance(out["clipped"], bool)
         self.assertTrue((d / out["file"]).is_file())
 
-    def test_tc4_no_tail_without_reverb_delay(self):
+    def test_no_tail_without_reverb_delay(self):
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo")
         y, sr = _read(d / out["file"])
@@ -117,7 +112,7 @@ class TestPreviewFile(_PreviewCase):
         self.assertAlmostEqual(len(y) / SR, 1.0, delta=2 / SR)
         self.assertAlmostEqual(out["duration_sec"], 1.0, delta=0.01)
 
-    def test_tc4_tail_3s_with_delay(self):
+    def test_tail_3s_with_delay(self):
         # окно 0,2–0,5 с, трек 4 с: хвост целиком влезает → 0,3 + 3 = 3,3 с
         jid, d = self._audio_job()
         out = self._ok_preview(jid, ECHO, 0.2, 0.5, source="vocals", output="solo")
@@ -125,20 +120,20 @@ class TestPreviewFile(_PreviewCase):
         self.assertAlmostEqual(len(y) / SR, 0.3 + TAIL, delta=2 / SR)
         self.assertAlmostEqual(out["duration_sec"], 0.3 + TAIL, delta=0.01)
 
-    def test_tc4_tail_with_reverb_too(self):
+    def test_tail_with_reverb_too(self):
         jid, d = self._audio_job()
         out = self._ok_preview(jid, [{"type": "reverb"}], 0.2, 0.5, source="vocals", output="solo")
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(len(y) / SR, 0.3 + TAIL, delta=2 / SR)
 
-    def test_tc4_tail_not_past_track_end(self):
+    def test_tail_not_past_track_end(self):
         # окно 2–3 с, трек 4 с: хвост обрезан концом трека → 2 с, не 4
         jid, d = self._audio_job()
         out = self._ok_preview(jid, ECHO, 2.0, 3.0, source="vocals", output="solo")
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(len(y) / SR, fa.DUR - 2.0, delta=2 / SR)
 
-    def test_tc4_solo_content_is_processed_window(self):
+    def test_solo_content_is_processed_window(self):
         jid, d = self._audio_job()
         for chain in (CUT_1K, ECHO):
             with self.subTest(chain=chain):
@@ -148,7 +143,7 @@ class TestPreviewFile(_PreviewCase):
                 self.assertEqual(y.shape, want.shape)
                 self.assertLessEqual(_residual_db(y, want), -60)
 
-    def test_tc4_mix_content_is_track_window_with_processed_stem(self):
+    def test_mix_content_is_track_window_with_processed_stem(self):
         jid, d = self._audio_job()
         for chain in (CUT_1K, ECHO):
             with self.subTest(chain=chain):
@@ -163,14 +158,14 @@ class TestPreviewFile(_PreviewCase):
         self.assertLess(fa._db(fa._amp(y, 1000, 0.0, 2.0) / fa.AMP), -18)
         self.assertAlmostEqual(fa._db(fa._amp(y, fa.HZ["drums"], 0.0, 2.0) / fa.AMP), 0, delta=1)
 
-    def test_tc4_output_defaults_to_mix(self):
+    def test_output_defaults_to_mix(self):
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals")
         y, _ = _read(d / out["file"])
         want, _ = self._expected(d, "vocals", CUT_1K, 1.0, 2.0, "mix")
         self.assertLessEqual(_residual_db(y, want), -60)
 
-    def test_tc4_source_mix(self):
+    def test_source_mix(self):
         jid, d = self._audio_job()
         for chain in (CUT_1K, ECHO):
             with self.subTest(chain=chain):
@@ -180,7 +175,7 @@ class TestPreviewFile(_PreviewCase):
                 self.assertEqual(y.shape, want.shape)
                 self.assertLessEqual(_residual_db(y, want), -60)
 
-    def test_tc4_not_in_dsp_list(self):
+    def test_not_in_dsp_list(self):
         jid, d = self._audio_job()
         variant = self._ok(jid, source="vocals", chain=CUT_1K)["file"]
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals")
@@ -199,8 +194,8 @@ class TestPreviewFile(_PreviewCase):
             a = self._ok_preview(jid, ECHO, 1.0, 2.0, source="vocals", output="solo")
             calls = proc.call_count
             self.assertGreaterEqual(calls, 1, "превью посчитано мимо fx_engine.process")
-            # время изменения при попадании в кэш обновляется (вытеснение — давно не слушанных,
-            # решение человека 2026-10-07), поэтому «не перезаписан» — по содержимому
+            # время изменения при попадании в кэш обновляется (вытеснение — давно не слушанных),
+            # поэтому «не перезаписан» — по содержимому
             before = (d / a["file"]).read_bytes()
             b = self._ok_preview(jid, ECHO, 1.0, 2.0, source="vocals", output="solo")
             self.assertEqual(proc.call_count, calls, "повтор пересчитан")
@@ -234,9 +229,7 @@ class TestPreviewFile(_PreviewCase):
 
 
 class TestPreviewErrors(_PreviewCase):
-    """ТК5 + выключенный движок."""
-
-    def test_tc5_preview_without_window_422(self):
+    def test_preview_without_window_422(self):
         jid, d = self._audio_job()
         for extra in ({}, {"from": 1.0}, {"to": 2.0}):
             with self.subTest(window=extra):
@@ -269,7 +262,7 @@ class TestPreviewErrors(_PreviewCase):
         self.assertEqual(_preview_files(d), [])
 
     def test_preview_false_is_variant(self):
-        # preview=false — обычный путь этапа 2: вариант dsp-fx-*, превью нет
+        # preview=false — обычный путь: вариант dsp-fx-*, превью нет
         jid, d = self._audio_job()
         out = self._ok(jid, source="vocals", chain=CUT_1K, preview=False)
         self.assertTrue(fa.NAME_RE.match(out["file"]), out)
@@ -277,9 +270,9 @@ class TestPreviewErrors(_PreviewCase):
 
 
 class TestPreviewLimit(_PreviewCase):
-    """ТК6: не больше 8 превью движка на джобу, чужие файлы не трогаются."""
+    """не больше 8 превью движка на джобу, чужие файлы не трогаются."""
 
-    def test_tc6_ninth_evicts_oldest(self):
+    def test_ninth_evicts_oldest(self):
         import numpy as np
         import soundfile as sf
         jid, d = self._audio_job()
@@ -308,7 +301,7 @@ class TestPreviewLimit(_PreviewCase):
         self.assertTrue((d / "stem-vocals.flac").is_file())
 
     def test_cache_hit_refreshes_mtime(self):
-        # попадание в кэш обновляет время изменения (os.utime, решение человека 2026-10-07):
+        # попадание в кэш обновляет время изменения (os.utime):
         # вытесняется давно не слушанное, а не давно посчитанное
         jid, d = self._audio_job()
         base = time.time() - 1000
@@ -329,13 +322,13 @@ class TestPreviewLimit(_PreviewCase):
         self.assertIn(a, left, "вытеснено превью, которое только что слушали (кэш не обновил mtime)")
         self.assertNotIn(others[0], left, "вытеснено не самое давно слушанное")
 
-    def test_tc6_eight_kept(self):
+    def test_eight_kept(self):
         jid, d = self._audio_job()
         for k in range(MAX_PREVIEWS):
             self._ok_preview(jid, CUT_1K, 0.1 * k, 0.1 * k + 0.5, source="vocals")
         self.assertEqual(len(_preview_files(d)), MAX_PREVIEWS)
 
-    def test_tc6_limit_per_job(self):
+    def test_limit_per_job(self):
         # лимит считается на джобу: превью другой джобы не вытесняют
         jid1, d1 = self._audio_job()
         jid2, d2 = self._audio_job()
@@ -346,7 +339,7 @@ class TestPreviewLimit(_PreviewCase):
 
 
 class TestPreviewCacheVersion(_PreviewCase):
-    """Регрессия ревью: кэш превью зависит от версии файлов-входов (дорожка, IR)."""
+    """Кэш превью зависит от версии файлов-входов (дорожка, IR)."""
 
     @staticmethod
     def _rewrite(path, x):
@@ -415,8 +408,8 @@ class TestPreviewCacheVersion(_PreviewCase):
                 self.assertGreater(_residual_db(y1, y2), -20, "превью посчитано со старым IR")
                 upload(_wav_bytes(0.5, 48000))  # вернуть исходный IR для следующего блока
 
-    def test_tc45_replaced_nam_same_mtime_recomputed(self):
-        # ТК45: захват .nam заменён файлом другого размера с тем же mtime_ns → повторный
+    def test_replaced_nam_same_mtime_recomputed(self):
+        # захват .nam заменён файлом другого размера с тем же mtime_ns → повторный
         # такой же запрос превью не из кэша. Граница torch/NAM — fx_nam.load_nam (фейк).
         import fx_engine
         import fx_nam
@@ -458,7 +451,7 @@ class TestPreviewCacheVersion(_PreviewCase):
 
 
 class TestPreviewConcurrent(_PreviewCase):
-    """Регрессия ревью: два одинаковых превью одновременно."""
+    """Два одинаковых превью одновременно."""
 
     def test_two_same_previews_in_parallel(self):
         import threading
@@ -504,7 +497,7 @@ class TestPreviewConcurrent(_PreviewCase):
 
 
 class TestPreviewClipped(_PreviewCase):
-    """Регрессия ревью: clipped считается и для превью из кэша."""
+    """Clipped считается и для превью из кэша."""
 
     BOOST = [{"type": "eq", "bands": [{"freq_hz": 1000, "gain_db": 24, "q": 1}]}]
 
@@ -526,7 +519,7 @@ class TestPreviewClipped(_PreviewCase):
 
 
 class TestPreviewEvictRace(_PreviewCase):
-    """Регрессия ревью: файл превью удалён между перечислением каталога и stat."""
+    """Файл превью удалён между перечислением каталога и stat."""
 
     def test_evict_survives_vanished_file(self):
         import glob as globmod
@@ -579,11 +572,9 @@ class TestPreviewEvictRace(_PreviewCase):
         self.assertLessEqual(len(_preview_files(d)), MAX_PREVIEWS)
 
 
-# ---------- Признак превью в /config (решение кросс-ревью) ----------
-
 class TestConfigAdvertisesPreview(_PreviewCase):
     """GET /config отдаёт fx_preview: true — по нему страница «Инструменты»
-    отличает воркер с режимом превью от воркера этапа 2."""
+    отличает воркер с режимом превью от воркера без него."""
 
     def test_config_has_fx_preview_true(self):
         r = self.client.get("/config")
@@ -591,13 +582,11 @@ class TestConfigAdvertisesPreview(_PreviewCase):
         self.assertIs(r.json().get("fx_preview"), True, r.json())
 
 
-# ---------- Этап 4 (internal-studio-engine), ТК7: поле fade превью ----------
-#
 # Контракт: fade — секунды, 0 ≤ fade ≤ 0,5 (иначе 422), по умолчанию 0, только при
 # preview. a = round(from·sr), b = round(to·sr), F = round(fade·sr);
 # end = min(b + F + tail, n); seg[k] = part[a+k]·w(k) при a+k < min(b+F, n), иначе 0;
 # w(k) = min(1, k/F)·min(1, (b+F−(a+k))/F) (линейно, как dsp.WindowGraph); F = 0 —
-# поведение этапа 3. fade входит в ключ кэша.
+# без фейда. fade входит в ключ кэша.
 
 FADE = 0.05
 
@@ -626,9 +615,9 @@ class _FadeCase(_PreviewCase):
 
 
 class TestPreviewFade(_FadeCase):
-    """ТК7: вход превью с линейными краями fade, длина, ключ кэша, ошибки."""
+    """Вход превью с линейными краями fade, длина, ключ кэша, ошибки."""
 
-    def test_tc7_identity_input_has_linear_edges(self):
+    def test_identity_input_has_linear_edges(self):
         # тождественная цепочка: файл = вход превью; голос — тон 1 кГц
         import numpy as np
         jid, d = self._audio_job()
@@ -649,7 +638,7 @@ class TestPreviewFade(_FadeCase):
         self.assertGreater(rms(y[b - a:b - a + F // 2]), rms(y[b - a + F // 2:b - a + F]) * 2)
         self.assertLess(abs(y[b - a + F:]).max(), 1e-3, "после to + fade вход не тишина")
 
-    def test_tc7_content_matches_contract(self):
+    def test_content_matches_contract(self):
         jid, d = self._audio_job()
         for chain in (CUT_1K, ECHO, IDENTITY):
             with self.subTest(chain=chain):
@@ -659,7 +648,7 @@ class TestPreviewFade(_FadeCase):
                 self.assertEqual(y.shape, want.shape)
                 self.assertLessEqual(_residual_db(y, want), -60)
 
-    def test_tc7_length_without_tail(self):
+    def test_length_without_tail(self):
         # без reverb/delay: to + fade − from
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=FADE)
@@ -667,14 +656,14 @@ class TestPreviewFade(_FadeCase):
         self.assertAlmostEqual(len(y) / SR, 1.0 + FADE, delta=2 / SR)
         self.assertAlmostEqual(out["duration_sec"], 1.0 + FADE, delta=0.01)
 
-    def test_tc7_length_with_tail(self):
+    def test_length_with_tail(self):
         # с delay: to + fade + хвост − from (влезает в трек 4 с)
         jid, d = self._audio_job()
         out = self._ok_preview(jid, ECHO, 0.2, 0.5, source="vocals", output="solo", fade=FADE)
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(len(y) / SR, 0.3 + FADE + TAIL, delta=2 / SR)
 
-    def test_tc7_length_capped_by_track_end(self):
+    def test_length_capped_by_track_end(self):
         # to + fade за концом трека: файл до конца трека, не длиннее
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 3.0, 3.98, source="vocals", output="solo", fade=FADE)
@@ -684,8 +673,8 @@ class TestPreviewFade(_FadeCase):
         self.assertEqual(y.shape, want.shape)
         self.assertLessEqual(_residual_db(y, want), -60)
 
-    def test_tc7_fade_zero_is_stage3(self):
-        # fade = 0 — как без поля (этап 3): то же содержимое и длина
+    def test_fade_zero_same_as_without_fade(self):
+        # fade = 0 — как без поля: то же содержимое и длина
         jid, d = self._audio_job()
         for chain in (CUT_1K, ECHO):
             with self.subTest(chain=chain):
@@ -699,13 +688,13 @@ class TestPreviewFade(_FadeCase):
                 self.assertEqual(ya.shape, want.shape)
                 self.assertLessEqual(_residual_db(ya, want), -60)
 
-    def test_tc7_max_fade_accepted(self):
+    def test_max_fade_accepted(self):
         jid, d = self._audio_job()
         out = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=0.5)
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(len(y) / SR, 1.5, delta=2 / SR)
 
-    def test_tc7_different_fade_different_file(self):
+    def test_different_fade_different_file(self):
         jid, d = self._audio_job()
         files = {
             self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=f)["file"]
@@ -714,14 +703,14 @@ class TestPreviewFade(_FadeCase):
         self.assertEqual(len(files), 3, "fade не входит в ключ кэша")
         self.assertEqual(len(_preview_files(d)), 3)
 
-    def test_tc7_same_fade_same_file(self):
+    def test_same_fade_same_file(self):
         jid, d = self._audio_job()
         a = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=FADE)
         b = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=FADE)
         self.assertEqual(a["file"], b["file"])
         self.assertEqual(len(_preview_files(d)), 1)
 
-    def test_tc7_bad_fade_422(self):
+    def test_bad_fade_422(self):
         jid, d = self._audio_job()
         for bad in (0.6, -1, -0.01, 0.51, "abc"):
             with self.subTest(fade=bad):
@@ -730,15 +719,13 @@ class TestPreviewFade(_FadeCase):
         self.assertEqual(_preview_files(d), [])
 
 
-# ---------- Этап 4 (internal-studio-engine), условие 10: поле pad превью ----------
-#
 # Контракт: pad (по умолчанию false, только превью) — файл от начала трека: тишина
 # a = round(from·sr) сэмплов, дальше тот же кусок, что без pad; длина файла = end
 # (отсчёт от 0); duration_sec — длина файла; pad входит в ключ кэша.
 
 
 class TestPreviewPad(_FadeCase):
-    """Условие 10: pad=true — кусок превью от начала трека (для вставки без задержки)."""
+    """pad=true — кусок превью от начала трека (для вставки без задержки)."""
 
     # (цепочка, from, to, fade): некруглый from, хвост delay, хвост до конца трека, fade=0
     CASES = (
@@ -810,7 +797,7 @@ class TestPreviewPad(_FadeCase):
         self.assertEqual(len(ya), int(round(2.0 * SR)) + int(round(FADE * SR)), "из кэша отдан файл без pad")
 
     def test_pad_default_false(self):
-        # без поля — как pad=false (этап 3/4 без изменений): тот же файл
+        # без поля — как pad=false: тот же файл
         jid, d = self._audio_job()
         a = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=FADE)
         b = self._ok_preview(jid, CUT_1K, 1.0, 2.0, source="vocals", output="solo", fade=FADE, pad=False)
@@ -819,9 +806,7 @@ class TestPreviewPad(_FadeCase):
         self.assertAlmostEqual(len(y) / SR, 1.0 + FADE, delta=2 / SR)
 
 
-# ---------- Условие 36f (закрытие хвостов), ТК42: превью с pad пишется потоком ----------
-#
-# Контракт: файл тот же, что раньше (тишина round(from·sr) сэмплов + кусок без pad, длина
+# Контракт: файл тот же (тишина round(from·sr) сэмплов + кусок без pad, длина
 # end от начала трека), но тишина до окна не собирается в массив длиной from: функция записи
 # получает её блоками ≤ 1 с.
 # Допущение о точке подмены: воркер пишет FLAC через soundfile, и любая запись (sf.write
@@ -835,7 +820,7 @@ PAD_TRACK_DUR = 8.0   # окно с 5 с: тишины до окна больш�
 
 @unittest.skipUnless(fa._OK, fa._SKIP)
 class TestPreviewPadStream(_FadeCase):
-    """ТК42 (36f): pad=true на позднем окне — файл тот же, тишина пишется блоками ≤ 1 с."""
+    """pad=true на позднем окне — файл тот же, тишина пишется блоками ≤ 1 с."""
 
     def _long_job(self):
         import numpy as np
@@ -875,7 +860,7 @@ class TestPreviewPadStream(_FadeCase):
 
     CASES = ((CUT_1K, 5.0, 6.0), (ECHO, 5.0, 6.0), (CUT_1K, 5.3456, 7.5))
 
-    def test_tc42_silence_written_in_blocks_le_1s(self):
+    def test_silence_written_in_blocks_le_1s(self):
         jid, d = self._long_job()
         for chain, fr, to in self.CASES:
             with self.subTest(chain=chain, fr=fr, to=to):
@@ -892,9 +877,7 @@ class TestPreviewPadStream(_FadeCase):
                                 f"один вызов записи — {biggest / SR:.1f} с: массив не меньше тишины до окна")
 
 
-# ---------- Условие 14 (internal-studio-engine, этап 5а): превью с sampler ----------
-#
-# Регрессия кросс-ревью. Контракт: превью с sampler — хвост FX_SAMPLER_TAIL_S = 1 с
+# Контракт: превью с sampler — хвост FX_SAMPLER_TAIL_S = 1 с
 # (удар у конца окна не обрывается): end = min(b + F + 1 с, n); кэш превью учитывает
 # файлы набора (<data>/fx/kits/<набор>/<часть>/*.wav): заменили wav — пересчёт.
 # Набор — настоящее хранилище воркера (файлы), дорожка-часть kick — щелчки.
@@ -1023,8 +1006,6 @@ class TestPreviewSampler(_PreviewCase):
         self.assertEqual(a["file"], b["file"])
 
 
-# ---------- Условие 15 (internal-studio-engine, этап 5б): превью с bass, ТК14 ----------
-#
 # Контракт: превью с bass — хвост как у sampler (1 с): end = min(b + F + 1 с, n);
 # кэш превью (_fx_stamp) учитывает файлы набора <data>/fx/kits/<набор>/<часть>/*.wav.
 # Набор — настоящее хранилище воркера (файлы), дорожка bass — ноты на долях 120 BPM.
@@ -1075,7 +1056,7 @@ class TestPreviewBass(_PreviewCase):
         x, _ = _bass_line(ev, fa.DUR, sr=SR)
         return self._audio_job(extra={"bass": x})
 
-    def test_tc14_tail_1s(self):
+    def test_tail_1s(self):
         self._full_kit()
         jid, d = self._bass_job()
         for fr, to, fade, want in ((0.5, 1.5, 0.0, 1.0 + SAMPLER_TAIL),
@@ -1087,14 +1068,14 @@ class TestPreviewBass(_PreviewCase):
                 self.assertAlmostEqual(len(y) / SR, want, delta=2 / SR)
                 self.assertAlmostEqual(out["duration_sec"], want, delta=0.01)
 
-    def test_tc14_tail_not_past_track_end(self):
+    def test_tail_not_past_track_end(self):
         self._full_kit()
         jid, d = self._bass_job()
         out = self._ok_preview(jid, BASS_CHAIN, 2.5, 3.5, source="bass", output="solo", fade=0.05)
         y, _ = _read(d / out["file"])
         self.assertAlmostEqual(len(y) / SR, fa.DUR - 2.5, delta=2 / SR)
 
-    def test_tc14_replaced_kit_wav_recomputed(self):
+    def test_replaced_kit_wav_recomputed(self):
         import fx_engine
         self._full_kit()
         jid, _ = self._bass_job()
@@ -1106,7 +1087,7 @@ class TestPreviewBass(_PreviewCase):
             self.assertGreater(proc.call_count, calls, "файл набора сменился, а превью взято из кэша")
         self.assertNotEqual(a["file"], b["file"])
 
-    def test_tc14_added_kit_wav_recomputed(self):
+    def test_added_kit_wav_recomputed(self):
         import fx_engine
         self._full_kit()
         jid, _ = self._bass_job()
@@ -1117,7 +1098,7 @@ class TestPreviewBass(_PreviewCase):
             self._ok_preview(jid, BASS_CHAIN, 0.5, 1.5, source="bass", output="solo")
             self.assertGreater(proc.call_count, calls, "в наборе новый файл, а превью взято из кэша")
 
-    def test_tc14_same_kit_same_file_from_cache(self):
+    def test_same_kit_same_file_from_cache(self):
         import fx_engine
         self._full_kit()
         jid, _ = self._bass_job()
@@ -1128,7 +1109,7 @@ class TestPreviewBass(_PreviewCase):
             self.assertEqual(proc.call_count, calls)
         self.assertEqual(a["file"], b["file"])
 
-    def test_tc14_fx_stamp_counts_bass_kit_files(self):
+    def test_fx_stamp_counts_bass_kit_files(self):
         # _fx_stamp(paths, chain): версия превью зависит от файлов набора bass
         self._full_kit()
         s1 = self.w._fx_stamp([], BASS_CHAIN)
@@ -1140,8 +1121,6 @@ class TestPreviewBass(_PreviewCase):
         self.assertNotEqual(s2, self.w._fx_stamp([], BASS_CHAIN), "новый файл набора bass не меняет штамп")
 
 
-# ---------- Условие 26 (этап 5в), ТК30: хвост превью по длине сэмплов, kit_open в кэше ----------
-#
 # Контракт: превью с sampler — хвост по длине самых длинных сэмплов цепочки (kit и
 # kit_open), от 1 до 4 с: end = min(b + F + хвост, n). _fx_stamp учитывает и файлы
 # набора kit_open. Набор — настоящее хранилище воркера (wav-файлы нужной длины),
@@ -1215,41 +1194,41 @@ class TestPreviewSamplerTailByKit(_PreviewCase):
         self.assertAlmostEqual(out["duration_sec"], len(y) / SR, delta=0.01)
         return len(y) / SR
 
-    def test_tc30_tail_equals_longest_sample_3s(self):
+    def test_tail_equals_longest_sample_3s(self):
         self._put(HH_KIT, "a.wav", 1.0)
         self._put(HH_KIT, "b.wav", 3.0)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "floor_db": -40}])
         self.assertAlmostEqual(got, 0.5 + 3.0, delta=2 / SR, msg="сэмплы до 3 с — хвост 3 с")
 
-    def test_tc30_tail_capped_at_4s(self):
+    def test_tail_capped_at_4s(self):
         self._put(HH_KIT, "a.wav", 10.0)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "floor_db": -40}])
         self.assertAlmostEqual(got, 0.5 + 4.0, delta=2 / SR, msg="сэмпл 10 с — хвост не больше 4 с")
 
-    def test_tc30_tail_at_least_1s(self):
+    def test_tail_at_least_1s(self):
         self._put(HH_KIT, "a.wav", 0.5)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "floor_db": -40}])
         self.assertAlmostEqual(got, 0.5 + 1.0, delta=2 / SR, msg="сэмплы 0,5 с — хвост не меньше 1 с")
 
-    def test_tc30_tail_with_fade(self):
+    def test_tail_with_fade(self):
         self._put(HH_KIT, "a.wav", 3.0)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "floor_db": -40}], fade=0.05)
         self.assertAlmostEqual(got, 0.5 + 0.05 + 3.0, delta=2 / SR)
 
-    def test_tc30_tail_counts_kit_open_samples(self):
+    def test_tail_counts_kit_open_samples(self):
         # самые длинные сэмплы — в kit_open: хвост по ним
         self._put(HH_KIT, "a.wav", 0.5)
         self._put(HH_KIT_OPEN, "o.wav", 3.0, hz=6000)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "kit_open": HH_KIT_OPEN, "floor_db": -40}])
         self.assertAlmostEqual(got, 0.5 + 3.0, delta=2 / SR, msg="хвост не учёл сэмплы kit_open")
 
-    def test_tc30_tail_not_past_track_end(self):
+    def test_tail_not_past_track_end(self):
         # окно 6–6,5 с + хвост 3 с → обрезано концом трека (8 с): 2 с
         self._put(HH_KIT, "a.wav", 3.0)
         got = self._len([{"type": "sampler", "kit": HH_KIT, "floor_db": -40}], fr=6.0, to=6.5)
         self.assertAlmostEqual(got, LONG_DUR - 6.0, delta=2 / SR)
 
-    def test_tc30_fx_stamp_counts_kit_open_files(self):
+    def test_fx_stamp_counts_kit_open_files(self):
         chain = [{"type": "sampler", "kit": HH_KIT, "kit_open": HH_KIT_OPEN}]
         self._put(HH_KIT, "a.wav", 0.3)
         self._put(HH_KIT_OPEN, "o.wav", 0.6, hz=6000)
@@ -1261,22 +1240,20 @@ class TestPreviewSamplerTailByKit(_PreviewCase):
         self._put(HH_KIT_OPEN, "extra.wav", 0.6, hz=5000)
         self.assertNotEqual(s2, self.w._fx_stamp([], chain), "новый файл набора kit_open не меняет штамп")
 
-    # --- ТК35 (кросс-ревью c26): хвост цепочки — больший из хвостов sampler и reverb/delay ---
+    # хвост цепочки — больший из хвостов sampler и reverb/delay
 
-    def test_tc35_sampler_10s_plus_delay_tail_4s(self):
+    def test_sampler_10s_plus_delay_tail_4s(self):
         self._put(HH_KIT, "a.wav", 10.0)
         chain = [{"type": "sampler", "kit": HH_KIT, "floor_db": -40}, *ECHO]
         got = self._len(chain)
         self.assertAlmostEqual(got, 0.5 + 4.0, delta=2 / SR, msg="хвост — 3 с эха, а не 4 с сэмплов")
 
-    def test_tc35_sampler_short_plus_reverb_tail_3s(self):
+    def test_sampler_short_plus_reverb_tail_3s(self):
         self._put(HH_KIT, "a.wav", 0.5)
         chain = [{"type": "sampler", "kit": HH_KIT, "floor_db": -40}, {"type": "reverb", "wet": 0.3}]
         got = self._len(chain)
         self.assertAlmostEqual(got, 0.5 + TAIL, delta=2 / SR, msg="хвост — 1 с сэмплов, а не 3 с реверба")
 
-
-# ---------- ТК7: один источник описания блоков ----------
 
 def _blocks():
     return json.loads(BLOCKS_JSON.read_text(encoding="utf-8"))
@@ -1285,16 +1262,16 @@ def _blocks():
 class TestBlocksCopies(unittest.TestCase):
     """Копии для фронта и MCP побайтно равны источнику (генерирует make mcp-data)."""
 
-    def test_tc7_source_exists_and_valid(self):
+    def test_source_exists_and_valid(self):
         self.assertTrue(BLOCKS_JSON.is_file(), BLOCKS_JSON)
         b = _blocks()
-        # прежние типы — в прежнем порядке первыми; за ними блоки синтов (карточка
-        # internal-own-track, этап 4, условия 23–24; их порядок карточка не задаёт)
+        # прежние типы — в прежнем порядке первыми; за ними блоки синтов (их порядок
+        # не задан)
         self.assertEqual(tuple(b)[:len(TYPES)], TYPES, "типы блоков и их порядок показа")
         self.assertEqual(set(tuple(b)[len(TYPES):]), set(SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES),
                          "блоки синтов, мастера и гитар")
 
-    def test_tc7_copies_identical(self):
+    def test_copies_identical(self):
         src = BLOCKS_JSON.read_bytes()
         for rel in ("frontend/src/fxBlocks.json", "internal/mcp/fx_blocks.json"):
             with self.subTest(copy=rel):
@@ -1302,7 +1279,7 @@ class TestBlocksCopies(unittest.TestCase):
                 self.assertTrue(p.is_file(), f"нет копии {rel} (make mcp-data)")
                 self.assertEqual(p.read_bytes(), src, f"{rel} отличается от worker/fx_blocks.json")
 
-    def test_tc7_labels_ru_en(self):
+    def test_labels_ru_en(self):
         for t, blk in _blocks().items():
             items = [("блок", blk)] + [(p["id"], p) for p in blk.get("params", [])] + \
                 [(s["id"], s) for s in blk.get("strings", [])] + \
@@ -1314,7 +1291,7 @@ class TestBlocksCopies(unittest.TestCase):
                         self.assertIsInstance(lab.get(lang), str)
                         self.assertTrue(lab[lang].strip())
 
-    def test_tc7_params_well_formed(self):
+    def test_params_well_formed(self):
         for t, blk in _blocks().items():
             for p in blk.get("params", []):
                 with self.subTest(type=t, param=p.get("id")):
@@ -1329,9 +1306,9 @@ class TestBlocksCopies(unittest.TestCase):
                 self.assertNotIn("bands", blk, t)
 
 
-# Значения этапа 2 (поведение воркера не меняется): параметр → (умолчание, мин, макс).
+# Параметр → (умолчание, мин, макс).
 # У eq.lowpass_hz допустимо 0 (выкл) или [1000, 22000].
-STAGE2 = {
+BASE_PARAM_SPEC = {
     "gate": {"threshold_db": (-50, -90, 0), "range_db": (-40, -90, 0),
              "attack_ms": (1, 0.1, 50), "release_ms": (100, 5, 1000)},
     "eq": {"highpass_hz": (0, 0, 1000), "lowpass_hz": (0, 1000, 22000)},
@@ -1377,14 +1354,14 @@ class TestSpecFromBlocks(_ParseCase):
         super().setUp()
         self.blocks = _blocks()
 
-    def test_tc7_same_types_and_params(self):
+    def test_same_types_and_params(self):
         self.assertEqual(set(self.fx.SPEC), set(self.blocks))
         for t, blk in self.blocks.items():
             with self.subTest(type=t):
                 self.assertEqual(set(self.fx.SPEC[t]), {p["id"] for p in blk.get("params", [])})
                 self.assertEqual(set(self.fx.STR_SPEC.get(t, {})), {s["id"] for s in blk.get("strings", [])})
 
-    def test_tc7_defaults_and_max_match(self):
+    def test_defaults_and_max_match(self):
         for t, blk in self.blocks.items():
             for p in blk["params"]:
                 with self.subTest(type=t, param=p["id"]):
@@ -1394,7 +1371,7 @@ class TestSpecFromBlocks(_ParseCase):
                     # умолчание дописывается parse_chain
                     self.assertEqual(self._ok(t)[p["id"]], p["default"])
 
-    def test_tc7_bounds_enforced_as_in_file(self):
+    def test_bounds_enforced_as_in_file(self):
         for t, blk in self.blocks.items():
             for p in blk["params"]:
                 k, lo, hi = p["id"], p["min"], p["max"]
@@ -1411,7 +1388,7 @@ class TestSpecFromBlocks(_ParseCase):
                     else:
                         self._bad(t, **{k: below})
 
-    def test_tc7_strings_as_in_file(self):
+    def test_strings_as_in_file(self):
         for t, blk in self.blocks.items():
             for s in blk.get("strings", []):
                 with self.subTest(type=t, string=s["id"]):
@@ -1425,18 +1402,15 @@ class TestSpecFromBlocks(_ParseCase):
                         # у блока могут быть и обязательные строки (sampler: kit) — они подставляются
                         self.assertEqual(self._ok(t)[s["id"]], s.get("default", ""))
 
-    def test_tc7_bands_as_in_file(self):
+    def test_bands_as_in_file(self):
         want = {k: (v["default"], v["min"], v["max"]) for k, v in self.blocks["eq"]["bands"].items()}
         self.assertEqual(dict(self.fx.BAND_SPEC), want)
 
 
 @unittest.skipUnless(_HAS_NP, "нужны numpy/scipy (окружение воркера)")
-class TestStage2Unchanged(_ParseCase):
-    """Перенос описания в JSON не меняет поведение проверки цепочки этапа 2."""
-
-    def test_stage2_behaviour_unchanged(self):
-        # поведение этапа 2: умолчания и допустимые значения те же
-        for t, params in STAGE2.items():
+class TestBaseParamsUnchanged(_ParseCase):
+    def test_base_params_unchanged(self):
+        for t, params in BASE_PARAM_SPEC.items():
             for k, (default, lo, hi) in params.items():
                 with self.subTest(type=t, param=k):
                     self.assertEqual(self._ok(t)[k], default)
@@ -1454,11 +1428,9 @@ class TestStage2Unchanged(_ParseCase):
                                                     "q": (1, 0.1, 10)})
 
 
-# ---------- ТК81: превью из кэша — без расчётов партии ----------
-
 @unittest.skipUnless(fa._OK, fa._SKIP)
 class TestPreviewCacheSkipsPartLevel(fa._FxApiCase):
-    """ТК81 / 49а (бывший test_tails): повтор превью synth/perc — из кэша, без расчёта уровня партии и окна;
+    """Повтор превью synth/perc — из кэша, без расчёта уровня партии и окна;
     другое окно — считается заново. Расчёты подменены счётчиками-обёртками (поведение то же)."""
 
 
@@ -1494,12 +1466,12 @@ class TestPreviewCacheSkipsPartLevel(fa._FxApiCase):
             self.assertNotEqual(c, a)
             self.assertGreater(spy.call_count, first, f"другое окно — {attr} не вызван")
 
-    def test_tc81_synth_repeat_from_cache(self):
+    def test_synth_repeat_from_cache(self):
         chain = fa._synth_chain([{"t": 2.5, "d": 1.0, "midi": [69], "vel": 1.0},
                               {"t": 5.0, "d": 1.0, "midi": [72], "vel": 1.0}])
         self._check(self.w, "synth_part_level", chain, add=False)
 
-    def test_tc81_perc_repeat_from_cache(self):
+    def test_perc_repeat_from_cache(self):
         import fx_engine
         self._check(fx_engine, "_perc_notes", fa._perc_chain([1.0, 2.5, 4.0, 5.5, 7.0]), add=True)
 

@@ -9,11 +9,10 @@ import (
 	"yue-studio/internal/dsp"
 )
 
-// Тесты карточки internal-dsp-space, условия 10.2 и 10.3: эффект на дорожку
+// Эффект на дорожку
 // (спека ChildID 0 с Chain) у цепочки с хвостом (TailSec > 0) — хвост звучит
 // после To ещё TailSec, сухая дорожка после To не удваивается; цепочка с Key
-// получает вторым входом стем Key родителя. Фейковый воркер и хелперы — из
-// sections_test.go / helpers_test.go / stem_fx_test.go.
+// получает вторым входом стем Key родителя.
 //
 // Синтетика хвоста: голос (vocals) — тон 1000 Гц на 2.0–3.6 с (внутри окна 2–4 с)
 // и тон 1500 Гц с 4.5 с (после To — эффекта на нём быть не должно); остальное
@@ -45,7 +44,7 @@ func hallParams() map[string]float64 {
 	return map[string]float64{"size": 2, "predelay": 0, "wet": 1, "width": 0}
 }
 
-// Карточка 10.2: после To звучит хвост, сухая дорожка не удвоена; после
+// После To звучит хвост, сухая дорожка не удвоена; после
 // To + TailSec (+ фейд) — исходный трек.
 func TestRebuildSectionsStemChainTail(t *testing.T) {
 	t.Parallel()
@@ -84,7 +83,7 @@ func TestRebuildSectionsStemChainTail(t *testing.T) {
 	}
 }
 
-// Карточка 10.3: цепочка с Key (ducking, ключ drums) получает вторым входом стем
+// Цепочка с Key (ducking, ключ drums) получает вторым входом стем
 // drums родителя: тон other в окне приседает после щелчков барабанов.
 func TestRebuildSectionsKeyChainUsesParentStem(t *testing.T) {
 	t.Parallel()
@@ -121,7 +120,7 @@ func TestRebuildSectionsKeyChainUsesParentStem(t *testing.T) {
 	}
 }
 
-// Карточка 6.5: у трека нет стема-ключа — ошибка, ничего не загружено.
+// У трека нет стема-ключа — ошибка, ничего не загружено.
 func TestRebuildSectionsKeyChainNoKeyStemIsError(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)

@@ -13,7 +13,7 @@ import (
 )
 
 // baseAudioFiles — где лежит звук трека: у сгенерированных audio.flac, у
-// импортированных — как загрузили (audio.mp3 / audio.wav: #257)
+// импортированных — как загрузили (audio.mp3 / audio.wav)
 var baseAudioFiles = []string{"audio.flac", "audio.mp3", "audio.wav"}
 
 // FetchBase — звук трека во временный файл: первое имя из baseAudioFiles,

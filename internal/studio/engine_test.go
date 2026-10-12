@@ -19,25 +19,24 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-studio-engine (этап 4 звукового движка), тест-кейсы 1–6:
-// запись пересборки ChildID 0 с Engine — цепочка движка на дорожки Stems в окне
+// Запись пересборки ChildID 0 с Engine — цепочка движка на дорожки Stems в окне
 // [From, To) (To ≤ 0 — до конца трека). Дорожка считается на воркере
 // (ApplyFx: source = дорожка, output solo, preview, fade, pad); в трек ложится
 // обработанный кусок (+1, с хвостом) с From − f и исходная дорожка в окне
-// [From − f, To + f) с линейными фейдами f (−1). f = 0,05 с (контракт).
+// [From − f, To + f) с линейными фейдами f (−1). f = 0,05 с.
 //
-// pad (условие 10): воркер отдаёт файл от начала трека — тишина round(from·sr) сэмплов,
+// pad: воркер отдаёт файл от начала трека — тишина round(from·sr) сэмплов,
 // дальше кусок. Все фейки этого файла ведут себя как воркер при обоих значениях pad
 // (workerFile): без pad — кусок без тишины спереди. Пересборка обязана просить pad.
 //
-// Воркер — engFake: secFake (sections_test.go) + ApplyFx. «Обработанный кусок»
+// Воркер — engFake: secFake + ApplyFx. «Обработанный кусок»
 // фейка — заранее известный сигнал: тон 1000 Гц первую секунду, дальше 1500 Гц,
 // длиной (To + f − from) + engTail (хвост). По тому, где в треке звучат 1000/1500,
 // видно, куда и с какого места куска он вклеен; по тону дорожки (500 Гц other,
 // 3000 Гц vocals) — где и с какими краями вычтена исходная дорожка.
 
 const (
-	engFade = 0.05 // фейд краёв окна (muteFadeSec по контракту)
+	engFade = 0.05 // фейд краёв окна (muteFadeSec)
 	engTail = 1.0  // хвост, который «воркер» дописывает после To + f
 	engDur  = 10.0 // длина трека
 	engAmp  = 0.2  // амплитуда обработанного куска
@@ -120,7 +119,7 @@ func workerFile(t *testing.T, files map[string]string, dir string, id int64, nam
 
 // engSetup — родитель: трек = vocals (3000 Гц) + other (500 Гц), drums/bass — тишина,
 // плюс дорожка xyz (не из списка изменяемых) — тон 2000 Гц, в трек не входит.
-// (Условие 14: части барабанов kick… теперь изменяемы — «чужая» дорожка здесь xyz.)
+// (Части барабанов kick… изменяемы — «чужая» дорожка здесь xyz.)
 func engSetup(t *testing.T) (*engFake, []float32) {
 	t.Helper()
 	needFFmpeg(t)
@@ -160,9 +159,7 @@ func engRun(t *testing.T, f *engFake, specs ...SectionSpec) []float32 {
 
 func near(a, b, tol float64) bool { return math.Abs(a-b) <= tol }
 
-// --- ТК1: запрос к воркеру, скачивание куска, вставки +1 и −1 ---
-
-// ТК1 (запрос): Engine на other в окне 2–6 → один ApplyFx у родителя с
+// Engine на other в окне 2–6 → один ApplyFx у родителя с
 // source=other, output=solo, preview, from = From − f, to = To, fade = f, цепочка как есть.
 func TestRebuildSectionsEngineRequest(t *testing.T) {
 	t.Parallel()
@@ -201,7 +198,7 @@ func TestRebuildSectionsEngineRequest(t *testing.T) {
 	}
 }
 
-// ТК1 (звук): +1 — кусок целиком с From − f (с начала куска, с хвостом, без фейдов);
+// +1 — кусок целиком с From − f (с начала куска, с хвостом, без фейдов);
 // −1 — исходная дорожка в [From − f, To + f) с линейными фейдами f; вне окна и
 // хвоста — исходный трек; длина трека та же; чужая дорожка (vocals) не тронута.
 func TestRebuildSectionsEngineInserts(t *testing.T) {
@@ -266,7 +263,7 @@ func TestRebuildSectionsEngineFromZero(t *testing.T) {
 	}
 }
 
-// --- ТК2: To ≤ 0 — до конца трека ---
+// To ≤ 0 — до конца трека.
 
 func TestRebuildSectionsEngineToZeroIsTrackEnd(t *testing.T) {
 	t.Parallel()
@@ -295,7 +292,7 @@ func TestRebuildSectionsEngineToZeroIsTrackEnd(t *testing.T) {
 	}
 }
 
-// --- ТК3: несколько дорожек; неизменяемые и отсутствующие пропускаются ---
+// Несколько дорожек; неизменяемые и отсутствующие пропускаются.
 
 func TestRebuildSectionsEngineTwoStemsSkipsImmutable(t *testing.T) {
 	t.Parallel()
@@ -327,7 +324,7 @@ func TestRebuildSectionsEngineTwoStemsSkipsImmutable(t *testing.T) {
 	}
 }
 
-// --- ТК4: ошибка воркера — ошибка пересборки с причиной, ничего не загружено ---
+// Ошибка воркера — ошибка пересборки с причиной, ничего не загружено.
 
 func TestRebuildSectionsEngineWorkerErrorFails(t *testing.T) {
 	t.Parallel()
@@ -358,7 +355,7 @@ func TestRebuildSectionsEngineWorkerErrorFails(t *testing.T) {
 	}
 }
 
-// Краевой (контракт): кусок не скачался — ошибка, ничего не загружено.
+// Краевой: кусок не скачался — ошибка, ничего не загружено.
 func TestRebuildSectionsEngineChunkNotFetchedFails(t *testing.T) {
 	t.Parallel()
 	f, _ := engSetup(t)
@@ -372,7 +369,7 @@ func TestRebuildSectionsEngineChunkNotFetchedFails(t *testing.T) {
 	}
 }
 
-// --- ТК5: смешанный список — вклейка рендера + ffmpeg-эффект + движок ---
+// Смешанный список — вклейка рендера + ffmpeg-эффект + движок.
 
 func TestRebuildSectionsEngineMixedWithInsertAndChain(t *testing.T) {
 	t.Parallel()
@@ -423,7 +420,7 @@ func TestRebuildSectionsEngineMixedWithInsertAndChain(t *testing.T) {
 	}
 }
 
-// --- ТК6: Db записи — гейн обработанного куска, вычитаемая дорожка −1 ---
+// Db записи — гейн обработанного куска, вычитаемая дорожка −1.
 
 func TestRebuildSectionsEngineDbGainsChunkOnly(t *testing.T) {
 	t.Parallel()
@@ -446,8 +443,6 @@ func TestRebuildSectionsEngineDbGainsChunkOnly(t *testing.T) {
 	}
 }
 
-// --- поля из JSON и подпись варианта ---
-
 // Поле приходит из фронта/MCP по JSON под именем engine — как есть.
 func TestSectionSpecEngineJSON(t *testing.T) {
 	t.Parallel()
@@ -462,7 +457,7 @@ func TestSectionSpecEngineJSON(t *testing.T) {
 	}
 }
 
-// Контракт: подпись варианта для записи движка — «Движок: <типы блоков через →> · <дорожки>».
+// Подпись варианта для записи движка — «Движок: <типы блоков через →> · <дорожки>».
 func TestRebuildSectionsEngineLabel(t *testing.T) {
 	t.Parallel()
 	f, _ := engSetup(t)
@@ -484,7 +479,7 @@ func deref(p *float64) any {
 	return *p
 }
 
-// --- Регрессия ревью (условие 2 «без сдвига и без щелчков»): некруглые границы окна ---
+// Некруглые границы окна: без сдвига и без щелчков.
 //
 // Воркер с тождественной цепочкой возвращает ровно то, что получил на вход превью
 // (контракт воркера): seg[k] = дорожка[a+k]·w(k), a = round(from·sr), b = round(to·sr),
@@ -634,7 +629,7 @@ var idCases = []struct {
 	{"некруглые 123.45678–139.99", 145, 123.45678, 139.99},
 }
 
-// Условие 2: тождественная цепочка движка на некруглом окне — трек после пересборки
+// Тождественная цепочка движка на некруглом окне — трек после пересборки
 // совпадает с исходным (остаток ≤ −60 дБ) целиком, в окне и на обоих краях.
 func TestRebuildSectionsEngineIdentityNoShift(t *testing.T) {
 	t.Parallel()
@@ -676,11 +671,11 @@ func TestRebuildSectionsEngineIdentityNoShift(t *testing.T) {
 	}
 }
 
-// --- Условие 2 (по кросс-ревью r1): окно запроса — на сетке 10 мс ---
+// Окно запроса — на сетке 10 мс.
 //
 // При 44,1 и 48 кГц время, кратное 10 мс, — целое число сэмплов. from — округление
 // From − f к ближайшим 10 мс (не меньше 0), to — To вниз до 10 мс. Как именно
-// округляется ничья (ровно 5 мс), карточкой не задано — тест допускает обе соседние
+// округляется ничья (ровно 5 мс), не задано — тест допускает обе соседние
 // точки сетки.
 
 // onGrid10ms — x кратно 0,01 с (с запасом на погрешность float).
@@ -717,7 +712,7 @@ func checkGrid(t *testing.T, r yue.FxRequest, specFrom, specTo float64) {
 	}
 }
 
-// --- Условие 2, главный: кусок и вычитаемая −1 — на сэмплах базы ---
+// Кусок и вычитаемая −1 — на сэмплах базы.
 //
 // muteEngFake — фейк воркера с fx_preview: записывает запросы ApplyFx; сам кусок
 // отдаёт replaceEngFake (ниже). База 44,1 кГц = other (белый шум) + vocals (другой
@@ -822,7 +817,7 @@ func relResidualDb(out, base, sub, ref []float32, from, to float64) float64 {
 	return 10 * math.Log10(e/er)
 }
 
-// --- Условия 2/8: старый воркер — ошибка пересборки, а не молча без эффекта ---
+// Старый воркер — ошибка пересборки, а не молча без эффекта.
 
 // /config без fx_preview: true (или /config недоступен) → ошибка до вызова ApplyFx,
 // текст — про обновление воркера; ничего не загружено.
@@ -897,7 +892,7 @@ func TestRebuildSectionsNoEngineIgnoresWorkerPreview(t *testing.T) {
 	}
 }
 
-// --- Условие 2 / ТК2: To ≤ 0 у импортированного трека (mp3, wav) — длина по декодированию ---
+// To ≤ 0 у импортированного трека (mp3, wav) — длина по декодированию.
 
 func TestRebuildSectionsEngineToZeroImportedBase(t *testing.T) {
 	t.Parallel()
@@ -938,7 +933,7 @@ func TestRebuildSectionsEngineToZeroImportedBase(t *testing.T) {
 	}
 }
 
-// --- Условие 2: обработанный кусок (+1) стоит в треке на тех же сэмплах, что у воркера ---
+// Обработанный кусок (+1) стоит в треке на тех же сэмплах, что у воркера.
 //
 // Тишина проверяет только −1 против базы; кусок при ней не слышен. Здесь «воркер»
 // заменяет дорожку известным сигналом Z, привязанным к своим сэмплам:
@@ -983,7 +978,7 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 		{"123.407–139.993", 145, 123.407, 139.993},
 		{"20.1234567–33.3333333", 40, 20.1234567, 33.3333333},
 		{"123.45678–139.99", 145, 123.45678, 139.99},
-		// условие 10: окна, на которых ошибается adelay ffmpeg (123,2 с при 44,1 кГц →
+		// окна, на которых ошибается adelay ffmpeg (123,2 с при 44,1 кГц →
 		// 5 433 119 сэмплов вместо 5 433 120): from = 123,2 / 123,25 / ≈123,41, to = 123,2 / 123,25
 		{"123.25–140 (from − f = 123.2)", 145, 123.25, 140},
 		{"123.3–140 (from − f = 123.25)", 145, 123.3, 140},
@@ -1060,7 +1055,7 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 	}
 }
 
-// --- Условие 8 (регрессия кросс-ревью r3): воркер этапа 3 — fx_preview есть, pad нет ---
+// Воркер с fx_preview, но без pad.
 //
 // Такой воркер на /config отвечает fx_preview: true, но поле pad игнорирует: отдаёт
 // кусок с начала окна без тишины спереди, duration_sec = длина куска. При From > 0
@@ -1068,7 +1063,7 @@ func TestRebuildSectionsEngineChunkOnWorkerSamples(t *testing.T) {
 // просьбой обновить воркер, а не уложить кусок мимо окна (молча без эффекта).
 // При From = 0 кусок и так от начала трека — тот же воркер обязан работать.
 
-// noPadFake — replaceEngFake, который игнорирует pad (воркер этапа 3).
+// noPadFake — replaceEngFake, который игнорирует pad.
 type noPadFake struct{ *replaceEngFake }
 
 func (f *noPadFake) ApplyFx(ctx context.Context, id int64, req yue.FxRequest) (*yue.DspVariant, error) {
@@ -1134,7 +1129,7 @@ func TestRebuildSectionsEngineWorkerIgnoresPadFromZeroWorks(t *testing.T) {
 	}
 }
 
-// --- Условие 14 (internal-studio-engine, этап 5а): движок на части барабанов ---
+// Движок на части барабанов.
 //
 // Пересборка разрешает Engine-запись на дорожку-часть барабанов (kick, snare, toms, hh,
 // ride, crash): часть качается как подробная (stem-<part>.flac), считается на воркере
@@ -1268,7 +1263,7 @@ func TestRebuildSectionsEngineUnknownPartSkipped(t *testing.T) {
 	}
 }
 
-// Регрессия кросс-ревью (условие 14): у родителя нет дорожки-части барабанов, и MakeStems
+// У родителя нет дорожки-части барабанов, и MakeStems
 // её не дал (демиксер без частей барабанов, например Demucs) — пересборка падает с
 // подсказкой «нужен RoFormer», ничего не загружено, MakeStems вызван (ровно один раз).
 func TestRebuildSectionsEngineDrumPartMissingHintsRoFormer(t *testing.T) {

@@ -1,10 +1,9 @@
-"""Тесты карточки internal-own-track, этап 13: чистый модуль worker/phrases.py —
-каталог фраз, render_dry (ТК132) и круг без шва loop_render (ТК133); этап 13б (условие 100,
-ТК137): семья synth (часть synth — тишина, ноты дают блоки цепочки), у барабанных фраз часть
+"""Тесты чистого модуля worker/phrases.py: каталог фраз, render_dry и круг без шва loop_render;
+семья synth (часть synth — тишина, ноты дают блоки цепочки), у барабанных фраз часть
 perc (тишина), каталог отдаёт beats/chords/style; ноты блоков synth/perc повторяются во втором
 круге входа; громкость synth-фразы — цель −20 dBFS A-RMS; bypass с synth/perc — только эти блоки.
 
-Контракт (из карточки, условия 93–94):
+Контракт:
 - PHRASES — каталог: id, family (guitar | bass | drums), name {ru, en}, bpm;
   гитарных фраз ≥ 5, басовых ≥ 2, барабанных ≥ 2; у барабанной — части kick, snare, hh;
 - render_dry(id, tempo, sr) → ({часть: моно-массив}, cycle_sec): части одной длины,
@@ -15,8 +14,6 @@ perc (тишина), каталог отдаёт beats/chords/style; ноты б
   цепочка — на частях из stems, вход — три круга подряд, результат — средний круг (хвост
   конца круга звучит в начале); прочие части сухие; громкость = A-RMS сухого сведения;
   пик ≤ 0,99 (clipped=True, если пришлось опускать); bypass — сухое сведение тем же путём.
-
-Запуск: cd worker && python3 -m unittest test_phrases -v
 """
 import unittest
 
@@ -30,10 +27,8 @@ except ImportError:
 _SKIP = "нужны numpy/scipy (окружение воркера)"
 SR = 44100
 FAMILIES = ("guitar", "bass", "drums", "synth")
-SILENT_FAMILIES = ("synth",)  # сухая фраза — тишина, звук дают ноты блока synth (условие 100)
+SILENT_FAMILIES = ("synth",)  # сухая фраза — тишина, звук дают ноты блока synth
 
-
-# ---------- помощники ----------
 
 def _catalog():
     """Каталог как {id: запись} — PHRASES может быть словарём id → запись или списком записей с id."""
@@ -93,8 +88,6 @@ def _db(v):
     return 20 * np.log10(max(v, 1e-12))
 
 
-# ---------- ТК132: каталог и render_dry ----------
-
 @unittest.skipUnless(_HAS_NP, _SKIP)
 class TestCatalog(unittest.TestCase):
 
@@ -109,11 +102,11 @@ class TestCatalog(unittest.TestCase):
                 self.assertIsInstance(e["name"]["ru"], str)
                 self.assertIsInstance(e["name"]["en"], str)
                 self.assertTrue(e["name"]["ru"] and e["name"]["en"])
-                # карточка требует поле bpm, но не его знак: у записи без сетки допустим 0
+                # у записи без сетки допустим bpm 0
                 self.assertIsInstance(e["bpm"], (int, float))
                 self.assertGreaterEqual(e["bpm"], 0)
 
-    def test_tc132_counts_by_family(self):
+    def test_counts_by_family(self):
         self.assertGreaterEqual(len(_ids("guitar")), 5)
         self.assertGreaterEqual(len(_ids("bass")), 2)
         self.assertGreaterEqual(len(_ids("drums")), 2)
@@ -122,7 +115,7 @@ class TestCatalog(unittest.TestCase):
 @unittest.skipUnless(_HAS_NP, _SKIP)
 class TestRenderDry(unittest.TestCase):
 
-    def test_tc132_every_phrase_renders_parts_same_length(self):
+    def test_every_phrase_renders_parts_same_length(self):
         for pid in _ids():
             with self.subTest(id=pid):
                 parts, cycle = _render(pid, 1.0)
@@ -140,7 +133,7 @@ class TestRenderDry(unittest.TestCase):
                 if _catalog()[pid]["family"] not in SILENT_FAMILIES:
                     self.assertGreater(np.max(np.abs(_sum(parts))), 1e-3, "фраза беззвучна")
 
-    def test_tc132_tempo_075_cycle_longer(self):
+    def test_tempo_075_cycle_longer(self):
         for pid in _ids():
             with self.subTest(id=pid):
                 parts1, c1 = _render(pid, 1.0)
@@ -158,18 +151,18 @@ class TestRenderDry(unittest.TestCase):
                 parts, c = _render(pid, t)
                 self.assertLessEqual(abs(c * SR - c1 / t * SR), 1)
 
-    def test_tc132_tempo_out_of_range_value_error(self):
+    def test_tempo_out_of_range_value_error(self):
         pid = _ids()[0]
         for t in (0.4, 1.6, 0, -1):
             with self.subTest(tempo=t):
                 with self.assertRaises(ValueError):
                     _render(pid, t)
 
-    def test_tc132_unknown_id_key_error(self):
+    def test_unknown_id_key_error(self):
         with self.assertRaises(KeyError):
             _render("no-such-phrase-xyz")
 
-    def test_tc132_bass_pitch_independent_of_tempo(self):
+    def test_bass_pitch_independent_of_tempo(self):
         for pid in _ids("bass"):
             with self.subTest(id=pid):
                 slow, _ = _render(pid, 0.75)
@@ -177,7 +170,7 @@ class TestRenderDry(unittest.TestCase):
                 r = _pitch_ratio(_sum(slow), _sum(fast), SR)
                 self.assertAlmostEqual(r, 1.0, delta=0.02, msg=f"высота сдвинулась в {r:.3f} раза")
 
-    def test_tc132_recording_pitch_independent_of_tempo(self):
+    def test_recording_pitch_independent_of_tempo(self):
         # механизм растяжки записи общий для гитарных фраз — две фразы вместо всех
         for pid in _ids("guitar")[:2]:
             with self.subTest(id=pid):
@@ -194,8 +187,6 @@ class TestRenderDry(unittest.TestCase):
         y = np.interp(np.arange(n) * 1.25, np.arange(len(x)), x)
         self.assertAlmostEqual(_pitch_ratio(x, y, SR), 1.25, delta=0.02)
 
-
-# ---------- ТК133: loop_render ----------
 
 CYCLE = 2.0
 N = int(CYCLE * SR)
@@ -230,14 +221,14 @@ class TestLoopRender(unittest.TestCase):
         self.assertEqual(y.ndim, 2)
         self.assertEqual(y.shape, (N, 2))
 
-    def test_tc133_delay_tail_wraps_into_cycle_start(self):
+    def test_delay_tail_wraps_into_cycle_start(self):
         y, _ = _loop(_late_parts(), ["guitar"], DELAY)
         self._check_shape(y)
         head = y[:int(0.2 * SR)]
         self.assertGreater(float(np.sqrt(np.mean(head ** 2))), 1e-3,
                            "в первые 0,2 с нет хвоста дилея с конца круга")
 
-    def test_tc133_bypass_head_silent(self):
+    def test_bypass_head_silent(self):
         y, clipped = _loop(_late_parts(), ["guitar"], DELAY, bypass=True)
         self._check_shape(y)
         self.assertLess(float(np.max(np.abs(y[:int(0.19 * SR)]))), 1e-4,
@@ -245,7 +236,7 @@ class TestLoopRender(unittest.TestCase):
         self.assertGreater(float(np.max(np.abs(y[int(0.3 * SR):]))), 0.05)
         self.assertFalse(clipped)
 
-    def test_tc133_gain12_loudness_equals_dry(self):
+    def test_gain12_loudness_equals_dry(self):
         parts = {"guitar": _tone(1000, 0.05, 0.0, CYCLE), "bass": _tone(110, 0.05, 0.0, CYCLE)}
         wet, clipped = _loop(parts, ["guitar"], GAIN12)
         dry, _ = _loop(parts, ["guitar"], GAIN12, bypass=True)
@@ -255,7 +246,7 @@ class TestLoopRender(unittest.TestCase):
         mono = _sum(parts)
         self.assertAlmostEqual(_db(_a_rms(dry.mean(axis=1))), _db(_a_rms(mono)), delta=3.0)
 
-    def test_tc133_peak_limited_and_clipped_flag(self):
+    def test_peak_limited_and_clipped_flag(self):
         # две части в фазе по 0,7 → сухой пик 1,4: круг обязан опуститься до 0,99
         parts = {"guitar": _tone(220, 0.7, 0.0, CYCLE), "bass": _tone(220, 0.7, 0.0, CYCLE)}
         for bypass in (False, True):
@@ -265,7 +256,7 @@ class TestLoopRender(unittest.TestCase):
                 self.assertIs(bool(clipped), True)
                 self.assertGreater(float(np.max(np.abs(y))), 0.5, "круг опущен сильнее нужного")
 
-    def test_tc133_part_not_in_stems_unchanged(self):
+    def test_part_not_in_stems_unchanged(self):
         """Цепочка gain +12 дБ на kick: остальные части — сухие. Части разнесены по времени,
         поэтому их вклад видно по отдельности. Общий множитель громкости g (выравнивание
         по сухому сведению) одинаков для всего круга: snare = g·сухой snare, kick = g·4·сухой kick."""
@@ -288,8 +279,8 @@ class TestLoopRender(unittest.TestCase):
                 # kick громче snare ровно на +12 дБ относительно сухих
                 self.assertAlmostEqual(_db(g_k / g_s), 12.0, delta=0.5)
 
-    def test_tc133_identity_sum_minus_dry_kick_equals_rest(self):
-        """Буквальная форма ТК133 «сумма минус сухой kick = сухие остальные» — для цепочки,
+    def test_identity_sum_minus_dry_kick_equals_rest(self):
+        """Буквальная форма «сумма минус сухой kick = сухие остальные» — для цепочки,
         не меняющей громкость (gain 0 дБ): выравнивание здесь — множитель 1."""
         kick = _tone(60, 0.1, 0.1, 0.9)
         snare = _tone(800, 0.1, 1.1, 1.9)
@@ -301,15 +292,13 @@ class TestLoopRender(unittest.TestCase):
         np.testing.assert_allclose(y, dry, atol=1e-4)
 
 
-# ---------- ТК137 (этап 13б, условие 100): синты и перкуссия фразой ----------
-
 STYLES = {"pad", "arp", "pulse", "drone"}
 
 
 @unittest.skipUnless(_HAS_NP, _SKIP)
 class TestSynthCatalog(unittest.TestCase):
 
-    def test_tc137_synth_phrases_have_chords_style_beats(self):
+    def test_synth_phrases_have_chords_style_beats(self):
         ids = _ids("synth")
         self.assertTrue(ids, "нет фраз семьи synth")
         styles = set()
@@ -325,13 +314,12 @@ class TestSynthCatalog(unittest.TestCase):
                 for c in e["chords"]:
                     self.assertIsInstance(c, str)
                     self.assertTrue(c)
-                # условие 100: Em C G D, 4 такта, 100 BPM
                 self.assertEqual(e["chords"], ["Em", "C", "G", "D"])
                 self.assertEqual(e["beats"], 16)
                 self.assertEqual(e["bpm"], 100)
         self.assertEqual(styles, STYLES, "нужны стили pad, arp, pulse, drone")
 
-    def test_tc137_synth_part_silent_cycle_by_beats(self):
+    def test_synth_part_silent_cycle_by_beats(self):
         for pid in _ids("synth"):
             e = _catalog()[pid]
             with self.subTest(id=pid):
@@ -340,8 +328,7 @@ class TestSynthCatalog(unittest.TestCase):
                 self.assertLess(float(np.max(np.abs(parts["synth"]))), 1e-6, "часть synth — тишина")
                 self.assertAlmostEqual(cycle, e["beats"] * 60.0 / e["bpm"], delta=1.5 / SR)
 
-    def test_tc137_drum_phrases_have_silent_perc_and_beats(self):
-        # ТК132: у барабанных фраз есть kick, snare, hh; ТК137: и тихая часть perc, beats > 0
+    def test_drum_phrases_have_silent_perc_and_beats(self):
         for pid in _ids("drums"):
             with self.subTest(id=pid):
                 self.assertGreater(_catalog()[pid]["beats"], 0)
@@ -368,7 +355,7 @@ def _pad_notes(cycle):
 @unittest.skipUnless(_HAS_NP, _SKIP)
 class TestSynthLoop(unittest.TestCase):
 
-    def test_tc137_note_tail_wraps_into_cycle_start(self):
+    def test_note_tail_wraps_into_cycle_start(self):
         dry = {"synth": np.zeros(N, dtype=np.float32)}
         chain = [_synth_block([{"t": CYCLE - 0.1, "d": 0.08, "midi": [60], "vel": 0.8}])]
         y, _ = _loop(dry, ["synth"], chain)
@@ -377,7 +364,7 @@ class TestSynthLoop(unittest.TestCase):
         self.assertGreater(float(np.sqrt(np.mean(head ** 2))), 1e-4,
                            "в первые 0,05 с нет хвоста ноты с конца круга")
 
-    def test_tc137_bypass_synth_reverb_not_silent_and_differs(self):
+    def test_bypass_synth_reverb_not_silent_and_differs(self):
         dry = {"synth": np.zeros(N, dtype=np.float32)}
         chain = [_synth_block([{"t": 0.0, "d": 0.5, "midi": [60, 64, 67], "vel": 0.8}], release_s=0.3),
                  {"type": "reverb", "decay_s": 2.0, "wet": 0.6}]
@@ -388,7 +375,7 @@ class TestSynthLoop(unittest.TestCase):
         diff = float(np.sqrt(np.mean((wet - byp) ** 2)))
         self.assertGreater(diff, 1e-3, "bypass не отличается от результата с ревербом")
 
-    def test_tc137_synth_phrase_loudness_target(self):
+    def test_synth_phrase_loudness_target(self):
         """A-RMS ≈ −20 dBFS (0,1) ± 1 дБ, если пик не упёрся в 0,99; упёрся (clipped) — ниже −20, но не ниже −30."""
         # synth-фразы различаются только длиной круга (часть synth — тишина): одна фраза
         for pid in _ids("synth")[:1]:

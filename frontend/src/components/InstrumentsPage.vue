@@ -128,8 +128,6 @@ function applyPreset(id) {
   if (p) chain.value = withAmp(fromWorkerChain(p.chain, BLOCKS))
 }
 
-// ---------- свои инструменты ----------
-
 const nameMode = ref('')         // '' | 'new' — «сохранить как мой», 'rename' — переименовать свой
 const myName = ref('')
 
@@ -199,8 +197,6 @@ async function upload(kind) {
     if (r) { await loadAssets(); chain.value = withAmp(chain.value) }
   } catch (e) { err.value = String(e) }
 }
-
-// ---------- круг ----------
 
 let loop = null          // {phase, cycle}: с какого места круга запущен файл и длина круга
 let playQueue = Promise.resolve()   // загрузки круга в плеер — строго по одной

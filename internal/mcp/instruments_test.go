@@ -10,11 +10,10 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 13в, условие 104 (тест-кейс ТК141, MCP):
 // инструмент fx_instruments (action list|create|update|delete) — свои инструменты воркера.
 // Воркер — instrFake поверх fakeService (server_test.go).
 // Допущение: аргументы инструмента названы как поля API воркера (id, name, base, group, stems, chain, extra);
-// chain и stems передаются массивами JSON. Написаны по карточке, без чтения реализации.
+// chain и stems передаются массивами JSON.
 
 type instrFake struct {
 	*fakeService
@@ -77,7 +76,7 @@ func sameJSON(t *testing.T, got any, want string) bool {
 	return reflect.DeepEqual(g, w)
 }
 
-// ТК141: action list зовёт FxInstruments, id и имена видны в выводе.
+// action list зовёт FxInstruments, id и имена видны в выводе.
 func TestFxInstrumentsToolList(t *testing.T) {
 	t.Parallel()
 	s, fake := newInstrServer(t)
@@ -98,7 +97,7 @@ func TestFxInstrumentsToolList(t *testing.T) {
 	}
 }
 
-// ТК141: create передаёт name/chain/stems (и base/group) воркеру; id созданного — в выводе.
+// create передаёт name/chain/stems (и base/group) воркеру; id созданного — в выводе.
 func TestFxInstrumentsToolCreate(t *testing.T) {
 	t.Parallel()
 	s, fake := newInstrServer(t)

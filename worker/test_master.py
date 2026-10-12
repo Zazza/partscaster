@@ -1,8 +1,7 @@
-"""Тесты карточки internal-own-track, этап 6 «Сведение и мастер»: блоки движка glue и
-limiter (условия 41, 42; ТК69, ТК70, ТК78б), /fx на варианте и «на месте» (условие 43; ТК71,
-ТК78в), поле master и place у записей пресетов звука (условие 45; ТК74).
+"""Тесты блоков движка glue и limiter, /fx на варианте и «на месте», поля master и place
+у записей пресетов звука.
 
-Контракт (из карточки, без чтения реализации):
+Контракт:
 - glue — склейка шины: стерео-связанный детектор RMS (окно = attack), мягкое колено 6 дБ,
   threshold_db −40…0 (−18), ratio 1…10 (2), attack_ms 0,1…100 (10), release_ms 20…2000 (250),
   makeup_db 0…12 (0), mix 0…1 (1, параллельная компрессия); ниже порога (за коленом) и mix 0 —
@@ -20,12 +19,10 @@ limiter (условия 41, 42; ТК69, ТК70, ТК78б), /fx на вариан
   записи specs ({stems, place, db}) — pan −1…1, width 0…2; встроенные — master [] и
   target_lufs как раньше (transmission −13, sex-on-fire −12, live-rhythm null).
 
-Допущение (карточка не уточняет): уровень тона «−6 дБFS» — по пику синуса (амплитуда 0,5),
+Допущение: уровень тона «−6 дБFS» — по пику синуса (амплитуда 0,5),
 что совпадает с RMS-уровнем по AES17 (синус полной шкалы = 0 дБFS).
 
 Внешние границы подменяются как в test_fx_api (fx_resources — фейк). GPU и сеть не нужны.
-
-Запуск: cd worker && python3 -m unittest test_master -v
 """
 import copy
 import os
@@ -94,7 +91,7 @@ def _music(dur=6.0, sr=SR, seed=1):
 
 
 def _peaky(dur=8.0, lufs=-20.0, every=0.5, seed=5):
-    """ТК78б: плотное тело (шум) с громкостью lufs и частыми короткими пиками +6 дБFS
+    """Плотное тело (шум) с громкостью lufs и частыми короткими пиками +6 дБFS
     (пара отсчётов ±2 каждые every с). Пики почти не добавляют громкости, но ограничитель
     держит их весь release — один проход после усиления заметно теряет LUFS."""
     rng = np.random.default_rng(seed)
@@ -124,8 +121,6 @@ def _scale_lufs(x, lufs):
     return x
 
 
-# ---------- ТК69: glue ----------
-
 @unittest.skipUnless(_HAS_NP, _SKIP_NP)
 class TestGlue(unittest.TestCase):
 
@@ -144,7 +139,7 @@ class TestGlue(unittest.TestCase):
             with self.subTest(k=k, v=v), self.assertRaises(fx.ChainError):
                 fx.parse_chain([{"type": "glue", k: v}])
 
-    def test_tc69_reduction_above_threshold(self):
+    def test_reduction_above_threshold(self):
         # тон −6 дБFS, порог −18, ratio 2, колено далеко позади: (−6 − (−18))·(1 − 1/2) = 6 дБ
         x = _stereo(_sine(1000, -6, 3.0))
         y = self._run(x, threshold_db=-18, ratio=2)
@@ -152,18 +147,18 @@ class TestGlue(unittest.TestCase):
         red = _rms_db(x[a:b]) - _rms_db(y[a:b])
         self.assertAlmostEqual(red, 6.0, delta=0.5)
 
-    def test_tc69_below_threshold_unchanged(self):
+    def test_below_threshold_unchanged(self):
         x = _stereo(_sine(1000, -30, 3.0))
         y = self._run(x, threshold_db=-18, ratio=2)
         a, b = int(1.0 * SR), int(2.5 * SR)
         self.assertAlmostEqual(_rms_db(y[a:b]) - _rms_db(x[a:b]), 0.0, delta=0.1)
 
-    def test_tc69_mix0_is_input(self):
+    def test_mix0_is_input(self):
         x = _stereo(_sine(1000, -6, 2.0))
         y = self._run(x, threshold_db=-30, ratio=8, mix=0)
         np.testing.assert_allclose(y, x, atol=1e-6)
 
-    def test_tc69_stereo_link(self):
+    def test_stereo_link(self):
         # громкий только L: R (тихий тон другой частоты) приглушается так же
         left, right = _sine(1000, -6, 3.0), _sine(700, -30, 3.0)
         x = _stereo(left, right)
@@ -174,7 +169,7 @@ class TestGlue(unittest.TestCase):
         self.assertGreater(red_l, 3.0, "громкий канал не сжат")
         self.assertAlmostEqual(red_r, red_l, delta=0.5)
 
-    def test_tc69_length_same(self):
+    def test_length_same(self):
         for x in (_stereo(_sine(1000, -6, 1.234)), _sine(1000, -6, 0.777).astype(np.float32)):
             with self.subTest(shape=x.shape):
                 y = self._run(x)
@@ -186,8 +181,6 @@ class TestGlue(unittest.TestCase):
         a, b = int(0.5 * SR), int(1.5 * SR)
         self.assertAlmostEqual(_rms_db(y[a:b]) - _rms_db(x[a:b]), 6.0, delta=0.2)
 
-
-# ---------- ТК70: limiter ----------
 
 @unittest.skipUnless(_HAS_NP, _SKIP_NP)
 class TestLimiter(unittest.TestCase):
@@ -209,11 +202,11 @@ class TestLimiter(unittest.TestCase):
             with self.subTest(k=k, v=v), self.assertRaises(fx.ChainError):
                 fx.parse_chain([{"type": "limiter", k: v}])
 
-    def test_tc70_target_minus30_chain_error(self):
+    def test_target_minus30_chain_error(self):
         with self.assertRaises(_fx().ChainError):
             _fx().process(np.zeros((1000, 2), np.float32), SR, [{"type": "limiter", "target_lufs": -30}])
 
-    def test_tc70_true_peak_below_ceiling_no_shift(self):
+    def test_true_peak_below_ceiling_no_shift(self):
         x = _scale_peak_db(_music(), 3.0)            # пики +3 дБFS
         y = self._run(x, ceiling_db=-1)
         self.assertEqual(y.shape, x.shape)
@@ -225,7 +218,7 @@ class TestLimiter(unittest.TestCase):
         corr = [float(np.dot(a[max(0, -k):n - max(0, k)], b[max(0, k):n - max(0, -k)])) for k in lags]
         self.assertEqual(list(lags)[int(np.argmax(corr))], 0)
 
-    def test_tc70_target_lufs(self):
+    def test_target_lufs(self):
         x = _scale_lufs(_music(), -20.0)
         self.assertAlmostEqual(_loud(x)["lufs"], -20.0, delta=0.15)
         y = self._run(x, target_lufs=-14)
@@ -233,7 +226,7 @@ class TestLimiter(unittest.TestCase):
         self.assertAlmostEqual(m["lufs"], -14.0, delta=0.3)
         self.assertLessEqual(m["true_peak_db"], -0.9)
 
-    def test_tc78b_target_reached_when_one_pass_falls_short(self):
+    def test_target_reached_when_one_pass_falls_short(self):
         # частые пики +6 дБFS над плотным телом, LUFS входа −20, цель −10: усиление +10 дБ
         # загоняет пики на +16, ограничитель снимает громкость — нужна подстройка (повтор прохода)
         x = _peaky()
@@ -245,13 +238,13 @@ class TestLimiter(unittest.TestCase):
         self.assertAlmostEqual(m["lufs"], -10.0, delta=0.3)
         self.assertLessEqual(m["true_peak_db"], -0.9)
 
-    def test_tc70_no_target_quiet_signal_unchanged(self):
+    def test_no_target_quiet_signal_unchanged(self):
         x = _scale_peak_db(_music(), -8.0)           # истинный пик заведомо ниже −1
         self.assertLess(_loud(x)["true_peak_db"], -2)
         y = self._run(x, target_lufs=0)
         np.testing.assert_allclose(y, x.astype(np.float32), atol=1e-6)
 
-    def test_tc70_silence_stays_silence(self):
+    def test_silence_stays_silence(self):
         x = np.zeros((SR * 2, 2), np.float32)
         for p in ({}, {"target_lufs": -14}):
             with self.subTest(**p):
@@ -260,8 +253,6 @@ class TestLimiter(unittest.TestCase):
                 self.assertTrue(np.all(np.isfinite(y)))
                 self.assertEqual(float(np.max(np.abs(y))), 0.0)
 
-
-# ---------- ТК71: /fx на варианте и «на месте» ----------
 
 VAR = "overdub-inst-0.flac"
 VAR_HZ = 5000
@@ -284,7 +275,7 @@ class TestFxFileInPlace(fa._FxApiCase):
     def _listed(self, jid):
         return {v["file"]: v for v in self.client.get(f"/jobs/{jid}/dsp").json()}
 
-    def test_tc71_file_processes_variant_not_track(self):
+    def test_file_processes_variant_not_track(self):
         jid, d = self._audio_job()
         self._variant(d, jid)
         out = self._ok(jid, source="mix", file=VAR, chain=fa.IDENTITY)
@@ -303,7 +294,7 @@ class TestFxFileInPlace(fa._FxApiCase):
         self.assertNotEqual(a, b, "результат по варианту перезаписал результат по треку")
         self.assertTrue((d / a).is_file() and (d / b).is_file())
 
-    def test_tc71_bad_names_422(self):
+    def test_bad_names_422(self):
         jid, d = self._audio_job()
         self._variant(d, jid)
         for bad in ("../" + VAR, "../1/" + VAR, "audio.flac", "stem-vocals.wav", "x/" + VAR):
@@ -311,18 +302,18 @@ class TestFxFileInPlace(fa._FxApiCase):
                 r = self._fx(jid, source="mix", file=bad, chain=fa.IDENTITY)
                 self.assertEqual(r.status_code, 422, r.text)
 
-    def test_tc71_missing_file_404(self):
+    def test_missing_file_404(self):
         jid, _ = self._audio_job()
         r = self._fx(jid, source="mix", file="dsp-fx-mix-00000000.flac", chain=fa.IDENTITY)
         self.assertEqual(r.status_code, 404, r.text)
 
-    def test_tc71_file_with_stem_source_422(self):
+    def test_file_with_stem_source_422(self):
         jid, d = self._audio_job()
         self._variant(d, jid)
         r = self._fx(jid, source="vocals", file=VAR, chain=fa.IDENTITY)
         self.assertEqual(r.status_code, 422, r.text)
 
-    def test_tc71_in_place_same_file_metrics_label(self):
+    def test_in_place_same_file_metrics_label(self):
         jid, d = self._audio_job()
         path = self._variant(d, jid)
         before = self._listed(jid)[VAR]
@@ -345,14 +336,14 @@ class TestFxFileInPlace(fa._FxApiCase):
         self._ok(jid, source="mix", file=VAR, in_place=True, chain=[{"type": "gain", "gain_db": 0}])
         self.assertEqual(self._listed(jid)[VAR]["label"], "Микс студии · мастер")
 
-    def test_tc71_in_place_without_file_422(self):
+    def test_in_place_without_file_422(self):
         jid, d = self._audio_job()
         track0 = (d / "audio.flac").read_bytes()
         r = self._fx(jid, source="mix", in_place=True, chain=fa.IDENTITY)
         self.assertEqual(r.status_code, 422, r.text)
         self.assertEqual((d / "audio.flac").read_bytes(), track0, "звук трека перезаписан")
 
-    def test_tc71_in_place_with_preview_422(self):
+    def test_in_place_with_preview_422(self):
         jid, d = self._audio_job()
         path = self._variant(d, jid)
         data0 = path.read_bytes()
@@ -394,7 +385,7 @@ class TestLimiterPreview(fa._FxApiCase):
         self.assertGreater(n, int((to - fr - 0.1) * SR))
         self.assertAlmostEqual(_rms_db(y_prev[:n]), _rms_db(seg[:n]), delta=0.5)
 
-    def test_tc78c_preview_quiet_part_matches_full_render(self):
+    def test_preview_quiet_part_matches_full_render(self):
         # тихие 6 с (−40 LUFS) + громкие 6 с (−12 LUFS), окно [1, 5) — тихая часть: по всему
         # треку усиление ≈ −2 дБ, окно отдельно подняло бы тихую часть на +12 дБ (зажим)
         quiet = _scale_lufs(_music(6.0, SR, seed=5), -40.0)
@@ -423,8 +414,6 @@ class TestLimiterPreview(fa._FxApiCase):
         self.assertGreater(fa._amp(yc, 2000, 0.2, 1.8), 0.01, "превью взято из кэша старой версии")
         self.assertLess(fa._amp(yc, VAR_HZ, 0.2, 1.8), 0.001)
 
-
-# ---------- ТК74: master и place у пресетов звука ----------
 
 ENGINE = [{"type": "eq", "highpass_hz": 80}]
 FINAL = [{"chain": "width", "params": {"width": 1.1, "bass": 120}}]
@@ -461,7 +450,7 @@ class TestPresetMasterPlace(tp._WorkerApiCase):
         self.assertTrue(r.json().get("detail"), r.text)
         self.assertEqual(len(self._list()), n, "невалидный пресет сохранился")
 
-    def test_tc74_master_saved_and_returned(self):
+    def test_master_saved_and_returned(self):
         pid = self._create(master=copy.deepcopy(MASTER))
         got = self._by_id(pid)
         self.assertEqual(got.get("master"), MASTER)
@@ -476,10 +465,10 @@ class TestPresetMasterPlace(tp._WorkerApiCase):
         self.assertLess(r.status_code, 300, r.text)
         self.assertEqual(self._by_id(pid)["master"], [{"type": "limiter"}])
 
-    def test_tc74_master_unknown_block_422(self):
+    def test_master_unknown_block_422(self):
         self._bad(master=[{"type": "nope"}])
 
-    def test_tc74_master_17_blocks_422(self):
+    def test_master_17_blocks_422(self):
         self._bad(master=[{"type": "gain", "gain_db": 0}] * 17)
 
     def test_master_bad_param_422(self):
@@ -496,13 +485,13 @@ class TestPresetMasterPlace(tp._WorkerApiCase):
         self.assertEqual(got["stems"], ["other"])
         self.assertEqual(got["place"], {"pan": 0.3, "width": 1.4})
 
-    def test_tc74_place_out_of_range_422(self):
+    def test_place_out_of_range_422(self):
         for place in ({"pan": 2, "width": 1}, {"pan": 0, "width": 3}, {"pan": -1.5, "width": 1},
                       {"pan": 0, "width": -0.1}, {"pan": "0", "width": 1}):
             with self.subTest(place=place):
                 self._bad(specs=[{"stems": ["other"], "place": place, "db": 0}])
 
-    def test_tc74_builtins_master_empty_target_unchanged(self):
+    def test_builtins_master_empty_target_unchanged(self):
         want = {"transmission": -13.0, "sex-on-fire": -12.0, "live-rhythm": None}
         got = {p["slug"]: p for p in self._list() if p.get("builtin")}
         for slug, target in want.items():
@@ -514,7 +503,7 @@ class TestPresetMasterPlace(tp._WorkerApiCase):
 
 @unittest.skipUnless(tp._HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestPresetMasterLimiterRoom(tp._WorkerApiCase):
-    """ТК79г / усл. 45б: при target_lufs и мастере без limiter limiter допишется 17-м блоком —
+    """При target_lufs и мастере без limiter limiter допишется 17-м блоком —
     16 блоков без limiter → 422; 15 → 200; 16 с limiter (дописывать нечего) → 200."""
 
     # помощники — те же, что у TestPresetMasterPlace (без повторного прогона его тестов)
@@ -525,14 +514,14 @@ class TestPresetMasterLimiterRoom(tp._WorkerApiCase):
 
     GAIN = {"type": "gain", "gain_db": 0}
 
-    def test_tc79g_target_and_16_blocks_without_limiter_422(self):
+    def test_target_and_16_blocks_without_limiter_422(self):
         self._bad(target_lufs=-14, master=[dict(self.GAIN) for _ in range(16)])
 
-    def test_tc79g_target_and_15_blocks_ok(self):
+    def test_target_and_15_blocks_ok(self):
         pid = self._create(target_lufs=-14, master=[dict(self.GAIN) for _ in range(15)])
         self.assertEqual(len(self._by_id(pid)["master"]), 15)
 
-    def test_tc79g_target_and_16_blocks_with_limiter_ok(self):
+    def test_target_and_16_blocks_with_limiter_ok(self):
         master = [dict(self.GAIN) for _ in range(15)] + [{"type": "limiter"}]
         pid = self._create(target_lufs=-14, master=master)
         self.assertEqual(len(self._by_id(pid)["master"]), 16)

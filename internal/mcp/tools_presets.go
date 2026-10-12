@@ -10,8 +10,6 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// ---------- пресеты звука ----------
-
 // argJSON — аргумент инструмента в Go-тип через JSON (списки объектов пресета); нет — без ошибки
 func argJSON(args map[string]any, key string, out any) error {
 	v, ok := args[key]

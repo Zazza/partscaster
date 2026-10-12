@@ -1,6 +1,6 @@
 """Спецификация жизненного цикла джобы: отмена, удаление, ветки генерации, очередь.
 
-Что должно работать (docs/api.md, docs/mcp.md, AGENTS.md):
+Что должно работать:
 L1. POST /jobs/{id}/cancel: queued — снимается из очереди (статус canceled, очередь
     её не запускает); running — генерация останавливается на ближайшем шаге,
     итог canceled (не error); готовая/упавшая/несуществующая — «нечего отменять»,
@@ -25,8 +25,6 @@ L4. Очередь (queue_loop): берёт queued по порядку номе�
 L5. Перезапуск воркера (_startup): джобы, «повисшие» в running, → error.
 
 Модель (yue2), torch и разделение на дорожки — внешние границы, подменяются.
-
-Запуск из каталога worker: python -m unittest test_jobs_lifecycle -v
 """
 import os
 import sys
@@ -178,8 +176,6 @@ class _Case(_WorkerApiCase):
                 self.w.queue_loop()
 
 
-# ---------- L1: отмена ----------
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestCancel(_Case):
 
@@ -246,8 +242,6 @@ class TestCancel(_Case):
         r = self.client.post("/jobs/9999/cancel")
         self.assertTrue(r.status_code == 404 or r.json().get("canceled") is False, r.text)
 
-
-# ---------- L2: удаление ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestDeleteJob(_Case):
@@ -326,8 +320,6 @@ class TestDeleteJob(_Case):
         self.assertFalse((self.jobs_dir / "8").exists())
         self.assertTrue((outside / "precious.flac").is_file(), "удаление ушло по ссылке наружу")
 
-
-# ---------- L3: ветки генерации ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestRunJobBranches(_Case):
@@ -445,8 +437,6 @@ class TestRunJobBranches(_Case):
         self._run(style=INSTRUMENTAL)
         self.assertEqual(self.separations, [])
 
-
-# ---------- L4–L5: очередь и перезапуск ----------
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestQueue(_Case):

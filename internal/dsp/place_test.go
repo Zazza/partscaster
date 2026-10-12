@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// Место дорожки в стерео — матрица 2×2 (internal-own-track, этап 6, усл. 39; ТК66, ТК67).
+// Место дорожки в стерео — матрица 2×2.
 // Порядок коэффициентов: [a, b, c, d] — L' = a·L + b·R, R' = c·L + d·R.
 
 // pmApply — применить матрицу к паре отсчётов.
@@ -17,7 +17,7 @@ func pmApply(m [4]float64, l, r float64) (float64, float64) {
 	return m[0]*l + m[1]*r, m[2]*l + m[3]*r
 }
 
-// pmSpec — матрица по формуле карточки: ширина M/S, затем панорама складыванием канала.
+// pmSpec — эталонная матрица: ширина M/S, затем панорама складыванием канала.
 func pmSpec(pan, width float64) [4]float64 {
 	w := [4]float64{(1 + width) / 2, (1 - width) / 2, (1 - width) / 2, (1 + width) / 2}
 	th := math.Abs(pan) * math.Pi / 2
@@ -51,7 +51,7 @@ func pmClose(t *testing.T, what string, got, want, tol float64) {
 	}
 }
 
-// ТК66: pan 0, width 1 — ровно единичная матрица.
+// pan 0, width 1 — ровно единичная матрица.
 func TestPlaceMatrixIdentity(t *testing.T) {
 	t.Parallel()
 	m := pmMust(t, 0, 1)
@@ -60,7 +60,7 @@ func TestPlaceMatrixIdentity(t *testing.T) {
 	}
 }
 
-// ТК66: (1, 1) на моно-входе L = R = s — левый 0, правый s·√2, мощность та же ±0,1 дБ.
+// (1, 1) на моно-входе L = R = s — левый 0, правый s·√2, мощность та же ±0,1 дБ.
 func TestPlaceMatrixHardRightMono(t *testing.T) {
 	t.Parallel()
 	m := pmMust(t, 1, 1)
@@ -74,7 +74,7 @@ func TestPlaceMatrixHardRightMono(t *testing.T) {
 	}
 }
 
-// ТК66: (−1, 1) — зеркально: правый 0, левый s·√2.
+// (−1, 1) — зеркально: правый 0, левый s·√2.
 func TestPlaceMatrixHardLeftMono(t *testing.T) {
 	t.Parallel()
 	m := pmMust(t, -1, 1)
@@ -84,7 +84,7 @@ func TestPlaceMatrixHardLeftMono(t *testing.T) {
 	pmClose(t, "L' при pan −1", l, s*math.Sqrt2, 1e-9)
 }
 
-// ТК66: (0, 0) — моно: L' = R' = (L+R)/2.
+// (0, 0) — моно: L' = R' = (L+R)/2.
 func TestPlaceMatrixZeroWidthIsMono(t *testing.T) {
 	t.Parallel()
 	m := pmMust(t, 0, 0)
@@ -96,7 +96,7 @@ func TestPlaceMatrixZeroWidthIsMono(t *testing.T) {
 	}
 }
 
-// ТК66: (0, 2) на чистом «боке» L = s, R = −s — бока ×2; середина не меняется.
+// (0, 2) на чистом «боке» L = s, R = −s — бока ×2; середина не меняется.
 func TestPlaceMatrixDoubleWidthSide(t *testing.T) {
 	t.Parallel()
 	m := pmMust(t, 0, 2)
@@ -109,7 +109,7 @@ func TestPlaceMatrixDoubleWidthSide(t *testing.T) {
 	pmClose(t, "R' середины при width 2", r, s, 1e-9)
 }
 
-// Усл. 39: матрица — ширина M/S, затем панорама складыванием канала (формула карточки)
+// Матрица — ширина M/S, затем панорама складыванием канала —
 // на промежуточных значениях обоих знаков.
 func TestPlaceMatrixFormula(t *testing.T) {
 	t.Parallel()
@@ -125,7 +125,7 @@ func TestPlaceMatrixFormula(t *testing.T) {
 	}
 }
 
-// ТК66: пределы pan −1…1, width 0…2 — вне ошибка, на границах — нет.
+// Пределы pan −1…1, width 0…2 — вне ошибка, на границах — нет.
 func TestPlaceMatrixLimits(t *testing.T) {
 	t.Parallel()
 	for _, c := range [][2]float64{{1.5, 1}, {-1.5, 1}, {0, -1}, {0, 2.5}, {math.NaN(), 1}, {0, math.NaN()}} {
@@ -140,9 +140,7 @@ func TestPlaceMatrixLimits(t *testing.T) {
 	}
 }
 
-// --- ТК67: граф вставок ---
-
-// ТК67: вставка с Matrix (0,5 вправо) — в графе есть фильтр pan=stereo; и у обычной вставки,
+// Вставка с Matrix (0,5 вправо) — в графе есть фильтр pan=stereo; и у обычной вставки,
 // и у «на месте». Коэффициенты проверяются прогоном ffmpeg (ниже), не форматом строки.
 func TestInsertsGraphMatrixPan(t *testing.T) {
 	t.Parallel()
@@ -156,8 +154,6 @@ func TestInsertsGraphMatrixPan(t *testing.T) {
 		}
 	}
 }
-
-// --- ТК67: прогон ffmpeg ---
 
 const pmSR = 16000
 
@@ -219,7 +215,7 @@ func pmCheckTone(t *testing.T, what string, got, want, ref float64) {
 	}
 }
 
-// ТК67: стерео-тон (L — 440 Гц 0,3; R — 660 Гц 0,2) через вставку с матрицей: каждый
+// Стерео-тон (L — 440 Гц 0,3; R — 660 Гц 0,2) через вставку с матрицей: каждый
 // выходной канал = a·L + b·R / c·L + d·R ±0,1 дБ; громкость (Gain) — до матрицы.
 func TestRunInputsMatrixStereoTone(t *testing.T) {
 	t.Parallel()
@@ -245,7 +241,7 @@ func TestRunInputsMatrixStereoTone(t *testing.T) {
 	}
 }
 
-// Усл. 39 / ТК66 (уточнение постановщика): моно-вход сначала в стерео копией в оба канала
+// Моно-вход сначала в стерео копией в оба канала
 // без ослабления (L = R = s), затем матрица: pan 0, width 1 — L = R = s; pan 1 — слева тишина,
 // справа s·√2; pan −1 — зеркально.
 func TestRunInputsMatrixMonoInput(t *testing.T) {

@@ -8,10 +8,9 @@ import (
 	"testing"
 )
 
-// Тесты цепочки «Убрать свист» (id "dewhistle") по спецификации: узкий вырез на freq
+// Тесты цепочки «Убрать свист» (id "dewhistle"): узкий вырез на freq
 // (и гармониках 2·freq, 3·freq ниже 20 кГц) глубиной depth в окне [start, end].
-// Проверяется звук на синтетике 44.1 кГц через Run; уровень тона — одна точка ДПФ
-// (toneAmpAt/decodeAt из inserts_test.go).
+// Проверяется звук на синтетике 44.1 кГц через Run; уровень тона — одна точка ДПФ.
 
 const dwSR = 44100
 
@@ -43,7 +42,7 @@ func dwDelta(src, out []float32, hz, from, to float64) float64 {
 	return dbfs(toneAmpAt(out, dwSR, hz, from, to)) - dbfs(toneAmpAt(src, dwSR, hz, from, to))
 }
 
-// Двухтональная синтетика спецификации: музыка 1000 Гц + свист 5000 Гц, равные амплитуды.
+// Двухтональная синтетика: музыка 1000 Гц + свист 5000 Гц, равные амплитуды.
 const dwMusicWhistle = "0.3*sin(2*PI*1000*t)+0.3*sin(2*PI*5000*t)"
 
 var dwBase = map[string]float64{"freq": 5000, "depth": 30, "width": 60, "harmonics": 1, "start": 2, "end": 4}
@@ -59,7 +58,6 @@ func dwWith(over map[string]float64) map[string]float64 {
 	return p
 }
 
-// Спецификация: цепочка доступна по ID и имеет имя.
 func TestDewhistleByID(t *testing.T) {
 	t.Parallel()
 	c := ByID("dewhistle")
@@ -68,7 +66,7 @@ func TestDewhistleByID(t *testing.T) {
 	}
 }
 
-// Спецификация: крутилки freq/depth/width/harmonics/start/end с заданными диапазонами;
+// Крутилки freq/depth/width/harmonics/start/end с заданными диапазонами;
 // есть свой start — общего from нет; дефолты лежат внутри диапазонов.
 func TestDewhistleParams(t *testing.T) {
 	t.Parallel()
@@ -111,7 +109,7 @@ func TestDewhistleParams(t *testing.T) {
 	}
 }
 
-// Спецификация: в окне 2.3–3.7 с свист 5000 Гц ослаблен ≥ 20 дБ, музыка 1000 Гц —
+// В окне 2.3–3.7 с свист 5000 Гц ослаблен ≥ 20 дБ, музыка 1000 Гц —
 // в пределах 3 дБ; вне окна свист не тронут (≤ 1 дБ); длина не меняется.
 func TestDewhistleNotchInWindow(t *testing.T) {
 	t.Parallel()
@@ -139,7 +137,7 @@ func TestDewhistleNotchInWindow(t *testing.T) {
 	}
 }
 
-// Спецификация: end=0 — вырез до конца трека: свист ослаблен и в 4.3–5.8 с,
+// end=0 — вырез до конца трека: свист ослаблен и в 4.3–5.8 с,
 // а до start не тронут.
 func TestDewhistleEndZeroToTrackEnd(t *testing.T) {
 	t.Parallel()
@@ -158,7 +156,7 @@ func TestDewhistleEndZeroToTrackEnd(t *testing.T) {
 	}
 }
 
-// Спецификация: harmonics=2 режет и 2·freq — при свисте 5000+10000 Гц оба ослаблены
+// harmonics=2 режет и 2·freq — при свисте 5000+10000 Гц оба ослаблены
 // ≥ 20 дБ в окне; harmonics=1 оставляет 10000 Гц почти нетронутым (≤ 3 дБ).
 func TestDewhistleHarmonics(t *testing.T) {
 	t.Parallel()
@@ -185,7 +183,7 @@ func TestDewhistleHarmonics(t *testing.T) {
 	}
 }
 
-// Спецификация (край): harmonics=3 режет и 3·freq, если ниже 20 кГц (5000 → 15000 Гц);
+// harmonics=3 режет и 3·freq, если ниже 20 кГц (5000 → 15000 Гц);
 // при freq=16000 гармоники 32/48 кГц выше 20 кГц — граф всё равно валиден, длина цела,
 // основной тон ослаблен.
 func TestDewhistleThirdHarmonicAndCap(t *testing.T) {

@@ -1,13 +1,11 @@
 // Сборка заявок к воркеру — чистые функции «вход → объект заявки api» (без DOM и сети).
 // Новый трек — форма App.vue (POST /jobs); студия — инструментал, «заново с места», «перепеть с
-// места», эффект на дорожку (StudioPage.vue). Смысл полей — docs/api.md.
+// места», эффект на дорожку (StudioPage.vue).
 import { SLOT_ORDER, dictStyle, effectiveLyrics } from './styleLogic.js'
 import { durTokens } from './slotOptions.js'
 import { characterPayload } from './character.js'
 import { beatSecAt, continuationPlan, planTimeline, trickStyleSuffix } from './abcEdit.js'
 import { revoiceSpecKinds } from './vocalParts.js'
-
-// ── новый трек (форма) ──────────────────────────────────────────────────────
 
 const CYR = /[а-яё]/i
 
@@ -55,8 +53,6 @@ export function newTrackPayload(f, extra = {}) {
     ...extra,
   }
 }
-
-// ── студия ──────────────────────────────────────────────────────────────────
 
 // стиль трека с припиской приёмов, которые план держит слабо (голос ±октава)
 export function trickStyle(base, specs) {

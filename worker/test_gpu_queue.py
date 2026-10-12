@@ -1,8 +1,5 @@
 """Тесты очереди к GPU (gpu_queue/_gpu_lock в yue_worker).
 
-Запуск: python3 -m unittest worker.test_gpu_queue (из корня репозитория)
-или: cd worker && python3 -m unittest test_gpu_queue
-
 Импорт yue_worker создаёт каталоги данных и БД — уводим их во временную
 папку через YUE_DATA_DIR до импорта. GPU в тестах не трогаем: проверяем
 только сам лок (взаимоисключение, реентерабельность, освобождение при ошибке).

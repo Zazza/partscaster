@@ -14,7 +14,6 @@ async function stopPlaying() {
   emit('refresh')
 }
 
-// соседний готовый трек относительно текущего
 function playNeighbor(list, delta) {
   const done = list.filter((x) => x.status === 'done' && x.audio_file)
   if (!done.length) return

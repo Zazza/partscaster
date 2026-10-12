@@ -47,7 +47,7 @@ const (
 	alignCandPeakFrac = 0.25
 	alignRefPeakFrac  = 0.5
 	alignPeakGapSec   = 0.05
-	alignHitSec       = 0.02 // допуск попадания атаки (критерий карточки — 30 мс)
+	alignHitSec       = 0.02 // допуск попадания атаки
 	alignMinPeaks     = 4    // меньше атак в окне — совпадение не оценить
 )
 

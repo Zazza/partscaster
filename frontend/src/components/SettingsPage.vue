@@ -14,7 +14,6 @@ const { askConfirm } = useConfirm()
 const serverURL = defineModel('serverURL')
 const emit = defineEmits(['close', 'saved'])
 
-// модалка: Esc закрывает
 const onKey = (e) => { if (e.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => { window.removeEventListener('keydown', onKey); clearInterval(modelTimer) })

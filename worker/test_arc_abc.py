@@ -1,6 +1,5 @@
-"""Спецификация «драматургия поверх прикреплённого ABC».
+"""Драматургия поверх прикреплённого ABC».
 
-Раньше arc вместе с abc был отказом 422. Теперь:
 A1. POST /jobs с непустым abc и arc ∈ {build, wave, burst} → 200: джоба создана,
     arc сохранён в строке, req_abc='request.abc', jobs/<id>/request.abc —
     ровно присланный abc.
@@ -8,9 +7,7 @@ A2. Генерация такой джобы: пайплайн получает 
     style == arc.style_with_arc(style, arc); request.abc на диске не меняется
     (файл пользователя не трогаем).
 A3. abc без arc → пайплайн получает исходный abc и исходный style.
-A4. arc с cot="off" — по-прежнему 422 (драматургии нужен план), с abc и без.
-
-Запуск из каталога worker: python -m unittest test_arc_abc -v
+A4. arc с cot="off" — 422 (драматургии нужен план), с abc и без.
 """
 import sys
 import types
@@ -67,7 +64,7 @@ class TestArcAbcSubmit(_WorkerApiCase):
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestArcAbcGeneration(_WorkerApiCase):
-    """A2, A3: что получает пайплайн при генерации джобы с abc."""
+    """Что получает пайплайн при генерации джобы с abc."""
 
     def setUp(self):
         super().setUp()

@@ -6,7 +6,6 @@ import (
 	"net/url"
 )
 
-// References — загруженные референсы для сравнения метрик.
 func (c *Client) References(ctx context.Context) ([]Reference, error) {
 	var refs []Reference
 	if err := c.get(ctx, "/references", &refs); err != nil {
@@ -24,7 +23,6 @@ func (c *Client) AddReference(ctx context.Context, name string, data []byte) (*R
 	return &out, nil
 }
 
-// JobDspVariants — список применённых DSP-вариантов джобы.
 func (c *Client) JobDspVariants(ctx context.Context, id int64) ([]DspVariant, error) {
 	var vs []DspVariant
 	if err := c.get(ctx, fmt.Sprintf("/jobs/%d/dsp", id), &vs); err != nil {

@@ -15,8 +15,6 @@ P5. POST /tracks/import: трек становится готовой джобо
     за папку джобы; пустое тело → 422 без новой джобы; title — название, без
     него — имя файла; транскрипция по запросу (score.abc), сбой транскрипции —
     трек всё равно импортирован, причина в transcribe_error.
-
-Запуск из каталога worker: python -m unittest test_paths_safety -v
 """
 import unittest
 from pathlib import Path
@@ -229,7 +227,7 @@ class TestDspVariantDelete(_Case):
         self.assertEqual(self._tree(), before)
 
     def test_stem_is_not_a_variant(self):
-        # решение человека 2026-10-11: удаление вариантов не стирает дорожки трека
+        # удаление вариантов не стирает дорожки трека
         d = self.jobs_dir / str(self.mine)
         (d / "stem-vocals.flac").write_bytes(b"stem")
         r = self.client.delete(f"/jobs/{self.mine}/dsp/stem-vocals.flac")

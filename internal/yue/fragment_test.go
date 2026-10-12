@@ -1,9 +1,7 @@
 package yue
 
-// Тесты карточки internal-own-track, условие 123 «Честный „проверить кусок“» (ТК150):
 // Client.FragmentJob(ctx, id, from, to, seed, abc) — POST /jobs/{id}/continue с from_sec, to_sec;
 // seed — только если > 0, abc — только если не пусто; ответ воркера {"id": N} → N.
-// Написаны по карточке, без чтения реализации.
 
 import (
 	"context"
@@ -60,7 +58,7 @@ func TestFragmentJobOmitsZeroSeedAndEmptyAbc(t *testing.T) {
 	}
 }
 
-// Уточнение 123в (ТК154): FragmentJob(…, abc, styleAdd) — style_add в теле только если не пусто.
+// FragmentJob(…, abc, styleAdd) — style_add в теле только если не пусто.
 func TestFragmentJobStyleAdd(t *testing.T) {
 	t.Parallel()
 	var got updateReq

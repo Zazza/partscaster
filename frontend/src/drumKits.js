@@ -63,7 +63,7 @@ export const ROOM = { type: 'reverb', decay_s: 0.5, predelay_ms: 5, lowpass_hz: 
 const KIT_FIELDS = ['kit', 'kit_open', 'kit_mid', 'kit_low', 'choke']
 
 // параметры удара машин, которые расходятся с живым набором: у живого хэта громкость 0 — его поднимает эквалайзер
-// (этап 10, сэмплы osdk тусклые), у машин хэт и так яркий, без eq — прежние +4 (усл. 84: машины не меняются)
+// (сэмплы osdk тусклые), у машин хэт и так яркий, без eq — +4
 const MACHINE_STRIKE = { hh: { output_db: 4 } }
 
 /** Блок sampler части набора: параметры удара (floor_db, dynamics, output_db…) — от блока живого набора той же

@@ -1,10 +1,8 @@
-// Тесты карточки internal-own-track, этап 5 «Перкуссия по сетке», условие 33 (тест-кейс ТК60):
-// девять готовых перкуссий в fxPresets со stems ['perc'], у каждой pattern (fours/eighths/
+// Девять готовых перкуссий в fxPresets со stems ['perc'], у каждой pattern (fours/eighths/
 // sixteenths/backbeat/offbeat) и swing 0…0,5, цепочка начинается с блока perc; kit-перкуссии —
 // kit osdk/…; наборы докачиваются как у sampler — missingKits видит perc.
-// Голос и рисунок по названию — из списка условия 30 (1 хэт, 2 шейкер, 3 хлопок, 4 ковбелл,
+// Голос и рисунок по названию — из списка (1 хэт, 2 шейкер, 3 хлопок, 4 ковбелл,
 // 5 римшот, 6 бубен) и названий готовых перкуссий.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
 import { missingKits } from './fxChain.js'
@@ -23,7 +21,7 @@ const WANT = {
   'Райд восьмыми (osdk)': [{ kit: 'osdk/ride' }, 'eighths'],
 }
 
-describe('fxPresets: готовые перкуссии (ТК60)', () => {
+describe('fxPresets: готовые перкуссии', () => {
   const percs = fxPresets.filter((p) => (p.stems || []).includes('perc'))
 
   it('девять перкуссий со stems [perc]', () => {
@@ -31,7 +29,7 @@ describe('fxPresets: готовые перкуссии (ТК60)', () => {
     for (const p of percs) expect(p.stems, p.id).toEqual(['perc'])
   })
 
-  it('названия — из карточки', () => {
+  it('названия — ожидаемый набор', () => {
     expect(percs.map((p) => p.name.ru).sort()).toEqual(Object.keys(WANT).sort())
   })
 
@@ -50,7 +48,7 @@ describe('fxPresets: готовые перкуссии (ТК60)', () => {
     expect(p.pattern).toBe(pattern)
     if (sound.kit) {
       expect(p.chain[0].kit).toBe(sound.kit)
-      // voice 0 — сэмплы набора (условие 30); не задан — тоже допустимо, если 0 по умолчанию
+      // voice 0 — сэмплы набора; не задан — тоже допустимо, если 0 по умолчанию
       if (p.chain[0].voice !== undefined) expect(p.chain[0].voice).toBe(0)
     } else {
       expect(p.chain[0].voice).toBe(sound.voice)
@@ -70,7 +68,7 @@ describe('fxPresets: готовые перкуссии (ТК60)', () => {
   })
 })
 
-describe('missingKits видит perc (ТК60)', () => {
+describe('missingKits видит perc', () => {
   it("perc с kit osdk/ride, наборов нет → ['osdk']", () => {
     expect(missingKits([{ type: 'perc', kit: 'osdk/ride' }], [])).toEqual(['osdk'])
   })

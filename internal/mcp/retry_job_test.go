@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// retryFake — fakeService + RetryJob, записывающий id и отдающий err.
 type retryFake struct {
 	*fakeService
 	retried []int64

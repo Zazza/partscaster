@@ -1,7 +1,5 @@
-// Тесты карточки internal-own-track, этап 0, условие 2 (тест-кейсы ТК8–ТК11): чистая
-// логика пульта дорожек в студии — строки пульта по дорожкам трека, окно «было/стало»,
+// Чистая логика пульта дорожек в студии — строки пульта по дорожкам трека, окно «было/стало»,
 // окно записи в трек, готовые цепочки для дорожки. Окна — {from, to} в секундах.
-// Написаны по карточке, без чтения реализации.
 import { describe, it, expect } from 'vitest'
 import { deskRows, previewWindow, applyWindow, presetsFor, rhythmSection, envTargetFor } from './trackDesk.js'
 import { fxPresets } from './fxPresets.js'
@@ -10,13 +8,13 @@ import { fxPresets } from './fxPresets.js'
 const rec = (childId, stems, over = {}) => ({ childId, instId: 'engine', from: 0, to: 0, db: 0, stems, ...over })
 const ids = list => list.map(x => x.childId).sort((a, b) => a - b)
 
-describe('deskRows — строки пульта (ТК8)', () => {
+describe('deskRows — строки пульта', () => {
   it('порядок: голос, барабаны, части барабанов, бас, …, «прочее», затем неизвестные', () => {
     const rows = deskRows(['other', 'vocals', 'kick', 'bass', 'zzz', 'drums'], [])
     expect(rows.map(r => r.stem)).toEqual(['vocals', 'drums', 'kick', 'bass', 'other', 'zzz'])
   })
 
-  it('полный набор известных дорожек в обратном порядке → порядок карточки', () => {
+  it('полный набор известных дорожек в обратном порядке → канонический порядок', () => {
     const known = ['vocals', 'drums', 'kick', 'snare', 'toms', 'hh', 'ride', 'crash', 'bass', 'guitar', 'piano', 'other']
     const rows = deskRows([...known].reverse(), [])
     expect(rows.map(r => r.stem)).toEqual(known)
@@ -63,7 +61,7 @@ describe('deskRows — строки пульта (ТК8)', () => {
   })
 })
 
-describe('previewWindow — окно «было/стало» (ТК9)', () => {
+describe('previewWindow — окно «было/стало»', () => {
   it('выделение берётся как есть', () => {
     expect(previewWindow({ from: 5, to: 9 }, 20, 100)).toEqual({ from: 5, to: 9 })
   })
@@ -98,7 +96,7 @@ describe('previewWindow — окно «было/стало» (ТК9)', () => {
   })
 })
 
-describe('applyWindow — окно записи в трек (ТК10)', () => {
+describe('applyWindow — окно записи в трек', () => {
   it('выделение → оно', () => {
     expect(applyWindow({ from: 12, to: 27 })).toEqual({ from: 12, to: 27 })
   })
@@ -109,7 +107,7 @@ describe('applyWindow — окно записи в трек (ТК10)', () => {
   })
 })
 
-describe('presetsFor — готовые цепочки для дорожки (ТК11)', () => {
+describe('presetsFor — готовые цепочки для дорожки', () => {
   const presets = [
     { id: 'any-1', chain: [] },
     { id: 'guitar', stems: ['guitar', 'other'], chain: [] },
@@ -135,12 +133,11 @@ describe('presetsFor — готовые цепочки для дорожки (Т
   })
 })
 
-// Карточка internal-own-track, этап 2, условия 15–17 (тест-кейс ТК37): ритм-секция одной
-// записью. rhythmSection(stemNames, presets, room) → [{stem, chain, label}] в порядке kick,
+// Ритм-секция одной записью. rhythmSection(stemNames, presets, room) → [{stem, chain, label}] в порядке kick,
 // snare, toms, hh, ride, crash, bass — только для частей, которые есть у трека; цепочки —
 // готовые «набором» из fxPresets; при room к каждой части барабанов (не баса) в конец —
-// reverb «комната». Написаны по карточке, без чтения реализации.
-describe('rhythmSection — ритм-секция набором (ТК37)', () => {
+// reverb «комната».
+describe('rhythmSection — ритм-секция набором', () => {
   const ROOM = { type: 'reverb', decay_s: 0.5, predelay_ms: 5, lowpass_hz: 7000, wet: 0.12 }
   // готовые цепочки «набором» по частям (id пресетов fxPresets)
   const PRESET_OF = {
@@ -161,12 +158,12 @@ describe('rhythmSection — ритм-секция набором (ТК37)', () =
     expect(stemsOf(out)).toEqual(['kick', 'snare', 'hh', 'bass'])
   })
 
-  it('порядок карточки не зависит от порядка дорожек трека', () => {
+  it('порядок ритм-секции не зависит от порядка дорожек трека', () => {
     const all = ['bass', 'crash', 'ride', 'hh', 'toms', 'snare', 'kick', 'vocals', 'drums', 'other']
     expect(stemsOf(rhythmSection(all, fxPresets, false))).toEqual(['kick', 'snare', 'toms', 'hh', 'ride', 'crash', 'bass'])
   })
 
-  it('room: у частей барабанов последний блок — комната с параметрами карточки, перед ней — готовая цепочка', () => {
+  it('room: у частей барабанов последний блок — комната с заданными параметрами, перед ней — готовая цепочка', () => {
     const out = rhythmSection(['kick', 'snare', 'hh', 'bass', 'other'], fxPresets, true)
     for (const r of out.filter(x => x.stem !== 'bass')) {
       expect(r.chain.at(-1)).toMatchObject(ROOM)

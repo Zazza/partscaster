@@ -1,17 +1,10 @@
-// Тесты карточки internal-own-track, этап 14 «Оркестр»: условия 113–114 (тест-кейс ТК143).
-//   113 — готовые инструменты оркестра в fxPresets: группы orch-strings / orch-winds / orch-brass / orch-mallets
-//     (партии по аккордам: stems ['synth'], блок synth с kit VSCO, стиль pad|arp|pulse|drone, октава),
-//     orch-bass (stems ['bass'], блок bass с kit — виолончель, альт, контрабас, фагот, туба),
-//     orch-lead (stems ['guitar','other','vocals'], блок bass с fmin_hz 80 / fmax_hz 1500 — скрипка, флейта,
-//     гобой, кларнет, труба); без имён групп и исполнителей. Наборы частей — из условия 110.
-//   114 — familyOf: stems из guitar/other/piano/vocals (хотя бы одна не vocals) → guitar; только vocals → null.
-// Пресеты опознаются по полю group, а не по id. Написаны по карточке, без чтения реализации.
+// Пресеты опознаются по полю group, а не по id.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
 import { PRESET_GROUPS, groupPresets } from './presetGroups.js'
 import { familyOf } from './phraseLoop.js'
 
-// условие 110: наборы VSCO и их части
+// наборы VSCO и их части
 const WIND_PARTS = ['sus', 'stac']
 const KIT_PARTS = {
   'vsco-violin': ['solo', 'ens', 'pizz', 'spic'],
@@ -31,8 +24,7 @@ const KIT_PARTS = {
 }
 
 // какие инструменты уместны в группе: для аккордовых групп — по смыслу названия группы («Струнные», «Медь» …);
-// для orch-bass / orch-lead — перечень из условия 113 (проверяется, что он покрыт; лишние инструменты допустимы:
-// условие перечисляет, но не ограничивает — см. отчёт теста)
+// для orch-bass / orch-lead — перечень (проверяется, что он покрыт; лишние инструменты допустимы)
 const GROUP_KITS = {
   'orch-strings': ['vsco-violin', 'vsco-viola', 'vsco-cello', 'vsco-contrabass', 'vsco-harp'],
   'orch-winds': ['vsco-flute', 'vsco-oboe', 'vsco-clarinet', 'vsco-bassoon'],
@@ -74,7 +66,7 @@ function suspiciousNames(text) {
 // правило — один тест: список нарушителей «id: причина»
 const violations = (list, check) => list.flatMap((p) => check(p).map((why) => `${p.id ?? p}: ${why}`))
 
-describe('условие 113: группы оркестра (ТК143)', () => {
+describe('группы оркестра', () => {
   it('у каждой группы оркестра есть подписи ru и en в PRESET_GROUPS', () => {
     expect(violations(ORCH_GROUPS, (g) => ['ru', 'en'].filter((l) => !PRESET_GROUPS[g]?.[l]?.trim()).map((l) => `нет ${l}`)))
       .toEqual([])
@@ -89,14 +81,14 @@ describe('условие 113: группы оркестра (ТК143)', () => {
     for (const g of ORCH_GROUPS) expect(out).toContain(PRESET_GROUPS[g].ru)
   })
 
-  it('других групп orch-* нет (все — из перечня условия)', () => {
+  it('других групп orch-* нет', () => {
     expect([...new Set(orch.map((p) => p.group))].sort()).toEqual([...ORCH_GROUPS].sort())
   })
 })
 
 // «имена ru/en непустые» у пресетов оркестра — правило fxPresets.test.js «name и note — ru и en, непустые» по всем пресетам
-describe('условие 113: пресеты групп оркестра (ТК143)', () => {
-  it('каждый: блок synth/bass с kit vsco-<инструмент>/<часть> из условия 110, инструмент — по смыслу группы', () => {
+describe('пресеты групп оркестра', () => {
+  it('каждый: блок synth/bass с kit vsco-<инструмент>/<часть>, инструмент — по смыслу группы', () => {
     expect(violations(orch, (p) => {
       const kb = kitBlocks(p)
       if (kb.length === 0) return ['нет блока synth/bass с kit']
@@ -133,7 +125,7 @@ describe('условие 113: пресеты групп оркестра (ТК14
     ])).toEqual([])
   })
 
-  // диапазоны условия 112 (fmin 20…1000, fmax 100…2000) покрывает значение из условия 113: 80 / 1500
+  // диапазоны (fmin 20…1000, fmax 100…2000) покрывают значение 80 / 1500
   it('Мелодия → оркестр (orch-lead): stems guitar/other/vocals, блок bass с fmin_hz 80 / fmax_hz 1500', () => {
     expect(violations(inGroup('orch-lead'), (p) => {
       const out = [...p.stems].sort().join() === 'guitar,other,vocals' ? [] : [`stems ${JSON.stringify(p.stems)}`]
@@ -145,11 +137,11 @@ describe('условие 113: пресеты групп оркестра (ТК14
   })
 })
 
-describe('условие 113: перечни инструментов из карточки покрыты', () => {
+describe('перечни инструментов оркестра покрыты', () => {
   it.each([
     ['orch-bass', GROUP_KITS['orch-bass']],
     ['orch-lead', GROUP_KITS['orch-lead']],
-  ])('в %s есть пресет на каждый инструмент из условия', (g, kits) => {
+  ])('в %s есть пресет на каждый инструмент из перечня', (g, kits) => {
     const used = new Set(inGroup(g).flatMap((p) => kitBlocks(p).map((b) => instrumentOf(b.kit))))
     for (const k of kits) expect(used).toContain(k)
   })
@@ -166,7 +158,7 @@ describe('проверка «нет имён» сама различает (са
   })
 })
 
-describe('условие 114: familyOf для мелодии-замены (ТК143)', () => {
+describe('familyOf для мелодии-замены', () => {
   it.each([
     [['guitar', 'other', 'vocals'], 'guitar'],
     [['other', 'vocals'], 'guitar'],

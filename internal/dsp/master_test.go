@@ -6,7 +6,7 @@ import (
 )
 
 // Тесты цепочки «Мастеринг» (id master): карточка реестра и поведение на
-// синтетике. Хелперы — из chains_test.go / inserts_test.go.
+// синтетике.
 
 // maxAbs — пиковая амплитуда (без знака).
 func maxAbs(s []float32) float64 {
@@ -19,7 +19,7 @@ func maxAbs(s []float32) float64 {
 	return m
 }
 
-// Карточка: master есть в реестре, не голосовая (применяется на весь микс),
+// master есть в реестре, не голосовая (применяется на весь микс),
 // без своей отметки start — значит получает общий from.
 func TestMasterChainCard(t *testing.T) {
 	t.Parallel()
@@ -49,7 +49,7 @@ func TestMasterChainCard(t *testing.T) {
 // материале такого нет).
 const masterExpr = "if(lt(t\\,3)\\,0.5\\,0.05)*(random(0)*2-1)"
 
-// Карточка: мастеринг поднимает RMS и держит пик (лимитер 0.94).
+// Мастеринг поднимает RMS и держит пик (лимитер 0.94).
 func TestMasterRaisesRmsAndCapsPeak(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -64,7 +64,7 @@ func TestMasterRaisesRmsAndCapsPeak(t *testing.T) {
 	}
 }
 
-// Карточка: разжатие внутри мастеринга — разброс громкое/тихое шире, чем на входе.
+// Разжатие внутри мастеринга — разброс громкое/тихое шире, чем на входе.
 func TestMasterWidensDynamics(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)

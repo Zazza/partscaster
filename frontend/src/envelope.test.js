@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { addPoint, movePoint, removePoint, dbAt, dbToY, yToDb, hitPoint, isFlat, bumpRange } from './envelope.js'
 
-// Тесты карточки internal-vocal-ride, условие 4: чистая логика линии громкости.
+// Чистая логика линии громкости.
 // Точки — { t, db }; дБ в диапазоне [−30, +12]; функции не мутируют вход.
 
 const pts = () => [{ t: 1, db: 0 }, { t: 3, db: -12 }, { t: 5, db: 6 }]

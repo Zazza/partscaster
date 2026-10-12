@@ -24,9 +24,6 @@ import (
 // База — audio.flac родителя, стемы — stem-<name>.flac родителя и ребёнка;
 // нет стема — один MakeStems(id) и повторное скачивание; результат —
 // overdub-inst-<ChildID последней спеки>.flac у родителя.
-//
-// Хелперы звука (lavfi, decodeBytes, slice, rms, needFFmpeg, key, keys, contains)
-// — из helpers_test.go того же пакета.
 
 var stemNames = []string{"drums", "bass", "other", "vocals"}
 
@@ -85,8 +82,6 @@ func (f *secFake) UploadDsp(_ context.Context, id int64, fname, label string, da
 	f.labels[fname] = label
 	return &yue.DspVariant{File: fname}, nil
 }
-
-// --- синтетика (16 кГц моно) ---
 
 const (
 	trackDur = 12.0 // длина трека родителя, с
@@ -150,7 +145,7 @@ func secSetup(t *testing.T) (*secFake, map[string]string) {
 	return f, pf
 }
 
-// спека кейса 1: окно 4–8, рендер начат за 2 с до From (т.е. в 2 с трека)
+// спека: окно 4–8, рендер начат за 2 с до From (т.е. в 2 с трека)
 func spec7(stems []string, db float64) SectionSpec {
 	return SectionSpec{ChildID: 7, From: 4, To: 8, Lead: 2, BeatSec: 0.5,
 		Stems: stems, Db: db, FadeIn: 0.1, FadeOut: 0.1}
@@ -243,9 +238,7 @@ func secUploaded(t *testing.T, f *secFake, name string) []float32 {
 	return decodeBytes(t, data)
 }
 
-// --- тест-кейсы карточки ---
-
-// Кейс 1: Stems ["other"] — в окне 440 заменён на 660, вне окна — база; drums не тронуты;
+// Stems ["other"] — в окне 440 заменён на 660, вне окна — база; drums не тронуты;
 // начало рендера в треке — From−Lead.
 func TestRebuildSectionsReplacesOnlyChosenStemInWindow(t *testing.T) {
 	t.Parallel()
@@ -296,7 +289,7 @@ func TestRebuildSectionsReplacesOnlyChosenStemInWindow(t *testing.T) {
 	}
 }
 
-// Кейс 2: громкость — стем ребёнка выравнивается по RMS стема родителя в окне, сверху Db.
+// Громкость — стем ребёнка выравнивается по RMS стема родителя в окне, сверху Db.
 func TestRebuildSectionsLevelMatchAndDb(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -320,7 +313,7 @@ func TestRebuildSectionsLevelMatchAndDb(t *testing.T) {
 	}
 }
 
-// Кейс 3б: Stems ["drums"], у ребёнка drums в окне тихие → в окне щелчков нет, 440 на месте.
+// Stems ["drums"], у ребёнка drums в окне тихие → в окне щелчков нет, 440 на месте.
 func TestRebuildSectionsDrumsReplacedBySilence(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -345,7 +338,7 @@ func TestRebuildSectionsDrumsReplacedBySilence(t *testing.T) {
 	assertClicks(t, out, 8.5, 11.5, "после окна")
 }
 
-// Кейс 4: у ребёнка нет стемов → MakeStems(ребёнок) ровно 1 раз, стемы скачиваются снова → успех.
+// У ребёнка нет стемов → MakeStems(ребёнок) ровно 1 раз, стемы скачиваются снова → успех.
 func TestRebuildSectionsMakesChildStemsOnce(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -383,7 +376,7 @@ func TestRebuildSectionsMakesChildStemsOnce(t *testing.T) {
 	}
 }
 
-// Кейс 4б: у родителя нет стемов → MakeStems(родитель) ровно 1 раз → успех.
+// У родителя нет стемов → MakeStems(родитель) ровно 1 раз → успех.
 func TestRebuildSectionsMakesParentStemsOnce(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -406,7 +399,7 @@ func TestRebuildSectionsMakesParentStemsOnce(t *testing.T) {
 	}
 }
 
-// Кейс 5: стемов нет, MakeStems не помог (ошибка или стемы так и не появились) → ошибка, загрузки нет.
+// Стемов нет, MakeStems не помог (ошибка или стемы так и не появились) → ошибка, загрузки нет.
 func TestRebuildSectionsStemsUnavailable(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -437,7 +430,7 @@ func TestRebuildSectionsStemsUnavailable(t *testing.T) {
 	}
 }
 
-// Кейс 6: имя результата — по ChildID последней спеки, загрузка одна и родителю,
+// Имя результата — по ChildID последней спеки, загрузка одна и родителю,
 // отчёты — по одному на спеку в порядке спек; база — audio.flac родителя, не прошлый микс.
 func TestRebuildSectionsResultNamedByLastSpec(t *testing.T) {
 	t.Parallel()
@@ -493,7 +486,7 @@ func TestRebuildSectionsResultNamedByLastSpec(t *testing.T) {
 	}
 }
 
-// Кейс 6б: пустой specs — ошибка, ничего не загружено.
+// Пустой specs — ошибка, ничего не загружено.
 func TestRebuildSectionsEmptySpecs(t *testing.T) {
 	t.Parallel()
 	f := newSecFake()
@@ -507,7 +500,7 @@ func TestRebuildSectionsEmptySpecs(t *testing.T) {
 	}
 }
 
-// --- KeepHighHz: у старой дорожки вычитается только низ (сбивка вместо барабанов) ---
+// KeepHighHz: у старой дорожки вычитается только низ (сбивка вместо барабанов).
 
 // hiSR — частота для синтетики с 9000 Гц: при 16 кГц он выше Найквиста (8 кГц).
 const hiSR = 44100
@@ -664,8 +657,6 @@ func TestSectionSpecKeepHighHzJSON(t *testing.T) {
 	}
 }
 
-// --- подпись микса (label для UploadDsp) ---
-//
 // Микс загружается с человеческой подписью: по каждой спеке «что · каким
 // дорожкам» + окно (" M:SS–M:SS", " с M:SS", весь трек — ничего), спеки
 // через " + ". Дорожки по-русски: vocals→голос, drums→барабаны, bass→бас,
@@ -705,7 +696,7 @@ func driveVocals(from, to float64) SectionSpec {
 	return SectionSpec{ChildID: 0, From: from, To: to, Stems: []string{"vocals"}, Chain: "voice-drive"}
 }
 
-// Подпись пересборки (rebuildLabel) — по примерам карточки: эффект на весь трек —
+// Подпись пересборки (rebuildLabel) — эффект на весь трек —
 // без окна; окно с концом — « M:SS–M:SS» (минуты без ведущего нуля, секунды двумя
 // цифрами); To = 0 — «с M:SS»; заглушение (Db ≤ −60, граница включительно) —
 // «заглушить», стемы по-русски через запятую; громкость — «громкость +N дБ»;

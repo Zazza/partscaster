@@ -14,18 +14,15 @@ import (
 	"unicode"
 )
 
-// Тесты карточки internal-dsp-space, общие условия 0.1–0.6 и контракт 10.1
-// (TailSec, Key) по всем новым цепочкам. Тесты написаны по карточке, без чтения
-// реализации: проверяется звук на синтетике (Run/RunInputs), а не текст графа.
+// Общие тесты новых цепочек, включая контракт TailSec и Key: проверяется звук
+// на синтетике (Run/RunInputs), а не текст графа.
 //
-// Общие хелперы новых цепочек (префикс nc) — здесь; хелперы старых тестов
-// (needFFmpeg, lavfi, decode, decodeAt, toneAmpAt, segRMS, dbfs, genIn, runChain,
-// secs, diffSeg, hasParam) — из inserts_test.go и chains_test.go.
+// Общие хелперы новых цепочек (префикс nc) — здесь.
 
 // ncSR — частота для проверок с верхом (> 5 кГц): 16 кГц для них мало.
 const ncSR = 44100
 
-// ncNewIDs — все новые цепочки карточки (transient убрана из задачи, карточка 6.2).
+// ncNewIDs — все новые цепочки.
 var ncNewIDs = []string{
 	"reverb-room", "reverb-hall", "reverb-plate", "reverb-spring",
 	"delay", "width", "haas",
@@ -37,10 +34,10 @@ var ncNewIDs = []string{
 	"vinyl",
 }
 
-// ncStereoIDs — стерео-цепочки (условие 0.6).
+// ncStereoIDs — стерео-цепочки.
 var ncStereoIDs = []string{"reverb-room", "reverb-hall", "reverb-plate", "reverb-spring", "delay", "width", "haas"}
 
-// ncNoTailIDs — новые цепочки без хвоста: TailSec = 0 (условие 10.1).
+// ncNoTailIDs — новые цепочки без хвоста: TailSec = 0.
 var ncNoTailIDs = []string{
 	"width", "haas", "chorus", "flanger", "phaser", "tremolo", "eq", "sweep", "autowah",
 	"fade", "multiband", "ducking", "pitch", "octaver",
@@ -387,9 +384,7 @@ func ncRunAny(t *testing.T, c *Chain, in, key string, p map[string]float64) (str
 	return out, Run(in, out, c.FilterGraph(p), nil)
 }
 
-// --- 0.1 ---
-
-// Карточка 0.1: каждая новая цепочка в dsp.All(), ByID находит; Name/Note/Label — на русском.
+// Каждая новая цепочка в dsp.All(), ByID находит; Name/Note/Label — на русском.
 func TestNewChainsRegisteredRussian(t *testing.T) {
 	t.Parallel()
 	inAll := map[string]bool{}
@@ -422,9 +417,7 @@ func TestNewChainsRegisteredRussian(t *testing.T) {
 	}
 }
 
-// --- 0.2 ---
-
-// Карточка 0.2: у цепочек без своего start есть общий from; до отметки from звук не тронут.
+// У цепочек без своего start есть общий from; до отметки from звук не тронут.
 func TestNewChainsFromKeepsAudioBefore(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -455,9 +448,7 @@ func TestNewChainsFromKeepsAudioBefore(t *testing.T) {
 	}
 }
 
-// --- 0.3 ---
-
-// Карточка 0.3: mix 0 → выход = сухой вход (разница ≤ −50 дБ); mix 1 → только
+// mix 0 → выход = сухой вход (разница ≤ −50 дБ); mix 1 → только
 // обработанный. dryWet линеен, поэтому отличие от сухого при mix 1 вдвое (6 дБ)
 // больше, чем при mix 0.5.
 func TestNewChainsMixDryWet(t *testing.T) {
@@ -506,13 +497,11 @@ func TestNewChainsMixDryWet(t *testing.T) {
 		})
 	}
 	if tested == 0 {
-		t.Error("ни у одной новой цепочки нет mix (карточка: chorus/flanger/phaser/autowah/haas)")
+		t.Error("ни у одной новой цепочки нет mix (chorus/flanger/phaser/autowah/haas)")
 	}
 }
 
-// --- 0.4 ---
-
-// Карточка 0.4: длина выхода = длине входа ±0.05 с у всех новых цепочек (хвост
+// Длина выхода = длине входа ±0.05 с у всех новых цепочек (хвост
 // реверба/дилея за концом трека отрезается).
 func TestNewChainsKeepLength(t *testing.T) {
 	t.Parallel()
@@ -541,7 +530,7 @@ func TestNewChainsKeepLength(t *testing.T) {
 	}
 }
 
-// Карточка 0.4 (краевой): короткий вход (0.1 с) не роняет ffmpeg, длина та же.
+// Короткий вход (0.1 с) не роняет ffmpeg, длина та же.
 func TestNewChainsShortInput(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -561,7 +550,7 @@ func TestNewChainsShortInput(t *testing.T) {
 	}
 }
 
-// Карточка 0.4 (краевой), для всех цепочек: отметка (start/from) за концом входа не роняет
+// Отметка (start/from) за концом входа не роняет
 // ffmpeg, длина та же; общий from за концом — выход равен входу.
 func TestNewChainsMarkBeyondEnd(t *testing.T) {
 	t.Parallel()
@@ -592,9 +581,7 @@ func TestNewChainsMarkBeyondEnd(t *testing.T) {
 	}
 }
 
-// --- 0.5 ---
-
-// Карточка 0.5, для всех цепочек: значения вне диапазона зажимаются — граф тот же, что на границе.
+// Значения вне диапазона зажимаются — граф тот же, что на границе.
 func TestNewChainsClampOutOfRange(t *testing.T) {
 	t.Parallel()
 	for _, c := range All() {
@@ -613,9 +600,7 @@ func TestNewChainsClampOutOfRange(t *testing.T) {
 	}
 }
 
-// --- 0.6 ---
-
-// Карточка 0.6: стерео-цепочки на моно-входе работают, выход стерео.
+// Стерео-цепочки на моно-входе работают, выход стерео.
 func TestNewStereoChainsOnMonoInput(t *testing.T) {
 	t.Parallel()
 	needFFmpeg(t)
@@ -631,9 +616,7 @@ func TestNewStereoChainsOnMonoInput(t *testing.T) {
 	}
 }
 
-// --- 10.1 ---
-
-// Карточка 10.1: у цепочек без хвоста TailSec = 0 (и у старых цепочек).
+// У цепочек без хвоста TailSec = 0 (и у старых цепочек).
 func TestTailSecZeroWithoutTail(t *testing.T) {
 	t.Parallel()
 	for _, id := range append(append([]string{}, ncNoTailIDs...), "wall") {
@@ -647,7 +630,7 @@ func TestTailSecZeroWithoutTail(t *testing.T) {
 	}
 }
 
-// Карточка 10.1: Key — стем-ключ; у ducking — «drums», у остальных пусто; json key,omitempty.
+// Key — стем-ключ; у ducking — «drums», у остальных пусто; json key,omitempty.
 func TestChainKey(t *testing.T) {
 	t.Parallel()
 	d := ByID("ducking")

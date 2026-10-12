@@ -1,7 +1,6 @@
-"""Тесты карточки internal-own-track, этап 5: блок движка perc (условие 30, ТК54–ТК56)
-и динамика ударов sampler (условие 35, ТК61).
+"""Тесты блока движка perc и динамики ударов sampler.
 
-Контракт (из карточки):
+Контракт:
 - perc: вход — только длина; удары notes [{t, d, vel}] (t от начала окна, d > 0 — ячейка
   удара, vel 0…1); voice 0 — сэмплы набора kit, 1 хэт, 2 шейкер, 3 хлопок, 4 ковбелл,
   5 римшот, 6 бубен; tone, decay, humanize_ms (детерминированный сдвиг), rel_db (−30…+6,
@@ -13,9 +12,6 @@
   и общая громкость (RMS входа) — как раньше.
 
 Внешняя граница — набор сэмплов (resources.kit): фейк FakeResources из test_fx_engine.
-Написаны по карточке, без чтения реализации.
-
-Запуск: cd worker && python3 -m unittest test_perc -v
 """
 import unittest
 
@@ -64,7 +60,7 @@ def _tone_amp(x, hz, sr=SR, t0=0.0, t1=0.05):
 
 
 def _onset(y, t, sr=SR, before=0.02, after=0.06, frac=0.1):
-    """Первый отсчёт около t, где |y| ≥ frac × местного пика (определение начала атаки — условие 30)."""
+    """Первый отсчёт около t, где |y| ≥ frac × местного пика (начало атаки)."""
     a = _mono(y)
     lo, hi = max(0, int((t - before) * sr)), min(len(a), int((t + after) * sr))
     seg = a[lo:hi]
@@ -86,13 +82,11 @@ class _PercCase(unittest.TestCase):
         return np.asarray(out, dtype=np.float64)
 
 
-# ---------- ТК54: голоса драм-машины 1…6 ----------
-
 VOICES = {1: "хэт", 2: "шейкер", 3: "хлопок", 4: "ковбелл", 5: "римшот", 6: "бубен"}
 
 
 class TestPercVoices(_PercCase):
-    """ТК54: один удар t = 0,5 vel 1 на тишине 2 с — начало в 0,5 ±2 мс, к 1,9 с затух."""
+    """Один удар t = 0,5 vel 1 на тишине 2 с — начало в 0,5 ±2 мс, к 1,9 с затух."""
 
     def _one(self, voice):
         x = _silence(2 * SR)
@@ -156,23 +150,21 @@ class TestPercVoices(_PercCase):
         self.assertTrue(np.all(y == 0))
 
 
-# ---------- ТК55: уровень относительно трека ----------
-
 def _tone100(dur, rms_db=-20.0, sr=SR):
     t = np.arange(int(dur * sr)) / sr
     x = (10 ** (rms_db / 20) * np.sqrt(2) * np.sin(2 * np.pi * 100 * t)).astype(np.float32)
     return np.stack([x, x], axis=1)
 
 
-# 8 ударов хэта по 0,25 с подряд: ячейки покрывают [0,5; 2,5) с (вход 3 с — свобода ТК55)
+# 8 ударов хэта по 0,25 с подряд: ячейки покрывают [0,5; 2,5) с (вход 3 с)
 HAT8 = [_hit(0.5 + 0.25 * i, d=0.25) for i in range(8)]
 
 
 class TestPercLevel(_PercCase):
 
     def test_rms_on_cells_rel_db(self):
-        # ТК55: тон 100 Гц RMS −20 дБFS, rel_db −14 → RMS выхода на ячейках −34 ±1 дБFS;
-        # ТК117: без rel_db — то же (умолчание perc −14)
+        # тон 100 Гц RMS −20 дБFS, rel_db −14 → RMS выхода на ячейках −34 ±1 дБFS;
+        # без rel_db — то же (умолчание perc −14)
         x = _tone100(3.0)
         for extra in ({"rel_db": -14}, {}):
             with self.subTest(**extra):
@@ -182,19 +174,19 @@ class TestPercLevel(_PercCase):
                 self.assertAlmostEqual(got, -34, delta=1)
 
     def test_output_db_adds(self):
-        # условие 30: × 10^(output_db/20) поверх rel_db
+        # × 10^(output_db/20) поверх rel_db
         x = _tone100(3.0)
         y = self._run(x, [_perc(HAT8, voice=1, rel_db=-14, output_db=-6)])
         cells = y[int(0.5 * SR):int(2.5 * SR)]
         self.assertAlmostEqual(_db(np.sqrt(np.mean(cells ** 2))), -40, delta=1)
 
     def test_silent_input_peak_minus6(self):
-        # ТК55: вход нулевой → пик −6 ±0,5 дБFS
+        # вход нулевой → пик −6 ±0,5 дБFS
         y = self._run(_silence(3 * SR), [_perc(HAT8, voice=1, rel_db=-14)])
         self.assertAlmostEqual(_db(np.abs(y).max()), -6, delta=0.5)
 
     def test_vel_half_is_6db_quieter(self):
-        # ТК55: в одной партии удар vel 0,5 тише удара vel 1 на 6 ±1 дБ (пики). Голос — ковбелл:
+        # в одной партии удар vel 0,5 тише удара vel 1 на 6 ±1 дБ (пики). Голос — ковбелл:
         # тональный, пик удара не зависит от случайного шума (выбор теста)
         y = self._run(_silence(3 * SR), [_perc([_hit(0.5, d=0.5, vel=1.0), _hit(1.5, d=0.5, vel=0.5)], voice=4)])
         a = _mono(y)
@@ -202,8 +194,6 @@ class TestPercLevel(_PercCase):
         p2 = a[int(1.5 * SR):int(2.4 * SR)].max()
         self.assertAlmostEqual(_db(p1 / p2), 6, delta=1)
 
-
-# ---------- ТК56: voice 0 — сэмплы набора; humanize; ошибки ----------
 
 KIT = "test/perc"
 PRE = 240                                  # 5 мс «подхода» в начале сэмпла: шум 2 % пика (< 10 %)
@@ -311,8 +301,6 @@ class TestPercErrors(_PercCase):
                     fx.process(_silence(SR), SR, [{"type": "perc", "voice": 1, "notes": notes}], None)
 
 
-# ---------- ТК61: sampler dynamics ----------
-
 class TestSamplerDynamics(unittest.TestCase):
     """Удары с пиками 0,1/0,2/0,4/0,8 (дважды, вперемешку); floor_db −40 — чтобы удар 0,1
     (−18 дБ от громких) не отсёкся порогом по умолчанию."""
@@ -359,7 +347,7 @@ class TestSamplerDynamics(unittest.TestCase):
         self.assertAlmostEqual(float(got.max() - got.min()), 2 * want, delta=2)
 
     def test_dynamics_overall_rms_as_input(self):
-        # условие 35: общая громкость выхода — как раньше (RMS входа)
+        # общая громкость выхода — RMS входа
         for dyn in (0, 2):
             with self.subTest(dynamics=dyn):
                 y = self._run(dynamics=dyn)

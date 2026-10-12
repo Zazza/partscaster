@@ -1,9 +1,7 @@
 package mcp
 
-// Тесты карточки internal-own-track, условие 123 «Честный „проверить кусок“» (ТК150):
 // MCP continue_job с to_sec ставит кусок (Service.FragmentJob), без to_sec — продолжение до конца
 // (Service.ContinueJob), FragmentJob при этом не зовётся.
-// Написаны по карточке, без чтения реализации.
 
 import (
 	"context"
@@ -90,7 +88,7 @@ func TestContinueJobWithoutToSecCallsContinueJob(t *testing.T) {
 	}
 }
 
-// Кросс-ревью s15 r1, условие 123е (ТК155): to_sec передан, даже 0, — это кусок (окно проверит воркер),
+// to_sec передан, даже 0, — это кусок (окно проверит воркер),
 // а не продолжение до конца песни.
 func TestContinueJobWithToSecZeroCallsFragmentJob(t *testing.T) {
 	t.Parallel()

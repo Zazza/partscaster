@@ -16,8 +16,7 @@ import (
 	"yue-studio/internal/yue"
 )
 
-// Тесты карточки internal-own-track, этап 1 «Пресеты звука», условие 5 (MCP),
-// тест-кейс ТК22: sound_presets — список; sound_preset_create / _update / _delete
+// sound_presets — список; sound_preset_create / _update / _delete
 // (delete только с confirm=true); sound_preset_apply (job_id, preset_id) — синхронно,
 // ответ — id версии; submit с sound_preset_ids → SubmitParams.SoundPresetIDs.
 // Воркер — fakeService (server_test.go) + методы пресетов.
@@ -81,7 +80,7 @@ func newPresetServer(t *testing.T) (*Server, *presetFake) {
 	return s, fake
 }
 
-// Условие 5: sound_preset_create передаёт имя, описание, specs и final воркеру; ответ — с id.
+// sound_preset_create передаёт имя, описание, specs и final воркеру; ответ — с id.
 func TestSoundPresetCreateTool(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -112,7 +111,7 @@ func TestSoundPresetCreateTool(t *testing.T) {
 	}
 }
 
-// Условие 5: sound_preset_update передаёт id и новые поля.
+// sound_preset_update передаёт id и новые поля.
 func TestSoundPresetUpdateTool(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -127,7 +126,7 @@ func TestSoundPresetUpdateTool(t *testing.T) {
 	}
 }
 
-// ТК22: sound_preset_delete без confirm → ошибка, воркер не вызван; с confirm=true — удалён.
+// sound_preset_delete без confirm → ошибка, воркер не вызван; с confirm=true — удалён.
 func TestSoundPresetDeleteRequiresConfirm(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -149,7 +148,7 @@ func TestSoundPresetDeleteRequiresConfirm(t *testing.T) {
 	}
 }
 
-// ТК22: submit передаёт sound_preset_ids в SubmitParams.SoundPresetIDs.
+// submit передаёт sound_preset_ids в SubmitParams.SoundPresetIDs.
 func TestSubmitPassesSoundPresetIDs(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -166,7 +165,7 @@ func TestSubmitPassesSoundPresetIDs(t *testing.T) {
 	}
 }
 
-// Без sound_preset_ids — пустой список (как раньше).
+// Без sound_preset_ids — пустой список.
 func TestSubmitWithoutSoundPresetIDs(t *testing.T) {
 	t.Parallel()
 	s, fake := newPresetServer(t)
@@ -178,7 +177,7 @@ func TestSubmitWithoutSoundPresetIDs(t *testing.T) {
 	}
 }
 
-// ТК22: sound_preset_apply (job_id, preset_id) — применение сразу через приложение:
+// sound_preset_apply (job_id, preset_id) — применение сразу через приложение:
 // создана версия-трек «<трек> · <пресет>», ответ — её id.
 func TestSoundPresetApplyReturnsVersionID(t *testing.T) {
 	t.Parallel()
@@ -222,8 +221,6 @@ func TestSoundPresetApplyUnknownPreset(t *testing.T) {
 	}
 }
 
-// ---------- Этап 1б. ТК30: sound_preset_apply с db (условие 12) ----------
-//
 // db — объект {«индекс записи»: дБ −24…24} поверх записей пресета: запись с этим
 // индексом уходит в пересборку с новым Db, прочие — как в пресете; неверный индекс
 // или дБ вне границ — ошибка без работы (ничего не скачано, не загружено, версии нет).
@@ -325,7 +322,7 @@ func dbTone(s []float64, hz float64) float64 {
 
 func dbRatio(a, ref float64) float64 { return 20 * math.Log10(a/ref) }
 
-// ТК30: db {"2": 3} → запись 2 («прочее», в пресете 0 дБ) уходит в пересборку с Db 3:
+// db {"2": 3} → запись 2 («прочее», в пресете 0 дБ) уходит в пересборку с Db 3:
 // 500 Гц громче опоры на 3 дБ; голос (−2 в пресете) и бас — как в опоре.
 func TestSoundPresetApplyDbOverridesRecord(t *testing.T) {
 	t.Parallel()
@@ -360,7 +357,7 @@ func TestSoundPresetApplyDbOverridesRecord(t *testing.T) {
 	}
 }
 
-// ТК30: db с неверным индексом / вне −24…24 → ошибка без работы.
+// db с неверным индексом / вне −24…24 → ошибка без работы.
 func TestSoundPresetApplyDbInvalid(t *testing.T) {
 	t.Parallel()
 	five := yue.SoundPreset{ID: 51, Name: "Пять записей"}
@@ -410,7 +407,7 @@ func TestSoundPresetApplyDbBoundsOk(t *testing.T) {
 	}
 }
 
-// Ревью/кросс-ревью этапа 1б: target_lufs в create/update. Создание — с целью; update без параметра
+// target_lufs в create/update. Создание — с целью; update без параметра
 // сохраняет прежнюю цель (правка описания не стирает громкость), явный null — снимает.
 func TestSoundPresetTargetLUFSCreateUpdate(t *testing.T) {
 	t.Parallel()
@@ -438,7 +435,7 @@ func TestSoundPresetTargetLUFSCreateUpdate(t *testing.T) {
 	}
 }
 
-// Карточка internal-own-track, этап 2, условие 19 (ТК40): схема target_lufs у sound_preset_create
+// Схема target_lufs у sound_preset_create
 // и sound_preset_update допускает null — тип в JSON Schema списком ["number","null"] (иначе
 // клиент MCP отвергает явный null, которым update снимает цель). Схема берётся так, как её
 // отдаёт tools/list: InputSchema инструмента, сериализованная в JSON.
@@ -485,7 +482,7 @@ func TestSoundPresetTargetLUFSSchemaNullable(t *testing.T) {
 	}
 }
 
-// Этап 4 (синты), паритет: chord_grid отдаёт сетку аккордов воркера как есть.
+// chord_grid отдаёт сетку аккордов воркера как есть.
 type chordFake struct{ *presetFake }
 
 func (f *chordFake) ChordGrid(_ context.Context, id int64) (*yue.ChordGrid, error) {

@@ -1,4 +1,4 @@
-"""Спецификация: архив воркера несёт собранный yue2.cpp (internal-own-track, условие 163, ТК193).
+"""Спецификация: архив воркера несёт собранный yue2.cpp.
 
 Что должно работать:
 T1. Есть dist/yue2cpp-linux-x86_64/ (yue-server + libggml*) → tools/worker-tar.sh кладёт его
@@ -7,8 +7,6 @@ T2. Каталога нет → архив прежний: без yue2cpp/ и б
 
 Скрипт работает от корня своего репозитория (dist/ — там), поэтому тест запускает копию
 скрипта в песочнице: tools/worker-tar.sh, worker/, deploy/units/ — общий dist/ не трогается.
-
-Запуск из каталога worker: python -m unittest test_worker_tar_engine -v
 """
 import shutil
 import subprocess

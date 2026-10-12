@@ -1,5 +1,5 @@
 <script setup>
-// Студия трека: пиано-ролл партитуры, минус по стемам, овердаб, DSP-цепочки.
+// Студия трека: пиано-ролл партитуры, минус по стемам, DSP-цепочки.
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t, locale } = useI18n()
@@ -55,8 +55,6 @@ const stemsList = ref([])
 const previewBusy = ref(false)
 let rollDrag = false
 
-// овердаб переехал в действие трека «переиграть в другом стиле» (ReplayModal, меню «⋯» карточки)
-
 // DSP-цепочки (ffmpeg на ПК)
 const dspChains = ref([])
 const dspSel = ref('')
@@ -86,9 +84,7 @@ let waveRafId = 0
 let waveLastPoll = { pos: 0, ts: 0 }
 
 // Позиционная сетка: колонка = музыкальный такт (позиция внутри голоса),
-// голоса в одной колонке звучат одновременно. Плоский поток из score.json
-// (голоса последовательными блоками) рисовал «тот же момент» в разных
-// местах сетки — выделение и метки врали местоположением.
+// голоса в одной колонке звучат одновременно.
 const voiceBarList = computed(() => {
   const res = {}
   for (const b of (rollData.value && rollData.value.bars) || []) {
@@ -138,7 +134,7 @@ const waveKey = computed(() => `w${props.job.id}:${waveFile.value || 'main'}`)
 
 // активная дорожка — одна на всю студию: файл волны — стем этой дорожки, линия громкости, эффекты и педали — по ней
 // (часть барабанов — правки на «барабаны»). Выбор в любом из мест (имя в пульте, список волны, «на что» у громкости,
-// эффектов, педалей) меняет её везде; «весь трек» — тоже везде (раньше цели правок оставались на старой дорожке)
+// эффектов, педалей) меняет её везде; «весь трек» — тоже везде
 const activeStem = computed(() => (stemsList.value.find((s) => s.file === waveFile.value) || {}).name || '')
 const stemNames = computed(() => stemsList.value.map((s) => s.name))
 watch(activeStem, (stem) => {
@@ -294,8 +290,6 @@ async function retryTranscribe() {
   } finally { transcribeBusy.value = false }
 }
 
-// ---------- волна громкости ----------
-
 async function loadWave() {
   waveBusy.value = true
   waveErr.value = ''
@@ -405,7 +399,7 @@ const posSection = (pos) => {
   }
   return ''
 }
-// подпись секции в плане: по-русски и только в её начале (раньше «ver ver ver…» в каждом такте)
+// подпись секции в плане: по-русски и только в её начале
 const secLabel = (pos) => sectionLabel(posSection(pos), locale.value)
 const isSecStart = (pos) => pos === 0 || posSection(pos) !== posSection(pos - 1)
 // голоса партитуры (Vocal/Ins) — по-русски; неизвестный — как есть
@@ -530,7 +524,7 @@ async function renderInstrumental() {
   }
 }
 
-// ---------- Приёмы: точечные «поломки» плана по выделенным тактам ----------
+// Приёмы: точечные «поломки» плана по выделенным тактам
 
 const trickBusy = ref(false)
 const trickMsg = ref('')
@@ -595,7 +589,7 @@ const hasVocalSel = computed(() => {
     /vocal/i.test(v) && (voiceBarList.value[v] || []).slice(p.lo, p.hi + 1).some((b) => (b.voices || {})[v]))
 })
 
-// приём по выделению: адресация — чистая функция (тесты в abcEdit.test),
+// приём по выделению: адресация — чистая функция,
 // позиция = такт, все голоса в выбранных колонках (октава — только вокал).
 // «+ инструмент» план не трогает — рендер куска группой и замена дорожек (addSection).
 const instSel = ref(TRICK_INSTRUMENTS[0].id)
@@ -714,8 +708,8 @@ function unpickSelection() {
 }
 
 // модель следует плану приблизительно: регистр голоса и инструменты план
-// держит слабо — такие приёмы дублируются припиской в стиль (trickStyleSuffix,
-// тесты там же); тот же двойной ход, что у драматургии «взрыв»
+// держит слабо — такие приёмы дублируются припиской в стиль (trickStyleSuffix);
+// тот же двойной ход, что у драматургии «взрыв»
 function trickStyle(base) {
   return trickStyleOf(base, pendingSpecs.value)
 }
@@ -814,14 +808,13 @@ function watchJob(refObj, key, label, playFn = null, onDone = null) {
       }
       maybeStopPoll()
     } catch (e) {
-      rollErr.value = String(e)   // раньше молчаливый catch хоронил ошибки микса
+      rollErr.value = String(e)
       maybeStopPoll()
     }
   }
 }
 
-// общий таймер живёт, пока хоть одна из слежений активна: раньше завершение
-// любой джобы убивало опрос для остальных (партия инструмента не доезжала)
+// общий таймер живёт, пока хоть одна из слежений активна
 function maybeStopPoll() {
   const active = [fragJob, buildJob, instJob].some((r) =>
     r.value && r.value.id && ['queued', 'running'].includes(r.value.status))
@@ -971,9 +964,8 @@ async function sparseVerses() {
   }
 }
 
-// «ещё вариант»: тот же кусок, другой сид — модель играет его по-разному
-// (сбивка на одном сиде удалась, на другом звучала провалом). Новый рендер
-// станет текущим, прежние остаются в alts — переключатель 1/2/3.
+// «ещё вариант»: тот же кусок, другой сид — модель играет его по-разному.
+// Новый рендер станет текущим, прежние остаются в alts — переключатель 1/2/3.
 async function moreVariant(it) {
   const inst = TRICK_INSTRUMENTS.find((i) => i.id === it.instId)
   if (!inst) return
@@ -1041,7 +1033,7 @@ async function continueFromSel() {
 // голоса (выше / вариации / октава), остальной голос и музыка версии — как были.
 // Продолжение берётся от ИСТОЧНИКА голоса (у версии-микса своих шагов модели
 // нет), 2 дубля; сервис useRevoice по готовности подставляет голос дубля
-// только в окно части → новая версия под «📎» (замер 2026-09-30, #214/#210).
+// только в окно части → новая версия под «📎».
 const REVOICE_TAKES = 2
 async function revoiceFromSel() {
   const r = selTimeRange()
@@ -1125,8 +1117,7 @@ async function renderFragment() {
   try {
     await ensureBaseAbc()
     // кусок в контексте трека: звук трека до начала куска — как уже сыгранный, дальше модель играет по полному плану
-    // с правками (текст и такты на своих местах) только до конца куска; раньше кусок генерировался с нуля по обрывку
-    // плана с текстом всей песни — и звучал «бредом»
+    // с правками (текст и такты на своих местах) только до конца куска
     // приёмы, которые план держит слабо (инструменты, голос ±октава), — припиской к стилю, как у пересборки
     const req = fragmentRequest(props.job, from, to, baseAbc.value, pendingSpecs.value)
     const f = req.fragment
@@ -1164,7 +1155,7 @@ const isImport = computed(() => props.job.style === IMPORT_STYLE)
 // подсказка кнопки, которая у импортированного трека недоступна
 const importTip = (key) => (isImport.value ? t('studio.import.noTokens') : t(key))
 
-// ---------- ЭКСПЕРИМЕНТ «голос альбома» (Seed-VC на воркере) ----------
+// ЭКСПЕРИМЕНТ «голос альбома» (Seed-VC на воркере):
 // голос этого трека поётся тембром голоса другой песни; кусок образца воркер
 // подбирает сам. Без Seed-VC на воркере блок виден с подписью «недоступно».
 const seedvcOk = ref(false)
@@ -1186,14 +1177,12 @@ async function submitVoice() {
   } finally { vcBusy.value = false }
 }
 
-// ---------- DSP ----------
-
 // подпись варианта: эффект целиком — по цепочке, микс — по реестру вклеек,
 // иначе подпись, сохранённая воркером (микс из MCP или с другого ПК)
 // «Готово»: название версии — resultTitle (results.js); подробности (дельты метрик) — по галочке, запоминается
 const chainNameOf = (id) => (dspChains.value.find((x) => x.id === id) || {}).name
 const DELTAS_KEY = 'yue_done_deltas'
-const showDeltas = ref(readFlag(DELTAS_KEY, false))   // по умолчанию выкл.
+const showDeltas = ref(readFlag(DELTAS_KEY, false))
 watch(showDeltas, (v) => writeFlag(DELTAS_KEY, v))
 
 // подпись версии для списка файла волны: микс — по реестру вклеек, остальное — resultTitle
@@ -1264,7 +1253,7 @@ async function toggleFxPrev() {
 }
 
 // на что эффект: '' — весь трек, иначе дорожка (стем) — через пересборку
-// дорожек: остальное не меняется (звон голоса #254 — обработка микса глушила гитары)
+// дорожек: остальное не меняется (обработка микса глушила гитары)
 // guitar/piano — подробные дорожки 6-стемной модели (внутри «прочего»)
 const DSP_TARGETS = ['', 'vocals', 'drums', 'bass', 'other', 'guitar', 'piano']
 

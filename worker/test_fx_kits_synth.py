@@ -1,25 +1,22 @@
-"""Тесты карточки internal-own-track, этап 7б: условия 56 и 58 — наборы, которые воркер синтезирует сам
-(тест-кейс ТК91 и вторая половина ТК92).
+"""Наборы, которые воркер синтезирует сам.
 
-Контракт (из карточки):
+Контракт:
 - POST /fx/kits/install?name=<набор> для tr808, tr909, linn, cr78, simmons и synthbass в сеть не ходит:
   пишет wav (48 кГц, моно, PCM 16) в <data>/fx/kits/<набор>/<часть>/, ответ
   {name, parts, downloaded: false, generated: true}; повтор — без перезаписи (generated false);
   неизвестный набор — 422;
 - части драм-машины — 12 (kick … cowbell), по 8 слоёв (wav на слой); synthbass — moog/sub808/acid,
-  по сэмплу на ноту BASS_RANGE (у всех трёх 28…55 — по 28, условие 58б);
-- ТК91: sampler kit «tr808/kick» на дорожке с 4 щелчками → 4 удара на местах щелчков ±2 мс;
-- ТК92 (новая редакция): блок bass с kit «synthbass/sub808» на синусе 41,2 Гц (E1) восьмыми → основной тон
+  по сэмплу на ноту BASS_RANGE (у всех трёх 28…55 — по 28);
+- sampler kit «tr808/kick» на дорожке с 4 щелчками → 4 удара на местах щелчков ±2 мс;
+- блок bass с kit «synthbass/sub808» на синусе 41,2 Гц (E1) восьмыми → основной тон
   выхода 41,2 ±1,5 Гц (не 82,4); с kit «synthbass/moog» на синусе 196 Гц (G3) → 196 ±3 Гц (не 98);
-- условие 58а: каждый модуль worker/*.py, который импортируют yue_worker.py или fx_engine.py, есть в команде
+- каждый модуль worker/*.py, который импортируют yue_worker.py или fx_engine.py, есть в команде
   scp в deploy.sh (иначе на машине воркера ModuleNotFoundError) — проверка по исходникам, без запуска.
 
 Внешняя граница — сеть: urllib.request.OpenerDirector.open (через него идут urlopen, build_opener,
 urlretrieve) подменён на ошибку и записывает вызовы; прямые сокеты запрещены. Хранилище — своё
 на тест (каталог данных из test_fx_api). Обработка — fx_engine.process с настоящими ресурсами воркера
 (fx_resources читает установленные файлы).
-
-Запуск: cd worker && python3 -m unittest test_fx_kits_synth -v
 """
 import ast
 import os
@@ -80,7 +77,7 @@ class _SynthKitCase(fa._FxApiCase):
 
 
 class TestMachineInstall(_SynthKitCase):
-    """ТК91 и условие 56: установка драм-машины без сети."""
+    """Установка драм-машины без сети."""
 
     def _check_layout(self, kit, body):
         import soundfile as sf
@@ -133,7 +130,7 @@ class TestMachineInstall(_SynthKitCase):
 
 
 class TestSamplerTr808(_SynthKitCase):
-    """ТК91: sampler kit «tr808/kick» на дорожке с 4 щелчками."""
+    """Sampler kit «tr808/kick» на дорожке с 4 щелчками."""
 
     SR = 44100
     CLICKS = (0.5, 1.5, 2.5, 3.5)
@@ -163,7 +160,7 @@ class TestSamplerTr808(_SynthKitCase):
         self.assertGreater(top, 0.0, "выход пустой")
         tol = int(0.002 * self.SR)
         # до первого щелчка — тишина (лишнего удара нет); 30 мс перед ним — атака сэмпла до его пика
-        # (пик сэмпла — в первых 25 мс, ТК90, и ставится на пик удара)
+        # (пик сэмпла — в первых 25 мс, и ставится на пик удара)
         self.assertLess(float(m[:at[0] - int(0.03 * self.SR)].max(initial=0.0)), 0.01 * top,
                         "звук до первого щелчка")
         # удар на месте каждого щелчка: пик звука в окне щелчка — там же ±2 мс, и он громкий
@@ -180,7 +177,7 @@ class TestSamplerTr808(_SynthKitCase):
 
 
 class TestSynthBassInstall(_SynthKitCase):
-    """Условие 58: synthbass — та же установка без сети; ТК92 — блок bass с synthbass/sub808."""
+    """synthbass — та же установка без сети; блок bass с synthbass/sub808."""
 
     def test_install_synthbass(self):
         import soundfile as sf
@@ -231,12 +228,12 @@ class TestSynthBassInstall(_SynthKitCase):
         return float(f[band][np.argmax(s[band])])
 
     def test_bass_block_sub808_on_e1_eighths(self):
-        """ТК92: нижняя нота набора (E1) не уходит на октаву вверх."""
+        """Нижняя нота набора (E1) не уходит на октаву вверх."""
         hz = self._bass_out_hz("synthbass/sub808", 41.2, 20, 200)
         self.assertAlmostEqual(hz, 41.2, delta=1.5, msg=f"основной тон выхода {hz:.1f} Гц (ждали 41,2, не 82,4)")
 
     def test_bass_block_moog_on_g3_eighths(self):
-        """ТК92: верхняя нота набора (G3) не уходит на октаву вниз."""
+        """Верхняя нота набора (G3) не уходит на октаву вниз."""
         hz = self._bass_out_hz("synthbass/moog", 196.0, 30, 300)
         self.assertAlmostEqual(hz, 196.0, delta=3.0, msg=f"основной тон выхода {hz:.1f} Гц (ждали 196, не 98)")
 
@@ -265,7 +262,7 @@ class _KitRes:
 
 @unittest.skipUnless(fa._OK, fa._SKIP)
 class TestBassKitNoteFolding(unittest.TestCase):
-    """ТК92а (условие 58б): свёртка нот дорожки к диапазону набора баса.
+    """Свёртка нот дорожки к диапазону набора баса.
 
     - набор без высот в именах (высота — замер по звуку), нижний сэмпл с дробной высотой
       MIDI 24,97: нота 49 (> 24,97 + 24) сворачивается на октаву вниз → тон выхода — нота 37;
@@ -383,7 +380,7 @@ def _deploy_scp_files():
 
 
 class TestDeployShipsImports(unittest.TestCase):
-    """Условие 58а (142): модули воркера, которые импортируют yue_worker.py и fx_engine.py, уезжают в архиве воркера."""
+    """Модули воркера, которые импортируют yue_worker.py и fx_engine.py, уезжают в архиве воркера."""
 
     def test_imported_worker_modules_in_scp(self):
         shipped = _deploy_scp_files()
@@ -397,7 +394,7 @@ class TestDeployShipsImports(unittest.TestCase):
 
     def test_data_files_of_shipped_modules_in_scp(self):
         """Файлы данных worker/*.json, которые читают отправляемые модули (имя — строкой в коде),
-        тоже уезжают через deploy.sh: fx_blocks.json, fx_presets.json (ТК104), fx_kit_files.json (условие 115)."""
+        тоже уезжают через deploy.sh: fx_blocks.json, fx_presets.json, fx_kit_files.json."""
         shipped = _deploy_scp_files()
         missing = {}
         for mod in sorted(f for f in shipped if f.endswith(".py") and (WORKER / f).is_file()):

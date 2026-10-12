@@ -1,7 +1,5 @@
-/* == Winamp-inspired design system =====================================
-   Тёмная тема — классический винамп: тёмно-серый металл с фасками,
-   зелёные LCD-дисплеи. Светлая — «светлый скин»: бежевый металл,
-   тёмно-синие LCD. Всё векторное (CSS), поэтому чётко на 2K/4K. */
+/* Winamp-inspired design system: фаски и LCD-дисплеи.
+   Всё векторное (CSS), поэтому чётко на 2K/4K. */
 
 :root {
   --bg: #08080c;
@@ -19,7 +17,6 @@
   --ok: #4caf7d;
   --err: #e8674a;
   --run: #d9a03d;
-  /* LCD-дисплеи */
   --lcd-bg: #14100a;
   --lcd-text: #ffbe3d;
   --lcd-dim: #4a3a15;
@@ -53,7 +50,7 @@
   --lcd-text: #ffbe3d;
   --lcd-dim: #4a3a15;
   --lcd-glow: rgba(255, 190, 61, .35);
-  /* главные кнопки — коралловый градиент (янтарь уходит с фона в LCD) */
+  /* главные кнопки — коралловый градиент */
   --play-grad: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, #ffffff), var(--accent) 45%, #9a340a);
   --play-fg: #ffffff;
   /* бейджи — читаемый синий вместо светло-голубого на белом */
@@ -68,14 +65,12 @@ body {
   font: 14px/1.5 'Inter', system-ui, sans-serif;
 }
 
-/* осовремененное «стекло»: лёгкая полупрозрачность + размытие фона */
 .glass {
   background: color-mix(in srgb, var(--panel) 86%, transparent);
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 
-/* фаска панели: светлая грань сверху/слева, тёмная снизу/справа */
 .wa-bevel {
   border: 1px solid var(--border);
   border-top-color: var(--bevel-hi);
@@ -85,7 +80,6 @@ body {
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .06);
 }
 
-/* LCD-дисплей: тёмное стекло, светящийся текст, лёгкое свечение */
 .wa-lcd {
   background: var(--lcd-bg);
   color: var(--lcd-text);
@@ -108,7 +102,6 @@ input, textarea, select, button {
   border-radius: 2px;
   padding: 6px 10px;
 }
-/* поля ввода — «утоплены», как окошки на панели усилителя */
 input, textarea {
   background: var(--panel2);
   border-top-color: var(--bevel-lo);
@@ -209,9 +202,8 @@ input[type="range"]::-webkit-slider-thumb {
   border-left-color: var(--bevel-hi);
 }
 
-/* Светлая тема: стеклянные контролы — полу-прозрачный белый + blur (2026, а не 1997).
-   Фаски остаются: характер винампа читается через грани и рельсы. Тени — холодные,
-   без тёплого подтона (палитра ушла от бежа к холодному серому). */
+/* Светлая тема: стеклянные контролы — полу-прозрачный белый + blur.
+   Фаски остаются: характер винампа читается через грани и рельсы. */
 [data-theme="light"] button {
   background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.38) 60%, rgba(244,245,248,.5));
   backdrop-filter: blur(10px) saturate(1.2);
@@ -265,7 +257,6 @@ input[type="range"]::-webkit-slider-thumb {
 /* вклейки инструментов в студии: громкость и отметка ритма */
 .insert-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 .insert-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-/* выключенная правка — в списке, но приглушена */
 .insert-row.off strong, .insert-row.off .muted { opacity: 0.5; text-decoration: line-through; }
 .insert-row .spacer { flex: 1; }
 

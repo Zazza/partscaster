@@ -48,8 +48,8 @@ const RHYTHM = [['kick', 'drums-kick-kit'], ['snare', 'drums-snare-kit'], ['toms
 export { ROOM }
 
 /** Ритм-секция одной записью: для частей барабанов и баса, которые есть у трека, — {stem, chain, label}.
- *  room — true/false (комната/сухо, как раньше) или id обработки DRUM_TREATMENTS (неизвестный — сухо): цепочка
- *  обработки — в конец каждой части барабанов, к басу — нет. kit — набор DRUM_KITS: 'osdk' — прежние готовые
+ *  room — true/false (комната/сухо) или id обработки DRUM_TREATMENTS (неизвестный — сухо): цепочка
+ *  обработки — в конец каждой части барабанов, к басу — нет. kit — набор DRUM_KITS: 'osdk' — готовые
  *  цепочки; машина — sampler с частями набора и прочими параметрами osdk той же части. Нет ни одной — []. */
 export function rhythmSection(stemNames, presets, room, locale = 'ru', kit = 'osdk') {
   const have = new Set(stemNames || [])
