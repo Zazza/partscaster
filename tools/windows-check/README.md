@@ -92,4 +92,32 @@ Windows не работает, родной воркер возможен тол
 
 ## Итог
 
-_(заполняется после прогона)_
+Проверено 2026-10-12, Windows 11, RTX 4070 Ti SUPER 16 ГБ, антивирус Касперского активен.
+
+1. **Шаги 1–3** — OK, но с оговоркой: uv при пине `torch==2.10.0` взял CPU-сборку с PyPI вместо
+   `2.10.0+cu128` со `--index-url` (нужен явный пин `torch==...+cu128`). Ручная доустановка
+   `uv pip install torch==2.10.0+cu128 torchaudio==2.10.0+cu128 --index-url https://download.pytorch.org/whl/cu128`
+   встаёт и работает: `torch.cuda.is_available() == True`.
+2. **Шаг 5** — падал дважды по внешним причинам, сама YuE2 **работает**:
+   - модель (~10 ГБ) скачалась до 6.8 ГиБ и оборвалась на SSL `self-signed certificate in
+     certificate chain` — Касперский перехватывает HTTPS; лечится `REQUESTS_CA_BUNDLE` /
+     `SSL_CERT_FILE` на bundle из корневых сертификатов хранилища Windows + certifi;
+   - после доустановки cu128-torch генерация через воркер упала на `RuntimeError:
+     USE_FLASH_ATTENTION was not enabled for build` — **Windows-сборка PyTorch 2.10.0+cu128
+     скомпилирована без aten flash-attention** (op есть в схеме, реализация — заглушка).
+     Дефолтный `backend="torch"` yue2 идёт через CUDA-граф с прямым `_flash_attention_forward`
+     и на Windows умирает; авто-детект пакета (`hasattr` + `seqused_k` в схеме) этого не различает.
+3. **Прямая генерация прошла**: `backend="torch-eager"` (без CUDA-графа, SDPA-внимание) —
+   **24.8 с аудио за 74.3 с, пик VRAM 7.8 ГиБ**. Артефакт `C:\yue-check\direct\audio.flac`,
+   без усечения. Вывод: **родной Windows-воркер возможен** — нужен `backend="torch-eager"`
+   (или патч детекта flash в yue2), пока Windows-torch без FA.
+4. **Шаг 4** — 6 failures + 47 errors, 770 skipped: почти всё переносимость (`/tmp` vs
+   `C:/Users/.../Temp` во временных путях, install.sh-тесты требуют bash/posix).
+   Полный список `C:\yue-check\unittest.txt`.
+5. **Шаг 6** — пропущен: нет cmake/ninja/nvcc/VS 18 Build Tools.
+6. **Руками сверх скрипта**: UTF-8 BOM для ps1 (Windows PowerShell 5.1 без BOM читает как ANSI
+   и падает на русских комментариях), cu128-torch, CA-bundle, прямой прогон `torch-eager`.
+   Для шага 5 пришлось временно остановить рабочий воркер в WSL (порт 8091) и вернуть после.
+
+Не делалось: правки develop, push. Папка `C:\yue-check` оставлена (модель в кеше) до решения.
+

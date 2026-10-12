@@ -1,4 +1,4 @@
-# Проверка: работает ли воркер Yue Studio на Windows без WSL. Описание и разбор итогов — README.md рядом.
+﻿# Проверка: работает ли воркер Yue Studio на Windows без WSL. Описание и разбор итогов — README.md рядом.
 #   powershell -ExecutionPolicy Bypass -File tools\windows-check\check-windows.ps1 [-Root C:\yue-check] [-SkipCpp]
 # Всё ставится в -Root (Python, пакеты, модели, данные); система не меняется, папку можно удалить целиком.
 param(
