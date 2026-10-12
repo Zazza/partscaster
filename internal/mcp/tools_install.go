@@ -70,6 +70,9 @@ func RegisterInstallTools(s *Server) {
 			"sep_dir":    prop("каталог RoFormer: окружение <dir>/venv и веса <dir>/models, можно на другом диске (пусто — ~/sep-venv и ~/sep-models)", "string"),
 			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/yue-studio/seedvc; можно на другом диске)", "string"),
 			"hf_home":    prop("каталог кеша весов HF (по умолчанию ~/yue/hf-cache)", "string"),
+			"engine": prop("движок генерации: torch — основной (по умолчанию) | cpp — yue2.cpp, ЭКСПЕРИМЕНТ: меньше видеопамяти "+
+				"(~8 ГБ, в экономном режиме ~4,5 ГБ против ~11), но тот же сид даёт другую песню (спроси пользователя)", "string"),
+			"cpp_model": prop("модель yue2.cpp (только при engine=cpp): auto — по видеопамяти (по умолчанию) | bf16 | q8 | q6 | q5", "string"),
 			"archive": prop("архив воркера worker-<версия>.tar.gz (пусто — собрать из исходников make worker-tar, "+
 				"либо взять лежащий рядом с yue-mcp из релизного пакета)", "string"),
 		}),
@@ -97,6 +100,10 @@ func RegisterInstallTools(s *Server) {
 			case stemsModel == "" && roformer && !dryRun:
 				return "", errors.New("спроси пользователя, чем делать дорожки по умолчанию, и передай stems_model=htdemucs|roformer " +
 					"(htdemucs — быстрее, roformer — чище; потом меняется в настройках приложения)")
+			}
+			engine, cppModel := argString(args, "engine"), argString(args, "cpp_model")
+			if err := checkEngineArgs(engine, cppModel); err != nil {
+				return "", err
 			}
 			// без RoFormer и без явного выбора настройка не меняется: переустановка ради whisper
 			// не сбрасывает выбранный раньше RoFormer (воркер без настройки и так делает Demucs)
@@ -129,6 +136,7 @@ func RegisterInstallTools(s *Server) {
 				}
 			}
 			plan, steps := workerInstallPlanFull(argString(args, "host"), archive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
+			plan, steps = withEngine(plan, steps, engine, cppModel)
 			out, err := runSteps(argString(args, "host"), steps, !dryRun)
 			out = plan + "\n" + out + workerAddress(s)
 			if dryRun {
@@ -286,6 +294,47 @@ func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool,
 			`grep -q '"stems_model": *"bs-roformer-sw"' && echo 'дорожки делает RoFormer' || ` +
 			`{ echo 'ВНИМАНИЕ: RoFormer выбран по умолчанию, но воркер делает дорожки demucs. ` +
 			`Проверьте шаг установки RoFormer, YUE_SEP_PY, YUE_DATA_DIR и YUE_STEMS_MODEL в ~/yue-studio/worker.env'; exit 1; }`})
+	}
+	return plan, steps
+}
+
+// checkEngineArgs — движок генерации и модель yue2.cpp для install.sh (--engine, --cpp-model); проверка до шагов.
+func checkEngineArgs(engine, cppModel string) error {
+	switch engine {
+	case "", "torch", "cpp":
+	default:
+		return fmt.Errorf("engine: torch или cpp (получено %q)", engine)
+	}
+	switch cppModel {
+	case "", "auto", "bf16", "q8", "q6", "q5":
+	default:
+		return fmt.Errorf("cpp_model: auto, bf16, q8, q6 или q5 (получено %q)", cppModel)
+	}
+	if cppModel != "" && engine != "cpp" {
+		return errors.New("cpp_model — только вместе с engine=cpp")
+	}
+	return nil
+}
+
+// withEngine — выбор движка в плане и в шаге install.sh; без engine план прежний (движок не меняется).
+func withEngine(plan string, steps []step, engine, cppModel string) (string, []step) {
+	if engine == "" {
+		return plan, steps
+	}
+	flags := " --engine " + engine
+	switch engine {
+	case "cpp":
+		if cppModel == "" {
+			cppModel = "auto"
+		}
+		flags += " --cpp-model " + cppModel
+		plan += "Движок генерации: yue2.cpp — ЭКСПЕРИМЕНТ (модель " + cppModel + "; программа из архива или сборка, " +
+			"модель скачивается). Не вышло — воркер работает на основном движке.\n"
+	default:
+		plan += "Движок генерации: основной (PyTorch).\n"
+	}
+	for i := range steps {
+		steps[i].cmd = strings.Replace(steps[i].cmd, "/install.sh --no-start", "/install.sh --no-start"+flags, 1)
 	}
 	return plan, steps
 }

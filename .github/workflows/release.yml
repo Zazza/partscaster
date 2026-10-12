@@ -39,6 +39,8 @@ jobs:
       - name: Wails CLI (версия — как в go.mod)
         run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
       - name: Пакет
+        # на Linux release.sh сначала собирает yue2.cpp в контейнере CUDA 12.8 (docker есть на ubuntu-раннере) —
+        # готовая программа второго движка (эксперимент) едет в архиве воркера
         run: |
           # Linux: Wails под webkit2gtk-4.1 (на ubuntu-24.04 нет 4.0, без тега cgo ищет 4.0)
           if [[ "$RUNNER_OS" == "Linux" ]]; then export GOFLAGS="-tags=webkit2_41"; fi

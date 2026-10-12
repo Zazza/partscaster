@@ -85,6 +85,11 @@ func (e *StatusError) Error() string { return e.Msg }
 // call — общий путь HTTP-запроса к API воркера: таймаут, опциональное тело
 // (JSON или сырые байты с X-Filename), проверка статуса, декод JSON в out.
 func (c *Client) call(ctx context.Context, method, path string, timeout time.Duration, req *request, out any) error {
+	return c.callWith(c.hc, ctx, method, path, timeout, req, out)
+}
+
+// callWith — call через заданный http.Client (долгая загрузка модели — без ResponseHeaderTimeout общего).
+func (c *Client) callWith(hc *http.Client, ctx context.Context, method, path string, timeout time.Duration, req *request, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -110,7 +115,7 @@ func (c *Client) call(ctx context.Context, method, path string, timeout time.Dur
 			httpReq.Header.Set("X-Filename", req.filename)
 		}
 	}
-	resp, err := c.hc.Do(httpReq)
+	resp, err := hc.Do(httpReq)
 	if err != nil {
 		return err
 	}

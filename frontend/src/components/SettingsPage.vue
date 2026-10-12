@@ -8,6 +8,7 @@ import VSelect from '../VSelect.vue'
 import { workerCheckText } from '../workerCheck.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useWorkerCompat } from '../composables/useWorkerCompat.js'
+import { modelOptions as cppModelOptions, engineConfig } from '../engine.js'
 const { askConfirm } = useConfirm()
 
 const serverURL = defineModel('serverURL')
@@ -16,7 +17,7 @@ const emit = defineEmits(['close', 'saved'])
 // модалка: Esc закрывает
 const onKey = (e) => { if (e.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+onUnmounted(() => { window.removeEventListener('keydown', onKey); clearInterval(modelTimer) })
 
 const ollamaURL = ref('')
 const ollamaModel = ref('')
@@ -30,6 +31,13 @@ const ollamaProbe = ref('') // статус проверки Ollama
 const autoStems = ref(true)
 const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
 const roformerOk = ref(false)           // окружение RoFormer установлено на воркере
+// движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим
+const engine = ref('torch')
+const cppModel = ref('q8')
+const cppLowVram = ref(false)
+const engineMsg = ref('')               // итог смены движка/загрузки модели
+const modelLoad = ref(null)             // идущая загрузка модели {name, file, done, total}
+let modelTimer = 0
 const checkRes = ref(null)              // «Проверить»: { ok, text }
 const appVersion = ref('')
 const agents = ref(null)                // { mcp_path, mcp_found, url, snippets }
@@ -74,6 +82,44 @@ function connectClaude() {
     })
 }
 
+const engineSupported = computed(() => !!(info.value && info.value.cpp_models)) // старый воркер — блока нет
+const engineOptions = computed(() => [
+  { value: 'torch', label: t('settings.engine.torch') },
+  { value: 'cpp', label: t('settings.engine.cpp'), disabled: !(info.value && info.value.cpp_available) },
+])
+const cppModels = computed(() => cppModelOptions(info.value))
+const cppModelInstalled = computed(() => !!cppModels.value.find((o) => o.value === cppModel.value && o.installed))
+
+function applyEngine(c) {
+  engine.value = c.engine || 'torch'
+  cppModel.value = c.cpp_model || 'q8'
+  cppLowVram.value = !!c.cpp_low_vram
+}
+
+// загрузка модели yue2.cpp: воркер отвечает по окончании, прогресс — опросом
+async function downloadModel() {
+  engineMsg.value = ''
+  const name = cppModel.value
+  modelLoad.value = { name, file: '', done: 0, total: 0 }
+  clearInterval(modelTimer)
+  modelTimer = setInterval(async () => {
+    try {
+      const p = await api.engineModelProgress()
+      if (p && p.name) modelLoad.value = p
+    } catch { /* прогресс — подсказка; загрузка идёт и без него */ }
+  }, 1000)
+  try {
+    await api.installEngineModel(name)
+    info.value = await api.workerConfig()
+    engineMsg.value = t('settings.engine.downloaded', { name: name.toUpperCase() })
+  } catch (e) {
+    engineMsg.value = t('settings.engine.downloadFailed', { err: String(e) })
+  } finally {
+    clearInterval(modelTimer)
+    modelLoad.value = null
+  }
+}
+
 const stemsOptions = computed(() => [
   { value: 'htdemucs', label: t('settings.stemsModel.fast') },
   { value: 'roformer', label: t('settings.stemsModel.clean'), disabled: !roformerOk.value },
@@ -102,6 +148,7 @@ onMounted(async () => {
     autoStems.value = c.auto_stems_instrumental !== false
     stemsModel.value = c.stems_pref || 'htdemucs'
     roformerOk.value = !!c.roformer_available
+    applyEngine(c)
     info.value = c
     await checkOllama()
   } catch {
@@ -144,6 +191,20 @@ async function save() {
       info.value = c
     } catch (e) {
       err.value = 'Ollama-настройки не применены (воркер старой версии или недоступен): ' + e
+    }
+    // движок — отдельным запросом: отказ (модель не скачана) не роняет остальные настройки
+    if (engineSupported.value) {
+      try {
+        await api.setWorkerConfig(engineConfig(engine.value, cppModel.value, cppLowVram.value))
+        engineMsg.value = ''
+      } catch (e) {
+        engineMsg.value = t('settings.engine.notApplied', { err: String(e) })
+      }
+      try {
+        const c = await api.workerConfig()
+        applyEngine(c)
+        info.value = c
+      } catch { /* показан прежний выбор; ошибка — выше */ }
     }
     saved.value = true
     useWorkerCompat().recheck() // другой воркер — своя версия
@@ -199,6 +260,30 @@ async function save() {
         <VSelect v-model="stemsModel" :options="stemsOptions" />
       </div>
       <div class="set-hint muted">{{ roformerOk ? t('settings.stemsModel.hint') : t('settings.stemsModel.missing') }}</div>
+
+      <template v-if="engineSupported">
+        <h3 class="set-h">{{ t('settings.engine') }}</h3>
+        <div class="set-row">
+          <span>{{ t('settings.engine.choice') }}</span>
+          <VSelect v-model="engine" :options="engineOptions" />
+        </div>
+        <div v-if="!info.cpp_available" class="set-hint muted">{{ t('settings.engine.unavailable') }}</div>
+        <template v-if="engine === 'cpp'">
+          <div class="set-hint"><span class="badge exp">{{ t('settings.engine.experimental') }}</span> {{ t('settings.engine.note') }}</div>
+          <div class="set-row">
+            <span>{{ t('settings.engine.model') }}</span>
+            <VSelect v-model="cppModel" :options="cppModels" />
+            <button v-if="!cppModelInstalled" class="ghost" :disabled="!!modelLoad" @click="downloadModel">{{ t('settings.engine.download') }}</button>
+          </div>
+          <div v-if="modelLoad" class="set-hint muted">{{ t('settings.engine.downloading', { file: modelLoad.file || '…', done: (modelLoad.done / 1e9).toFixed(1), total: (modelLoad.total / 1e9).toFixed(1) }) }}</div>
+          <div v-else-if="!cppModelInstalled" class="set-hint muted">{{ t('settings.engine.needDownload') }}</div>
+          <label class="set-row set-check">
+            <input type="checkbox" v-model="cppLowVram" />
+            <span>{{ t('settings.engine.lowVram') }}</span>
+          </label>
+        </template>
+        <div v-if="engineMsg" class="set-hint">{{ engineMsg }}</div>
+      </template>
 
       <h3 class="set-h">{{ t('settings.info') }} <span class="muted">{{ t('settings.info.readonly') }}</span></h3>
       <div v-if="info" class="set-info muted">

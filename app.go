@@ -604,6 +604,16 @@ func (a *App) YueFxKitProgress() (map[string]any, error) {
 	return a.yue.FxKitProgress(a.ctx)
 }
 
+// YueInstallEngineModel — скачать модель yue2.cpp (второй движок, эксперимент) на воркер; ждёт конца загрузки.
+func (a *App) YueInstallEngineModel(name string) (map[string]any, error) {
+	return a.yue.InstallEngineModel(a.ctx, name)
+}
+
+// YueEngineModelProgress — прогресс идущей загрузки модели yue2.cpp ({} — нет).
+func (a *App) YueEngineModelProgress() (map[string]any, error) {
+	return a.yue.EngineModelProgress(a.ctx)
+}
+
 // YueInstallFxKit — воркер качает набор сэмплов барабанов (блок sampler) из своего каталога.
 func (a *App) YueInstallFxKit(name string) (map[string]any, error) {
 	return a.yue.InstallFxKit(a.ctx, name)

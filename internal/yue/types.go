@@ -56,6 +56,9 @@ type Service interface {
 	InstallFxKit(ctx context.Context, name string) (map[string]any, error)
 	// FxKitProgress — прогресс идущей установки набора ({} — нет)
 	FxKitProgress(ctx context.Context) (map[string]any, error)
+	// второй движок генерации yue2.cpp (ЭКСПЕРИМЕНТ): загрузка модели и её прогресс ({} — нет)
+	InstallEngineModel(ctx context.Context, name string) (map[string]any, error)
+	EngineModelProgress(ctx context.Context) (map[string]any, error)
 	// фразы страницы «Инструменты»: круг через цепочку, играет по кругу
 	FxPhrases(ctx context.Context) ([]FxPhrase, error)
 	FxPhrase(ctx context.Context, req FxPhraseReq) (*FxPhraseResult, error)

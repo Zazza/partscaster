@@ -31,6 +31,7 @@ import PresetsPage from './components/PresetsPage.vue'
 import ReplayModal from './components/ReplayModal.vue'
 import RecipeImportModal from './components/RecipeImportModal.vue'
 import { activeImports } from './recipe.js'
+import { engineLabel, retryWarning, currentEngineLabel } from './engine.js'
 import PresetChips from './components/PresetChips.vue'
 import JobPresets from './components/JobPresets.vue'
 import StudioPage from './components/StudioPage.vue'
@@ -505,7 +506,22 @@ async function cancel(id) {
 const leakTip = (j) => t('queue.vocalLeak.tip', { at: j.vocal_leak.split(',').map((s) => fmtDur(Number(s))).join(', ') })
 // «повторить» упавшую или отменённую джобу: снова в очередь с теми же параметрами
 const canRetry = (j) => j.status === 'error' || j.status === 'canceled'
-async function retry(j) {
+// действующий движок генерации воркера ("torch" | "cpp-q8" …; '' — не известен): сид повторяет исполнение
+// только на том же движке — перед повтором по сиду предупреждаем
+const currentEngine = ref('')
+async function loadEngine() {
+  try { currentEngine.value = currentEngineLabel(await api.workerConfig()) } catch { currentEngine.value = '' }
+}
+onMounted(loadEngine)
+// повтор по сиду на другом движке — с предупреждением; тот же движок — сразу. Движок перечитывается:
+// его могли переключить не из этого окна (MCP config_set)
+async function withEngineCheck(j, action) {
+  await loadEngine()
+  const warn = retryWarning(j, currentEngine.value)
+  if (!warn) return action()
+  askConfirm(t('engine.retryWarning.title'), warn, action)
+}
+async function doRetry(j) {
   try {
     await api.retryJob(j.id)
   } catch (e) {
@@ -513,6 +529,7 @@ async function retry(j) {
   }
   refresh()
 }
+const retry = (j) => withEngineCheck(j, () => doRetry(j))
 
 function deleteJob(j) {
   askConfirm(`Удалить результат #${j.id} «${j.title}»?`,
@@ -523,7 +540,8 @@ function deleteJob(j) {
     })
 }
 
-function reuseJob(j) {
+const reuseJob = (j) => withEngineCheck(j, () => fillFromJob(j))
+function fillFromJob(j) {
   title.value = j.title
   styleOverride.value = j.style
   lyrics.value = j.lyrics
@@ -986,6 +1004,7 @@ function onWindowClick(e) {
           <div class="job-meta-line">
             <span class="job-meta-extra">
               <span v-if="j.seed" class="muted">seed {{ j.seed }}</span>
+              <span v-if="engineLabel(j)" class="badge exp" :title="t('engine.badge.tip')">{{ engineLabel(j) }}</span>
               <span v-if="j.cot && j.cot !== 'full'" class="muted" :title="t('queue.cot.tip')">{{ t('queue.cot.' + j.cot) }}</span>
               <span v-if="characterLabel(j)" class="muted" :title="t('character.title')">{{ characterLabel(j) }}</span>
               <span v-if="j.req_abc" class="badge" :title="t('form.abc.tip')">свой ABC</span>
@@ -1305,7 +1324,7 @@ function onWindowClick(e) {
   </div>
 
   <SettingsPage v-if="settingsPage" v-model:server-url="serverURL"
-                @close="settingsPage = false" @saved="refresh" />
+                @close="settingsPage = false" @saved="refresh(); loadEngine()" />
   <CorpusPage v-if="corpusPage"
               @close="corpusPage = false"
               @imported="onImported"

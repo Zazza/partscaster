@@ -118,6 +118,10 @@ export function YueDspVariants(arg1) {
   return window['go']['main']['App']['YueDspVariants'](arg1);
 }
 
+export function YueEngineModelProgress() {
+  return window['go']['main']['App']['YueEngineModelProgress']();
+}
+
 export function YueEnsureMp3(arg1) {
   return window['go']['main']['App']['YueEnsureMp3'](arg1);
 }
@@ -176,6 +180,10 @@ export function YueImportRecipe(arg1, arg2) {
 
 export function YueImportTrack() {
   return window['go']['main']['App']['YueImportTrack']();
+}
+
+export function YueInstallEngineModel(arg1) {
+  return window['go']['main']['App']['YueInstallEngineModel'](arg1);
 }
 
 export function YueInstallFxKit(arg1) {

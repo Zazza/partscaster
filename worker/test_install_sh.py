@@ -278,7 +278,9 @@ class TestInstallBasic(_InstallCase):
         self.install("1.0.0", "--no-start", YUE_HOME=str(x))
         unit = (x / "units" / "yue-worker.service").read_text().splitlines()
         for want in (f"WorkingDirectory={x}/current", f"EnvironmentFile={x}/worker.env",
-                     f'Environment="YUE_DATA_DIR={x}/data"'):
+                     f'Environment="YUE_DATA_DIR={x}/data"',
+                     # ревью s20: воркер ищет собранную install.sh программу yue2.cpp в $YUE_HOME/yue2cpp-src
+                     f'Environment="YUE_HOME={x}"'):
             self.assertIn(want, unit)
         self.assertFalse(any("%h/yue-studio" in ln for ln in unit), unit)
 

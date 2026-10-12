@@ -9,6 +9,8 @@ WorkingDirectory=%h/yue-studio/current
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # данные — рядом с кодом (install.sh подставляет свой YUE_HOME); worker.env главнее, его YUE_DATA_DIR побеждает
 Environment="YUE_DATA_DIR=%h/yue-studio/data"
+# каталог установки: там воркер ищет собранную install.sh программу yue2.cpp (yue2cpp-src)
+Environment="YUE_HOME=%h/yue-studio"
 EnvironmentFile=%h/yue-studio/worker.env
 ExecStart="%h/yue/.venv/bin/python" -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
 Restart=on-failure

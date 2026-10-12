@@ -4,7 +4,13 @@
 Аутентификации нет (см. раздел «Безопасность» в README).
 
 ```
-GET/POST /config       настройки: ollama_url, ollama_model (меняются на лету)
+GET/POST /config       настройки: ollama_url, ollama_model (меняются на лету); движок генерации — engine
+                       (torch | cpp — yue2.cpp, ЭКСПЕРИМЕНТ), cpp_model (bf16|q8|q6|q5), cpp_low_vram; GET ещё
+                       cpp_available (программа запускается) и cpp_models {имя: {file, size, installed}}; engine=cpp
+                       без программы или без скачанной модели — 422; смена — со следующей генерации
+POST /engine/models/install?name=  скачать модель yue2.cpp и VAE (закреплённые файлы, проверка sha256; есть — без
+                       сети); ждёт конца; сумма не сошлась — 502, неизвестное имя — 422
+GET  /engine/models/progress  идущая загрузка {name, file, done, total} или {}
 GET  /health           статус, модель в памяти?
 POST /jobs/{id}/ops     {op, params, result, refs} — запись журнала правок (рецепт трека; пишет приложение/MCP после
                        успешной правки; op: submit|continue|fragment|overdub|variant_track|fx|minus|update|set_head|
@@ -16,9 +22,10 @@ POST /recipes/import    {recipe, mode: seed|plan} → {id} — сессия им
 GET  /recipes/imports[/{id}]  сессии импорта (с /{id} — ещё recipe и state ведущего)
 POST /recipes/imports/{id}/claim  {owner} — захват ведения на 10 мин; держит другой — 409
 PATCH /recipes/imports/{id}  {state?, progress?, status? (running|done|error), error?, root_job_id?}
-GET  /version          {version, api, source_hash, model, components:{whisper,seedvc,roformer}, stems_model} —
+GET  /version          {version, api, source_hash, model, engine, components:{whisper,seedvc,roformer}, stems_model} —
                        сборка воркера (файл VERSION архива, без него dev), версия API (WORKER_API; клиенты сверяют
-                       со своей), отпечаток кода, модель генерации и что установлено
+                       со своей), отпечаток кода, модель генерации (у yue2.cpp — «Serveurperso/YuE2-GGUF:<файл>@yue2.cpp-
+                       <коммит>»), движок (torch | cpp-q8 …) и что установлено
 POST /jobs             {title, style, lyrics, seed, cot, abc?, draft?, arc?, max_tokens?, temperature?, cfg?} — abc: свой план; draft: черновик ~15-20 с;
                        temperature (0 или 0.5–1.5, смелость игры) и cfg (0 или 1–4, точность по стилю/нотам) —
                        характер исполнения, 0 = по умолчанию (1.0 / YUE2_CFG_SCALE); у parent_id и /continue — как у родителя;
@@ -29,7 +36,8 @@ POST /jobs             {title, style, lyrics, seed, cot, abc?, draft?, arc?, max
                        parent_id?, role? — производный трек (section | rebuild | fragment | variant;
                        continue — только через /continue): в списке приложения прячется под родителем («📎 N»)
 POST /plan             {style, lyrics, seed, cot} → {abc, truncated, seconds, seed}  — только план (seed пустой — случайный, в ответе)
-GET  /jobs[/{id}]      список/статус (req_abc = рендер по своему ABC)
+GET  /jobs[/{id}]      список/статус (req_abc = рендер по своему ABC; engine — чем сделан: "" старые = PyTorch,
+                       torch, cpp-bf16|cpp-q8|cpp-q6|cpp-q5 — сид повторяет исполнение только на том же движке)
                        mixes — число готовых миксов (overdub-inst-*.flac: вклейки, эффекты на дорожки)
 POST /jobs/{id}/cancel отмена: queued — из очереди; running — остановка генерации
                        (пайплайн завершится на ближайшем шаге). В running-джобах

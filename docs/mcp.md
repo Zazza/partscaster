@@ -138,10 +138,12 @@ chain+params | steps, db; final — цепочка на микс) · `sound_pres
 разделит, поставит наборы, пересоберёт, финал на результате; ответ — id версии) · `submit` с `sound_preset_ids`
 (до 3; применит открытое приложение, когда трек готов и очередь пуста; у черновика — нельзя).
 
-**Настройки**: `config_get` / `config_set` (адрес воркера, Ollama, `stems_model`, `fx_engine` — движок вкл/выкл).
+**Настройки**: `config_get` / `config_set` (адрес воркера, Ollama, `stems_model`, `fx_engine` — движок вкл/выкл;
+движок генерации `engine` torch | cpp — yue2.cpp, эксперимент, `cpp_model`, `cpp_low_vram`) · `engine_model_install`
+(скачать модель yue2.cpp: bf16 | q8 | q6 | q5, ждёт конца).
 
 **Установка и диагностика**: `doctor` (воркер/GPU/ffmpeg/HF-токен) ·
-`install_worker` (локально или по ssh на GPU-машину; сухой прогон по умолчанию) ·
+`install_worker` (локально или по ssh на GPU-машину; сухой прогон по умолчанию; `engine=cpp`, `cpp_model` — второй движок) ·
 `install_app` (сборка wails).
 
 † — деструктивные: требуют `confirm=true`, агент обязан спросить пользователя.

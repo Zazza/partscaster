@@ -38,13 +38,18 @@ func RegisterStudioTools(s *Server) {
 	s.Register(Tool{
 		Name: "config_set",
 		Description: "Настройки: server_url — адрес воркера (сохраняется и в settings приложения); " +
-			"ollama_url / ollama_model — применяются на лету; stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл.",
+			"ollama_url / ollama_model — применяются на лету; stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
+			"engine — движок генерации (torch | cpp — yue2.cpp, ЭКСПЕРИМЕНТ), cpp_model, cpp_low_vram — со следующей генерации.",
 		InputSchema: props(map[string]any{
 			"server_url":   prop("адрес воркера, напр. http://gpu-host:8091", "string"),
 			"stems_model":  prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
 			"ollama_url":   prop("URL Ollama (api/chat)", "string"),
 			"ollama_model": prop("модель Ollama", "string"),
 			"fx_engine":    prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
+			"engine": prop("движок генерации: torch — основной | cpp — yue2.cpp, ЭКСПЕРИМЕНТ (меньше видеопамяти; "+
+				"тот же сид даёт другую песню, ноты и продолжения переносятся). cpp — только с установленной программой и скачанной моделью", "string"),
+			"cpp_model":    prop("модель yue2.cpp: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install)", "string"),
+			"cpp_low_vram": prop("экономный режим yue2.cpp (~4,5 ГБ видеопамяти, песня до ~3,5 мин)", "boolean"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			if u := argString(args, "server_url"); u != "" {
@@ -64,12 +69,42 @@ func RegisterStudioTools(s *Server) {
 			if v, ok := args["fx_engine"].(bool); ok {
 				cfg["fx_engine"] = v
 			}
+			if v := argString(args, "engine"); v != "" {
+				cfg["engine"] = v
+			}
+			if v := argString(args, "cpp_model"); v != "" {
+				cfg["cpp_model"] = v
+			}
+			if v, ok := args["cpp_low_vram"].(bool); ok {
+				cfg["cpp_low_vram"] = v
+			}
 			if len(cfg) > 0 {
 				if err := s.client.SetWorkerConfig(context.Background(), cfg); err != nil {
 					return "", fmt.Errorf("воркер не принял настройки: %w (старая версия или недоступен)", err)
 				}
 			}
 			return "ок. Проверь config_get", nil
+		},
+	})
+
+	s.Register(Tool{
+		Name: "engine_model_install",
+		Description: "Скачать модель второго движка генерации yue2.cpp (ЭКСПЕРИМЕНТ) на воркер с проверкой суммы: " +
+			"bf16 (7,2 ГБ, эталон), q8 (3,8 ГБ, почти без потерь, ~8 ГБ видеопамяти), q6 (2,9 ГБ), q5 (2,6 ГБ). " +
+			"Ждёт конца загрузки (минуты); готовая модель не качается заново. Потом — config_set engine=cpp cpp_model=<имя>.",
+		InputSchema: props(map[string]any{
+			"name": prop("модель: bf16 | q8 | q6 | q5", "string"),
+		}, "name"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			name := argString(args, "name")
+			if name == "" {
+				return "", errors.New("name: bf16, q8, q6 или q5")
+			}
+			out, err := s.client.InstallEngineModel(context.Background(), name)
+			if err != nil {
+				return "", fmt.Errorf("модель %s не скачана: %w", name, err)
+			}
+			return fmt.Sprintf("модель %s скачана. Включить: config_set engine=cpp cpp_model=%s\n%s", name, name, toJSON(out)), nil
 		},
 	})
 

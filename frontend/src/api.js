@@ -7,7 +7,7 @@ import {
   YueTranscribeFile, YueTranscribeJob, YueImportTrack, YueEnsureMp3, YueJobScore, YueJobAbcText, YueJobPreview, YueSubmitOverdub,
   YueJobPeaks, YueJobSpectrumPNG,
   YueRecognizeLyricsFile, YueAdaptLyrics, YueJobLyrics,
-  YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YuePlayLoop, YueFxKitProgress,
+  YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YuePlayLoop, YueFxKitProgress, YueInstallEngineModel, YueEngineModelProgress,
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueCorpusCreate, YueCorpusAddTracks, YueCorpusBuild, YueCorpusList, YueCorpusGet, YueCorpusTracks,
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
@@ -72,6 +72,9 @@ export const api = {
   playLoop: (file, phase) => YuePlayLoop(file, phase),
   // прогресс установки набора сэмплов на воркере ({} — ничего не ставится)
   fxKitProgress: () => YueFxKitProgress(),
+  // второй движок генерации yue2.cpp (эксперимент): загрузка модели на воркер и её прогресс
+  installEngineModel: (name) => YueInstallEngineModel(name),
+  engineModelProgress: () => YueEngineModelProgress(),
   // свои инструменты (на воркере): список, сохранить, заменить, удалить
   fxInstruments: () => YueFxInstruments(),
   fxInstrumentCreate: (body) => YueFxInstrumentCreate(body),

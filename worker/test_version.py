@@ -37,7 +37,7 @@ class TestVersionEndpoint(_WorkerApiCase):
 
     def test_fields_and_types(self):
         v = self._get()
-        self.assertEqual(set(v), {"version", "api", "source_hash", "model", "components", "stems_model"})
+        self.assertEqual(set(v), {"version", "api", "source_hash", "model", "engine", "components", "stems_model"})
         self.assertIsInstance(v["version"], str)
         self.assertTrue(v["version"])
         self.assertIsInstance(v["api"], int)

@@ -37,6 +37,7 @@ import urllib.parse
 import urllib.request
 
 import arc
+import engine_cpp
 import llm
 import media
 import instruments as fx_instruments
@@ -222,6 +223,9 @@ def _migrate():
         # пресеты звука у трека: [{id, status, child_id, error}] — что применить после готовности
         if "sound_presets" not in cols:
             conn.execute("ALTER TABLE jobs ADD COLUMN sound_presets TEXT DEFAULT ''")
+        # движок, которым сделан трек ('' — старые, PyTorch): сид повторяет исполнение только на том же движке
+        if "engine" not in cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN engine TEXT DEFAULT ''")
         conn.execute("""
         CREATE TABLE IF NOT EXISTS sound_presets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -319,6 +323,7 @@ def _get_pipe():
     global _pipe, _load_error
     with _load_lock:
         if _pipe is None:
+            _stop_cpp()   # видеопамять — одному движку
             if _load_error:
                 raise HTTPException(503, f"model load failed earlier: {_load_error}")
             from yue2 import YuE2Pipeline
@@ -414,7 +419,7 @@ def _progress_watcher(job_id: int, counters: dict, t0: float, budget: int = 0):
             # токены / бюджет; загрузка модели и план — неопределённая длительность
             pct = None
             if stage == "semantic":
-                pct = min(99, sem * 100 // max(1, budget or MAX_SEM_TOKENS))
+                pct = min(99, sem * 100 // max(1, counters.get("budget") or budget or MAX_SEM_TOKENS))
             with _state_lock:
                 _progress[job_id] = {
                     "stage": stage,
@@ -456,18 +461,32 @@ def _continue_song(pipe, row, request):
     from yue2.protocol import CODEC_OFFSET, CONTEXT, Sampling, negative_prefix, token_prefixes
 
     src = JOBS_DIR / str(row["parent_id"])
-    saved = SymbolicPlan.load(src)
     tokens = [int(t) for t in np.load(src / "semantic.npy")]
     k = _cont_steps(row["cont_from"], len(tokens))
-    # стиль — из строки нового трека (стиль родителя + приписка «что изменить в
-    # звучании»); раньше брался из плана родителя, и приписка до модели не
-    # доходила (request.json #200 — без неё)
-    req = dataclasses.replace(saved.request, style=request.get("style") or saved.request.style,
-                              seed=int(request.get("seed") or saved.request.seed),
-                              cfg_scale=request.get("cfg_scale", saved.request.cfg_scale))
-    if request.get("abc"):
-        plan = pipe.plan(request=dataclasses.replace(req, abc=request["abc"]))
+    try:
+        saved = SymbolicPlan.load(src)
+    except (OSError, ValueError, KeyError):
+        saved = None
+    if saved is None:
+        # родитель сделан yue2.cpp (нет plan.json/abc_tokens.npy): план — из его score.abc (или новый план),
+        # как при изменённом плане; ноты до отметки — те же
+        score = src / "score.abc"
+        abc = request.get("abc") or (score.read_text(encoding="utf-8") if score.is_file() else None)
+        kw = {"cot": row["cot"] if abc else "off", "seed": int(request.get("seed") or row["seed"] or LIB_DEFAULT_SEED)}
+        if request.get("cfg_scale"):
+            kw["cfg_scale"] = request["cfg_scale"]
+        plan = pipe.plan(style=request.get("style") or row["style"], lyrics=row["lyrics"], abc=abc, **kw)
+        req = plan.request
     else:
+        # стиль — из строки нового трека (стиль родителя + приписка «что изменить в
+        # звучании»); раньше брался из плана родителя, и приписка до модели не
+        # доходила (request.json #200 — без неё)
+        req = dataclasses.replace(saved.request, style=request.get("style") or saved.request.style,
+                                  seed=int(request.get("seed") or saved.request.seed),
+                                  cfg_scale=request.get("cfg_scale", saved.request.cfg_scale))
+    if saved is not None and request.get("abc"):
+        plan = pipe.plan(request=dataclasses.replace(req, abc=request["abc"]))
+    elif saved is not None:
         plan = SymbolicPlan(req, saved.abc, saved.abc_ids,
                             token_prefixes(req, pipe.tokenizer, saved.abc_ids), saved.timing, saved.truncated)
     forced = [t + CODEC_OFFSET for t in tokens[:k]]
@@ -518,6 +537,102 @@ def _unload_pipe() -> None:
         pass
 
 
+# ---------- второй движок: yue2.cpp (ЭКСПЕРИМЕНТ, engine_cpp.py) ----------
+
+_cpp: "engine_cpp.CppServer | None" = None   # сервер yue2.cpp; ведётся под _pipe_lock, как _pipe
+
+
+def _stop_cpp() -> None:
+    """Остановить сервер yue2.cpp (вызывать под _pipe_lock): видеопамять освобождается целиком."""
+    global _cpp
+    srv, _cpp = _cpp, None
+    if srv is not None:
+        try:
+            srv.stop()
+        except Exception:  # noqa: BLE001 - процесс уже мог умереть; остановка всё равно считается сделанной
+            log.exception("yue2.cpp stop failed")
+
+
+def _get_cpp() -> "engine_cpp.CppServer":
+    """Сервер yue2.cpp с моделью и режимом из настроек (вызывать под _pipe_lock). Модель PyTorch перед ним
+    выгружается; смена модели/режима — новый процесс к этой генерации."""
+    global _cpp
+    name, low = cpp_model_pref(), cpp_low_vram_pref()
+    binary = engine_cpp.find_binary()
+    if binary is None:
+        raise RuntimeError("yue2.cpp не установлен — переключите движок на основной (PyTorch) в настройках")
+    if not engine_cpp.model_installed(name):
+        raise RuntimeError(f"модель yue2.cpp {name} не скачана — скачайте её в настройках")
+    d = engine_cpp.models_dir()
+    srv = engine_cpp.CppServer(binary, d / engine_cpp.MODELS[name]["file"], d / engine_cpp.VAE["file"], low,
+                               log_path=DATA_DIR / "yue2cpp-server.log")
+    if _cpp is not None and (not _cpp.running or _cpp.key() != srv.key()):
+        _stop_cpp()
+    if _cpp is None:
+        _unload_pipe()
+        srv.start()
+        _cpp = srv
+        log.info("yue2.cpp started: %s%s", engine_cpp.MODELS[name]["file"], " (economy)" if low else "")
+    return _cpp
+
+
+def _cpp_label(cpp) -> str:
+    """Метка трека по модели, с которой сервер реально запущен."""
+    name = next((n for n, m in engine_cpp.MODELS.items() if m["file"] == cpp.model_path.name), "")
+    return engine_cpp.engine_label(name)
+
+
+def _set_job_engine(job_id: int, label: str) -> None:
+    with db_lock, db() as conn:
+        conn.execute("UPDATE jobs SET engine=? WHERE id=?", (label, job_id))
+
+
+def _cpp_log_cb(counters: dict):
+    """Строки журнала yue2.cpp → счётчики сторожа прогресса (стадия, шаги семантики, бюджет движка)."""
+    c = {"phase": "load", "sem": 0, "budget": 0}
+
+    def on_log(line: str) -> None:
+        engine_cpp.parse_log_line(line, c)
+        counters["phase"] = c["phase"]
+        if c["phase"] in ("semantic", "decode"):
+            counters["plan_end"] = 0
+            counters["tokens"] = c["sem"]
+            counters["budget"] = c["budget"]
+
+    return on_log
+
+
+class _CppSong:
+    """Итог генерации yue2.cpp в форме, которую ждёт _run_job: save_artifacts и truncated."""
+
+    def __init__(self, parts: dict, meta: dict):
+        self.parts, self.meta, self.truncated = parts, meta, False
+
+    def save_artifacts(self, job_dir: Path) -> None:
+        engine_cpp.save_artifacts(job_dir, self.parts, self.meta)
+
+
+def _cpp_render(cpp, row, request: dict, job_dir: Path, budget: int, counters: dict, cancel_ev) -> _CppSong:
+    """Трек или продолжение на yue2.cpp: та же заявка, что у PyTorch (стиль с припиской, план, сид, характер)."""
+    low = cpp.low_vram
+    if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"]):
+        body = engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], budget, low,
+                                           request.get("abc"), style=request["style"], cfg_default=CFG_SCALE)
+    else:
+        body = engine_cpp.build_request(row, budget, low, request.get("abc"), style=request["style"],
+                                        seed=row["seed"] or LIB_DEFAULT_SEED, cfg_default=CFG_SCALE)
+    parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
+    meta = {"model": cpp.model_path.name, "engine": _cpp_label(cpp), "low_vram": low,
+            "request": {k: v for k, v in body.items() if k != "source_tokens"}}
+    return _CppSong(parts, meta)
+
+
+def _cpp_plan(cpp, style: str, lyrics: str, cot: str, seed: int) -> str:
+    """План на yue2.cpp (генерация на 1 шаг): тот же план модель потом пишет в треке с этим сидом."""
+    parts = cpp.synth(engine_cpp.plan_request(style, lyrics, cot, seed))
+    return parts["replay"].get("abc") or ""
+
+
 def friendly_error(e: BaseException) -> str:
     """Текст ошибки для человека. Нехватка видеопамяти (частое на общем GPU:
     рядом Ollama, Stable Diffusion) — вместо стека CUDA «GPU занят» со
@@ -557,7 +672,16 @@ def _run_job(job_id: int):
     watch_stop = _progress_watcher(job_id, counters, time.time(), budget)
     try:  # noqa: SIM105 - очистка состояния после любого исхода
         with _pipe_lock, gpu_queue(f"render {job_id}"):
-            pipe = _get_pipe()
+            # движок — тот, что в настройках к началу генерации; трек помнит, каким сделан
+            cpp = pipe = None
+            if engine_pref() == "cpp":
+                # метка — до запуска сервера: упавшая на старте джоба помнит, каким движком её делали
+                _set_job_engine(job_id, engine_cpp.engine_label(cpp_model_pref()))
+                cpp = _get_cpp()
+                _set_job_engine(job_id, _cpp_label(cpp))
+            else:
+                pipe = _get_pipe()
+                _set_job_engine(job_id, "torch")
             counters["phase"] = "plan"
             request = {"style": row["style"], "lyrics": row["lyrics"], "cot": row["cot"],
                        "on_token": on_token,
@@ -588,11 +712,15 @@ def _run_job(job_id: int):
                 # драматургия: строим план сами, правим темп/вокал по дуге —
                 # и рендерим по своему ABC (механизм req_abc)
                 counters["phase"] = "arc-plan"
-                plan_res = pipe.plan(style=request["style"], lyrics=request["lyrics"],
-                                     cot=row["cot"],
-                                     **({"seed": row["seed"]} if row["seed"] else {}))
+                if cpp is not None:
+                    plan_abc = _cpp_plan(cpp, request["style"], request["lyrics"], row["cot"],
+                                         row["seed"] or LIB_DEFAULT_SEED)
+                else:
+                    plan_abc = pipe.plan(style=request["style"], lyrics=request["lyrics"],
+                                         cot=row["cot"],
+                                         **({"seed": row["seed"]} if row["seed"] else {})).abc
                 request["style"] = arc.style_with_arc(request["style"], row["arc"])
-                request["abc"] = arc.apply_arc(plan_res.abc, row["arc"])
+                request["abc"] = arc.apply_arc(plan_abc, row["arc"])
                 (job_dir / "request.abc").write_text(request["abc"], encoding="utf-8")
                 log.info("job %s: arc=%s applied to plan", job_id, row["arc"])
             t0 = time.time()
@@ -600,9 +728,12 @@ def _run_job(job_id: int):
             try:
                 try:
                     # кусок с отметкой (cont_from) — продолжение трека, только короче; старый кусок — с нуля
-                    song = (_continue_song(pipe, row, request)
-                            if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
-                            else pipe(**request))
+                    if cpp is not None:
+                        song = _cpp_render(cpp, row, request, job_dir, budget, counters, cancel_ev)
+                    else:
+                        song = (_continue_song(pipe, row, request)
+                                if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
+                                else pipe(**request))
                     # через counters: сторож прогресса раз в 2 с пишет стадию оттуда
                     # и затёр бы прямую запись в _progress
                     counters["phase"] = "finalize"
@@ -631,6 +762,7 @@ def _run_job(job_id: int):
                 # выгрузка — после except: там стек ошибки ещё держит тензоры генерации
                 if failure == "oom":
                     _unload_pipe()
+                    _stop_cpp()
                 return
             truncated = song.truncated
             if isinstance(truncated, dict):
@@ -795,6 +927,7 @@ def _startup():
 def _shutdown():
     with _pipe_lock:
         _unload_pipe()
+        _stop_cpp()
 
 
 # роли производных треков: section — рендер куска для вклейки, rebuild —
@@ -872,6 +1005,10 @@ class ConfigIn(BaseModel):
     auto_stems_instrumental: bool | None = None
     stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); YUE_FX_ENGINE=0 — выкл всегда
+    # движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим (~4,5 ГБ)
+    engine: str | None = None
+    cpp_model: str | None = None
+    cpp_low_vram: bool | None = None
 
 
 # настройки воркера, переживающие перезапуск (в отличие от Ollama — те из env)
@@ -886,8 +1023,12 @@ def _load_settings() -> dict:
 
 
 def _save_settings(st: dict) -> None:
+    """Атомарно (временный файл + rename): чтение во время записи не видит полфайла — иначе выбор (движок,
+    модель дорожек) на миг откатывался к умолчанию."""
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_PATH.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = SETTINGS_PATH.with_name(f".{SETTINGS_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, SETTINGS_PATH)
 
 
 STEMS_CHOICES = (MODEL_DEMUCS, "roformer")
@@ -897,6 +1038,24 @@ def stems_pref() -> str:
     """Чем делать дорожки по умолчанию: htdemucs (быстро) или roformer (чище, ~4,5× дольше)."""
     v = _load_settings().get("stems_model", MODEL_DEMUCS)
     return v if v in STEMS_CHOICES else MODEL_DEMUCS
+
+
+ENGINE_CHOICES = ("torch", "cpp")
+
+
+def engine_pref() -> str:
+    """Движок генерации: torch (основной, по умолчанию) или cpp (yue2.cpp — эксперимент)."""
+    v = _load_settings().get("engine", "torch")
+    return v if v in ENGINE_CHOICES else "torch"
+
+
+def cpp_model_pref() -> str:
+    v = _load_settings().get("cpp_model", "q8")
+    return v if v in engine_cpp.MODELS else "q8"
+
+
+def cpp_low_vram_pref() -> bool:
+    return bool(_load_settings().get("cpp_low_vram", False))
 
 
 def auto_stems_instrumental() -> bool:
@@ -948,6 +1107,11 @@ def get_config():
         "fx_engine": fx_engine_enabled(),
         "fx_preview": True,   # воркер умеет превью движка (страница «Инструменты»); старый — нет поля
         "fx_phrases": True,   # фразы по кругу для страницы «Инструменты» (/fx/phrases)
+        "engine": engine_pref(),
+        "cpp_model": cpp_model_pref(),
+        "cpp_low_vram": cpp_low_vram_pref(),
+        "cpp_available": engine_cpp.find_binary() is not None,
+        "cpp_models": engine_cpp.models_info(),
     }
 
 
@@ -977,6 +1141,24 @@ def set_config(req: ConfigIn):
     if req.fx_engine is not None:
         st = _load_settings()
         st["fx_engine"] = bool(req.fx_engine)
+        _save_settings(st)
+    if req.engine is not None or req.cpp_model is not None or req.cpp_low_vram is not None:
+        st = _load_settings()
+        engine = req.engine if req.engine is not None else engine_pref()
+        model = req.cpp_model if req.cpp_model is not None else cpp_model_pref()
+        if engine not in ENGINE_CHOICES:
+            raise HTTPException(422, f"engine must be one of {', '.join(ENGINE_CHOICES)}")
+        if model not in engine_cpp.MODELS:
+            raise HTTPException(422, f"cpp_model must be one of {', '.join(engine_cpp.MODEL_NAMES)}")
+        # yue2.cpp включается только готовым: программа запускается, модель и VAE на месте;
+        # идущая генерация не трогается — новый движок/модель со следующей
+        if engine == "cpp" and engine_cpp.find_binary() is None:
+            raise HTTPException(422, "yue2.cpp не установлен (программы нет или она не запускается)")
+        if (engine == "cpp" or req.cpp_model is not None) and not engine_cpp.model_installed(model):
+            raise HTTPException(422, f"модель не скачана: {model} — сначала скачайте её")
+        st.update(engine=engine, cpp_model=model)
+        if req.cpp_low_vram is not None:
+            st["cpp_low_vram"] = bool(req.cpp_low_vram)
         _save_settings(st)
     log.info("config updated: ollama=%s model=%s", OLLAMA_URL, OLLAMA_MODEL)
     return get_config()
@@ -1029,7 +1211,8 @@ def copilot(req: CopilotIn):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": _pipe is not None, "load_error": _load_error}
+    return {"status": "ok", "model_loaded": _pipe is not None or (_cpp is not None and _cpp.running),
+            "load_error": _load_error}
 
 
 # Версия API воркера: растёт при НЕсовместимом изменении (клиент старше воркера перестаёт работать);
@@ -1063,7 +1246,13 @@ _SOURCE_HASH = _source_hash(_WORKER_DIR)
 
 
 def _model_label() -> str:
-    """Модель генерации и версия пакета yue2 — от них зависит, как прозвучит тот же сид."""
+    """Модель генерации и версия движка — от них зависит, как прозвучит тот же сид."""
+    if engine_pref() == "cpp":
+        return engine_cpp.model_label(cpp_model_pref())
+    return _torch_label()
+
+
+def _torch_label() -> str:
     try:
         from importlib.metadata import version
         return f"{MODEL_ID}@yue2-{version('yue2')}"
@@ -1079,6 +1268,7 @@ def get_version():
         "api": WORKER_API,
         "source_hash": _SOURCE_HASH,
         "model": _model_label(),
+        "engine": engine_cpp.engine_label(cpp_model_pref()) if engine_pref() == "cpp" else "torch",
         "components": {"whisper": cfg["whisper_available"], "seedvc": cfg["seedvc_available"],
                        "roformer": cfg["roformer_available"]},
         "stems_model": cfg["stems_model"],
@@ -1475,8 +1665,14 @@ def plan(req: PlanIn):
     # трек по этому плану с тем же сидом споёт так же
     seed = req.seed or random.randrange(1, 2**31)
     with _pipe_lock, gpu_queue("plan"):
-        pipe = _get_pipe()
         t0 = time.time()
+        if engine_pref() == "cpp":
+            try:
+                abc = _cpp_plan(_get_cpp(), req.style, req.lyrics, req.cot, seed)
+            except RuntimeError as e:   # нехватка памяти — сервер уже остановлен (CppServer), текст — для человека
+                raise HTTPException(503, friendly_error(e)) from e
+            return {"abc": abc, "truncated": False, "seconds": round(time.time() - t0, 1), "seed": seed}
+        pipe = _get_pipe()
         result = pipe.plan(style=req.style, lyrics=req.lyrics, cot=req.cot, seed=seed)
     truncated = result.truncated
     if isinstance(truncated, dict):
@@ -2202,9 +2398,9 @@ def job_preview(job_id: int, body: dict):
     to_s = min(max(to_s, from_s + 1.0), total_sec)
     a, b = int(from_s * LATENT_HZ), max(int(to_s * LATENT_HZ), int(from_s * LATENT_HZ) + 1)
     with _pipe_lock, gpu_queue(f"preview {job_id}"):
-        pipe = _get_pipe()
         try:
-            audio = pipe.decode(z[a:b, :])
+            # латенты у движков общие ([T,64]): декодирует тот, что включён
+            audio = _get_cpp().decode(z[a:b, :]) if engine_pref() == "cpp" else _get_pipe().decode(z[a:b, :])
         except Exception as e:  # noqa: BLE001
             raise HTTPException(500, f"decode failed: {e}") from e
     fname = f"preview-{from_s:.0f}-{to_s:.0f}.flac"
@@ -4072,6 +4268,40 @@ def fx_kits_progress():
         return dict(list(_kit_progress.values())[-1]) if _kit_progress else {}   # последняя начатая
 
 
+# ---------- модели yue2.cpp: загрузка с проверкой суммы (условие 157) ----------
+
+_model_progress: dict[str, dict] = {}
+_model_progress_lock = threading.Lock()
+
+
+@app.post("/engine/models/install")
+def engine_model_install(name: str = ""):
+    """Скачать модель yue2.cpp и VAE (есть с верной суммой — без сети). Ждёт конца загрузки; одновременные
+    загрузки одного файла идут по очереди (вторая находит готовый файл)."""
+    if name not in engine_cpp.MODELS:
+        raise HTTPException(422, f"unknown model {name!r} (есть: {', '.join(engine_cpp.MODEL_NAMES)})")
+
+    def progress(file, done, total):
+        with _model_progress_lock:
+            _model_progress[name] = {"name": name, "file": file, "done": done, "total": total}
+
+    try:
+        engine_cpp.download(name, progress)
+    except (OSError, RuntimeError) as e:
+        raise HTTPException(502, f"модель {name} не скачана: {e}") from e
+    finally:
+        with _model_progress_lock:
+            _model_progress.pop(name, None)
+    return {"name": name, "installed": engine_cpp.model_installed(name), "cpp_models": engine_cpp.models_info()}
+
+
+@app.get("/engine/models/progress")
+def engine_model_progress():
+    """Идущая загрузка модели {name, file, done, total} (нет — {})."""
+    with _model_progress_lock:
+        return dict(list(_model_progress.values())[-1]) if _model_progress else {}
+
+
 def _kit_pinned_files() -> dict:
     """Закреплённые списки файлов наборов {набор: {часть: [имена]}} (fx_kit_files.json рядом с воркером; нет — {})."""
     try:
@@ -4314,8 +4544,12 @@ def job_recipe(job_id: int):
         root["plan_abc"] = _read_text(root_id, root.get("abc_file") or "score.abc")
         root["request_abc"] = _read_text(root_id, root.get("req_abc"))
     ver = get_version()
+    # сид повторяет исполнение только на том же движке: в рецепт — движок корня, не текущий
+    eng = (root or {}).get("engine") or ""
+    name = eng[4:] if eng.startswith("cpp-") else ""
+    model = engine_cpp.model_label(name) if name in engine_cpp.MODELS else _torch_label()
     try:
-        out = recipe.build_recipe(jobs, ops, root_id, ver["model"], ver["stems_model"],
+        out = recipe.build_recipe(jobs, ops, root_id, model, ver["stems_model"],
                                   time.strftime("%Y-%m-%dT%H:%M:%S%z"))
     except recipe.RecipeError as e:
         raise HTTPException(422, str(e)) from e

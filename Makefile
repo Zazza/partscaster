@@ -3,7 +3,7 @@ WAILS ?= $(HOME)/go/bin/wails
 # версия сборки — из git (тег + коммиты после него); без git — dev
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: help test test-go test-front test-worker lint lint-go lint-front lint-worker fmt build install-desktop uninstall-desktop worker worker-tar release mcp mcp-data clean
+.PHONY: help test test-go test-front test-worker lint lint-go lint-front lint-worker fmt build install-desktop uninstall-desktop worker worker-tar yue2cpp release mcp mcp-data clean
 
 help: ## показать список задач
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
@@ -63,6 +63,9 @@ worker: ## деплой воркера на GPU-машину (YUE_DEPLOY_HOST=us
 
 worker-tar: ## архив воркера dist/worker-<версия>.tar.gz (код + install.sh)
 	./tools/worker-tar.sh dist $(VERSION)
+
+yue2cpp: ## готовая сборка yue2.cpp (второй движок, эксперимент) в dist/ для архива воркера; нужен docker
+	./tools/yue2cpp-build.sh
 
 release: ## релизный пакет под эту ОС в dist/ (приложение + yue-mcp + архив воркера)
 	WAILS=$(WAILS) ./tools/release.sh $(VERSION)
