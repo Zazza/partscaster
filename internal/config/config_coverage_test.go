@@ -20,6 +20,7 @@ func isolate(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir) // Windows: os.UserConfigDir читает %AppData%, а не XDG/HOME
 	t.Setenv("YUE_URL", "")
 	return filepath.Join(dir, "yue-studio", "settings.json")
 }
@@ -94,6 +95,7 @@ func TestSaveSettingsUnwritableDoesNotPanic(t *testing.T) {
 	}
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir)
 	t.Setenv("YUE_URL", "")
 	SaveSettings(Settings{ServerURL: "http://gpu-host:8091"})
 	if got := Load().YueURL; got != defaultURL {

@@ -65,6 +65,7 @@ func newStudioCovServer(t *testing.T) (*Server, *studioCovFake) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
+	t.Setenv("AppData", dir) // Windows: os.UserConfigDir читает %AppData%
 	t.Setenv("YUE_URL", "")
 	t.Setenv("TMPDIR", t.TempDir())
 	fake := &studioCovFake{fakeService: &fakeService{url: "http://w:8091",
