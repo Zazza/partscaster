@@ -62,6 +62,7 @@ func (a *App) startup(ctx context.Context) {
 // наслаиваются), пока приложение открыто.
 func (a *App) presetLoop(ctx context.Context) {
 	r := &studio.PresetRunner{Svc: a.yue}
+	r.ResetStale(ctx) // застрявшие «running» от прошлого запуска → error, лечится «Повторить»
 	t := time.NewTicker(presetTick)
 	defer t.Stop()
 	for {

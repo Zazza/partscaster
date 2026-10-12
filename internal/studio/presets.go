@@ -537,6 +537,29 @@ func (r *PresetRunner) finish(ctx context.Context, jobID, pid int64, st yue.JobP
 	}
 }
 
+// ResetStale — при старте приложения сбросить пресеты в статусе running: их применял
+// процесс прошлого запуска, при закрытии окна он умер молча и статус висит вечно,
+// блокируя применение («застряло — не стартует»). running → error с причиной;
+// дальше пользователь решает: «Повторить» (error → pending) или оставить.
+func (r *PresetRunner) ResetStale(ctx context.Context) {
+	jobs, err := r.Svc.Jobs(ctx)
+	if err != nil {
+		log.Printf("пресеты звука: сброс застрявших: список треков: %v", err)
+		return
+	}
+	for i := range jobs {
+		for _, sp := range jobs[i].SoundPresets {
+			if sp.Status != "running" {
+				continue
+			}
+			st := yue.JobPreset{Status: "error", Error: "применение прервано — приложение перезапустилось"}
+			if _, err := r.Svc.SoundPresetState(ctx, jobs[i].ID, sp.ID, st); err != nil {
+				log.Printf("пресеты звука: сброс застрявшего #%d/%d: %v", jobs[i].ID, sp.ID, err)
+			}
+		}
+	}
+}
+
 // presetLevelMax — подстройка громкости дорожки к цели level_db не больше ±12 дБ
 const presetLevelMax = 12.0
 

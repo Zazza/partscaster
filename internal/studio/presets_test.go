@@ -644,6 +644,54 @@ func rnRunner(f *rnFake, err error) (*PresetRunner, *[]rnApply) {
 	return r, &calls
 }
 
+// ResetStale (старт приложения): running-пресеты — от умершего прошлого запуска → error
+// с причиной; pending/done/error не трогаются; очередь видеокарты не важна.
+func TestPresetRunnerResetStale(t *testing.T) {
+	t.Parallel()
+	f := &rnFake{
+		jobs: []yue.Job{
+			{ID: 1, Status: "done", SoundPresets: []yue.JobPreset{
+				{ID: 10, Status: "running"},
+				{ID: 11, Status: "pending"},
+				{ID: 12, Status: "done", ChildID: 50},
+			}},
+			{ID: 2, Status: "running", SoundPresets: []yue.JobPreset{{ID: 20, Status: "running"}}},
+		},
+	}
+	r, calls := rnRunner(f, nil)
+	r.ResetStale(context.Background())
+
+	if len(*calls) != 0 {
+		t.Errorf("ResetStale не применяет пресеты, Apply %+v", *calls)
+	}
+	sp := func(job, id int64) yue.JobPreset {
+		for k := range f.jobs {
+			if f.jobs[k].ID != job {
+				continue
+			}
+			for _, s := range f.jobs[k].SoundPresets {
+				if s.ID == id {
+					return s
+				}
+			}
+		}
+		t.Fatalf("нет пресета %d у джобы %d", id, job)
+		return yue.JobPreset{}
+	}
+	if s := sp(1, 10); s.Status != "error" || s.Error == "" {
+		t.Errorf("застрявший running → %+v, want error с причиной", s)
+	}
+	if s := sp(2, 20); s.Status != "error" {
+		t.Errorf("running у занятой очереди тоже сбрасывается: %+v", s)
+	}
+	if s := sp(1, 11); s.Status != "pending" {
+		t.Errorf("pending тронут: %+v", s)
+	}
+	if s := sp(1, 12); s.Status != "done" || s.ChildID != 50 {
+		t.Errorf("done тронут: %+v", s)
+	}
+}
+
 // Есть джоба queued или running → тик ничего не делает (видеокарта занята).
 func TestPresetRunnerBusyWorkerDoesNothing(t *testing.T) {
 	t.Parallel()
