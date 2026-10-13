@@ -44,10 +44,10 @@ describe('описание блоков (fxBlocks.json)', () => {
     expect(Object.keys(blocks).slice(0, TYPES.length)).toEqual(TYPES)
   })
 
-  // за прежними — блоки синтов и perc, их порядок не задан
-  it('за прежними типами — synth и эффекты синтов, perc, tremolo, мастер (glue, limiter)', () => {
+  // за прежними — блоки синтов, perc, мастер и воздух, их порядок не задан
+  it('за прежними типами — synth и эффекты синтов, perc, tremolo, мастер (glue, limiter), воздух (air)', () => {
     expect([...Object.keys(blocks).slice(TYPES.length)].sort())
-      .toEqual(['chorus', 'flanger', 'glue', 'limiter', 'perc', 'phaser', 'spring', 'synth', 'tape', 'tremolo'])
+      .toEqual(['air', 'chorus', 'flanger', 'glue', 'limiter', 'perc', 'phaser', 'spring', 'synth', 'tape', 'tremolo'])
   })
 })
 

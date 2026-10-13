@@ -223,7 +223,7 @@ func psPreset(id int64, specs []yue.PresetSpec, final []yue.PresetStep) yue.Soun
 
 func psApply(t *testing.T, f *psFake, p yue.SoundPreset) *PresetResult {
 	t.Helper()
-	res, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+	res, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 	if err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
 		{Stems: []string{"snare"}, Engine: []map[string]any{{"type": "sampler", "kit": "osdk/snare"}}},
 	}, psFinal())
 
-	_, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+	_, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 	if err == nil {
 		t.Fatal("ApplySoundPreset без kick/snare после разделения: нет ошибки")
 	}
@@ -535,7 +535,7 @@ func TestApplySoundPresetStepErrors(t *testing.T) {
 		f := psSetup(t, nil)
 		f.err = errors.New("fx engine off")
 		p := psPreset(13, []yue.PresetSpec{{Stems: []string{"bass"}, Engine: psAmpEngine()}}, psFinal())
-		_, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+		_, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 		if err == nil || !strings.Contains(err.Error(), "fx engine off") {
 			t.Errorf("ошибка %v, want с причиной «fx engine off»", err)
 		}
@@ -548,7 +548,7 @@ func TestApplySoundPresetStepErrors(t *testing.T) {
 		f := psSetup(t, nil)
 		f.promoteErr = errors.New("promote refused")
 		p := psPreset(14, nil, psFinal())
-		_, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+		_, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 		if err == nil || !strings.Contains(err.Error(), "promote refused") {
 			t.Errorf("ошибка %v, want с причиной «promote refused»", err)
 		}
@@ -896,7 +896,7 @@ func TestApplySoundPresetFfmpegOnDrumPartIsError(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
 	p := psPreset(11, []yue.PresetSpec{{Stems: []string{"kick"}, Chain: "eq", Params: map[string]float64{"low": -12}}}, nil)
-	_, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+	_, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 	if err == nil || !strings.Contains(err.Error(), "kick") {
 		t.Fatalf("want ошибку про kick, got %v", err)
 	}

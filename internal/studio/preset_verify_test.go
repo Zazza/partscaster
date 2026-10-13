@@ -176,7 +176,7 @@ func vfAsked(ids []int64, id int64) bool {
 
 func vfApply(t *testing.T, f *vfFake, p yue.SoundPreset) *PresetResult {
 	t.Helper()
-	res, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+	res, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 	if err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}

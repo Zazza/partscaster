@@ -326,7 +326,7 @@ func ppCheckMixAdd(t *testing.T, what string, r *yue.FxRequest) {
 
 func ppApply(t *testing.T, f *ppFake, p yue.SoundPreset) {
 	t.Helper()
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, p); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p); err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}
 }
@@ -521,7 +521,7 @@ func TestPresetPartsChordGrid404NoChords(t *testing.T) {
 	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 404, Msg: "yue /chords: 404 Not Found: no plan"}}
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 45, ppPartsPadPerc)); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, ppPreset(t, 45, ppPartsPadPerc)); err != nil {
 		t.Fatalf("ApplySoundPreset при ChordGrid 404: %v, want без ошибки (404 = аккордов нет)", err)
 	}
 	if r := ppCall(t, f.ppFake, "synth"); r != nil {
@@ -545,7 +545,7 @@ func TestPresetPartsChordGrid500Error(t *testing.T) {
 	t.Parallel()
 	f := &ppChordErrFake{ppFake: ppSetup(t, 8, ppBars()),
 		err: &yue.StatusError{Code: 500, Msg: "yue /chords: 500 Internal Server Error: boom"}}
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, ppPreset(t, 46, ppPartsPadPerc)); err == nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, ppPreset(t, 46, ppPartsPadPerc)); err == nil {
 		t.Fatal("ApplySoundPreset при ChordGrid 500 без ошибки, want ошибку")
 	}
 }
@@ -573,7 +573,7 @@ func TestPresetPartsSkippedPartKitNotInstalled(t *testing.T) {
  {"kind": "synth", "engine": [{"type": "synth", "kit": "badkit/x"}], "style": "pad", "sections": ["solo"]},
  {"kind": "perc", "engine": [{"type": "perc", "voice": 0}], "pattern": "backbeat"}
 ]`)
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, p); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p); err != nil {
 		t.Fatalf("ApplySoundPreset: %v, want без ошибки (партия без нот свой набор не качает)", err)
 	}
 	if slices.Contains(f.installs, "badkit") {

@@ -66,6 +66,30 @@ func (f *presetFake) FxAssets(context.Context) (map[string]any, error) {
 
 func (f *presetFake) JobStems(context.Context, int64) ([]map[string]any, error) { return nil, nil }
 
+func (f *presetFake) WorkerConfig(context.Context) (map[string]any, error) {
+	return map[string]any{"fx_preview": true}, nil
+}
+
+// ApplyFx — слой «живой звук» (воздух): у тонов теста верха выше 16 кГц нет, поэтому поверх микса — тишина
+// (presetAirChunk кладёт тест), на дорожке — сама дорожка; длина — до конца окна, как у превью воркера.
+func (f *presetFake) ApplyFx(_ context.Context, _ int64, req yue.FxRequest) (*yue.DspVariant, error) {
+	dur := presetAirDur
+	if req.To != nil {
+		dur = max(dur, *req.To+req.Fade)
+	}
+	name := presetAirChunk
+	if !req.Add { // воздух на дорожке — сама дорожка: ниже 16 кГц блок звук не меняет
+		name = "preview-fx-" + req.Source + ".flac"
+		f.fetch[name] = f.fetch["stem-"+req.Source+".flac"]
+	}
+	return &yue.DspVariant{File: name, DurationSec: dur}, nil
+}
+
+const (
+	presetAirChunk = "preview-fx-air.flac"
+	presetAirDur   = 5.0
+)
+
 // newPresetServer — сервер со всеми инструментами (как newTestServer), воркер — presetFake.
 func newPresetServer(t *testing.T) (*Server, *presetFake) {
 	t.Helper()
@@ -184,7 +208,8 @@ func TestSoundPresetApplyReturnsVersionID(t *testing.T) {
 	needFF(t)
 	s, fake := newPresetServer(t)
 	fake.jobs = []yue.Job{{ID: 466, Title: "Warm Wire", Status: "done", AudioFile: "audio.flac", DurationSec: 4}}
-	fake.fetch = map[string]string{"audio.flac": fxLavfi(t, "0.3*sin(2*PI*500*t)", 4)}
+	fake.fetch = map[string]string{"audio.flac": fxLavfi(t, "0.3*sin(2*PI*500*t)", 4),
+		presetAirChunk: fxLavfi(t, "0", presetAirDur)}
 
 	out, ok := call(t, s, "sound_preset_apply", map[string]any{"job_id": 466, "preset_id": 12})
 	if !ok {
@@ -268,6 +293,7 @@ func newDbPresetServer(t *testing.T) (*Server, *stemPresetFake) {
 		"stem-bass.flac":   fxLavfi(t, "0.2*sin(2*PI*200*t)", dur),
 		"stem-other.flac":  fxLavfi(t, "0.2*sin(2*PI*500*t)", dur),
 		"stem-drums.flac":  fxLavfi(t, "0", dur),
+		presetAirChunk:     fxLavfi(t, "0", dur), // воздух слоя «живой звук» — у тонов верха нет
 	}
 	return s, f
 }

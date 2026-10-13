@@ -97,7 +97,7 @@ var lvSum = 10 * math.Log10(3*math.Pow(10, -2)+math.Pow(10, -3))
 // lvApplied — Db, на который пересборка изменила дорожку с тоном hz (дБ к исходному треку).
 func lvApplied(t *testing.T, f *lvFake, orig []float32, p yue.SoundPreset, hz float64) float64 {
 	t.Helper()
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, p); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p); err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}
 	name := fmt.Sprintf("dsp-preset-%d-mix.flac", p.ID)

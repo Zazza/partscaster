@@ -62,7 +62,7 @@ func msPresetSetup(t *testing.T) *msPresetFake {
 // msApply — ApplySoundPreset с фейком, который перехватывает мастер.
 func msApply(t *testing.T, f *msPresetFake, p yue.SoundPreset) *PresetResult {
 	t.Helper()
-	res, err := ApplySoundPreset(context.Background(), f, psJobID, p)
+	res, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p)
 	if err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestApplySoundPresetMasterErrorNoTrack(t *testing.T) {
 	f.merr = errors.New("limiter: нет ffmpeg")
 	p := psPreset(69, []yue.PresetSpec{psVocalCut()}, psWidth())
 	p.TargetLUFS = psTarget(-13)
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, p); err == nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p); err == nil {
 		t.Fatal("ошибка мастера: want ошибку применения")
 	}
 	if len(f.promoted) != 0 {

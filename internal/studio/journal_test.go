@@ -343,7 +343,7 @@ func TestJournalApplySoundPreset(t *testing.T) {
 	f := psSetup(t, nil)
 	rec := &jrRec{Service: f}
 	p := psPreset(9, nil, []yue.PresetStep{{Chain: "level", Params: map[string]float64{"gain": -6, "ceiling": -0.5}}})
-	res, err := ApplySoundPreset(context.Background(), yue.Journaled(rec), psJobID, p)
+	res, err := ApplySoundPreset(withoutLiveLayer(context.Background()), yue.Journaled(rec), psJobID, p)
 	if err != nil || res == nil || res.ChildID != psChild {
 		t.Fatalf("ApplySoundPreset = %+v, %v", res, err)
 	}
@@ -364,7 +364,7 @@ func TestJournalApplySoundPresetErrorNoRecord(t *testing.T) {
 	f.promoteErr = errors.New("версия не создана")
 	rec := &jrRec{Service: f}
 	p := psPreset(9, nil, []yue.PresetStep{{Chain: "level", Params: map[string]float64{"gain": -6}}})
-	if _, err := ApplySoundPreset(context.Background(), yue.Journaled(rec), psJobID, p); err == nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), yue.Journaled(rec), psJobID, p); err == nil {
 		t.Fatal("ошибки нет, want ошибка версии")
 	}
 	if len(rec.recs) != 0 {

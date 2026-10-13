@@ -1036,6 +1036,50 @@ def _gain(x, sr, p, _res):
     return x * _db(p["gain_db"])
 
 
+AIR_SRC_HZ = (8000.0, 11500.0)   # верх, который у YuE2 ещё есть: его вторые гармоники ложатся в 16–23 кГц
+AIR_BAND_HZ = (16000.0, 20000.0)  # полоса «воздуха»: выше ~16 кГц кодек YuE2 звук обрывает
+AIR_REF_HZ = (12000.0, 16000.0)   # соседняя полоса — по ней уровень воздуха (у живых записей на ~10 дБ ниже)
+AIR_MIN_SR = 40000
+
+
+def _band_energy(x, sr, lo, hi) -> float:
+    """Энергия полосы [lo, hi), сумма по каналам (не моно-сумма: верх в противофазе в ней пропал бы),
+    средняя по спектру окон."""
+    n = 1 << 13
+    if x.shape[0] < n:
+        x = np.pad(x, ((0, n - x.shape[0]), (0, 0)))
+    win = np.hanning(n)[:, None]
+    spec = np.zeros(n // 2 + 1)
+    for i in range(0, x.shape[0] - n + 1, n // 2):
+        spec += (np.abs(np.fft.rfft(x[i:i + n] * win, axis=0)) ** 2).sum(axis=1)
+    fr = np.fft.rfftfreq(n, 1 / sr)
+    return float(spec[(fr >= lo) & (fr < hi)].sum())
+
+
+def _air(x, sr, p, _res):
+    """Воздух: достроить верх выше 16 кГц, который YuE2 срезает (голос звучит «глухо»).
+    Вторые гармоники полосы 8–11,5 кГц (квадрат сигнала) — только в полосе 16–20 кГц; громкость — чтобы она
+    стала на tilt_db ниже соседней 12–16 кГц, как у живых записей. Где верх уже есть или нет самой полосы —
+    звук не меняется: тёмная по природе дорожка (электрогитара) тёмной и останется.
+    only=1 — на выходе только воздух: так его добавляют поверх целого трека, не разделяя его на дорожки."""
+    if sr <= AIR_MIN_SR or x.shape[0] == 0:   # 40 кГц и ниже: верх полосы воздуха (20 кГц) — уже предел частот
+        return np.zeros_like(x) if p["only"] else x
+    src = _zero_phase(signal.butter(4, AIR_SRC_HZ, "bandpass", fs=sr, output="sos"), x)
+    # квадрат — чётная функция: удвоенные частоты (и постоянная составляющая с разностными — их срезает полоса);
+    # полоса 16–20 кГц и для громкости, и для звука: выше 20 кГц ничего не добавляется (при 96 кГц тоже)
+    h = _zero_phase(signal.butter(8, AIR_BAND_HZ, "bandpass", fs=sr, output="sos"), src * src)
+    ref = _band_energy(x, sr, *AIR_REF_HZ)
+    have = _band_energy(x, sr, *AIR_BAND_HZ)
+    add = _band_energy(h, sr, *AIR_BAND_HZ)
+    want = ref * 10 ** (p["tilt_db"] / 10) - have
+    if want <= 0 or add <= EPS:
+        return np.zeros_like(x) if p["only"] else x
+    # воздух не громче полосы, из которой он сделан: без неё (звук есть только в 12–16 кГц) усиление разнесло бы
+    # почти нулевой остаток фильтра
+    h = h * min(np.sqrt(want / add), np.sqrt(_band_energy(src, sr, *AIR_SRC_HZ) / add))
+    return h if p["only"] else x + h
+
+
 SYNTH_MAX_NOTES = 5000   # нот в блоке synth не больше: партия на весь трек — сотни
 SYNTH_MAX_CHORD = 16     # нот в одном аккорде не больше
 SYNTH_MIN_T = -600.0     # нота не раньше 10 мин до окна: считается целиком от начала — длинная съела бы память
@@ -1669,7 +1713,8 @@ def _limiter(x, sr, p, _res):
 BLOCKS = {"gate": _gate, "eq": _eq, "comp": _comp, "drive": _drive, "amp": _amp,
           "cab": _cab, "reverb": _reverb, "delay": _delay, "gain": _gain, "sampler": _sampler,
           "bass": _bass, "synth": _synth, "chorus": _chorus, "phaser": _phaser, "flanger": _flanger,
-          "tape": _tape, "spring": _spring, "tremolo": _tremolo, "perc": _perc, "glue": _glue, "limiter": _limiter}
+          "tape": _tape, "spring": _spring, "tremolo": _tremolo, "perc": _perc, "glue": _glue, "limiter": _limiter,
+          "air": _air}
 
 
 def process(audio, sr: int, chain, resources=None) -> np.ndarray:

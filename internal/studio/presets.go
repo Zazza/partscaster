@@ -62,6 +62,11 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, err
 	}
+	live, err := liveLayer(ctx, svc, job, p)
+	if err != nil {
+		return nil, err
+	}
+	parts = append(parts, live...)
 	if err := ensurePresetKits(ctx, svc, p.Specs, parts); err != nil {
 		return nil, err
 	}

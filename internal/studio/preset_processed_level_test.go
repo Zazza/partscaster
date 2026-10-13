@@ -95,7 +95,7 @@ func prlTrackSum() float64 {
 
 func prlRun(t *testing.T, f *prlFake, p yue.SoundPreset) []float32 {
 	t.Helper()
-	if _, err := ApplySoundPreset(context.Background(), f, psJobID, p); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), f, psJobID, p); err != nil {
 		t.Fatalf("ApplySoundPreset: %v", err)
 	}
 	name := fmt.Sprintf("dsp-preset-%d-mix.flac", p.ID)

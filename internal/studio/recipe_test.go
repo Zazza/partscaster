@@ -499,7 +499,7 @@ func rcTicks(t *testing.T, f *rcNew, max int) *RecipeRunner {
 	t.Helper()
 	r := &RecipeRunner{Svc: f, Owner: "app"}
 	for i := 0; i < max && f.status() == "running"; i++ {
-		r.Tick(context.Background())
+		r.Tick(withoutLiveLayer(context.Background())) // механика импорта; слой «живой звук» — своими тестами
 	}
 	return r
 }
@@ -803,7 +803,7 @@ func TestRecipeRunnerSoundPresetReapplied(t *testing.T) {
 	src := psSetup(t, nil)
 	rec := &jrRec{Service: src}
 	p := psPreset(9, nil, []yue.PresetStep{{Chain: "level", Params: map[string]float64{"gain": -6, "ceiling": -0.5}}})
-	if _, err := ApplySoundPreset(context.Background(), yue.Journaled(rec), psJobID, p); err != nil {
+	if _, err := ApplySoundPreset(withoutLiveLayer(context.Background()), yue.Journaled(rec), psJobID, p); err != nil {
 		t.Fatalf("исходный пресет: %v", err)
 	}
 	if len(rec.recs) != 1 {

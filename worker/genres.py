@@ -31,6 +31,12 @@ TREATMENTS = {
     ],
 }
 
+# тарелкам (хэт, райд, крэш) — без сжатия и перегруза «tight» и с комнатой светлее: сжатие душит звон тарелок
+# (опыт After Glow #830: без компрессора барабанов «тарелки точно лучше»), а комната с верхом 7 кГц их глушит;
+# у живых записей тарелки звенят до 20 кГц. Гейт-реверб и лоуфай — стиль, их не трогаем.
+CYMBALS = ("hh", "ride", "crash")
+CYMBAL_TREATMENTS = dict(TREATMENTS, tight=[], room=[dict(_ROOM, lowpass_hz=12000)])
+
 # мастер: склейка шины и, где по стилю, лента; громкость — целью (limiter дописывает воркер)
 _GLUE = {"type": "glue", "threshold_db": -18, "ratio": 2, "attack_ms": 10, "release_ms": 250, "mix": 0.7}
 _TAPE = {"type": "tape", "wow": 0.12, "flutter": 0.08, "saturation": 0.25, "lowpass_hz": 12000, "hiss": 0.04}
@@ -1649,7 +1655,8 @@ def _drums(fx: dict, kit: str, treat: str, levels: tuple, hh: float) -> list:
     out = []
     for part in DRUM_PARTS:
         pid = f"drums-{part}-kit" if kit == "osdk" else f"drums-{part}-{kit}"
-        spec = {"stems": [part], "engine": copy.deepcopy(fx[pid]["chain"]) + copy.deepcopy(TREATMENTS[treat])}
+        treatments = CYMBAL_TREATMENTS if part in CYMBALS else TREATMENTS
+        spec = {"stems": [part], "engine": copy.deepcopy(fx[pid]["chain"]) + copy.deepcopy(treatments[treat])}
         if part in ("kick", "snare"):
             spec["level_db"] = levels[0] if part == "kick" else levels[1]
         elif part == "hh":

@@ -186,6 +186,9 @@ func (f *fakeService) FetchAudio(ctx context.Context, id int64, file string) (io
 	if c, ok := f.fetch[file]; ok {
 		return io.NopCloser(strings.NewReader(c)), "application/octet-stream", nil
 	}
+	if b, ok := f.uploads[file]; ok { // как воркер: загруженный вариант скачивается по имени
+		return io.NopCloser(strings.NewReader(string(b))), "application/octet-stream", nil
+	}
 	return nil, "", errNotFound
 }
 

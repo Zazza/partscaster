@@ -44,6 +44,7 @@ TYPES = ("gate", "eq", "comp", "drive", "amp", "cab", "reverb", "delay", "gain",
 SYNTH_TYPES = ("synth", "chorus", "phaser", "flanger", "tape", "spring", "perc")
 MASTER_TYPES = ("glue", "limiter")
 GUITAR_TYPES = ("tremolo",)
+AIR_TYPES = ("air",)  # воздух выше 16 кГц — слой «живой звук» пресетов
 PREVIEW_RE = re.compile(r"^preview-fx-[0-9a-f]{8}\.flac$")
 TAIL = 3.0
 MAX_PREVIEWS = 8
@@ -1268,8 +1269,8 @@ class TestBlocksCopies(unittest.TestCase):
         # прежние типы — в прежнем порядке первыми; за ними блоки синтов (их порядок
         # не задан)
         self.assertEqual(tuple(b)[:len(TYPES)], TYPES, "типы блоков и их порядок показа")
-        self.assertEqual(set(tuple(b)[len(TYPES):]), set(SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES),
-                         "блоки синтов, мастера и гитар")
+        self.assertEqual(set(tuple(b)[len(TYPES):]), set(SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES + AIR_TYPES),
+                         "блоки синтов, мастера, гитар и воздух")
 
     def test_copies_identical(self):
         src = BLOCKS_JSON.read_bytes()
