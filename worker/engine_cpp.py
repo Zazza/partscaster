@@ -25,6 +25,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import proclock
+
 # закреплённые версии: программа (проверена опытом) и файлы моделей (автор может перезалить — тот же трек
 # тихо зазвучал бы иначе); обновление — осознанно, сменой этих строк
 CPP_COMMIT = "c893629"
@@ -92,15 +94,8 @@ def models_info() -> dict:
 @contextlib.contextmanager
 def _download_lock(name: str):
     """Одна загрузка файла за раз — и между потоками воркера, и между воркером и install.sh."""
-    import fcntl
-    d = models_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    with open(d / f".{name}.lock", "w") as fh:
-        fcntl.flock(fh, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(fh, fcntl.LOCK_UN)
+    with proclock.locked(models_dir() / f".{name}.lock"):
+        yield
 
 
 def _sha256(path: Path) -> str:

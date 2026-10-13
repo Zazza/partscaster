@@ -41,6 +41,15 @@ LDFLAGS="-X main.version=$VERSION"
 # релизный MCP без srcDir: проверка «MCP старше исходников» в релизе не нужна
 HASH="$(go run ./cmd/srchash)"
 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS -X main.buildHash=$HASH" -o "build/bin/yue-mcp$EXE" ./cmd/yue-mcp
+if [[ "$GOOS" == "windows" ]]; then
+  # yue-worker.exe — воркер без WSL: код воркера вшивается в программу (go:embed из payload/)
+  PAYLOAD=cmd/yue-worker/payload
+  mkdir -p "$PAYLOAD"
+  rm -f "$PAYLOAD"/worker-*.tar.gz
+  cp "$WORKER_TAR" "$PAYLOAD/"
+  GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o build/bin/yue-worker.exe ./cmd/yue-worker
+  rm -f "$PAYLOAD"/worker-*.tar.gz
+fi
 
 NAME="yue-studio-$VERSION-$GOOS-$GOARCH"
 PKG="dist/$NAME"
@@ -53,6 +62,7 @@ if [[ "$GOOS" == "darwin" ]]; then
 else
   cp "build/bin/yue-studio$EXE" "$PKG/"
 fi
+[[ "$GOOS" == "windows" ]] && cp build/bin/yue-worker.exe "$PKG/"
 cp "build/bin/yue-mcp$EXE" "$PKG/"
 cp "$WORKER_TAR" "$PKG/"
 sed "s/@VERSION@/$VERSION/g" deploy/INSTALL.txt > "$PKG/INSTALL.txt"

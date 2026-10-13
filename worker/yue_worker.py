@@ -28,6 +28,7 @@ import llm
 import media
 import instruments as fx_instruments
 import presets as sound_presets
+import proclock
 import recipe
 import waveform
 from pathlib import Path
@@ -312,11 +313,15 @@ def _get_pipe():
             _stop_cpp()   # видеопамять — одному движку
             if _load_error:
                 raise HTTPException(503, f"model load failed earlier: {_load_error}")
+            # torch-eager — на Windows: PyTorch там собран без flash-attention, которую зовут CUDA-графы YuE2
+            backend = os.environ.get("YUE2_BACKEND", "torch")
+            if backend not in YUE2_BACKENDS:
+                raise HTTPException(503, f"YUE2_BACKEND={backend!r}: нужно одно из {', '.join(YUE2_BACKENDS)}")
             from yue2 import YuE2Pipeline
             try:
                 t0 = time.time()
                 _pipe = YuE2Pipeline.from_pretrained(
-                    MODEL_ID, vae=MODEL_VAE, device="cuda",
+                    MODEL_ID, vae=MODEL_VAE, device="cuda", backend=backend,
                 ).__enter__()
                 log.info("pipeline loaded in %.1fs", time.time() - t0)
             except Exception as e:  # noqa: BLE001
@@ -1202,6 +1207,7 @@ def health():
 WORKER_API = 1
 MODEL_ID = "m-a-p/YuE2-3B"
 MODEL_VAE = "m-a-p/YuE2-Vae"
+YUE2_BACKENDS = ("torch", "torch-eager", "vllm")
 
 
 def _read_version(d: Path) -> str:
@@ -4112,14 +4118,8 @@ def fx_kit_install(name: str = ""):
 def _kit_file_lock(name: str):
     """Блокировка набора между процессами (воркер и kits_install.py при make worker): иначе оба писали бы в одну
     <часть>.part, и replace одного ронял бы установку другого."""
-    import fcntl
-    _kits_dir().mkdir(parents=True, exist_ok=True)
-    with open(_kits_dir() / f".{name}.lock", "w") as fh:
-        fcntl.flock(fh, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(fh, fcntl.LOCK_UN)
+    with proclock.locked(_kits_dir() / f".{name}.lock"):
+        yield
 
 
 def _fx_kits_guard_for(name: str) -> threading.Lock:

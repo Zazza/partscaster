@@ -10,3 +10,4 @@ __pycache__/
 # типы Wails для редактора (генерирует make build из Go-структур; сборка и CI их не читают)
 frontend/src/wailsjs/go/models.ts
 frontend/src/wailsjs/go/main/App.d.ts
+cmd/yue-worker/payload/*.tar.gz

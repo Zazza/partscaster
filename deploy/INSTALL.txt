@@ -14,6 +14,10 @@ Yue Studio @VERSION@ — установка / installation
    Необязательные компоненты (тексты треков, чистое разделение дорожек) ставит AI-агент
    инструментом install_worker — или по docs/deployment.md.
 
+   Windows без WSL: запустите yue-worker.exe (двойной щелчок). Первый раз он сам поставит
+   Python и пакеты (~25 ГБ вместе с моделью), дальше просто запускает воркер; окно открыто —
+   воркер работает, закрыли — остановлен. Адрес воркера в приложении — 127.0.0.1.
+
 2. Приложение: запустите yue-studio. В «Настройках» введите адрес воркера
    (например 192.168.1.5 — порт 8091 подставится) и нажмите «Проверить».
 
@@ -26,6 +30,8 @@ Package contents: the app, yue-mcp (MCP server for AI agents) and the worker arc
 for an NVIDIA GPU machine (Linux, CUDA).
 
 1. Worker (on the GPU machine): tar xzf worker-@VERSION@.tar.gz && ./worker-@VERSION@/install.sh
+   Windows without WSL: run yue-worker.exe — it installs Python and packages on first run (~25 GB
+   with the model), then just starts the worker while its window is open. Worker address: 127.0.0.1.
    Update — the same with a newer archive; rollback: ~/yue-studio/current/install.sh --rollback
 2. App: run yue-studio, enter the worker address in Settings, press "Check".
 3. AI agents: Settings → "For AI agents" — config snippets and "Connect to Claude Code".

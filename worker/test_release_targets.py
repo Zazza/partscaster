@@ -178,7 +178,7 @@ class TestReleaseTargets(unittest.TestCase):
 
         with zipfile.ZipFile(zpath) as zf:
             names = {n.rstrip("/") for n in zf.namelist()}
-            for f in ("yue-studio.exe", "yue-mcp.exe", f"worker-{VERSION}.tar.gz", "INSTALL.txt"):
+            for f in ("yue-studio.exe", "yue-mcp.exe", "yue-worker.exe", f"worker-{VERSION}.tar.gz", "INSTALL.txt"):
                 self.assertIn(f"{top}/{f}", names, sorted(names))
             self.assertTrue(all(n == top or n.startswith(top + "/") for n in names), sorted(names))
             install = zf.read(f"{top}/INSTALL.txt").decode("utf-8")
