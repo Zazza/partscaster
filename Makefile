@@ -3,7 +3,7 @@ WAILS ?= $(HOME)/go/bin/wails
 # версия сборки — из git (тег + коммиты после него); без git — dev
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: help test test-go test-front test-worker lint lint-go lint-front lint-worker fmt build install-desktop uninstall-desktop worker worker-tar yue2cpp release mcp mcp-data clean
+.PHONY: help test test-go test-front test-worker lint lint-go lint-front lint-worker fmt build install-desktop uninstall-desktop worker worker-tar yue2cpp release dist-linux dist-windows dist-mac mcp mcp-data clean
 
 help: ## показать список задач
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
@@ -69,6 +69,15 @@ yue2cpp: ## готовая сборка yue2.cpp (второй движок, э�
 
 release: ## релизный пакет под эту ОС в dist/ (приложение + yue-mcp + архив воркера)
 	WAILS=$(WAILS) ./tools/release.sh $(VERSION)
+
+dist-linux: ## пакет Linux в dist/ (только на Linux)
+	TARGET_OS=linux WAILS=$(WAILS) ./tools/release.sh $(VERSION)
+
+dist-windows: ## пакет Windows в dist/ (.zip; собирается и с Linux)
+	TARGET_OS=windows WAILS=$(WAILS) ./tools/release.sh $(VERSION)
+
+dist-mac: ## пакет macOS в dist/ (только на Mac)
+	TARGET_OS=darwin WAILS=$(WAILS) ./tools/release.sh $(VERSION)
 
 mcp: ## собрать MCP-сервер (build/bin/yue-mcp)
 	go build -ldflags "-X main.buildHash=$$(go run ./cmd/srchash) -X main.srcDir=$(CURDIR) -X main.version=$(VERSION)" -o build/bin/yue-mcp ./cmd/yue-mcp

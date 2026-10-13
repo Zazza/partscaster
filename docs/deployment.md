@@ -6,7 +6,8 @@
 
 ## Релизный пакет: скачал, поставил, работает
 
-Релиз (GitHub Release тега `vX.Y.Z`, собирается `.github/workflows/release.yml`; локально — `make release`):
+Релиз (GitHub Release тега `vX.Y.Z`, собирается `.github/workflows/release.yml`; локально — `make release`
+под эту ОС или `make dist-linux` / `make dist-windows` / `make dist-mac`):
 
 - `yue-studio-<версия>-<ОС>-<арх>.tar.gz` (Windows — `.zip`): приложение, `yue-mcp` рядом с ним,
   архив воркера и `INSTALL.txt`;
@@ -295,6 +296,18 @@ cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --ho
 
 Требования: Go 1.22+, Node.js 20+, [Wails CLI v2](https://wails.io)
 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`).
+
+**Пакеты по ОС** (приложение + `yue-mcp` + архив воркера + `INSTALL.txt` в `dist/`):
+
+| Цель | Где собирается | Итог |
+|---|---|---|
+| `make dist-linux` | Linux | `yue-studio-<версия>-linux-<арх>.tar.gz` |
+| `make dist-windows` | Linux или Windows (Wails под Windows собирается без cgo) | `yue-studio-<версия>-windows-amd64.zip` |
+| `make dist-mac` | только Mac (Wails под macOS — cgo и SDK Apple) | `yue-studio-<версия>-darwin-<арх>.tar.gz` |
+
+На чужой ОС `dist-linux` и `dist-mac` отказывают с подсказкой; в CI пакет каждой ОС собирается на своём
+раннере. На Linux с docker перед пакетом собирается yue2.cpp (`make yue2cpp`), если его ещё нет в `dist/`, —
+архив воркера одинаков во всех пакетах.
 
 **Linux (основная, всё протестировано):**
 ```bash
