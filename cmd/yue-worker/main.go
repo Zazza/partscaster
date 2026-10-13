@@ -64,7 +64,7 @@ func start(homeFlag string, lan bool) error {
 	defer lock.Close()
 	// воркер из другой папки (или другая программа) на том же порту
 	if c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", workerexe.Port), time.Second); err == nil {
-		c.Close()
+		_ = c.Close() // пробное соединение: ошибка закрытия не важна
 		return fmt.Errorf("порт %d занят — воркер уже запущен (его окно открыто) или порт занят другой программой",
 			workerexe.Port)
 	}
@@ -154,7 +154,7 @@ func unpackWorker(home string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // файл на чтение: ошибка закрытия не важна
 	appDir := filepath.Join(home, "app")
 	dir, err := workerexe.ExtractWorker(f, appDir)
 	if err != nil {

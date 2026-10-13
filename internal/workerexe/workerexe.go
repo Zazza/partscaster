@@ -118,7 +118,7 @@ func ExtractWorker(r io.Reader, dstRoot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }() // чтение архива: ошибка закрытия не важна
 	tr := tar.NewReader(gz)
 	top := ""
 	for {

@@ -97,7 +97,7 @@ func download(url, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s: %s", url, resp.Status)
 	}
@@ -120,7 +120,7 @@ func extractUv(archive string, isZip bool, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer zr.Close()
+		defer func() { _ = zr.Close() }() // всё здесь — чтение: ошибки закрытия не важны
 		for _, f := range zr.File {
 			if filepath.Base(f.Name) != want {
 				continue
@@ -129,7 +129,7 @@ func extractUv(archive string, isZip bool, dst string) error {
 			if err != nil {
 				return err
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			return writeFile(dst, rc, 0o755)
 		}
 		return fmt.Errorf("в архиве uv нет %s", want)
