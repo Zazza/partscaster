@@ -1,9 +1,10 @@
 // Указание автора набора Salamander (Alexander Holm, CC-BY) — в подсказке пресета с этим набором.
 import { describe, it, expect } from 'vitest'
 import { fxPresets } from './fxPresets.js'
-import { PRESET_GROUPS, groupPresets } from './presetGroups.js'
+import { PRESET_GROUPS, FAMILIES, groupPresets } from './presetGroups.js'
 
-const SYNTH_GROUPS = ['synth-pad', 'synth-organ', 'synth-keys', 'synth-lead', 'synth-toy']
+// синт-бас — в семействе «Бас» (подвид bass-synth), остальные синты — в группах синтов и клавиш
+const SYNTH_GROUPS = ['synth-pad', 'synth-organ', 'synth-keys', 'synth-lead', 'synth-toy', 'bass-synth']
 const OLD_IDS = ['synth-solina', 'synth-juno', 'synth-moog-bass', 'synth-moog-lead', 'synth-cs80-brass',
   'synth-farfisa', 'synth-vox-continental', 'synth-vltone']
 
@@ -28,12 +29,13 @@ describe('группы синтов', () => {
     expect(synths.filter((p) => !SYNTH_GROUPS.includes(p.group)).map((p) => `${p.id}: ${p.group}`)).toEqual([])
   })
 
-  it('groupPresets по синтам — ровно 5 групп синтов, каждая непустая', () => {
+  it('groupPresets по синтам — все группы синтов, каждая непустая, подпись «семейство · подвид»', () => {
     const groups = groupPresets(synths)
     expect(groups.map((g) => g.group).sort()).toEqual([...SYNTH_GROUPS].sort())
     for (const g of groups) {
       expect(g.items.length).toBeGreaterThan(0)
-      expect(g.label).toBe(PRESET_GROUPS[g.group].ru)
+      const pg = PRESET_GROUPS[g.group]
+      expect(g.label).toBe(`${FAMILIES.find((f) => f.id === pg.family).ru} · ${pg.ru}`)
     }
   })
 

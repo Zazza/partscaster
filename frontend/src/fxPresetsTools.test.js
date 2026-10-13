@@ -189,17 +189,17 @@ describe('fillAmp(chain, amps, hints)', () => {
 })
 
 // Проверка по исходникам: своих копий fillAmp нет,
-// fillAmp берётся из fxChain.js, группировка — из presetGroups.js.
-describe('экраны используют общие fillAmp и groupPresets', () => {
+// fillAmp берётся из fxChain.js, группировка (instrumentTree) — из presetGroups.js.
+describe('экраны используют общие fillAmp и instrumentTree', () => {
   const src = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
-  it('TrackDesk и InstrumentsPage: fillAmp и groupPresets — из общих модулей, подсказки передаются', () => {
+  it('TrackDesk и InstrumentsPage: fillAmp и instrumentTree — из общих модулей, подсказки передаются', () => {
     const bad = ['./components/TrackDesk.vue', './components/InstrumentsPage.vue'].flatMap((rel) => {
       const s = src(rel)
       return [
         [/function\s+fillAmp\s*\(/.test(s), 'своя копия fillAmp'],
         [!/import\s*\{[^}]*\bfillAmp\b[^}]*\}\s*from\s*['"]\.\.\/fxChain\.js['"]/.test(s), 'fillAmp не из fxChain.js'],
         [!/amp_hint/.test(s), 'подсказки пресета не передаются'],
-        [!/import\s*\{[^}]*\bgroupPresets\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/.test(s), 'groupPresets не из presetGroups.js'],
+        [!/import\s*\{[^}]*\binstrumentTree\b[^}]*\}\s*from\s*['"]\.\.\/presetGroups\.js['"]/.test(s), 'instrumentTree не из presetGroups.js'],
       ].filter(([hit]) => hit).map(([, why]) => `${rel}: ${why}`)
     })
     expect(bad).toEqual([])

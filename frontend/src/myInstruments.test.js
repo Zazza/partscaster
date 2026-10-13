@@ -143,18 +143,18 @@ describe('mergeInstruments — общий список', () => {
     expect(m.accent).toBe(0.5)
   })
 
-  test('groupPresets: свой «guitar-drive» — последним в группе «Гитара: перегруз»', () => {
+  test('groupPresets: свой «guitar-drive» — последним в группе «Гитара · Перегруз»', () => {
     const b = [...builtin(), { ...builtin()[1], id: 'g-drive-2' }]
     const groups = groupPresets(mergeInstruments(b, [mineDrive()], 'ru'), 'ru')
     const drive = groups.find((g) => g.group === 'guitar-drive')
-    expect(drive.label).toBe('Гитара: перегруз')
+    expect(drive.label).toBe('Гитара · Перегруз')
     expect(drive.items.map((p) => p.id)).toEqual(['g-drive', 'g-drive-2', 'my-7'])
     // своя группа не появилась отдельно — порядок групп как у готовых
     expect(groups.map((g) => g.group)).toEqual(['guitar-clean', 'guitar-drive', 'synth-pad'])
   })
 
-  test('свой с группой, которой нет у готовых, — отдельной группой в конце', () => {
-    const odd = { ...mineDrive(), id: 9, group: 'my-own-group' }
+  test('свой без основы с группой, которой нет у готовых, — отдельной группой в конце', () => {
+    const odd = { ...mineDrive(), id: 9, base: '', group: 'my-own-group' }
     const groups = groupPresets(mergeInstruments(builtin(), [odd, mineSynth()], 'ru'), 'ru')
     expect(groups.map((g) => g.group)).toEqual(['guitar-clean', 'guitar-drive', 'synth-pad', 'my-own-group'])
     expect(groups.at(-1).items.map((p) => p.id)).toEqual(['my-9'])

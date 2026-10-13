@@ -35,10 +35,10 @@ describe('TrackDesk: выбор инструмента', () => {
     expect(b.open.value).toBe('')
   })
 
-  it('группы — инструменты дорожки, без цепочек без дорожек (мастер-склейка)', async () => {
+  it('список — инструменты дорожки, без цепочек без дорожек (мастер-склейка)', async () => {
     const { b } = await desk()
     b.toggleRow('guitar')
-    const ids = b.rowGroups.value.flatMap((g) => g.items.map((x) => x.id))
+    const ids = b.rowTree.value.flatMap((f) => f.subs.flatMap((g) => g.items.map((x) => x.id)))
     expect(ids.length).toBeGreaterThan(0)
     expect(fxPresets.find((p) => p.id === 'master-glue')).toBeTruthy()
     expect(ids).not.toContain('master-glue')
@@ -46,10 +46,12 @@ describe('TrackDesk: выбор инструмента', () => {
     expect([...ids].sort()).toEqual([...want].sort())
   })
 
-  it('пункты инструмента — инструменты выбранной группы; выбор ставит цепочку, редактор не открывает', async () => {
+  it('пункты инструмента — инструменты выбранного подвида; выбор ставит цепочку, редактор не открывает', async () => {
     const { b } = await desk()
     b.toggleRow('guitar')
-    const g = b.rowGroups.value.find((x) => x.items.length)
+    const f = b.rowTree.value[0]
+    const g = f.subs.at(-1)
+    b.familyId.value = f.family
     b.groupId.value = g.group
     expect(b.itemOpts.value).toEqual(itemOptions(g, 'ru'))
     b.pickById(g.items[0].id)

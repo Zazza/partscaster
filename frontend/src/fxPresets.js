@@ -428,7 +428,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'vocal-plate',
+    id: 'vocal-plate', group: 'mix',
     stems: ['vocals'],
     name: { ru: 'Голос: плейт', en: 'Vocal: plate' },
     note: {
@@ -443,7 +443,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'drums-room',
+    id: 'drums-room', group: 'mix',
     stems: ['drums'],
     name: { ru: 'Барабаны: комната', en: 'Drums: room' },
     note: {
@@ -456,7 +456,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'synth-delay',
+    id: 'synth-delay', group: 'mix',
     stems: ['other', 'piano'],
     name: { ru: 'Синт: дилей и зал', en: 'Synth: delay and hall' },
     note: {
@@ -471,7 +471,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-kick-kit',
-    stems: ['kick'], group: 'drum-kits',
+    stems: ['kick'], group: 'drums-osdk',
     name: { ru: 'Бочка: набор', en: 'Kick: kit' },
     note: {
       ru: 'На дорожку «бочка» (RoFormer): удары бочки заменяются сэмплами набора The Open Source Drum Kit, сила удара выбирает сэмпл. Набор — fx_kit_install osdk.',
@@ -481,7 +481,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-snare-kit',
-    stems: ['snare'], group: 'drum-kits',
+    stems: ['snare'], group: 'drums-osdk',
     name: { ru: 'Малый: набор', en: 'Snare: kit' },
     note: {
       ru: 'На дорожку «малый барабан» (RoFormer): удары малого — сэмплами набора; порог −20 дБ пропускает и тихие удары (гоулст-ноты); слышна протечка бочки/хэта — поднимите порог.',
@@ -491,7 +491,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-toms-kit',
-    stems: ['toms'], group: 'drum-kits',
+    stems: ['toms'], group: 'drums-osdk',
     name: { ru: 'Тамы: набор по высоте', en: 'Toms: kit by pitch' },
     note: {
       ru: 'На дорожку «тамы» (RoFormer): удары делятся по высоте — высокие играет малый там, средние — средний, низкие — большой (The Open Source Drum Kit). Близкие по высоте удары (меньше ~2 полутонов) — один там. Набор — fx_kit_install osdk.',
@@ -501,7 +501,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-hh-kit',
-    stems: ['hh'], group: 'drum-kits',
+    stems: ['hh'], group: 'drums-osdk',
     name: { ru: 'Хэт: набор', en: 'Hi-hat: kit' },
     note: {
       ru: 'На дорожку «хэт» (RoFormer): удары хэта — сэмплами The Open Source Drum Kit. Коротко звучащий удар — закрытый хэт, долго звучащий — полузакрытый; новый удар глушит предыдущий, как педаль. Эквалайзер: в сэмплах хэта слышны бочка и малый, и сам он тусклее, чем в записях, — низ срезан, верх поднят (центр звука 5 → 8,6 кГц, как у хэта настоящих записей). Набор — fx_kit_install osdk.',
@@ -516,7 +516,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-ride-kit',
-    stems: ['ride'], group: 'drum-kits',
+    stems: ['ride'], group: 'drums-osdk',
     name: { ru: 'Райд: набор', en: 'Ride: kit' },
     note: {
       ru: 'На дорожку «райд» (RoFormer): удары райда — сэмплами набора. Если в дорожке в основном протечка других барабанов, поднимите порог.',
@@ -526,7 +526,7 @@ export const fxPresets = [
   },
   {
     id: 'drums-crash-kit',
-    stems: ['crash'], group: 'drum-kits',
+    stems: ['crash'], group: 'drums-osdk',
     name: { ru: 'Крэш: набор', en: 'Crash: kit' },
     note: {
       ru: 'На дорожку «крэш» (RoFormer): удары тарелки — сэмплами набора, тарелка звенит до конца.',
@@ -627,7 +627,7 @@ export const fxPresets = [
     chain: [{ type: 'bass', kit: 'synthbass/acid', division: 2, floor_db: -20 }],
   },
   {
-    id: 'master-glue',
+    id: 'master-glue', group: 'master',
     name: { ru: 'Мастер: склейка', en: 'Master: glue' },
     note: {
       ru: 'На весь трек: чуть низа и воздуха, мягкий компрессор 2:1 с медленной атакой — микс плотнее, удары целы.',
@@ -641,7 +641,7 @@ export const fxPresets = [
 
   // мастер: на весь собранный микс, на воркере; limiter — громкость к цели по истинному пику
   {
-    id: 'master-stream', stems: ['master'],
+    id: 'master-stream', stems: ['master'], group: 'master',
     name: { ru: 'Мастер: стриминг −14 LUFS', en: 'Master: streaming −14 LUFS' },
     note: {
       ru: 'Лёгкая склейка шины и громкость −14 LUFS (как у стримингов), пики не выше −1 dBTP — без перегруза в mp3.',
@@ -653,7 +653,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'master-loud', stems: ['master'],
+    id: 'master-loud', stems: ['master'], group: 'master',
     name: { ru: 'Мастер: громко −11 LUFS', en: 'Master: loud −11 LUFS' },
     note: {
       ru: 'Плотнее и громче: срез инфранизов, склейка 2:1, −11 LUFS, пики −1 dBTP. Ударам меньше места — для громкого рока.',
@@ -666,7 +666,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'master-soft-glue', stems: ['master'],
+    id: 'master-soft-glue', stems: ['master'], group: 'master',
     name: { ru: 'Мастер: мягкая склейка', en: 'Master: soft glue' },
     note: {
       ru: 'Параллельная склейка (60 % сжатого): партии держатся вместе, громкость и пики не трогаются.',
@@ -697,7 +697,7 @@ export const fxPresets = [
     ],
   },
   {
-    id: 'synth-moog-bass', stems: ['synth'], group: 'synth-lead', style: 'pulse', octave: 0,
+    id: 'synth-moog-bass', stems: ['synth'], group: 'bass-synth', style: 'pulse', octave: 0,
     name: { ru: 'Синт-бас (Moog)', en: 'Synth bass (Moog)' },
     note: { ru: 'Пила и квадрат на октаву ниже через резонансный фильтр с коротким «щелчком» огибающей — плотный пульсирующий бас восьмыми.', en: 'Saw plus a square an octave down through a resonant filter with a short envelope "pluck" — a tight eighth-note bass.' },
     chain: [
@@ -1228,55 +1228,55 @@ export const fxPresets = [
   },
   // перкуссия по сетке: блок perc (удары подставляет студия по тактам трека) + эффекты
   {
-    id: 'perc-hat8', stems: ['perc'], place: { pan: 0.3, width: 1 }, pattern: 'eighths', swing: 0,
+    id: 'perc-hat8', stems: ['perc'], group: 'perc', place: { pan: 0.3, width: 1 }, pattern: 'eighths', swing: 0,
     name: { ru: 'Хэт восьмыми (808)', en: 'Hi-hat eighths (808)' },
     note: { ru: 'Сухой закрытый хэт драм-машины восьмыми, слабые доли тише — пульс поверх живых барабанов.', en: 'A dry closed drum-machine hat in eighths, weak beats softer — a pulse on top of the drums.' },
     chain: [{ type: 'perc', voice: 1, tone: 1, decay: 0.8, rel_db: -16 }],
   },
   {
-    id: 'perc-hat16', stems: ['perc'], place: { pan: 0.3, width: 1 }, pattern: 'sixteenths', swing: 0.1,
+    id: 'perc-hat16', stems: ['perc'], group: 'perc', place: { pan: 0.3, width: 1 }, pattern: 'sixteenths', swing: 0.1,
     name: { ru: 'Хэт шестнадцатыми (808)', en: 'Hi-hat sixteenths (808)' },
     note: { ru: 'Частый хэт шестнадцатыми с лёгким свингом — движение в куплете, диско и пост-панк.', en: 'Busy sixteenth hat with a light swing — motion for verses, disco and post-punk.' },
     chain: [{ type: 'perc', voice: 1, tone: 1.1, decay: 0.6, rel_db: -18 }],
   },
   {
-    id: 'perc-shaker16', stems: ['perc'], place: { pan: -0.3, width: 1 }, pattern: 'sixteenths', swing: 0.15,
+    id: 'perc-shaker16', stems: ['perc'], group: 'perc', place: { pan: -0.3, width: 1 }, pattern: 'sixteenths', swing: 0.15,
     name: { ru: 'Шейкер шестнадцатыми', en: 'Shaker sixteenths' },
     note: { ru: 'Мягкий шейкер с подтянутым свингом и «живым» разбросом — воздух и шорох между ударами.', en: 'A soft shaker with swing and a human spread — air and rustle between the hits.' },
     chain: [{ type: 'perc', voice: 2, tone: 1, decay: 1, humanize_ms: 6, rel_db: -20 }],
   },
   {
-    id: 'perc-tamb24', stems: ['perc'], place: { pan: -0.4, width: 1 }, pattern: 'backbeat', swing: 0,
+    id: 'perc-tamb24', stems: ['perc'], group: 'perc', place: { pan: -0.4, width: 1 }, pattern: 'backbeat', swing: 0,
     name: { ru: 'Бубен на 2 и 4', en: 'Tambourine on 2 and 4' },
     note: { ru: 'Бубен на слабые доли вместе с малым — классика соула и брит-попа, припев становится шире.', en: 'Tambourine on the backbeat with the snare — soul and britpop classic, widens a chorus.' },
     chain: [{ type: 'perc', voice: 6, tone: 1, decay: 1, humanize_ms: 4, rel_db: -16 }, { type: 'reverb', decay_s: 1.2, predelay_ms: 10, lowpass_hz: 8000, wet: 0.15 }],
   },
   {
-    id: 'perc-clap24', stems: ['perc'], pattern: 'backbeat', swing: 0,
+    id: 'perc-clap24', stems: ['perc'], group: 'perc', pattern: 'backbeat', swing: 0,
     name: { ru: 'Хлопки на 2 и 4 (909)', en: 'Claps on 2 and 4 (909)' },
     note: { ru: 'Хлопки драм-машины поверх малого с комнатой — танцевальный удар на слабую долю.', en: 'Drum-machine claps over the snare with a room — a dance backbeat.' },
     chain: [{ type: 'perc', voice: 3, tone: 1, decay: 1, rel_db: -14 }, { type: 'reverb', decay_s: 0.9, predelay_ms: 5, lowpass_hz: 7000, wet: 0.2 }],
   },
   {
-    id: 'perc-cowbell4', stems: ['perc'], place: { pan: 0.2, width: 1 }, pattern: 'fours', swing: 0,
+    id: 'perc-cowbell4', stems: ['perc'], group: 'perc', place: { pan: 0.2, width: 1 }, pattern: 'fours', swing: 0,
     name: { ru: 'Ковбелл четвертями', en: 'Cowbell quarters' },
     note: { ru: 'Ковбелл 808 на каждую долю — фанк и нью-вейв, звучит нарочито и смешно; тише — держит темп.', en: 'An 808 cowbell on every beat — funk and new wave, deliberately cheeky; quieter it keeps time.' },
     chain: [{ type: 'perc', voice: 4, tone: 1, decay: 0.8, rel_db: -20 }],
   },
   {
-    id: 'perc-rim24', stems: ['perc'], pattern: 'backbeat', swing: 0,
+    id: 'perc-rim24', stems: ['perc'], group: 'perc', pattern: 'backbeat', swing: 0,
     name: { ru: 'Римшот на 2 и 4', en: 'Rimshot on 2 and 4' },
     note: { ru: 'Сухой щелчок по ободу на слабые доли — для тихих куплетов и баллад вместо малого.', en: 'A dry rim click on the backbeat — for quiet verses and ballads instead of the snare.' },
     chain: [{ type: 'perc', voice: 5, tone: 1, decay: 1, rel_db: -16 }],
   },
   {
-    id: 'perc-kick-double', stems: ['perc'], pattern: 'fours', swing: 0,
+    id: 'perc-kick-double', stems: ['perc'], group: 'perc', pattern: 'fours', swing: 0,
     name: { ru: 'Удвоение бочки (osdk)', en: 'Kick doubling (osdk)' },
     note: { ru: 'Живая бочка на каждую долю поверх трека — «четыре в пол»: плотнее низ, танцевальнее припев.', en: 'A real kick on every beat on top of the track — four on the floor: denser low end, a dancier chorus.' },
     chain: [{ type: 'perc', voice: 0, kit: 'osdk/kick', rel_db: -12 }],
   },
   {
-    id: 'perc-ride8', stems: ['perc'], place: { pan: 0.35, width: 1 }, pattern: 'eighths', swing: 0,
+    id: 'perc-ride8', stems: ['perc'], group: 'perc', place: { pan: 0.35, width: 1 }, pattern: 'eighths', swing: 0,
     name: { ru: 'Райд восьмыми (osdk)', en: 'Ride eighths (osdk)' },
     note: { ru: 'Живая тарелка райд восьмыми — открывает припев и бридж, звенит дольше хэта.', en: 'A real ride cymbal in eighths — opens up a chorus or bridge, rings longer than a hat.' },
     chain: [{ type: 'perc', voice: 0, kit: 'osdk/ride', rel_db: -18 }],
@@ -1293,7 +1293,7 @@ export const fxPresets = [
     for (const part of Object.keys(k.parts)) {
       const live = fxPresets.find((p) => p.id === `drums-${part}-kit`).chain[0]
       gen.push({
-        id: `drums-${part}-${k.id}`, stems: [part], group: 'drum-kits',
+        id: `drums-${part}-${k.id}`, stems: [part], group: `drums-${k.id}`,
         name: { ru: `${cap(PART_NAMES[part].ru)}: ${k.name.ru}`, en: `${cap(PART_NAMES[part].en)}: ${k.name.en}` },
         note: k.note,
         chain: [kitSampler(live, k.parts[part], part)],

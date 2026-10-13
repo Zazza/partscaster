@@ -1332,6 +1332,7 @@
  },
  {
   "id": "vocal-plate",
+  "group": "mix",
   "stems": [
    "vocals"
   ],
@@ -1376,6 +1377,7 @@
  },
  {
   "id": "drums-room",
+  "group": "mix",
   "stems": [
    "drums"
   ],
@@ -1407,6 +1409,7 @@
  },
  {
   "id": "synth-delay",
+  "group": "mix",
   "stems": [
    "other",
    "piano"
@@ -1445,7 +1448,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Бочка: набор",
    "en": "Kick: kit"
@@ -1468,7 +1471,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Малый: набор",
    "en": "Snare: kit"
@@ -1491,7 +1494,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Тамы: набор по высоте",
    "en": "Toms: kit by pitch"
@@ -1516,7 +1519,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Хэт: набор",
    "en": "Hi-hat: kit"
@@ -1557,7 +1560,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Райд: набор",
    "en": "Ride: kit"
@@ -1580,7 +1583,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-osdk",
   "name": {
    "ru": "Крэш: набор",
    "en": "Crash: kit"
@@ -1603,7 +1606,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Бочка: Драм-машина 808",
    "en": "Kick: 808 drum machine"
@@ -1626,7 +1629,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Малый: Драм-машина 808",
    "en": "Snare: 808 drum machine"
@@ -1649,7 +1652,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Тамы: Драм-машина 808",
    "en": "Toms: 808 drum machine"
@@ -1674,7 +1677,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Хэт: Драм-машина 808",
    "en": "Hi-hat: 808 drum machine"
@@ -1699,7 +1702,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Райд: Драм-машина 808",
    "en": "Ride: 808 drum machine"
@@ -1722,7 +1725,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr808",
   "name": {
    "ru": "Крэш: Драм-машина 808",
    "en": "Crash: 808 drum machine"
@@ -1745,7 +1748,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Бочка: Драм-машина 909",
    "en": "Kick: 909 drum machine"
@@ -1768,7 +1771,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Малый: Драм-машина 909",
    "en": "Snare: 909 drum machine"
@@ -1791,7 +1794,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Тамы: Драм-машина 909",
    "en": "Toms: 909 drum machine"
@@ -1816,7 +1819,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Хэт: Драм-машина 909",
    "en": "Hi-hat: 909 drum machine"
@@ -1841,7 +1844,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Райд: Драм-машина 909",
    "en": "Ride: 909 drum machine"
@@ -1864,7 +1867,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-tr909",
   "name": {
    "ru": "Крэш: Драм-машина 909",
    "en": "Crash: 909 drum machine"
@@ -1887,7 +1890,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Бочка: Сэмплерная машина 80-х (Linn)",
    "en": "Kick: 80s sample machine (Linn)"
@@ -1910,7 +1913,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Малый: Сэмплерная машина 80-х (Linn)",
    "en": "Snare: 80s sample machine (Linn)"
@@ -1933,7 +1936,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Тамы: Сэмплерная машина 80-х (Linn)",
    "en": "Toms: 80s sample machine (Linn)"
@@ -1958,7 +1961,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Хэт: Сэмплерная машина 80-х (Linn)",
    "en": "Hi-hat: 80s sample machine (Linn)"
@@ -1983,7 +1986,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Райд: Сэмплерная машина 80-х (Linn)",
    "en": "Ride: 80s sample machine (Linn)"
@@ -2006,7 +2009,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-linn",
   "name": {
    "ru": "Крэш: Сэмплерная машина 80-х (Linn)",
    "en": "Crash: 80s sample machine (Linn)"
@@ -2029,7 +2032,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Бочка: Ранняя ритм-машина (CR-78)",
    "en": "Kick: Early rhythm box (CR-78)"
@@ -2052,7 +2055,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Малый: Ранняя ритм-машина (CR-78)",
    "en": "Snare: Early rhythm box (CR-78)"
@@ -2075,7 +2078,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Тамы: Ранняя ритм-машина (CR-78)",
    "en": "Toms: Early rhythm box (CR-78)"
@@ -2100,7 +2103,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Хэт: Ранняя ритм-машина (CR-78)",
    "en": "Hi-hat: Early rhythm box (CR-78)"
@@ -2125,7 +2128,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Райд: Ранняя ритм-машина (CR-78)",
    "en": "Ride: Early rhythm box (CR-78)"
@@ -2148,7 +2151,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-cr78",
   "name": {
    "ru": "Крэш: Ранняя ритм-машина (CR-78)",
    "en": "Crash: Early rhythm box (CR-78)"
@@ -2171,7 +2174,7 @@
   "stems": [
    "kick"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Бочка: Электронные барабаны 80-х (Simmons)",
    "en": "Kick: 80s electronic drums (Simmons)"
@@ -2194,7 +2197,7 @@
   "stems": [
    "snare"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Малый: Электронные барабаны 80-х (Simmons)",
    "en": "Snare: 80s electronic drums (Simmons)"
@@ -2217,7 +2220,7 @@
   "stems": [
    "toms"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Тамы: Электронные барабаны 80-х (Simmons)",
    "en": "Toms: 80s electronic drums (Simmons)"
@@ -2242,7 +2245,7 @@
   "stems": [
    "hh"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Хэт: Электронные барабаны 80-х (Simmons)",
    "en": "Hi-hat: 80s electronic drums (Simmons)"
@@ -2267,7 +2270,7 @@
   "stems": [
    "ride"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Райд: Электронные барабаны 80-х (Simmons)",
    "en": "Ride: 80s electronic drums (Simmons)"
@@ -2290,7 +2293,7 @@
   "stems": [
    "crash"
   ],
-  "group": "drum-kits",
+  "group": "drums-simmons",
   "name": {
    "ru": "Крэш: Электронные барабаны 80-х (Simmons)",
    "en": "Crash: 80s electronic drums (Simmons)"
@@ -2517,6 +2520,7 @@
  },
  {
   "id": "master-glue",
+  "group": "master",
   "name": {
    "ru": "Мастер: склейка",
    "en": "Master: glue"
@@ -2556,6 +2560,7 @@
   "stems": [
    "master"
   ],
+  "group": "master",
   "name": {
    "ru": "Мастер: стриминг −14 LUFS",
    "en": "Master: streaming −14 LUFS"
@@ -2584,6 +2589,7 @@
   "stems": [
    "master"
   ],
+  "group": "master",
   "name": {
    "ru": "Мастер: громко −11 LUFS",
    "en": "Master: loud −11 LUFS"
@@ -2616,6 +2622,7 @@
   "stems": [
    "master"
   ],
+  "group": "master",
   "name": {
    "ru": "Мастер: мягкая склейка",
    "en": "Master: soft glue"
@@ -2736,7 +2743,7 @@
   "stems": [
    "synth"
   ],
-  "group": "synth-lead",
+  "group": "bass-synth",
   "style": "pulse",
   "octave": 0,
   "name": {
@@ -5014,6 +5021,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": 0.3,
    "width": 1
@@ -5043,6 +5051,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": 0.3,
    "width": 1
@@ -5072,6 +5081,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": -0.3,
    "width": 1
@@ -5102,6 +5112,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": -0.4,
    "width": 1
@@ -5139,6 +5150,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "pattern": "backbeat",
   "swing": 0,
   "name": {
@@ -5171,6 +5183,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": 0.2,
    "width": 1
@@ -5200,6 +5213,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "pattern": "backbeat",
   "swing": 0,
   "name": {
@@ -5225,6 +5239,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "pattern": "fours",
   "swing": 0,
   "name": {
@@ -5249,6 +5264,7 @@
   "stems": [
    "perc"
   ],
+  "group": "perc",
   "place": {
    "pan": 0.35,
    "width": 1

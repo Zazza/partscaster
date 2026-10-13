@@ -1,7 +1,7 @@
 <script setup>
 // Пульт дорожек студии: строка на каждую дорожку трека — послушать её, видеть её правки и собрать ей звук.
 // Раскладка строк и окна — чистый модуль trackDesk.js.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { useInserts } from '../composables/useInserts.js'
@@ -15,7 +15,7 @@ import { fxPresets } from '../fxPresets.js'
 import { useInstruments } from '../composables/useInstruments.js'
 import { installKit as installKitOn } from '../kitProgress.js'
 import { fromWorkerChain, toWorkerChain, missingRequired, fillAmp } from '../fxChain.js'
-import { groupPresets, groupOptions, itemOptions, groupOf } from '../presetGroups.js'
+import { instrumentTree, familyOptions, subOptions, itemOptions, pathOf } from '../presetGroups.js'
 import { DRUM_KITS, DRUM_TREATMENTS } from '../drumKits.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { insertTitle, insertWindow } from '../insertLabels.js'
@@ -42,7 +42,8 @@ const before = useWindowPlay('desk-before', () => t('instr.before'))
 
 const open = ref('')             // раскрытая дорожка
 const fine = ref(false)          // «тонко настроить»: редактор блоков (по умолчанию — только выбор инструмента)
-const groupId = ref('')          // группа в выборе «группа → инструмент» (как на странице «Инструменты»)
+const familyId = ref('')         // выбор «семейство → подвид → инструмент» (как на странице «Инструменты»)
+const groupId = ref('')
 const editing = ref(null)        // запись движка на правке: {childId, from, to} | null
 const chain = ref([])
 const presetId = ref('')
@@ -81,12 +82,22 @@ function pickPreset(p) {
   presetId.value = p.id
   chain.value = withAmp(fromWorkerChain(p.chain, BLOCKS), p.amp_hint)
 }
-// выбор инструмента для раскрытой дорожки: готовые и свои — группа, затем инструмент (поиск внутри группы)
-// цепочки без дорожек (мастер-склейка «на весь трек») — не инструмент дорожки: в пульте их нет
-const rowGroups = computed(() => (open.value
-  ? groupPresets(presetsFor(open.value, instruments.value).filter((p) => (p.stems || []).length), locale.value) : []))
-const groupOpts = computed(() => groupOptions(rowGroups.value, t('instr.group.other')))
-const itemOpts = computed(() => itemOptions(rowGroups.value.find((g) => g.group === groupId.value), locale.value))
+// выбор инструмента для раскрытой дорожки: готовые и свои — семейство, подвид, затем инструмент (поиск внутри
+// подвида); цепочки без дорожек (мастер-склейка «на весь трек») — не инструмент дорожки: в пульте их нет
+const rowTree = computed(() => (open.value
+  ? instrumentTree(presetsFor(open.value, instruments.value).filter((p) => (p.stems || []).length), locale.value,
+    t('instr.group.other')) : []))
+const familyOpts = computed(() => familyOptions(rowTree.value))
+const famNode = computed(() => rowTree.value.find((f) => f.family === familyId.value))
+const groupOpts = computed(() => subOptions(famNode.value))
+// один вариант — список не нужен
+const showFamily = computed(() => familyOpts.value.length > 1)
+const showGroup = computed(() => groupOpts.value.length > 1)
+const itemOpts = computed(() => itemOptions(famNode.value?.subs.find((x) => x.group === groupId.value), locale.value))
+watch(familyId, () => {
+  const node = famNode.value
+  if (node && !node.subs.some((x) => x.group === groupId.value)) groupId.value = node.subs[0].group
+})
 const picked = computed(() => instruments.value.find((p) => p.id === presetId.value) || null)
 function pickById(id) {
   const p = instruments.value.find((x) => x.id === id)
@@ -103,7 +114,9 @@ function toggleRow(stem) {
   // сразу ничего не выбрано: сначала — инструмент из списка
   presetId.value = ''
   chain.value = []
-  groupId.value = groupOf(rowGroups.value, '')
+  const at = pathOf(rowTree.value, '')
+  familyId.value = at.family
+  groupId.value = at.group
 }
 
 // «изменить» из «Правок трека»: редактор дорожки записи с её цепочкой, кнопка — «заменить»
@@ -282,7 +295,11 @@ async function upload(kind) {
     <div v-if="open === row.stem" class="desk-editor">
       <p v-if="editing" class="muted">{{ t('desk.editing') }}</p>
       <div class="desk-pick">
-        <label>
+        <label v-if="showFamily">
+          <span class="muted">{{ t('instr.family') }}</span>
+          <VSelect v-model="familyId" :options="familyOpts" />
+        </label>
+        <label v-if="showGroup">
           <span class="muted">{{ t('instr.group') }}</span>
           <VSelect v-model="groupId" :options="groupOpts" />
         </label>

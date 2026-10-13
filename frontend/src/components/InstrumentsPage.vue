@@ -20,7 +20,7 @@ import BLOCKS from '../fxBlocks.json'
 import { fxPresets } from '../fxPresets.js'
 import ChainEditor from './ChainEditor.vue'
 import { toWorkerChain, fromWorkerChain, missingRequired, fillAmp } from '../fxChain.js'
-import { groupPresets, groupOptions, itemOptions, groupOf } from '../presetGroups.js'
+import { instrumentTree, familyOptions, subOptions, itemOptions, pathOf } from '../presetGroups.js'
 import { familyOf, phraseStems, pagePresets, phaseAfter, phraseFamily, phraseChain } from '../phraseLoop.js'
 
 const { t, locale } = useI18n()
@@ -36,9 +36,8 @@ const LOOP_KEY = 'instr-loop'
 const TEMPO_MIN = 0.5
 const TEMPO_MAX = 1.5
 
-// готовые и свои; перкуссия без группы — своя группа «Перкуссия по сетке» (в списке «Разное» её не найти)
-const withGroup = (p) => (p.group || familyOf(p) !== 'perc' ? p : { ...p, group: 'perc' })
-const presets = computed(() => pagePresets(instruments.value).map(withGroup))
+// готовые и свои
+const presets = computed(() => pagePresets(instruments.value))
 const first = pagePresets(fxPresets)[0]
 const chain = ref(fromWorkerChain(first.chain, BLOCKS))
 const presetId = ref(first.id)
@@ -57,19 +56,30 @@ const note = ref('')
 const tr = (lbl) => (lbl && (lbl[locale.value] || lbl.ru)) || ''
 const preset = computed(() => presets.value.find((p) => p.id === presetId.value))
 const family = computed(() => familyOf(preset.value))
-const presetGroups = computed(() => groupPresets(presets.value, locale.value))
-// два списка: группа и инструмент в ней; поиск — только внутри группы
+// три списка: семейство (бас, гитара…) → подвид (чем различаются) → инструмент; поиск — внутри подвида
+const tree = computed(() => instrumentTree(presets.value, locale.value, t('instr.group.other')))
+const familyId = ref('')
 const groupId = ref('')
-const groupOpts = computed(() => groupOptions(presetGroups.value, t('instr.group.other')))
-const itemOpts = computed(() => itemOptions(presetGroups.value.find((g) => g.group === groupId.value), locale.value))
-watch([presetGroups, presetId], () => {
-  if (!presetGroups.value.some((g) => g.group === groupId.value && g.items.some((p) => p.id === presetId.value))) {
-    groupId.value = groupOf(presetGroups.value, presetId.value)
+const familyOpts = computed(() => familyOptions(tree.value))
+const famNode = computed(() => tree.value.find((f) => f.family === familyId.value))
+const groupOpts = computed(() => subOptions(famNode.value))
+const showGroup = computed(() => groupOpts.value.length > 1)   // один подвид — второй список не нужен
+const subNode = computed(() => famNode.value?.subs.find((x) => x.group === groupId.value))
+const itemOpts = computed(() => itemOptions(subNode.value, locale.value))
+watch([tree, presetId], () => {
+  if (!subNode.value?.items.some((p) => p.id === presetId.value)) {
+    const at = pathOf(tree.value, presetId.value)
+    familyId.value = at.family
+    groupId.value = at.group
   }
 }, { immediate: true })
-// выбрали другую группу — инструмент из неё (иначе второй список показывал бы чужой пресет голым id)
-watch(groupId, (g) => {
-  const grp = presetGroups.value.find((x) => x.group === g)
+// выбрали другое семейство — его первый подвид; другой подвид — инструмент из него
+watch(familyId, () => {
+  const node = famNode.value
+  if (node && !node.subs.some((x) => x.group === groupId.value)) groupId.value = node.subs[0].group
+})
+watch(groupId, () => {
+  const grp = subNode.value
   if (grp && grp.items.length && !grp.items.some((p) => p.id === presetId.value)) applyPreset(grp.items[0].id)
 })
 const familyPhrases = computed(() => phrases.value.filter((p) => p.family === phraseFamily(family.value)))
@@ -172,7 +182,7 @@ function deleteMine() {
       await api.fxInstrumentDelete(p.wid)
       await reloadMine()
       // после удаления — первый инструмент той же группы, иначе первый вообще
-      const grp = presetGroups.value.find((g) => g.group === p.group)
+      const grp = tree.value.flatMap((f) => f.subs).find((g) => g.group === p.group)
       applyPreset((grp && grp.items[0]?.id) || presets.value[0].id)
     } catch (e) { err.value = String(e) }
   })
@@ -315,6 +325,10 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
 
         <div class="instr-pick">
           <label>
+            <span class="muted">{{ t('instr.family') }}</span>
+            <VSelect v-model="familyId" :options="familyOpts" />
+          </label>
+          <label v-if="showGroup">
             <span class="muted">{{ t('instr.group') }}</span>
             <VSelect v-model="groupId" :options="groupOpts" />
           </label>
@@ -322,10 +336,11 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
             <span class="muted">{{ t('instr.item') }}</span>
             <VSelect :model-value="presetId" :options="itemOpts" searchable @update:model-value="applyPreset" />
           </label>
-          <label>
-            <span class="muted" :title="t('instr.phrase.tip')">{{ t('instr.phrase') }}</span>
-            <VSelect v-model="phraseId" :options="phraseOpts" />
-          </label>
+        </div>
+        <div v-if="phraseOpts.length" class="instr-phrases">
+          <span class="muted" :title="t('instr.phrase.tip')">{{ t('instr.phrase') }}</span>
+          <button v-for="o in phraseOpts" :key="o.value" class="toggle" :class="{ on: o.value === phraseId }"
+                  :aria-pressed="o.value === phraseId" @click="phraseId = o.value">{{ o.label }}</button>
         </div>
         <p v-if="preset" class="muted voice-hint">{{ tr(preset.note) }}</p>
         <div class="corpus-actions">
@@ -370,6 +385,7 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
 <style scoped>
 .instr-on { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .instr-tempo { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.instr-phrases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
 .instr-pick { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
 .instr-name { min-width: 240px; }
 .instr-pick label { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }

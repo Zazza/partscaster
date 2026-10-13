@@ -250,20 +250,20 @@ describe('rhythmSection с набором и обработкой', () => {
 })
 
 describe('fxPresets: готовые по частям наборов и синт-басы', () => {
-  it('группы drum-kits и bass-kit есть в PRESET_GROUPS с ожидаемыми подписями', () => {
-    expect(PRESET_GROUPS['drum-kits']?.ru).toBe('Барабаны: наборы')
-    expect(PRESET_GROUPS['bass-kit']?.ru).toBe('Бас: замена нот сэмплами')
-    for (const g of ['drum-kits', 'bass-kit']) {
+  it('группы наборов барабанов (по набору) и bass-kit есть в PRESET_GROUPS: семейство и подписи', () => {
+    for (const kit of MACHINES) expect(PRESET_GROUPS[`drums-${kit}`]?.family, kit).toBe('drums')
+    expect(PRESET_GROUPS['bass-kit']?.family).toBe('bass')
+    for (const g of [...MACHINES.map((k) => `drums-${k}`), 'bass-kit']) {
       expect(typeof PRESET_GROUPS[g].en).toBe('string')
       expect(PRESET_GROUPS[g].en.trim()).not.toBe('')
     }
   })
 
   const pairs = MACHINES.flatMap((kit) => DESK_PARTS.map((part) => [kit, part]))
-  it.each(pairs)('%s / %s: пресет drums-<часть>-<набор>, group drum-kits, stems [часть], sampler набора', (kit, part) => {
+  it.each(pairs)('%s / %s: пресет drums-<часть>-<набор>, group drums-<набор>, stems [часть], sampler набора', (kit, part) => {
     const p = preset(`drums-${part}-${kit}`)
     expect(p, `нет drums-${part}-${kit}`).toBeDefined()
-    expect(p.group).toBe('drum-kits')
+    expect(p.group).toBe(`drums-${kit}`)
     expect(p.stems).toEqual([part])
     const s = p.chain.find((b) => b.type === 'sampler')
     expect(s).toBeDefined()

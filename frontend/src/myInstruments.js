@@ -18,7 +18,8 @@ export function mergeInstruments(builtin, mine) {
       note: base
         ? { ru: `свой, на основе «${base.name.ru}»`, en: `own, based on “${base.name.en || base.name.ru}”` }
         : { ru: 'свой', en: 'own' },
-      group: m.group || '', stems: m.stems || [], chain: m.chain || [],
+      // группа — основы: у сохранённых до разбивки наборов барабанов там прежняя общая 'drum-kits'
+      group: (base ? base.group : m.group) || '', stems: m.stems || [], chain: m.chain || [],
     }
   })
   return [...(builtin || []), ...own]

@@ -3,7 +3,7 @@
 // groupPresets(list, locale) → [{group, label, items}]: порядок первого появления группы, внутри —
 // исходный порядок; без group — группа '' с label ''.
 import { describe, it, expect } from 'vitest'
-import { PRESET_GROUPS, groupPresets } from './presetGroups.js'
+import { PRESET_GROUPS, FAMILIES, groupPresets } from './presetGroups.js'
 
 describe('PRESET_GROUPS', () => {
   it('объект id → {ru, en}, не меньше двух групп (гитары и басы)', () => {
@@ -31,11 +31,12 @@ describe('groupPresets', () => {
     expect(shape(groupPresets(list(), 'en'))).toEqual([[g1, ['a', 'c']], [g2, ['b']], ['', ['d']]])
   })
 
-  it('label — подпись группы на языке locale (en и ru); у группы "" — пустая', () => {
+  it('label — «семейство · подвид» на языке locale (en и ru); у группы "" — пустая', () => {
+    const lbl = (g, loc) => `${FAMILIES.find((f) => f.id === PRESET_GROUPS[g].family)[loc]} · ${PRESET_GROUPS[g][loc]}`
     const en = groupPresets(list(), 'en')
-    expect(en.map((x) => x.label)).toEqual([PRESET_GROUPS[g1].en, PRESET_GROUPS[g2].en, ''])
+    expect(en.map((x) => x.label)).toEqual([lbl(g1, 'en'), lbl(g2, 'en'), ''])
     const ru = groupPresets(list(), 'ru')
-    expect(ru.map((x) => x.label)).toEqual([PRESET_GROUPS[g1].ru, PRESET_GROUPS[g2].ru, ''])
+    expect(ru.map((x) => x.label)).toEqual([lbl(g1, 'ru'), lbl(g2, 'ru'), ''])
   })
 
   it('порядок групп — по первому появлению, не по PRESET_GROUPS', () => {
