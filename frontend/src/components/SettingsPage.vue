@@ -11,7 +11,10 @@ import { useWorkerCompat } from '../composables/useWorkerCompat.js'
 import { modelOptions as cppModelOptions, engineConfig } from '../engine.js'
 const { askConfirm } = useConfirm()
 
-const serverURL = defineModel('serverURL')
+// имя модели — camelCase под kebab-аргумент v-model:server-url родителя:
+// «serverURL» (с большой URL) не сопоставлялось с attr «server-url», поле адреса
+// было пустым и «Сохранить» падал на serverURL.value.trim()
+const serverURL = defineModel('serverUrl', { type: String, default: '' })
 const emit = defineEmits(['close', 'saved'])
 
 const onKey = (e) => { if (e.key === 'Escape') emit('close') }
