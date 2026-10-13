@@ -16,7 +16,7 @@ import { useInserts } from './composables/useInserts.js'
 import { useWorkerCompat } from './composables/useWorkerCompat.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
-import { buildStyleLine, cleanLyrics } from './styleLogic.js'
+import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine } from './styleLogic.js'
 import { formStyle, needsTranslate, translateOr, newTrackPayload } from './requests.js'
 import { usePlayer, fmtDur } from './composables/usePlayer.js'
 import { useConfirm } from './composables/useConfirm.js'
@@ -123,8 +123,16 @@ function characterReset() {
   temperature.value = CHARACTER.temperature.def
   cfgScale.value = CHARACTER.cfg.def
 }
-// «без слов»: стих не нужен, на воркер уйдёт заглушка [Instrumental]
+// «без слов»: стих не нужен, на воркер уйдёт заглушка [Instrumental]; голос в слотах стиля → «без голоса»,
+// выключили — голос стиля возвращается (keptVocals)
 const noLyrics = ref(false)
+let keptVocals = ''
+function applyInstrumental(on) {
+  const r = withInstrumental(slots.value, on, keptVocals)
+  slots.value = r.slots
+  keptVocals = r.kept
+}
+watch(noLyrics, applyInstrumental)
 // длительность инструментала: длина трека у YuE2 задаётся числом секций в тексте,
 // явного параметра нет; диапазон размножает [Instrumental]-секции
 const durMode = ref('auto')
@@ -168,7 +176,8 @@ const styleLine = computed({
 // финальная строка стиля к отправке: русские значения из списков подставляются
 // словарём, самописная кириллица переводится через Ollama; английское — как есть
 async function finalStyle() {
-  const s = formStyle(styleOverride.value, slots.value, rackCompile(rackSel.value))
+  // «без слов» у строки 1:1 — пометка в начале строки (у слотов — голос стиля, см. applyInstrumental)
+  const s = formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value, rackCompile(rackSel.value))
   if (!needsTranslate(s, autoTranslate.value)) return s
   translateBusy.value = true
   try {
@@ -248,6 +257,9 @@ function applyPreset(p, mode) {
     styleOverride.value = ''
     for (const k of Object.keys(p.slots)) slots.value[k] = p.slots[k]
   }
+  // голос нового стиля: «без слов» уже включено — сразу без голоса; запомненный голос прежнего стиля — забыть
+  keptVocals = ''
+  if (noLyrics.value) applyInstrumental(true)
 }
 
 // текущая форма → своя группа библиотеки: строка (или слоты+BPM) как есть

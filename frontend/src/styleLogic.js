@@ -38,3 +38,27 @@ export function instrumentalLyrics(durMode) {
 export function effectiveLyrics(lyrics, noLyrics, durMode) {
   return noLyrics ? instrumentalLyrics(durMode) : cleanLyrics(lyrics)
 }
+
+// «без слов» для слотов стиля: включили — голос стиля → «без голоса» (прежний запоминается в kept),
+// выключили — прежний голос возвращается, если пользователь не вписал свой. Вход не меняется.
+export const INSTRUMENTAL_VOCALS = 'instrumental, no vocals'
+
+export function withInstrumental(slots, on, kept = '') {
+  const out = { ...slots }
+  if (on) {
+    if (out.vocals === INSTRUMENTAL_VOCALS) return { slots: out, kept }
+    return { slots: { ...out, vocals: INSTRUMENTAL_VOCALS }, kept: out.vocals || '' }
+  }
+  if (out.vocals === INSTRUMENTAL_VOCALS) out.vocals = kept
+  return { slots: out, kept: '' }
+}
+
+// «без слов» для стиля точной строкой (1:1): строка уходит как есть, но с «Instrumental, no vocals» в начале
+// (если ещё нет) — иначе модель получала бы заглушку стиха при описании голоса в строке
+export function instrumentalLine(line, on) {
+  if (!on) return line
+  const s = (line || '').trim()
+  if (!s) return ''
+  if (/^instrumental/i.test(s)) return line
+  return `Instrumental, no vocals, ${s}`
+}

@@ -1,85 +1,324 @@
 [
  {
-  "id": "chillout",
-  "name": "Электроника · чилаут",
+  "id": "postpunk",
+  "name": "Пост-панк",
   "items": [
    {
-    "id": "chillout-bg",
-    "name": "Чилаут фоновый",
-    "style": "Instrumental, no vocals, downtempo chillout, laid-back dub bass, soft drums building and receding, warm analog synth pad, Rhodes chords, vinyl crackle, spacious wide stereo, dreamy melancholy, 82 BPM"
+    "id": "cold-bass-postpunk",
+    "name": "Холодный: мелодичный бас ведёт",
+    "style": "English, dark post-punk, cold 1979 minimalism, melodic high-register bass guitar playing the lead melody, mechanical tight drums with cavernous reverb, sparse thin trebly guitar, icy string synth pads, deep deadpan baritone male vocals, bleak isolation, 140 BPM"
    },
    {
-    "id": "trip-hop",
-    "name": "Трип-хоп (Portishead-вайб, без цитаты)",
-    "style": "Instrumental, no vocals, trip-hop, slow heavy hip-hop breakbeat, moody bassline, dusty vinyl samples, theremin-like synth wails, noir atmosphere, melancholy paranoia, 88 BPM"
+    "id": "dark-arpeggio-postpunk",
+    "name": "Тёмный: сплетённые арпеджио гитар",
+    "style": "English, dark post-punk, two interlocking minor-key arpeggiated guitars, deep propulsive bass, metronomic drums, deadpan baritone male vocals, doomed urban romance, 130 BPM"
    },
    {
-    "id": "balearic",
-    "name": "Балеарик / солнечное утро",
-    "style": "Instrumental, no vocals, balearic downtempo, gentle tropical percussion, nylon guitar licks, warm analog synth pad, marimba, ocean-wide reverb, sunny serenity, 96 BPM"
-   },
-   {
-    "id": "lounge-chill",
-    "name": "Лаунж-чилл (кафе/фон)",
-    "style": "Instrumental, no vocals, smooth lounge chillout, brushed drums, upright walking bass, soft electric piano chords, subtle vibraphone, relaxed coffee-house vibe, polite and warm, 90 BPM"
+    "id": "angular-postpunk",
+    "name": "Угловатый: сухие рваные гитары, танцевальный бас",
+    "style": "English, angular post-punk, art punk, jerky disco-punk drums, dry funky bassline, scratchy angular guitar stabs, choppy and dry, nervous speak-sung male, ironic, twitchy tension, sardonic, dry close room, no reverb, 1980 independent label, 150 BPM"
    }
   ]
  },
  {
-  "id": "ambient",
-  "name": "Эмбиент / медитация",
+  "id": "coldwave",
+  "name": "Холодная волна",
   "items": [
    {
-    "id": "ambient-relax",
-    "name": "Релакс / медитация",
-    "style": "Instrumental, no vocals, dark ambient into warm ambient, no percussion, slow evolving drones, mellotron flutes, music box plucks deep in space, cathedral reverb huge space, meditative spiritual, 55 BPM"
+    "id": "coldwave-machine",
+    "name": "Синтетическая: драм-машина и синт-бас",
+    "style": "English, coldwave, minimal synth, cheap drum machine, steady mechanical pulse, thin chorus guitar far behind, monophonic synth bass, icy synth lead, distant detached baritone, monotone, cold loneliness, nocturnal, home 4-track, tape hiss, small cold reverb, 125 BPM"
    },
    {
-    "id": "space-ambient",
-    "name": "Космический эмбиент",
-    "style": "Instrumental, no vocals, space ambient, no percussion, deep sub drones, shimmering high harmonics, slow chord clouds, NASA radio chatter feel far away, immense scale, weightless floating, 50 BPM"
-   },
-   {
-    "id": "dark-ambient",
-    "name": "Тёмный эмбиент",
-    "style": "Instrumental, no vocals, dark ambient, no beat, low cavernous drones, metallic resonances, distant industrial echoes, unsettling tension, abyssal darkness, 45 BPM"
-   },
-   {
-    "id": "nature-newage",
-    "name": "Нью-эйдж / природа",
-    "style": "Instrumental, no vocals, new age, harp arpeggios, soft flute melody, gentle string pad, brook-and-birds atmosphere, healing spa serenity, 60 BPM"
+    "id": "coldwave-tape",
+    "name": "Плёночная: советский магнитофонный андеграунд",
+    "style": "Russian, soviet coldwave, 1980s tape underground, stiff drum machine, plodding bass, out-of-tune clean guitar, flanger, cheap organ synth drone, flat gloomy male, half-spoken, grey apathy, kitchen melancholy, worn cassette dub, muffled lo-fi, 118 BPM"
    }
   ]
  },
  {
-  "id": "lofi",
-  "name": "Lo-fi / биты",
+  "id": "goth",
+  "name": "Готик-рок",
   "items": [
    {
-    "id": "lofi-beats",
-    "name": "Lo-fi биты",
-    "style": "Instrumental, no vocals, lo-fi hip-hop beats, boom bap head-nodding swing, dusty piano loops, warm vinyl hiss and wobble, tape saturation, rainy window mood, bittersweet nostalgia, 78 BPM"
+    "id": "gothic-rock",
+    "name": "Плотный: катящийся бас и живые барабаны",
+    "style": "English, gothic rock, chorus-drenched rolling bass, dark brooding atmosphere, dramatic deep male vocals, cavernous reverb, 120 BPM"
    },
    {
-    "id": "jazzhop",
-    "name": "Джаз-хоп",
-    "style": "Instrumental, no vocals, jazz-hop, swung boom bap drums, walking upright bass, muted trumpet phrases, Rhodes chords, smoky club atmosphere, laid-back cool, 84 BPM"
+    "id": "goth-machine",
+    "name": "Машинный: драм-машина и флэнжер",
+    "style": "English, gothic rock, deathrock, drum machine tom patterns, galloping bass, flanger and chorus guitar, sharp treble, sepulchral baritone, dramatic, morbid romance, nocturnal ritual, cavernous gated reverb, 1983, 135 BPM"
+   }
+  ]
+ },
+ {
+  "id": "punk",
+  "name": "Панк",
+  "items": [
+   {
+    "id": "punk-77",
+    "name": "Британский 77-го: средний темп, издёвка",
+    "style": "English, 1976 London pub rock turning punk, not pop-punk, mid-tempo 4/4, loose live drums, root-note bass, 1950s rock and roll riffs played rough, raw overdriven chords, no solos, sneering snarled male, London accent, sarcastic, bored contempt, garage live room, dry, no polish, 135 BPM"
    },
    {
-    "id": "chillhop-guitar",
-    "name": "Чилл-хоп с гитарой",
-    "style": "Instrumental, no vocals, chillhop, soft head-nod beat, mellow electric guitar licks with reverb, warm sub bass, rain-sample texture, cozy evening calm, 80 BPM"
+    "id": "punk-modern",
+    "name": "Современный злой: давящие барабаны, грязный бас ведёт",
+    "style": "English, modern noisy punk, post-hardcore, not pop-punk, pounding tom-heavy drums, distorted overdriven bass driving the riff, abrasive noisy guitar stabs, feedback, barked shouted male, thick accent, spoken-shouted, furious, cathartic, defiant, loud dry room, bass-heavy, raw, 140 BPM"
    },
    {
-    "id": "sleepy-tape",
-    "name": "Сонная плёнка / sleepy",
-    "style": "Instrumental, no vocals, sleepy lo-fi tape music, barely-there beat, detuned music box and toy piano, heavy tape wobble, under-water feeling, drowsy half-dream, 66 BPM"
+    "id": "punk-lofi-hc",
+    "name": "Лоу-фай хардкор: быстро, с органом, как в подвале",
+    "style": "English, lo-fi hardcore punk, garage punk, fast d-beat, sloppy pounding, buzzsaw fuzz guitar, blown-out, cheap combo organ riff, hoarse yelled male, buried in the mix, unhinged sweaty chaos, blown-out 4-track tape, basement recording, 175 BPM"
+   },
+   {
+    "id": "ska-punk",
+    "name": "Ска-панк: гитара на слабую долю и духовые",
+    "style": "English, two-tone ska punk, not pop-punk, fast skank beat, offbeat upstroke guitar chops, walking bass, brass section riffs with trumpet and trombone, rough energetic male vocals, sweaty live club, raw horns up front, 165 BPM"
+   },
+   {
+    "id": "horror-punk",
+    "name": "Хоррор-панк: мрачно и с хором",
+    "style": "English, horror punk, spooky catchy punk, galloping horror riff, ghoul-chorus backing vocals, campy monster-movie imagery, 160 BPM"
+   }
+  ]
+ },
+ {
+  "id": "garage",
+  "name": "Гаражный рок",
+  "items": [
+   {
+    "id": "garage-rock",
+    "name": "Сырой: хруст и крик",
+    "style": "English, garage rock, raw crunchy guitars, simple fast energetic beat, shouted sloppy vocals, two-minute song energy, 145 BPM"
+   },
+   {
+    "id": "garage-blues-duo",
+    "name": "Блюзовый дуэт: слайд и барабаны, без баса",
+    "style": "English, garage blues rock duo, slide guitar in open tuning, no bass guitar, pounding heavy drums, stomping fuzz riffs, raw passionate male vocals, frantic swagger, 120 BPM"
+   },
+   {
+    "id": "garage-60s",
+    "name": "60-х: фузз и орган",
+    "style": "English, 1960s garage rock, proto-punk, stomping beat, tambourine, fuzz box riff, twangy reverb, Farfisa combo organ, snotty howling male, teen rebellion, wild, mono 1966 garage, tape saturation, 140 BPM"
+   }
+  ]
+ },
+ {
+  "id": "altrock",
+  "name": "Альт-рок и гранж",
+  "items": [
+   {
+    "id": "grunge",
+    "name": "Гранж: тихо-громко",
+    "style": "English, 1990s grunge, detuned distorted guitars, loud-quiet-loud dynamics, heavy fuzz bass, apathetic angsty male vocals, raw unpolished production, 110 BPM"
+   },
+   {
+    "id": "chorus-wall-alt",
+    "name": "Стена гитар с хорусом",
+    "style": "English, alternative rock, chorus-drenched buzzing guitar walls, glam edge, driving straight beat, ringing melodic riffs, tense high androgynous male vocals, bittersweet intoxicating romance, 125 BPM"
+   },
+   {
+    "id": "art-rock-chords",
+    "name": "Арт-рок: необычные аккорды",
+    "style": "English, art rock, unusual guitar harmony with sus2 and add9 colors, clean delayed arpeggios, paranoid melancholy, quiet-loud dynamics, occasional 5/4 passage, anxious high male vocals, 110 BPM"
+   }
+  ]
+ },
+ {
+  "id": "indie",
+  "name": "Инди-рок",
+  "items": [
+   {
+    "id": "indie-rock",
+    "name": "Звонкий: чистые гитары",
+    "style": "English, indie rock, jangly clean guitars, driving upbeat drums, earnest youthful male vocals, bittersweet bright mood, 135 BPM"
+   },
+   {
+    "id": "indie-slacker",
+    "name": "Небрежный: шумные гитары, ленивый голос",
+    "style": "English, lo-fi indie rock, slacker rock, loose mid-tempo drums, sloppy, detuned noisy fuzz, off-kilter leads, lazy deadpan male, half-mumbled, ironic apathy, bittersweet, lo-fi home recording, tape hiss, 112 BPM"
+   }
+  ]
+ },
+ {
+  "id": "shoegaze",
+  "name": "Шугейз и дрим-поп",
+  "items": [
+   {
+    "id": "shoegaze-wall",
+    "name": "Стена: гитары плывут, голос тонет",
+    "style": "English, shoegaze, steady driving drums buried in the wash, walls of reverse reverb, tremolo-bar warble, dense fuzz layers, breathy buried vocals, more texture than words, blissful haze, overwhelmed, loud blurry wall of sound, no clear edges, 120 BPM"
+   },
+   {
+    "id": "dreampop",
+    "name": "Дрим-поп: прозрачно и медленно",
+    "style": "English, dream pop, slow drum machine, soft pulse, chiming chorus guitar, long delays, glassy synth pad, airy ethereal female, weightless longing, huge reverb, soft focus, 92 BPM"
+   }
+  ]
+ },
+ {
+  "id": "postrock",
+  "name": "Пост-рок",
+  "items": [
+   {
+    "id": "postrock-crescendo",
+    "name": "Нарастание: от тишины до стены",
+    "style": "Instrumental, no vocals, post-rock, slow build from silence to pounding climax, tremolo-picked guitars, delay swells, bowed strings, glockenspiel, cathartic, vast, wide live room, dynamic, no compression, 100 BPM"
+   },
+   {
+    "id": "postrock-math",
+    "name": "Математичный: сложный счёт, чистые гитары",
+    "style": "Instrumental, no vocals, math rock, instrumental post-rock, odd time signatures, tight stop-start drums, clean tapped interlocking guitars, restless, precise, playful, dry and clear, every instrument separate, 140 BPM"
+   }
+  ]
+ },
+ {
+  "id": "surf",
+  "name": "Сёрф",
+  "items": [
+   {
+    "id": "surf",
+    "name": "Солнечный: пружинный ревер и погоня",
+    "style": "Instrumental, no vocals, 1960s surf rock, twangy wet-reverb guitar lead, driving beat, hand claps, sunny beach chase energy, 150 BPM"
+   },
+   {
+    "id": "surf-dark",
+    "name": "Тёмный: минор и тремоло",
+    "style": "Instrumental, no vocals, dark surf rock, spy surf, galloping tom beat, minor key reverb lead, heavy tremolo picking, menacing, noir chase, drenched spring reverb, 1963 mono, 165 BPM"
+   }
+  ]
+ },
+ {
+  "id": "psych",
+  "name": "Психоделия 60-х",
+  "items": [
+   {
+    "id": "psych-tape",
+    "name": "Плёночная: меллотрон и обратные звуки",
+    "style": "English, 1967 psychedelic rock, loose swinging drums, melodic bass, fuzz leads, backwards guitar, Mellotron flutes, harpsichord, dreamy double-tracked male, kaleidoscopic wonder, tape phasing, hard-panned stereo, 4-track, 105 BPM"
+   },
+   {
+    "id": "psych-jam",
+    "name": "Джем: орган, эхо и длинные соло",
+    "style": "English, acid rock, psychedelic jam, hypnotic groove, congas, long wah-fuzz solos, swirling organ, tape echo, chanting male, reverb-soaked, trippy, expansive, live loose, warm valve, 112 BPM"
+   }
+  ]
+ },
+ {
+  "id": "classic",
+  "name": "Классический рок и блюз-рок",
+  "items": [
+   {
+    "id": "classic-rock",
+    "name": "Рок 70-х: орган и гимн",
+    "style": "English, classic 1970s rock, bluesy guitar riffs, powerful live drums, Hammond organ, raspy male vocals, anthemic sing-along chorus, vintage analog production, 120 BPM"
+   },
+   {
+    "id": "blues-rock",
+    "name": "Блюз-рок: шаффл и жгучее соло",
+    "style": "English, blues rock, driving shuffle-rock beat, searing blues guitar leads, Hammond organ, powerful gritty male vocals, swagger, 118 BPM"
+   },
+   {
+    "id": "prog-rock",
+    "name": "Прог-рок: меняющийся размер",
+    "style": "English, progressive rock, shifting time signatures, Mellotron flutes, long instrumental passages, dynamic quiet-loud shifts, melodic high male vocals, 110 BPM"
+   }
+  ]
+ },
+ {
+  "id": "metal",
+  "name": "Хэви-метал",
+  "items": [
+   {
+    "id": "heavy-metal",
+    "name": "Классика 80-х: две гитары",
+    "style": "English, classic 1980s heavy metal, galloping bass, twin guitar harmonies, soaring high male vocals, punchy drums, 135 BPM"
+   },
+   {
+    "id": "thrash",
+    "name": "Трэш: быстро и рублено",
+    "style": "English, thrash metal, aggressive downpicked riffs, fast double-kick drums, barked rhythmic vocals, breakneck tempo, 185 BPM"
+   }
+  ]
+ },
+ {
+  "id": "doom",
+  "name": "Дум и стоунер",
+  "items": [
+   {
+    "id": "doom",
+    "name": "Дум: очень медленно и тяжело",
+    "style": "English, doom metal, crushingly slow riffs, thick dark distortion, mournful wailing vocals, funeral pace, cavernous heaviness, 70 BPM"
+   },
+   {
+    "id": "stoner",
+    "name": "Стоунер: фузз и пустыня",
+    "style": "English, stoner rock, desert rock, groovy mid-tempo, heavy swing, thick fuzz riffs, tube amp, laid-back hazy male, sun-baked hypnotic, warm vintage, live jam, 100 BPM"
+   }
+  ]
+ },
+ {
+  "id": "synthwave",
+  "name": "Синтвейв",
+  "items": [
+   {
+    "id": "outrun",
+    "name": "Аутран: шоссе на закате",
+    "style": "Instrumental, no vocals, synthwave outrun, driving 80s beat, arpeggiated analog bass, gated reverb drums, neon sax or lead synth, sunset highway nostalgia, 110 BPM"
+   },
+   {
+    "id": "darksynth",
+    "name": "Дарк-синт: хоррор 80-х",
+    "style": "Instrumental, no vocals, darksynth, menacing slow pounding beat, distorted bass pulse, horror-movie staccato strings synth, cold fear, midnight slasher chase, 100 BPM"
+   },
+   {
+    "id": "vaporwave",
+    "name": "Вейпорвейв: замедленные сэмплы",
+    "style": "Instrumental, no vocals, vaporwave, slowed chopped easy-listening samples, pitch-dropped sax and muzak piano, tape slow-downs, ironic nostalgic haze, 70 BPM"
+   }
+  ]
+ },
+ {
+  "id": "chiptune",
+  "name": "Чиптюн и 8-бит",
+  "items": [
+   {
+    "id": "chiptune",
+    "name": "Чиптюн: игровая приставка",
+    "style": "Instrumental, no vocals, chiptune, 8-bit square-wave lead melodies, fast pulse-wave arpeggios, 8-bit noise-channel drums, playful retro video game energy, 150 BPM"
+   },
+   {
+    "id": "chip-punk",
+    "name": "8-бит панк: пищалки и гитары",
+    "style": "English, chiptune punk, electropunk, fast punk drums, distorted power chords, 8-bit square-wave lead melodies, soft melodic male in front, snotty playful fun, raw loud, bitcrushed, 170 BPM"
+   },
+   {
+    "id": "chip-metal",
+    "name": "8-бит метал: пищалки и рубка",
+    "style": "English, chiptune metal, double kick blast drums, palm-muted metal chug, 8-bit arpeggios, screamed and clean male, frantic boss fight energy, modern loud, 180 BPM"
+   }
+  ]
+ },
+ {
+  "id": "industrial",
+  "name": "EBM и электро",
+  "items": [
+   {
+    "id": "ebm",
+    "name": "EBM: марш машин",
+    "style": "Instrumental, no vocals, EBM electronic body music, pumping industrial bass sequencer, metallic percussion, hard steady beat, cold machine discipline, 130 BPM"
+   },
+   {
+    "id": "dark-electro",
+    "name": "Тёмное электро",
+    "style": "Instrumental, no vocals, dark electro, distorted beat, gritty bass growls, ominous bell tones, gothic night factory mood, 125 BPM"
    }
   ]
  },
  {
   "id": "techno",
-  "name": "Техно",
+  "name": "Техно и эйсид",
   "items": [
    {
     "id": "dark-techno",
@@ -88,7 +327,7 @@
    },
    {
     "id": "melodic-techno",
-    "name": "Мелодичное техно",
+    "name": "Мелодичное",
     "style": "Instrumental, no vocals, melodic techno, driving four-on-the-floor, hypnotic arpeggio bassline, cinematic pad swells, build-ups and drops, euphoric dark energy, 124 BPM"
    },
    {
@@ -98,7 +337,7 @@
    },
    {
     "id": "acid",
-    "name": "Эсид",
+    "name": "Эйсид: 303",
     "style": "Instrumental, no vocals, acid techno, squelchy 303 acid bassline, relentless straight kick, sharp hi-hats, tweaky filter sweeps, sweaty warehouse trance, 132 BPM"
    }
   ]
@@ -109,17 +348,17 @@
   "items": [
    {
     "id": "deep-house",
-    "name": "Дип-хаус",
+    "name": "Дип",
     "style": "Instrumental, no vocals, deep house, warm bubbling bassline, four-on-the-floor with soft clap, jazzy chords through filter, late-night groove, sophisticated ease, 120 BPM"
    },
    {
     "id": "funky-house",
-    "name": "Фанки-хаус / диско-хаус",
+    "name": "Диско-хаус",
     "style": "Instrumental, no vocals, funky disco house, chopped disco guitar loops, bouncing bass, filter sweeps, hands-in-the-air piano stabs, party euphoria, 124 BPM"
    },
    {
     "id": "prog-house",
-    "name": "Прогрессив-хаус",
+    "name": "Прогрессив",
     "style": "Instrumental, no vocals, progressive house, long smooth build-ups, layered synth arpeggios, wide atmospherics, emotional breakdown into drop, uplifting journey, 126 BPM"
    }
   ]
@@ -130,7 +369,7 @@
   "items": [
    {
     "id": "uplifting",
-    "name": "Аплифтинг-транс",
+    "name": "Аплифтинг",
     "style": "Instrumental, no vocals, uplifting trance, fast driving beat, supersaw leads, epic breakdown with plucked melody, big euphoric drop, hands-up euphoria, 138 BPM"
    },
    {
@@ -142,23 +381,23 @@
  },
  {
   "id": "dnb",
-  "name": "Drum'n'bass / джангл",
+  "name": "Drum'n'bass и джангл",
   "items": [
    {
     "id": "liquid-dnb",
-    "name": "Ликвид DnB",
+    "name": "Ликвид",
     "style": "Instrumental, no vocals, liquid drum and bass, rolling breakbeats, warm sub bass, lush pad chords, soulful vocal-chop echoes (no words), sunrise euphoria, 174 BPM"
    },
    {
     "id": "jungle",
-    "name": "Джангл (рэгги-сэмплы)",
+    "name": "Джангл: рубленые брейки",
     "style": "Instrumental, no vocals, jungle, chopped amen breaks, deep dub bassline, reggae skank chords, sirens and dub delays, raw rude-bwoy energy, 165 BPM"
    }
   ]
  },
  {
   "id": "breaks",
-  "name": "Брейки / big beat",
+  "name": "Брейки и биг-бит",
   "items": [
    {
     "id": "bigbeat-guitars",
@@ -173,86 +412,34 @@
   ]
  },
  {
-  "id": "synthwave",
-  "name": "Синтвейв / ретро",
+  "id": "triphop",
+  "name": "Трип-хоп и даунтемпо",
   "items": [
    {
-    "id": "outrun",
-    "name": "Аутран",
-    "style": "Instrumental, no vocals, synthwave outrun, driving 80s beat, arpeggiated analog bass, gated reverb drums, neon sax or lead synth, sunset highway nostalgia, 110 BPM"
+    "id": "trip-hop",
+    "name": "Трип-хоп: нуар и пыльные сэмплы",
+    "style": "Instrumental, no vocals, trip-hop, slow heavy hip-hop breakbeat, moody bassline, dusty vinyl samples, theremin-like synth wails, noir atmosphere, melancholy paranoia, 88 BPM"
    },
    {
-    "id": "darksynth",
-    "name": "Дарк-синт (хоррор 80-х)",
-    "style": "Instrumental, no vocals, darksynth, menacing slow pounding beat, distorted bass pulse, horror-movie staccato strings synth, cold fear, midnight slasher chase, 100 BPM"
-   },
-   {
-    "id": "vaporwave",
-    "name": "Вейпорвейв",
-    "style": "Instrumental, no vocals, vaporwave, slowed chopped easy-listening samples, pitch-dropped sax and muzak piano, tape slow-downs, ironic nostalgic haze, 70 BPM"
+    "id": "balearic",
+    "name": "Балеарик: нейлон и маримба",
+    "style": "Instrumental, no vocals, balearic downtempo, gentle tropical percussion, nylon guitar licks, warm analog synth pad, marimba, ocean-wide reverb, sunny serenity, 96 BPM"
    }
   ]
  },
  {
-  "id": "chiptune",
-  "name": "Чиптюн / 8-бит",
+  "id": "ambient",
+  "name": "Эмбиент",
   "items": [
    {
-    "id": "chiptune",
-    "name": "Чиптюн",
-    "style": "Instrumental, no vocals, chiptune, 8-bit NES square-wave lead melodies, Game Boy chiptune arpeggios, 8-bit noise-channel drums, playful retro video game energy, 150 BPM"
+    "id": "space-ambient",
+    "name": "Космический",
+    "style": "Instrumental, no vocals, space ambient, no percussion, deep sub drones, shimmering high harmonics, slow chord clouds, NASA radio chatter feel far away, immense scale, weightless floating, 50 BPM"
    },
    {
-    "id": "nintendo-punk",
-    "name": "Нинтендо-панк (в духе Bondage Fairies)",
-    "style": "English, chiptune punk, electropunk, 8-bit NES square-wave lead melodies, aggressive down-tuned distorted guitar riffs, power chords, fast punk energy, shouted male vocals, raw snotty fun, 170 BPM"
-   },
-   {
-    "id": "nintendocore",
-    "name": "Нинтендокор (чиптюн + метал)",
-    "style": "English, nintendocore, metalcore riffs with 8-bit Game Boy arpeggios, double kick blast drums, palm-muted chug, screamed and clean male vocals, frantic video game boss fight energy, 180 BPM"
-   }
-  ]
- },
- {
-  "id": "industrial",
-  "name": "Индастриал / EBM",
-  "items": [
-   {
-    "id": "ebm",
-    "name": "EBM",
-    "style": "Instrumental, no vocals, EBM electronic body music, pumping industrial bass sequencer, metallic percussion, hard steady beat, cold machine discipline, 130 BPM"
-   },
-   {
-    "id": "dark-electro",
-    "name": "Тёмное электро",
-    "style": "Instrumental, no vocals, dark electro, distorted beat, gritty bass growls, ominous bell tones, gothic night factory mood, 125 BPM"
-   }
-  ]
- },
- {
-  "id": "reggae",
-  "name": "Регги / даб",
-  "items": [
-   {
-    "id": "marley",
-    "name": "Marley — reggae",
-    "style": "English reggae, one drop groove, warm round bass, offbeat skank guitar, laid-back soulful male vocals, sunny morning, Hammond organ bubbles, 78 BPM"
-   },
-   {
-    "id": "dub",
-    "name": "Даб",
-    "style": "Instrumental, no vocals, roots dub, heavy one-drop bass and drums, spring reverb explosions, tape delay echoes, skanking guitar offbeats, sparse melodica, deep bass meditation, 75 BPM"
-   },
-   {
-    "id": "dancehall",
-    "name": "Дэнсхолл",
-    "style": "Jamaican patois, dancehall, riddim bounce, punchy synth stabs, energetic toasting male vocals, party crowd energy, 102 BPM"
-   },
-   {
-    "id": "lovers-rock",
-    "name": "Лаверс-рок (нежное регги)",
-    "style": "English, lovers rock reggae, smooth one-drop groove, silky soul female vocals, romantic, warm horns, sweet and mellow, 78 BPM"
+    "id": "dark-ambient",
+    "name": "Тёмный",
+    "style": "Instrumental, no vocals, dark ambient, no beat, low cavernous drones, metallic resonances, distant industrial echoes, unsettling tension, abyssal darkness, 45 BPM"
    }
   ]
  },
@@ -262,395 +449,71 @@
   "items": [
    {
     "id": "chicago-blues",
-    "name": "Чикаго-блюз (электро)",
+    "name": "Чикаго: электро",
     "style": "English, Chicago electric blues, shuffle groove, gritty tube guitar solos, harmonica wails, walking bass, barroom piano, raspy male vocals, whiskey and smoke, 96 BPM"
    },
    {
     "id": "delta-blues",
-    "name": "Дельта-блюз (акустика)",
+    "name": "Дельта: акустика",
     "style": "English, delta blues, fingerpicked acoustic slide guitar, stomping foot and harmonica, gravel male voice, 1930s porch recording, lonely road story, 78 BPM"
    },
    {
     "id": "slow-blues",
-    "name": "Слоу-блюз (полночный)",
+    "name": "Медленный: полночь",
     "style": "English, slow blues 12/8, mournful bends guitar, sparse piano chords, brushed drums, world-weary male vocals, last-call bar sadness, 58 BPM"
-   },
-   {
-    "id": "blues-rock",
-    "name": "Блюз-рок",
-    "style": "English, blues rock, driving shuffle-rock beat, searing blues guitar leads, Hammond organ, powerful gritty male vocals, swagger, 118 BPM"
    }
   ]
  },
  {
-  "id": "mantra",
-  "name": "Мантры / Индия",
+  "id": "funk",
+  "name": "Фанк и афробит",
   "items": [
    {
-    "id": "india-mantra",
-    "name": "Индия / мантра",
-    "style": "Sanskrit chant, indian raga drone, tanpura drone, sitar lines, tabla groove, bansuri flute, low resonant male chant vocals group unison slow, hypnotic trance-like repetition, meditative spiritual, warm live room, 80 BPM"
+    "id": "funk",
+    "name": "Фанк 70-х",
+    "style": "English, funk, syncopated slap bass, wah rhythm guitar, punchy horns, tight drums with ghost notes, swaggering groove, 105 BPM"
    },
    {
-    "id": "kirtan",
-    "name": "Киртан (групповое пение)",
-    "style": "Sanskrit, kirtan devotional chant, call-and-response group vocals, harmonium drone, tabla and kartal hand claps, joyful communal worship, rising ecstatic repetition, 100 BPM"
-   },
-   {
-    "id": "sitar-raga",
-    "name": "Ситар-рага (инструментал)",
-    "style": "Instrumental, no vocals, indian classical raga, sitar alaps and fast meend runs, tanpura drone, tabla accelerating tala, exotic microtonal beauty, hypnotic, 90 BPM"
-   },
-   {
-    "id": "bollywood-retro",
-    "name": "Болливуд-ретро",
-    "style": "Hindi, retro Bollywood song, playful filmi orchestra, dholak groove, sweet soaring female vocals with male answer, strings and flute flourishes, theatrical romance, 105 BPM"
+    "id": "afrobeat",
+    "name": "Афробит: полиритмия и медь",
+    "style": "English, afrobeat, polyrhythmic drum groove, shekere, hypnotic bass ostinato, interlocking clean guitar riffs, Farfisa organ, big horn section riffs, chanted call-and-response, male lead, defiant joyful trance, live band, long jam, 1973 Lagos, 112 BPM"
    }
   ]
  },
  {
-  "id": "oriental",
-  "name": "Восток / этника",
+  "id": "reggae",
+  "name": "Регги и даб",
   "items": [
    {
-    "id": "ethnic-oriental",
-    "name": "Этника восточная",
-    "style": "Instrumental, no vocals, oriental world fusion, driving darbuka and frame drum groove, oud and bouzouki lines, duduk wails, warm live room, dark fairy tale atmosphere with sunny morning turn, 105 BPM"
+    "id": "roots-reggae",
+    "name": "Рутс: one drop и орган",
+    "style": "English, roots reggae, one drop groove, warm round bass, offbeat skank guitar, Hammond organ bubbles, laid-back soulful male, sunny morning, conscious, warm 1970s Kingston studio, 78 BPM"
    },
    {
-    "id": "turkish-psych",
-    "name": "Турецкий психоделик-фолк",
-    "style": "Turkish, anatolian psychedelic folk, saz electric baglama riffs, funky groove, hypnotic east modes, passionate male vocals, vintage 70s fuzz, 110 BPM"
+    "id": "dub",
+    "name": "Даб: эхо и пружинный ревер",
+    "style": "Instrumental, no vocals, roots dub, heavy one-drop bass and drums, spring reverb explosions, tape delay echoes, skanking guitar offbeats, sparse melodica, deep bass meditation, 75 BPM"
    },
    {
-    "id": "arabesque",
-    "name": "Арабеска (драматичная)",
-    "style": "Instrumental, no vocals, arabesque orchestral, violin and qanun unison bends, darbuka groove, dramatic minor modes, oud solos, bazaar-to-moonlight romance, 100 BPM"
-   },
-   {
-    "id": "shamanic",
-    "name": "Шаманские бубны",
-    "style": "Instrumental, no vocals, shamanic drumming, frame drum heart-beat pulse, rattle and throat-hum overtones, ceremonial fire circle, trance possession rhythm, 130 BPM"
-   },
-   {
-    "id": "celtic",
-    "name": "Кельтика",
-    "style": "Instrumental, no vocals, celtic folk, tin whistle and fiddle dance melody, acoustic guitar strum, bodhran pulse, tavern cheer to misty hills, 115 BPM"
+    "id": "dancehall",
+    "name": "Дэнсхолл",
+    "style": "Jamaican patois, dancehall, riddim bounce, punchy synth stabs, energetic toasting male vocals, party crowd energy, 102 BPM"
    }
   ]
  },
  {
   "id": "jazz",
-  "name": "Джаз / босса",
+  "name": "Джаз",
   "items": [
    {
-    "id": "smooth-jazz",
-    "name": "Смус-джаз",
-    "style": "Instrumental, no vocals, smooth jazz, silky saxophone lead, funky-lite drum groove, Rhodes comping, fretless bass, city-night elegance, 95 BPM"
-   },
-   {
     "id": "noir-jazz",
-    "name": "Нуар-джаз",
+    "name": "Нуар: дымное трио",
     "style": "Instrumental, no vocals, jazz noir, sparse smoky trio, walking bass, brushed snare, lonely muted trumpet, dark alley atmosphere, rain and neon reflections, 76 BPM"
    },
    {
-    "id": "bossa",
-    "name": "Босса-нова",
-    "style": "Portuguese, bossa nova, nylon guitar bossa pattern, soft shaker, breathy female vocals, gentle trumpet, seaside evening romance, 80 BPM"
-   },
-   {
     "id": "swing-bigband",
-    "name": "Свинг / биг-бэнд",
+    "name": "Свинг: биг-бэнд",
     "style": "English, big band swing, punchy brass sections, walking bass, ride cymbal swing, joyful shout vocals with band answers, dancehall 1940s celebration, 140 BPM"
-   }
-  ]
- },
- {
-  "id": "cinematic",
-  "name": "Кино-саундтрек / неоклассика",
-  "items": [
-   {
-    "id": "romantic-theme",
-    "name": "Романтическая тема",
-    "style": "Instrumental, no vocals, cinematic love theme, grand piano melody, string quartet swells, warm analog synth pad under, soft brushes, spacious wide stereo, romantic longing, tender lullaby, 72 BPM"
-   },
-   {
-    "id": "epic",
-    "name": "Эпика (трейлерная)",
-    "style": "Instrumental, no vocals, epic cinematic trailer, huge taiko drums and ostinato strings, brass fanfare, choir swells, rising tension into heroic climax, 90 BPM"
-   },
-   {
-    "id": "noir-score",
-    "name": "Нуар-саундтрек",
-    "style": "Instrumental, no vocals, film noir score, lonely sax over dark strings, slow jazz-noir drum shadows, muted trumpet lament, crime-city 2am, 72 BPM"
-   },
-   {
-    "id": "neoclassical",
-    "name": "Неоклассика (пиано)",
-    "style": "Instrumental, no vocals, neoclassical piano, intimate felt piano melody, subtle string swells, pedaled resonances, bittersweet introspection, 70 BPM"
-   },
-   {
-    "id": "western",
-    "name": "Вестерн (пустыня)",
-    "style": "Instrumental, no vocals, spaghetti western, twanging reverb guitar, whistling melody, mariachi trumpets, galloping rhythm, dusty showdown tension, 95 BPM"
-   }
-  ]
- },
- {
-  "id": "pop",
-  "name": "Поп / диско",
-  "items": [
-   {
-    "id": "ruki-vverh",
-    "name": "Руки Вверх — eurodance",
-    "style": "Russian eurodance 1997, four-on-the-floor drum machine, bright synth lead hook, catchy cheerful male vocals, simple happy pop melody, party, 140 BPM"
-   },
-   {
-    "id": "synthpop",
-    "name": "Синт-поп 80-х",
-    "style": "English, 80s synth-pop, programmed Linn drums, warm analog synth bass, chorus-drenched guitar sparkles, catchy bittersweet chorus, neon romance, 118 BPM"
-   },
-   {
-    "id": "disco-70",
-    "name": "Диско 70-х",
-    "style": "English, 70s disco, four-on-the-floor kick, funky bass, string section riffs, wah guitar, diva female vocals, mirror-ball euphoria, 120 BPM"
-   },
-   {
-    "id": "citypop",
-    "name": "Сити-поп",
-    "style": "Japanese, 80s city pop, smooth funky groove, shimmering electric piano, glassy guitar solo, sweet female vocals, night-drive Tokyo glamour, 104 BPM"
-   }
-  ]
- },
- {
-  "id": "rock",
-  "name": "Рок",
-  "items": [
-   {
-    "id": "classic-rock",
-    "name": "Классический рок 70-х",
-    "style": "English, classic 1970s rock, bluesy guitar riffs, powerful live drums, Hammond organ, raspy male vocals, anthemic sing-along chorus, vintage analog production, 120 BPM"
-   },
-   {
-    "id": "grunge",
-    "name": "Гранж 90-х",
-    "style": "English, 1990s grunge, detuned distorted guitars, loud-quiet-loud dynamics, heavy fuzz bass, apathetic angsty male vocals, raw unpolished production, 110 BPM"
-   },
-   {
-    "id": "grunge-instr",
-    "name": "Гранж без слов",
-    "style": "Instrumental, no vocals, instrumental grunge, detuned distorted guitar riffs carrying the melody, loud-quiet-loud dynamics, heavy fuzz bass, raw unpolished production, 108 BPM"
-   },
-   {
-    "id": "indie-rock",
-    "name": "Инди-рок",
-    "style": "English, indie rock, jangly clean guitars, driving upbeat drums, earnest youthful male vocals, bittersweet bright mood, 135 BPM"
-   },
-   {
-    "id": "garage-rock",
-    "name": "Гараж-рок",
-    "style": "English, garage rock, raw crunchy guitars, simple fast energetic beat, shouted sloppy vocals, two-minute song energy, 145 BPM"
-   },
-   {
-    "id": "surf",
-    "name": "Сёрф (без слов)",
-    "style": "Instrumental, no vocals, 1960s surf rock, twangy wet-reverb guitar lead, driving beat, hand claps, sunny beach chase energy, 150 BPM"
-   },
-   {
-    "id": "prog-rock",
-    "name": "Прог-рок",
-    "style": "English, progressive rock, shifting time signatures, Mellotron flutes, long instrumental passages, dynamic quiet-loud shifts, melodic high male vocals, 110 BPM"
-   },
-   {
-    "id": "rock-instr",
-    "name": "Инструментальный рок (без слов)",
-    "style": "Instrumental, no vocals, instrumental rock, melodic guitar leads over driving rhythm, powerful drums, dynamic build-ups, 125 BPM"
-   }
-  ]
- },
- {
-  "id": "alt-rock",
-  "name": "Альт-рок / гитарная гармония",
-  "items": [
-   {
-    "id": "dark-arpeggio-postpunk",
-    "name": "Тёмный пост-панк с арпеджио (Interpol-вайб)",
-    "style": "English, dark post-punk, two interlocking minor-key arpeggiated guitars, deep propulsive bass, metronomic drums, deadpan baritone male vocals, doomed urban romance, 130 BPM"
-   },
-   {
-    "id": "dark-arpeggio-postpunk-instr",
-    "name": "Тёмный пост-панк с арпеджио (без слов)",
-    "style": "Instrumental, no vocals, dark post-punk, interlocking minor-key arpeggiated guitars carrying the melody, deep propulsive bass, metronomic drums, doomed urban night, 130 BPM"
-   },
-   {
-    "id": "cold-bass-postpunk",
-    "name": "Холодный пост-панк с мелодичным басом (Joy Division-вайб)",
-    "style": "English, dark post-punk, cold 1979 minimalism, melodic high-register bass guitar playing the lead melody, mechanical tight drums with cavernous reverb, sparse thin trebly guitar, icy string synth pads, deep deadpan baritone male vocals, bleak isolation, 140 BPM"
-   },
-   {
-    "id": "cold-bass-postpunk-instr",
-    "name": "Холодный пост-панк с мелодичным басом (без слов)",
-    "style": "Instrumental, no vocals, dark post-punk, cold 1979 minimalism, melodic high-register bass guitar carrying the melody, mechanical tight drums with cavernous reverb, sparse thin trebly guitar, icy string synth pads, bleak isolation, 140 BPM"
-   },
-   {
-    "id": "art-rock-chords",
-    "name": "Арт-рок с необычными аккордами (Radiohead-вайб)",
-    "style": "English, art rock, unusual guitar harmony with sus2 and add9 colors, clean delayed arpeggios, paranoid melancholy, quiet-loud dynamics, occasional 5/4 passage, anxious high male vocals, 110 BPM"
-   },
-   {
-    "id": "art-rock-chords-instr",
-    "name": "Арт-рок с необычными аккордами (без слов)",
-    "style": "Instrumental, no vocals, art rock, unusual sus2/add9 guitar harmony, clean delayed arpeggios, paranoid melancholy, quiet-loud dynamics, occasional 5/4 passage, 110 BPM"
-   },
-   {
-    "id": "chorus-wall-alt",
-    "name": "Альт-рок с chorus-гитарами (Placebo-вайб)",
-    "style": "English, alternative rock, chorus-drenched buzzing guitar walls, glam edge, driving straight beat, ringing melodic riffs, tense high androgynous male vocals, bittersweet intoxicating romance, 125 BPM"
-   },
-   {
-    "id": "chorus-wall-alt-instr",
-    "name": "Альт-рок с chorus-гитарами (без слов)",
-    "style": "Instrumental, no vocals, alternative rock, chorus-drenched buzzing guitar walls, glam edge, driving straight beat, ringing melodic riffs, bittersweet intensity, 125 BPM"
-   },
-   {
-    "id": "garage-blues-duo",
-    "name": "Гараж-блюз-дуэт (White Stripes-вайб)",
-    "style": "English, garage blues rock duo, slide guitar in open tuning, no bass guitar, pounding heavy drums, stomping fuzz riffs, raw passionate male vocals, frantic swagger, 120 BPM"
-   },
-   {
-    "id": "garage-blues-duo-instr",
-    "name": "Гараж-блюз-дуэт (без слов)",
-    "style": "Instrumental, no vocals, garage blues rock duo, slide guitar in open tuning carrying the tune, no bass, pounding heavy drums, stomping fuzz riffs, frantic swagger, 120 BPM"
-   }
-  ]
- },
- {
-  "id": "punk",
-  "name": "Панк / пост-панк",
-  "items": [
-   {
-    "id": "punk-rock",
-    "name": "Панк-рок",
-    "style": "English, punk rock, fast three-chord songs, raw shouted vocals, simple loud drums and bass, two minutes of fury, 170 BPM"
-   },
-   {
-    "id": "post-punk",
-    "name": "Пост-панк",
-    "style": "English, post-punk, cold driving bassline, metallic-edged guitars, deadpan baritone vocals, tense grey atmosphere, danceable tension, 145 BPM"
-   },
-   {
-    "id": "post-punk-instr",
-    "name": "Пост-панк без слов",
-    "style": "Instrumental, no vocals, instrumental post-punk, motorik driving bass and drums, icy chorus guitars, hypnotic grey groove, 140 BPM"
-   },
-   {
-    "id": "gothic-rock",
-    "name": "Готик-рок",
-    "style": "English, gothic rock, chorus-drenched rolling bass, dark brooding atmosphere, dramatic deep male vocals, cavernous reverb, 120 BPM"
-   },
-   {
-    "id": "horror-punk",
-    "name": "Хоррор-панк",
-    "style": "English, horror punk, spooky catchy punk, galloping horror riff, ghoul-chorus backing vocals, campy monster-movie imagery, 160 BPM"
-   }
-  ]
- },
- {
-  "id": "metal",
-  "name": "Метал",
-  "items": [
-   {
-    "id": "heavy-metal",
-    "name": "Хеви-метал (классика 80-х)",
-    "style": "English, classic 1980s heavy metal, galloping bass, twin guitar harmonies, soaring high male vocals, punchy drums, 135 BPM"
-   },
-   {
-    "id": "thrash",
-    "name": "Трэш-метал",
-    "style": "English, thrash metal, aggressive downpicked riffs, fast double-kick drums, barked rhythmic vocals, breakneck tempo, 185 BPM"
-   },
-   {
-    "id": "doom",
-    "name": "Дум-метал",
-    "style": "English, doom metal, crushingly slow riffs, thick dark distortion, mournful wailing vocals, funeral pace, cavernous heaviness, 70 BPM"
-   },
-   {
-    "id": "stoner-instr",
-    "name": "Стоунер-рок без слов",
-    "style": "Instrumental, no vocals, instrumental stoner rock, fuzzy thick retro riffs, groovy heavy jam, vintage tube fuzz, hazy desert vibe, 100 BPM"
-   }
-  ]
- },
- {
-  "id": "folk",
-  "name": "Фолк / акустика",
-  "items": [
-   {
-    "id": "singersongwriter",
-    "name": "Бардовская / авторская (гитара+голос)",
-    "style": "Russian, singer-songwriter, one acoustic guitar and voice, intimate storytelling verses, sincere conversational vocals, live room, campfire honesty, 95 BPM"
-   },
-   {
-    "id": "folk-acoustic",
-    "name": "Фолк-акустика (без слов)",
-    "style": "Instrumental, no vocals, acoustic folk, fingerpicked guitar interludes, wooden flute, gentle frame drum, meadow-and-forest serenity, 90 BPM"
-   },
-   {
-    "id": "slavic-folk",
-    "name": "Славянский фолк",
-    "style": "Russian, slavic folk, gusli and zhaleyka motifs, female folk vocals with ornaments, circle-dance rhythm, ancient field and river imagery, 105 BPM"
-   },
-   {
-    "id": "folk-rock",
-    "name": "Фолк-рок",
-    "style": "English, folk rock, strummed acoustic guitars with electric leads, steady drums, storytelling male vocals, anthemic choruses, 125 BPM"
-   }
-  ]
- },
- {
-  "id": "country",
-  "name": "Кантри",
-  "items": [
-   {
-    "id": "country-classic",
-    "name": "Классическое кантри",
-    "style": "English, classic country, twangy telecaster, steel guitar bends, train-beat bass, lonesome male vocals, whiskey-and-heartache storytelling, 100 BPM"
-   },
-   {
-    "id": "bluegrass",
-    "name": "Блюграсс",
-    "style": "English, bluegrass, breakneck banjo rolls, fiddle and mandolin breaks, upright slap bass, high lonesome harmonies, porch energy, 150 BPM"
-   },
-   {
-    "id": "country-ballad",
-    "name": "Кантри-баллада",
-    "style": "English, country ballad, slow swaying 6/8, weeping steel guitar, brushed drums, tender male vocals, dusty sunset nostalgia, 70 BPM"
-   }
-  ]
- },
- {
-  "id": "funk-soul",
-  "name": "Фанк / соул / госпел",
-  "items": [
-   {
-    "id": "funk",
-    "name": "Фанк",
-    "style": "English, funk, syncopated slap bass, wah rhythm guitar, punchy horns, tight drums with ghost notes, swaggering groove, 105 BPM"
-   },
-   {
-    "id": "soul",
-    "name": "Соул (мотаун-вайб)",
-    "style": "English, classic soul, warm tremolo guitar, walking bass, baritone sax, passionate female vocals with gospel runs, bittersweet love, 85 BPM"
-   },
-   {
-    "id": "gospel",
-    "name": "Госпел",
-    "style": "English, gospel, church organ and piano, hand-claps, mass choir with lead vocalist, rising testifying fervor, uplifted, 90 BPM"
-   },
-   {
-    "id": "funk-instr",
-    "name": "Фанк без слов",
-    "style": "Instrumental, no vocals, instrumental funk, syncopated slap bass leads, wah guitar licks, tight horn stabs, breakbeat drums, 108 BPM"
    }
   ]
  },
@@ -660,29 +523,91 @@
   "items": [
    {
     "id": "boombap",
-    "name": "Бум-бэп (золотая эра)",
+    "name": "Бум-бэп: золотая эра",
     "style": "English, boom bap hip-hop, dusty sampled beat, fat kick and snappy snare, jazzy sample loop, confident rap flow, 92 BPM"
-   },
-   {
-    "id": "trap",
-    "name": "Трэп",
-    "style": "English, trap, booming 808 bass, rolling hi-hats, dark minor synth melody, laid-back menacing flow, 140 BPM"
-   },
-   {
-    "id": "rus-hiphop",
-    "name": "Русский хип-хоп (лирика)",
-    "style": "Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM"
    },
    {
     "id": "ghetto-funk",
     "name": "Фанк-брейк с рэпом",
     "style": "English, funk-rap, live funk breakbeat, slap bass, horn stabs, old-school party rap with crowd responses, 105 BPM"
+   },
+   {
+    "id": "rus-hiphop",
+    "name": "Русский: лирика",
+    "style": "Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM"
+   }
+  ]
+ },
+ {
+  "id": "folk",
+  "name": "Фолк",
+  "items": [
+   {
+    "id": "singersongwriter",
+    "name": "Авторская: гитара и голос",
+    "style": "Russian, singer-songwriter, one acoustic guitar and voice, intimate storytelling verses, sincere conversational vocals, live room, campfire honesty, 95 BPM"
+   },
+   {
+    "id": "folk-acoustic",
+    "name": "Акустика без слов",
+    "style": "Instrumental, no vocals, acoustic folk, fingerpicked guitar interludes, wooden flute, gentle frame drum, meadow-and-forest serenity, 90 BPM"
+   },
+   {
+    "id": "slavic-folk",
+    "name": "Славянский",
+    "style": "Russian, slavic folk, gusli and zhaleyka motifs, female folk vocals with ornaments, circle-dance rhythm, ancient field and river imagery, 105 BPM"
+   },
+   {
+    "id": "celtic",
+    "name": "Кельтика",
+    "style": "Instrumental, no vocals, celtic folk, tin whistle and fiddle dance melody, acoustic guitar strum, bodhran pulse, tavern cheer to misty hills, 115 BPM"
+   },
+   {
+    "id": "bluegrass",
+    "name": "Блюграсс",
+    "style": "English, bluegrass, breakneck banjo rolls, fiddle and mandolin breaks, upright slap bass, high lonesome harmonies, porch energy, 150 BPM"
+   },
+   {
+    "id": "folk-rock",
+    "name": "Фолк-рок",
+    "style": "English, folk rock, strummed acoustic guitars with electric leads, steady drums, storytelling male vocals, anthemic choruses, 125 BPM"
+   }
+  ]
+ },
+ {
+  "id": "oriental",
+  "name": "Восток и этника",
+  "items": [
+   {
+    "id": "ethnic-oriental",
+    "name": "Этника восточная",
+    "style": "Instrumental, no vocals, oriental world fusion, driving darbuka and frame drum groove, oud and bouzouki lines, duduk wails, warm live room, dark fairy tale atmosphere with sunny morning turn, 105 BPM"
+   },
+   {
+    "id": "turkish-psych",
+    "name": "Анатолийская психоделия",
+    "style": "Turkish, anatolian psychedelic folk, saz electric baglama riffs, funky groove, hypnotic east modes, passionate male vocals, vintage 70s fuzz, 110 BPM"
+   },
+   {
+    "id": "arabesque",
+    "name": "Арабеска",
+    "style": "Instrumental, no vocals, arabesque orchestral, violin and qanun unison bends, darbuka groove, dramatic minor modes, oud solos, bazaar-to-moonlight romance, 100 BPM"
+   },
+   {
+    "id": "sitar-raga",
+    "name": "Ситар-рага",
+    "style": "Instrumental, no vocals, indian classical raga, sitar alaps and fast meend runs, tanpura drone, tabla accelerating tala, exotic microtonal beauty, hypnotic, 90 BPM"
+   },
+   {
+    "id": "shamanic",
+    "name": "Шаманские бубны",
+    "style": "Instrumental, no vocals, shamanic drumming, frame drum heart-beat pulse, rattle and throat-hum overtones, ceremonial fire circle, trance possession rhythm, 130 BPM"
    }
   ]
  },
  {
   "id": "latino",
-  "name": "Латино / фламенко",
+  "name": "Латино",
   "items": [
    {
     "id": "flamenco",
@@ -698,17 +623,33 @@
     "id": "tango",
     "name": "Танго",
     "style": "Instrumental, no vocals, argentine tango, bandoneón laments, dramatic staccato strings, piano stabs, sharp stops and lunges, fatal romance, 110 BPM"
+   }
+  ]
+ },
+ {
+  "id": "cinematic",
+  "name": "Кино и неоклассика",
+  "items": [
+   {
+    "id": "noir-score",
+    "name": "Нуар-саундтрек",
+    "style": "Instrumental, no vocals, film noir score, lonely sax over dark strings, slow jazz-noir drum shadows, muted trumpet lament, crime-city 2am, 72 BPM"
    },
    {
-    "id": "reggaeton",
-    "name": "Реггетон",
-    "style": "Spanish, reggaeton, dembow bounce, deep synth bass, catchy chanted hooks, club summer heat, 96 BPM"
+    "id": "neoclassical",
+    "name": "Неоклассика: фортепиано",
+    "style": "Instrumental, no vocals, neoclassical piano, intimate felt piano melody, subtle string swells, pedaled resonances, bittersweet introspection, 70 BPM"
+   },
+   {
+    "id": "western",
+    "name": "Вестерн",
+    "style": "Instrumental, no vocals, spaghetti western, twanging reverb guitar, whistling melody, mariachi trumpets, galloping rhythm, dusty showdown tension, 95 BPM"
    }
   ]
  },
  {
   "id": "classical",
-  "name": "Классика / танцы",
+  "name": "Классика",
   "items": [
    {
     "id": "baroque",
@@ -727,7 +668,7 @@
    },
    {
     "id": "organ-dark",
-    "name": "Орган, готика (без слов)",
+    "name": "Орган: готика",
     "style": "Instrumental, no vocals, dark organ toccata, cathedral echoes, ominous minor cascades, gothic dread and grandeur, 75 BPM"
    }
   ]
@@ -738,13 +679,8 @@
   "items": [
    {
     "id": "ru-rock",
-    "name": "Русский рок (классика жанра)",
+    "name": "Русский рок",
     "style": "Russian, classic russian rock, anthemic minor-key guitars, earnest hoarse male vocals, live drums, sing-along chorus, kitchen-poetry sincerity, 120 BPM"
-   },
-   {
-    "id": "ru-estrada",
-    "name": "Эстрада (советская вайб)",
-    "style": "Russian, soviet-era estrada, orchestral pop, warm strings and brass, theatrical clear female or male vocals, lyrical melody, 90 BPM"
    },
    {
     "id": "ru-romance",
@@ -759,53 +695,18 @@
   "items": [
    {
     "id": "preset-0",
-    "name": "Marley — reggae",
-    "style": "English reggae, one drop groove, warm round bass, offbeat skank guitar, laid-back soulful male vocals, sunny morning, Hammond organ bubbles, 78 BPM"
-   },
-   {
-    "id": "preset-1",
-    "name": "Руки Вверх — eurodance",
-    "style": "Russian eurodance 1997, four-on-the-floor drum machine, bright synth lead hook, catchy cheerful male vocals, simple happy pop melody, party, 140 BPM"
-   },
-   {
-    "id": "preset-2",
-    "name": "Чилаут фоновый",
-    "style": "Instrumental, no vocals, downtempo chillout, laid-back dub bass, soft drums building and receding, warm analog synth pad, Rhodes chords, vinyl crackle, spacious wide stereo, dreamy melancholy, 82 BPM"
-   },
-   {
-    "id": "preset-3",
-    "name": "Релакс / медитация",
-    "style": "Instrumental, no vocals, dark ambient into warm ambient, no percussion, slow evolving drones, mellotron flutes, music box plucks deep in space, cathedral reverb huge space, meditative spiritual, 55 BPM"
-   },
-   {
-    "id": "preset-4",
-    "name": "Lo-fi биты",
-    "style": "Instrumental, no vocals, lo-fi hip-hop beats, boom bap head-nodding swing, dusty piano loops, warm vinyl hiss and wobble, tape saturation, rainy window mood, bittersweet nostalgia, 78 BPM"
-   },
-   {
-    "id": "preset-5",
     "name": "Электроника + жёсткие гитары",
     "style": "Instrumental, no vocals, big beat electronic rock, breakbeat chopped funk drums, aggressive down-tuned distorted guitar riffs, moogy synth bass, pounding relentless, loudness war brickwall, intense aggression, rebellious defiance, 145 BPM"
    },
    {
-    "id": "preset-6",
+    "id": "preset-1",
     "name": "Тёмный техно",
     "style": "Instrumental, no vocals, dub techno dark warehouse, four-on-the-floor pounding kick, hypotonic dub chords with spacey delays, metallic clangorous hits, cavernous reverb, paranoid claustrophobia, 130 BPM"
    },
    {
-    "id": "preset-7",
-    "name": "Индия / мантра",
-    "style": "Sanskrit chant, indian raga drone, tanpura drone, sitar lines, tabla groove, bansuri flute, low resonant male chant vocals group unison slow, hypnotic trance-like repetition, meditative spiritual, warm live room, 80 BPM"
-   },
-   {
-    "id": "preset-8",
+    "id": "preset-2",
     "name": "Этника восточная",
     "style": "Instrumental, no vocals, oriental world fusion, driving darbuka and frame drum groove, oud and bouzouki lines, duduk wails, warm live room, dark fairy tale atmosphere with sunny morning turn, 105 BPM"
-   },
-   {
-    "id": "preset-9",
-    "name": "Романтическая тема",
-    "style": "Instrumental, no vocals, cinematic love theme, grand piano melody, string quartet swells, warm analog synth pad under, soft brushes, spacious wide stereo, romantic longing, tender lullaby, 72 BPM"
    }
   ]
  }
