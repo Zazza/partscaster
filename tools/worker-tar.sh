@@ -20,11 +20,18 @@ done
 cp worker/*.json worker/requirements*.txt worker/seedvc_install.sh worker/install.sh "$D/"
 cp worker/phrases/* "$D/phrases/"
 cp deploy/units/yue-worker.service "$D/units/"
-# готовая сборка yue2.cpp (tools/yue2cpp-build.sh) — второй движок генерации, ЭКСПЕРИМЕНТ; нет её — install.sh
-# соберёт сам при --engine cpp
-if [[ -x dist/yue2cpp-linux-x86_64/yue-server ]]; then
+# готовая сборка yue2.cpp (tools/yue2cpp-build.sh / yue2cpp-build.ps1) — второй движок генерации, ЭКСПЕРИМЕНТ;
+# каталог — по TARGET_OS (по умолчанию linux); нет сборки — install.sh соберёт сам при --engine cpp,
+# а yue-worker.exe просто не предложит этот движок
+case "${TARGET_OS:-linux}" in
+  windows)
+    CPP_DIR="dist/yue2cpp-windows-x86_64"; CPP_BIN="yue-server.exe" ;;
+  *)
+    CPP_DIR="dist/yue2cpp-linux-x86_64"; CPP_BIN="yue-server" ;;
+esac
+if [[ -f "$CPP_DIR/$CPP_BIN" ]]; then
   mkdir -p "$D/yue2cpp"
-  cp -P dist/yue2cpp-linux-x86_64/* "$D/yue2cpp/"
+  cp -P "$CPP_DIR"/* "$D/yue2cpp/"
 fi
 chmod +x "$D/install.sh" "$D/seedvc_install.sh"
 printf '%s\n' "$VERSION" > "$D/VERSION"

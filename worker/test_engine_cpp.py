@@ -10,8 +10,10 @@ M3. download(name, progress_cb, base_url): качает недостающее (
     готовый файл с верной суммой — без обращения к источнику.
 M4. find_binary(): $YUE_CPP_BIN → <каталог воркера>/yue2cpp/yue-server → $YUE_HOME/yue2cpp-src/
     build/yue-server; нет — None. cuda_lib_dirs(): каталоги lib пакетов nvidia из venv.
+    На Windows имена с .exe, cuda_lib_dirs — torch/lib и nvidia <pkg>/bin, каталоги добавляются
+    в PATH (LD_LIBRARY_PATH на Windows нет).
 M5. CppServer: запуск только на 127.0.0.1 с --model/--vae; экономный режим → --max-seq 8192;
-    LD_LIBRARY_PATH содержит переданные lib_dirs; stop() останавливает процесс; synth() —
+    lib_dirs идут в LD_LIBRARY_PATH (Windows: в PATH); stop() останавливает процесс; synth() —
     POST /synth, опрос /job, результат multipart; отмена → POST /job?cancel=1 и InterruptedError;
     failed → RuntimeError с хвостом журнала; строки журнала уходят в on_log.
 M6. build_request / continue_request / plan_request — перевод заявки (
@@ -633,16 +635,26 @@ class TestDownload(_EnvCase):
 
 
 class TestFindBinary(_EnvCase):
+    # порядок кандидатов: запуск самого бинарника не проверяем (binary_runs → True) —
+    # стабильные стабы идут и на Windows, где шебанг-скрипт не исполняется
+    def setUp(self):
+        super().setUp()
+        runner = mock.patch.object(self.e, "binary_runs", lambda p: True)
+        runner.start()
+        self.addCleanup(runner.stop)
 
     def _exe(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("#!/bin/sh\nexit 0\n")
-        path.chmod(0o755)
+        try:
+            path.chmod(0o755)   # на Linux нужен exec-бит; на Windows права не работают
+        except OSError:
+            pass
         return path
 
     def test_none_when_absent(self):
-        self.assertFalse((WORKER_DIR / "yue2cpp" / "yue-server").exists(),
-                         "в рабочем дереве лежит yue2cpp/yue-server — тест не про чистую машину")
+        self.assertFalse((WORKER_DIR / "yue2cpp").exists(),
+                         "в рабочем дереве лежит yue2cpp/ — тест не про чистую машину")
         self.assertIsNone(self.e.find_binary())
 
     def test_env_bin(self):
@@ -651,11 +663,13 @@ class TestFindBinary(_EnvCase):
         self.assertEqual(Path(self.e.find_binary()), b)
 
     def test_built_by_install_sh(self):
-        b = self._exe(self.tmp / "home" / "yue2cpp-src" / "build" / "yue-server")
+        name = "yue-server.exe" if self.e.IS_WINDOWS else "yue-server"
+        b = self._exe(self.tmp / "home" / "yue2cpp-src" / "build" / name)
         self.assertEqual(Path(self.e.find_binary()), b)
 
     def test_env_bin_wins(self):
-        self._exe(self.tmp / "home" / "yue2cpp-src" / "build" / "yue-server")
+        name = "yue-server.exe" if self.e.IS_WINDOWS else "yue-server"
+        self._exe(self.tmp / "home" / "yue2cpp-src" / "build" / name)
         b = self._exe(self.tmp / "bin" / "yue-server")
         os.environ["YUE_CPP_BIN"] = str(b)
         self.assertEqual(Path(self.e.find_binary()), b)
@@ -668,11 +682,15 @@ class TestCudaLibDirs(_EnvCase):
     def test_finds_nvidia_lib_dirs(self):
         site = self.tmp / "site"
         libs = [site / "nvidia" / "cublas" / "lib", site / "nvidia" / "cuda_runtime" / "lib"]
+        # регулярные пакеты (__init__.py): иначе venv-шные nvidia namespace перебивают фейковые
         for d in libs:
             d.mkdir(parents=True)
+            (d.parent / "__init__.py").write_bytes(b"")
             (d / "libfake.so.12").write_bytes(b"")
+        (site / "nvidia" / "__init__.py").write_bytes(b"")
         with mock.patch.object(sys, "path", [str(site)] + [p for p in sys.path]):
-            sys.modules.pop("nvidia", None)
+            for m in [k for k in sys.modules if k == "nvidia" or k.startswith("nvidia.")]:
+                sys.modules.pop(m, None)
             got = [str(Path(x).resolve()) for x in self.e.cuda_lib_dirs()]
         for d in libs:
             self.assertIn(str(d.resolve()), got)
@@ -681,6 +699,58 @@ class TestCudaLibDirs(_EnvCase):
         self.assertIsInstance(self.e.cuda_lib_dirs(), list)
 
 
+class TestWindowsBranch(_EnvCase):
+    """Ветка Windows (IS_WINDOWS): кандидаты бинарника с .exe, cuda_lib_dirs — torch/lib и nvidia <pkg>/bin
+    (у Windows-сборки torch библиотеки CUDA в torch/lib), _env добавляет каталоги в PATH, а не
+    LD_LIBRARY_PATH. Тесты идут и на Linux: IS_WINDOWS подменяется точечно."""
+
+    def test_candidates_have_exe_suffix(self):
+        with mock.patch.object(self.e, "IS_WINDOWS", True):
+            names = [p.name for p in self.e._candidates()]
+        self.assertIn("yue-server.exe", names)
+        self.assertNotIn("yue-server", names)
+
+    def test_candidates_posix_without_exe(self):
+        with mock.patch.object(self.e, "IS_WINDOWS", False):
+            names = [p.name for p in self.e._candidates()]
+        self.assertIn("yue-server", names)
+        self.assertNotIn("yue-server.exe", names)
+
+    def test_cuda_lib_dirs_torch_lib_and_nvidia_bin(self):
+        site = self.tmp / "site"
+        torch_lib = site / "torch" / "lib"
+        nv_bin = site / "nvidia" / "cublas" / "bin"
+        torch_lib.mkdir(parents=True)
+        nv_bin.mkdir(parents=True)
+        (site / "torch" / "__init__.py").write_bytes(b"")   # регулярный пакет — перебивает torch из venv
+        (site / "nvidia" / "__init__.py").write_bytes(b"")   # и nvidia из venv (иначе namespace склеится)
+        (nv_bin.parent / "__init__.py").write_bytes(b"")
+        (torch_lib / "cublas64_12.dll").write_bytes(b"")
+        (nv_bin / "cublasLt64_12.dll").write_bytes(b"")
+        with mock.patch.object(sys, "path", [str(site)] + [p for p in sys.path]):
+            for m in [k for k in sys.modules if k == "nvidia" or k.startswith("nvidia.") or k == "torch"]:
+                sys.modules.pop(m, None)
+            with mock.patch.object(self.e, "IS_WINDOWS", True):
+                got = [str(Path(x).resolve()) for x in self.e.cuda_lib_dirs()]
+        self.assertIn(str(torch_lib.resolve()), got)
+        self.assertIn(str(nv_bin.resolve()), got)
+
+    def test_env_windows_prepends_path(self):
+        with mock.patch.dict(os.environ, {"PATH": r"C:\Windows"}, clear=False):
+            os.environ.pop("LD_LIBRARY_PATH", None)
+            with mock.patch.object(self.e, "IS_WINDOWS", True):
+                env = self.e._env([r"C:\venv\torch\lib"])
+        self.assertEqual(env["PATH"], os.pathsep.join([r"C:\venv\torch\lib", r"C:\Windows"]))
+        self.assertNotIn("LD_LIBRARY_PATH", env)
+
+    def test_env_posix_ld_library_path(self):
+        with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": "/opt/old"}, clear=False):
+            with mock.patch.object(self.e, "IS_WINDOWS", False):
+                env = self.e._env(["/venv/nvidia/cublas/lib"])
+        self.assertEqual(env["LD_LIBRARY_PATH"], os.pathsep.join(["/venv/nvidia/cublas/lib", "/opt/old"]))
+
+
+@unittest.skipUnless(os.name != "nt", "фейк yue-server — скрипт с шебангом, на Windows не исполняется")
 class _ServerCase(_EnvCase):
 
     def setUp(self):

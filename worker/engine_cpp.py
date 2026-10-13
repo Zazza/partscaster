@@ -153,35 +153,60 @@ def download(name: str, progress_cb=None, base_url: str = HF_BASE) -> None:
         _fetch(spec, base_url, progress_cb)
 
 
+IS_WINDOWS = os.name == "nt"
+
+
 def _candidates() -> list[Path]:
+    exe = ".exe" if IS_WINDOWS else ""
     out = []
     if os.environ.get("YUE_CPP_BIN"):
         out.append(Path(os.environ["YUE_CPP_BIN"]))
-    out.append(Path(__file__).resolve().parent / "yue2cpp" / "yue-server")   # из архива релиза
+    out.append(Path(__file__).resolve().parent / "yue2cpp" / f"yue-server{exe}")   # из архива релиза
     home = Path(os.environ.get("YUE_HOME", Path.home() / "yue-studio"))
-    out.append(home / "yue2cpp-src" / "build" / "yue-server")               # собран install.sh
+    out.append(home / "yue2cpp-src" / "build" / f"yue-server{exe}")               # собран install.sh
     return out
 
 
 def cuda_lib_dirs() -> list[str]:
-    """Каталоги библиотек CUDA из venv воркера (пакеты nvidia-* ставит PyTorch cu128): готовой сборке yue2.cpp
-    (CUDA 12.8) нужны cudart и cublas 12 — пакет разработки CUDA у пользователя не нужен."""
+    """Каталоги библиотек CUDA из venv воркера: готовой сборке yue2.cpp (CUDA 12.8) нужны cudart и cublas 12 —
+    пакет разработки CUDA у пользователя не нужен. Linux: пакеты nvidia-* (ставит PyTorch cu128), lib/.
+    Windows: torch/lib (у Windows-сборки torch библиотеки CUDA вшиты туда) и nvidia-*/bin."""
     dirs = []
-    for pkg in ("nvidia.cuda_runtime", "nvidia.cublas"):
+    if IS_WINDOWS:
         try:
-            spec = importlib.util.find_spec(pkg)
+            spec = importlib.util.find_spec("torch")
         except (ImportError, ValueError):
             spec = None
         if spec and spec.submodule_search_locations:
             lib = Path(list(spec.submodule_search_locations)[0]) / "lib"
             if lib.is_dir():
                 dirs.append(str(lib))
+        for pkg in ("nvidia.cuda_runtime", "nvidia.cublas"):
+            dirs += _nvidia_pkg_dirs(pkg, ("bin", "lib"))
+        return dirs
+    for pkg in ("nvidia.cuda_runtime", "nvidia.cublas"):
+        dirs += _nvidia_pkg_dirs(pkg, ("lib",))
     return dirs
+
+
+def _nvidia_pkg_dirs(pkg: str, subs: tuple[str, ...]) -> list[str]:
+    try:
+        spec = importlib.util.find_spec(pkg)
+    except (ImportError, ValueError):
+        return []
+    if not (spec and spec.submodule_search_locations):
+        return []
+    root = Path(list(spec.submodule_search_locations)[0])
+    return [str(root / s) for s in subs if (root / s).is_dir()]
 
 
 def _env(lib_dirs: list[str]) -> dict:
     env = dict(os.environ)
-    if lib_dirs:
+    if not lib_dirs:
+        return env
+    if IS_WINDOWS:
+        env["PATH"] = os.pathsep.join([*lib_dirs, *filter(None, [env.get("PATH")])])
+    else:
         env["LD_LIBRARY_PATH"] = os.pathsep.join([*lib_dirs, *filter(None, [env.get("LD_LIBRARY_PATH")])])
     return env
 
@@ -436,9 +461,12 @@ class CppServer:
             cmd += ["--max-seq", str(LOW_VRAM_SEQ)]
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, "wb")
+        # отдельная группа/сессия: на Windows start_new_session запрещён — эквивалент через creationflags
+        popen_kwargs = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if IS_WINDOWS
+                        else {"start_new_session": True})
         try:
             self.proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                         env=_env(self.lib_dirs), start_new_session=True)
+                                         env=_env(self.lib_dirs), **popen_kwargs)
         finally:
             log.close()   # дескриптор унаследован процессом
         t0 = time.monotonic()

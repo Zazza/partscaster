@@ -172,9 +172,10 @@ class TestReleaseTargets(unittest.TestCase):
         worker = self.root / lines[-1]
         self.assertEqual(worker.name, f"worker-{VERSION}.tar.gz")
         self.assertTrue(worker.is_file(), worker)
-        # воркер всегда Linux — в пакете Windows он с готовым yue2.cpp
+        # воркер в пакете Windows — своей ОС: linux-сборка yue2.cpp в него не попадает
+        # (кросс-сборка с Linux идёт без yue2.cpp — этот движок недоступен в таком пакете)
         with tarfile.open(worker, "r:gz") as tf:
-            self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server", tf.getnames())
+            self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server", tf.getnames())
 
         with zipfile.ZipFile(zpath) as zf:
             names = {n.rstrip("/") for n in zf.namelist()}

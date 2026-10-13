@@ -38,9 +38,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Wails CLI (версия — как в go.mod)
         run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
+      - name: CUDA Toolkit (Windows — сборка yue2.cpp, ~10 мин)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install -y cuda --version=12.8.1.1.9 # как контейнер Linux-сборки (12.8); VS C++ на раннере есть
       - name: Пакет
-        # на Linux release.sh сначала собирает yue2.cpp в контейнере CUDA 12.8 (docker есть на ubuntu-раннере) —
-        # готовая программа второго движка (эксперимент) едет в архиве воркера
+        # release.sh сам собирает yue2.cpp готовой программой: на Linux — в контейнере CUDA 12.8, на Windows —
+        # локально с CUDA из шага выше; без сборки архив воркера едет без второго движка (не фатально)
         run: |
           # Linux: Wails под webkit2gtk-4.1 (на ubuntu-24.04 нет 4.0, без тега cgo ищет 4.0)
           if [[ "$RUNNER_OS" == "Linux" ]]; then export GOFLAGS="-tags=webkit2_41"; fi

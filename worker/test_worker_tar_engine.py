@@ -4,10 +4,13 @@
 T1. Есть dist/yue2cpp-linux-x86_64/ (yue-server + libggml*) → tools/worker-tar.sh кладёт его
     в архив как worker-<v>/yue2cpp/ (yue-server исполняемый, библиотеки рядом).
 T2. Каталога нет → архив прежний: без yue2cpp/ и без ошибки.
+T3. TARGET_OS=windows → из dist/yue2cpp-windows-x86_64/ (yue-server.exe + libggml*.dll);
+    linux-сборка при этом в архив не попадает; без TARGET_OS — прежнее поведение (linux).
 
 Скрипт работает от корня своего репозитория (dist/ — там), поэтому тест запускает копию
 скрипта в песочнице: tools/worker-tar.sh, worker/, deploy/units/ — общий dist/ не трогается.
 """
+import os
 import shutil
 import subprocess
 import tarfile
@@ -35,12 +38,19 @@ class TestWorkerTarEngine(unittest.TestCase):
         shutil.copytree(REPO / "deploy" / "units", self.root / "deploy" / "units")
         self.out = Path(self._td.name) / "out"
 
-    def _build(self):
+    def _build(self, target_os=None):
+        env = dict(os.environ)
+        if target_os:
+            env["TARGET_OS"] = target_os
         p = subprocess.run(["bash", str(self.root / "tools" / "worker-tar.sh"), str(self.out), VERSION],
-                           cwd=self.root, capture_output=True, text=True, timeout=120)
+                           cwd=self.root, capture_output=True, text=True, timeout=120, env=env)
         self.assertEqual(p.returncode, 0, f"stdout:\n{p.stdout}\nstderr:\n{p.stderr}")
-        path = Path([ln for ln in p.stdout.splitlines() if ln.strip()][-1].strip())
-        self.assertEqual(path, self.out / f"{TOP}.tar.gz")
+        # последняя строка — путь архива (под Git Bash — в MSYS-форме /tmp/…, сверяем имя);
+        # сам архив открываем по ожидаемому месту: скрипт обязан положить его в OUT
+        echo = [ln for ln in p.stdout.splitlines() if ln.strip()][-1].strip()
+        self.assertEqual(Path(echo).name, f"{TOP}.tar.gz")
+        path = self.out / f"{TOP}.tar.gz"
+        self.assertTrue(path.is_file(), f"{path} не создан")
         with tarfile.open(path, "r:gz") as tf:
             return {m.name.rstrip("/"): m for m in tf.getmembers()}
 
@@ -73,6 +83,33 @@ class TestWorkerTarEngine(unittest.TestCase):
         (self.root / "dist").mkdir()
         m = self._build()
         self.assertEqual([n for n in m if "/yue2cpp" in n], [])
+
+    def test_windows_build_target_os_windows(self):
+        # TARGET_OS=windows: едет windows-сборка (yue-server.exe + libggml*.dll), а не linux-файлы
+        d = self.root / "dist" / "yue2cpp-windows-x86_64"
+        d.mkdir(parents=True)
+        (d / "yue-server.exe").write_bytes(b"MZ fake")
+        (d / "libggml-cuda.dll").write_bytes(b"MZ fake")
+        m = self._build(target_os="windows")
+        self.assertIn(f"{TOP}/yue2cpp/yue-server.exe", m)
+        self.assertIn(f"{TOP}/yue2cpp/libggml-cuda.dll", m)
+
+    def test_windows_target_ignores_linux_build(self):
+        # пакет Windows с linux-сборкой рядом: чужая ОС не попадает в архив
+        d = self.root / "dist" / "yue2cpp-linux-x86_64"
+        d.mkdir(parents=True)
+        (d / "yue-server").write_text("#!/bin/sh\n")
+        m = self._build(target_os="windows")
+        self.assertEqual([n for n in m if "/yue2cpp" in n], [])
+
+    def test_default_target_keeps_linux(self):
+        # без TARGET_OS поведение прежнее: linux-каталог
+        d = self.root / "dist" / "yue2cpp-linux-x86_64"
+        d.mkdir(parents=True)
+        (d / "yue-server").write_text("#!/bin/sh\n")
+        (d / "yue-server").chmod(0o755)
+        m = self._build()
+        self.assertIn(f"{TOP}/yue2cpp/yue-server", m)
 
 
 if __name__ == "__main__":
