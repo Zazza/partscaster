@@ -6,6 +6,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { useInserts } from '../composables/useInserts.js'
+import { usePlayer } from '../composables/usePlayer.js'
 import VSelect from '../VSelect.vue'
 import { presetFromEdits, withLevels, presetOptions } from '../soundPresets.js'
 import { placeLabel } from '../mixDesk.js'
@@ -14,6 +15,7 @@ const props = defineProps({ job: { type: Object, required: true } })
 const emit = defineEmits(['applied'])
 const { t } = useI18n()
 const inserts = useInserts()
+const { markNow } = usePlayer()
 
 const presets = ref([])
 const presetId = ref(null)
@@ -85,6 +87,8 @@ async function preview() {
     const r = await inserts.previewSpecs(props.job.id, gains)
     if (!r || !r.variant) throw new Error(t('preset.preview.none'))
     await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
+    markNow(`v${props.job.id}:${r.variant.file}`, `#${props.job.id} ${props.job.title}`,
+      props.job.id, r.variant.file, props.job.duration_sec)
     msg.value = t('preset.preview.done')
     emit('applied')
   } catch (e) {

@@ -506,7 +506,8 @@ async function importAction(imp, action) {
 }
 
 async function togglePlay(j) {
-  await toggleArtifact(`m${j.id}`, `#${j.id} ${j.title}`, () => api.playAudio(j.id))
+  await toggleArtifact(`m${j.id}`, `#${j.id} ${j.title}`, () => api.playAudio(j.id),
+    { jobId: j.id, file: j.audio_file, dur: j.duration_sec })
 }
 
 async function cancel(id) {

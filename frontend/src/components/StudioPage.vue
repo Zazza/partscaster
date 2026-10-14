@@ -41,7 +41,7 @@ const IMPORT_STYLE = '(импорт внешнего трека)'
 const props = defineProps({ job: { type: Object, required: true }, autoTranslate: Boolean })
 const emit = defineEmits(['close', 'open-metrics'])
 
-const { isPlaying, playBusy, playBtn, toggleArtifact, playerState, nowPlayingKey, refreshPlayer, setPlayRange, rangeUntil } = usePlayer()
+const { isPlaying, playBusy, playBtn, toggleArtifact, markNow, playerState, nowPlayingKey, refreshPlayer, setPlayRange, rangeUntil } = usePlayer()
 const { askConfirm } = useConfirm()
 const inserts = useInserts()
 const revoice = useRevoice()
@@ -341,8 +341,9 @@ async function onWaveSeek(sec) {
     if (nowPlayingKey.value === waveKey.value && playerState.value.job_id === props.job.id) {
       await api.seekAudio(sec)
     } else {
-      await api.playFile(props.job.id, waveFile.value || props.job.audio_file || 'audio.flac', waveDuration.value)
-      nowPlayingKey.value = waveKey.value
+      const wavePlayFile = waveFile.value || props.job.audio_file || 'audio.flac'
+      await api.playFile(props.job.id, wavePlayFile, waveDuration.value)
+      markNow(waveKey.value, `#${props.job.id} ${props.job.title}`, props.job.id, wavePlayFile, waveDuration.value)
       await api.seekAudio(sec)
     }
     refreshPlayer()
@@ -636,7 +637,11 @@ async function addSection(instId) {
     rollErr.value = ''
     try {
       const res = await inserts.addMute(props.job.id, { instId: inst.id, from: r.from, to: r.to, stems: inst.mute, db: inst.db })
-      if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
+      if (res && res.variant) {
+        await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
+        markNow(`v${props.job.id}:${res.variant.file}`, `#${props.job.id} ${props.job.title}`,
+          props.job.id, res.variant.file, props.job.duration_sec)
+      }
     } catch (e) {
       rollErr.value = String(e)
     } finally {
@@ -865,7 +870,8 @@ async function afterEdit(r, prev) {
     }
   } else if (r && r.variant) {
     await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
-    nowPlayingKey.value = `v${props.job.id}:${r.variant.file}`
+    markNow(`v${props.job.id}:${r.variant.file}`, `#${props.job.id} ${props.job.title}`,
+      props.job.id, r.variant.file, props.job.duration_sec)
   }
   reloadVariants()
 }
@@ -913,14 +919,17 @@ async function onPlace(it, place) {
 function playMix() {
   const file = mixFile.value
   if (!file) return
-  toggleArtifact(`v${props.job.id}:${file}`, t('studio.edits.mix') + ' · #' + props.job.id, async () => {
+  const label = t('studio.edits.mix') + ' · #' + props.job.id
+  toggleArtifact(`v${props.job.id}:${file}`, label, async () => {
     try {
       await api.playFile(props.job.id, file, props.job.duration_sec)
+      markNow(`v${props.job.id}:${file}`, label, props.job.id, file, props.job.duration_sec)
     } catch {
       // микса ещё нет (правки перенесены на новую версию, пересборки не было) — собрать сейчас
       const r = await inserts.rebuild(props.job.id)
       if (!r || !r.variant) throw new Error(t('studio.edits.none'))
       await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
+      markNow(`v${props.job.id}:${r.variant.file}`, label, props.job.id, r.variant.file, props.job.duration_sec)
       reloadVariants()
     }
   })

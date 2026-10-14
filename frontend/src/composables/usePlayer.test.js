@@ -152,3 +152,60 @@ describe('playbackEnded: трек доиграл до конца', () => {
     expect(playbackEnded(st({ position_sec: 181 }))).toBe(true)
   })
 })
+
+describe('▶ панели: память последнего артефакта (togglePlay без выделения)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('localStorage', new MemStorage())
+    apiMock.playFile = vi.fn().mockResolvedValue({})
+    apiMock.seekAudio = vi.fn().mockResolvedValue({})
+    apiMock.toggleAudio = vi.fn().mockResolvedValue({})
+    apiMock.stopAudio = vi.fn().mockResolvedValue({})
+    apiMock.audioState = vi.fn().mockResolvedValue({ playing: false, position_sec: 0, duration_sec: 0, job_id: 0 })
+  })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  it('после «стопа» плей панели возвращает последний запущенный артефакт, а не что попало', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.markNow('v882:overdub-inst-0.flac', '#882 превью', 882, 'overdub-inst-0.flac', 180)
+    await p.togglePlay()
+    await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-0.flac', 180)
+    expect(apiMock.toggleAudio).not.toHaveBeenCalled()
+    expect(p.nowPlayingKey.value).toBe('v882:overdub-inst-0.flac')
+  })
+
+  it('играет или на паузе в середине — обычная пауза/продолжение, без перезапуска', async () => {
+    const p = await freshPlayer({ job_id: 7, playing: true, position_sec: 42, duration_sec: 180 })
+    p.markNow('m7', '#7', 7, 'audio.flac', 180)
+    await p.togglePlay()
+    expect(apiMock.toggleAudio).toHaveBeenCalled()
+    expect(apiMock.playFile).not.toHaveBeenCalled()
+  })
+
+  it('выделение в студии гоняет кусок, пока оно и есть последний артефакт', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setPlayRange(RANGE)
+    p.markNow(RANGE.key, 'кусок', RANGE.jobId, RANGE.file, RANGE.dur)
+    await p.togglePlay()
+    await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(RANGE.jobId, RANGE.file, RANGE.dur)
+    expect(apiMock.seekAudio).toHaveBeenCalledWith(RANGE.from)
+  })
+
+  it('после «послушать превью» плей панели не уводит на выделение волны', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setPlayRange(RANGE)
+    p.markNow('v882:overdub-inst-0.flac', '#882 превью', 882, 'overdub-inst-0.flac', 180)
+    await p.togglePlay()
+    await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-0.flac', 180)
+    expect(apiMock.seekAudio).not.toHaveBeenCalled()   // не прогон куска выделения
+  })
+
+  it('нет памяти — прежнее поведение: пауза/продолжение загруженного', async () => {
+    const p = await freshPlayer({ job_id: 7, playing: false, position_sec: 42, duration_sec: 180 })
+    await p.togglePlay()
+    expect(apiMock.toggleAudio).toHaveBeenCalled()
+  })
+})

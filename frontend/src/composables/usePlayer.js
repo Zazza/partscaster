@@ -8,6 +8,9 @@ const nowPlaying = ref('')     // подпись встроенного плее
 const playBusy = ref({})
 // key — уникальный идентификатор артефакта: 'm15' — трек, 's15:stem-bass' — стем
 const nowPlayingKey = ref('')
+// последний запущенный артефакт: «плей» панели после «стопа»/конца играет его снова,
+// а не что попало (в студии — превью пресета, волна или микс; в списке — трек)
+const lastArtifact = ref(null)   // {key, label, jobId, file, dur} | null
 const volume = ref(parseFloat(localStorage.getItem('yue_volume') ?? '0.8'))
 
 // рельса перемотки: тянем локально, на отпускании — команда в плеер
@@ -40,7 +43,7 @@ function isPlaying(key) {
   return playerState.value.job_id > 0 && nowPlayingKey.value === key
 }
 
-async function toggleArtifact(key, label, play) {
+async function toggleArtifact(key, label, play, artifact) {
   if (playBusy.value[key]) return
   if (isPlaying(key)) {
     await api.stopAudio()
@@ -53,12 +56,23 @@ async function toggleArtifact(key, label, play) {
   try {
     await play()
     nowPlayingKey.value = key
+    // запомнить, что играть по «плей» панели после стопа (файл известен — иначе нечего)
+    if (artifact && artifact.file) lastArtifact.value = { key, label, ...artifact }
   } catch (e) {
     nowPlaying.value = `звук: ${String(e)}`
   } finally {
     playBusy.value = { ...playBusy.value, [key]: false }
     setTimeout(() => refreshCb && refreshCb(), 300)
   }
+}
+
+// отметить запущенный артефакт (прямой playFile без toggleArtifact): «плей» панели
+// после «стопа» вернётся именно к нему
+function markNow(key, label, jobId, file, dur) {
+  if (!file) return
+  lastArtifact.value = { key, label, jobId, file, dur }
+  nowPlaying.value = label
+  nowPlayingKey.value = key
 }
 
 function playBtn(key) {
@@ -92,16 +106,41 @@ async function playRangeOnce(r) {
 
 // ▶ шапки: есть выделение в студии — гоняет кусок (пауза внутри куска —
 // продолжение с места паузы, стоп/конец — новый прогон с начала); иначе —
-// обычная пауза/продолжение загруженного
+// обычная пауза/продолжение загруженного. После «стопа»/конца возвращается
+// последний запущенный артефакт; выделение гоняет кусок, пока оно и есть
+// последний запущенный («послушать превью» + плей панели не должен уводить
+// на выделение волны — играло другое)
 async function togglePlay() {
   const r = playRange.value
-  if (!r) return api.toggleAudio()
-  const st = playerState.value
-  if (nowPlayingKey.value === r.key && st.job_id === r.jobId && st.job_id > 0
-      && (st.playing || (st.position_sec > r.from && st.position_sec < r.to))) {
-    return api.toggleAudio()
+  const a = lastArtifact.value
+  if (r && (!a || a.key === r.key)) {
+    const st = playerState.value
+    if (nowPlayingKey.value === r.key && st.job_id === r.jobId && st.job_id > 0
+        && (st.playing || (st.position_sec > r.from && st.position_sec < r.to))) {
+      return api.toggleAudio()
+    }
+    return playRangeOnce(r)
   }
-  return playRangeOnce(r)
+  const st = playerState.value
+  // играет или на паузе в середине — пауза/продолжение загруженного
+  if (st.job_id > 0 && !playbackEnded(st) && st.position_sec > 0) return api.toggleAudio()
+  // после «стопа»/конца (или с нуля) — последний запущенный артефакт заново
+  if (a && a.file) {
+    if (playBusy.value[a.key]) return
+    playBusy.value = { ...playBusy.value, [a.key]: true }
+    nowPlaying.value = a.label
+    try {
+      await api.playFile(a.jobId, a.file, a.dur)
+      nowPlayingKey.value = a.key
+    } catch (e) {
+      nowPlaying.value = `звук: ${String(e)}`
+    } finally {
+      playBusy.value = { ...playBusy.value, [a.key]: false }
+      setTimeout(() => refreshCb && refreshCb(), 300)
+    }
+    return
+  }
+  return api.toggleAudio()
 }
 
 async function stopAll() {
@@ -131,8 +170,8 @@ export function fmtDur(s) {
 
 export function usePlayer() {
   return {
-    playerState, nowPlaying, playBusy, nowPlayingKey, volume, seekPos,
-    refreshPlayer, isPlaying, toggleArtifact, playBtn, stopAll,
+    playerState, nowPlaying, playBusy, nowPlayingKey, lastArtifact, volume, seekPos,
+    refreshPlayer, isPlaying, toggleArtifact, markNow, playBtn, stopAll,
     onVolume, onSeekInput, onSeekChange, onRefresh,
     playRange, rangeUntil, setPlayRange, togglePlay,
   }
