@@ -346,6 +346,10 @@ export function YueSetVolume(arg1) {
   return window['go']['main']['App']['YueSetVolume'](arg1);
 }
 
+export function YueSetWindowTitle(arg1) {
+  return window['go']['main']['App']['YueSetWindowTitle'](arg1);
+}
+
 export function YueSetWorkerConfig(arg1) {
   return window['go']['main']['App']['YueSetWorkerConfig'](arg1);
 }

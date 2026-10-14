@@ -134,6 +134,11 @@ func (a *App) YueQueueMove(id int64, dir int) { a.queue.Move(id, dir) }
 // YueQueueCancel — ждущую запись убрать из очереди (идущую не прервать).
 func (a *App) YueQueueCancel(id int64) { a.queue.Cancel(id) }
 
+// YueSetWindowTitle — заголовок нативного окна (document.title его не меняет).
+func (a *App) YueSetWindowTitle(title string) {
+	runtime.WindowSetTitle(a.ctx, title)
+}
+
 // YueQueueSetPaused — пауза очереди обработки: новое не начинается, идущая доигрывает.
 func (a *App) YueQueueSetPaused(v bool) { a.queue.SetPaused(v) }
 

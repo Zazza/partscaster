@@ -210,7 +210,7 @@ const selRange = computed(() => {
 })
 
 watch(() => props.job.id, setWindowTitle, { immediate: true })
-onUnmounted(() => { document.title = t('app.title') })
+onUnmounted(() => { api.setWindowTitle(t('app.title')) })
 
 onMounted(async () => {
   waveRafId = requestAnimationFrame(waveCursorLoop)
@@ -1463,7 +1463,7 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
 
 // заголовок нативного окна: в студии — какой трек правим, вне — просто название
 function setWindowTitle() {
-  document.title = t('studio.windowTitle', { id: props.job.id, title: props.job.title })
+  api.setWindowTitle(t('studio.windowTitle', { id: props.job.id, title: props.job.title }))
 }
 </script>
 
