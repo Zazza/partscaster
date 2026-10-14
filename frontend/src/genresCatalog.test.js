@@ -236,3 +236,25 @@ describe('ТК7: подсказки жанра — металл и родств�
     expect(sorted(slotHintsEn.genre, 1, 'en')).toBe(true)
   })
 })
+
+describe('ТК8: имена библиотеки и стойки переведены для EN-интерфейса', () => {
+  it('у всех встроенных групп и стилей есть nameEn', async () => {
+    const { rackGroups, rackEffects } = await import('./rack.js')
+    const { presets } = await import('./presets.js')
+    const byId = new Map(presets.map((p) => [p.id, p]))
+    const miss = []
+    for (const g of groups) {
+      if (!g.nameEn) miss.push('группа ' + g.id)
+      for (const i of g.items) {
+        const src = i.name ? i : byId.get(i.id) // стиль-ссылка на пресет берёт имя оттуда
+        if (src && !src.nameEn) miss.push('стиль ' + i.id)
+      }
+    }
+    for (const g of rackGroups) {
+      if (!g.nameEn) miss.push('стойка ' + g.id)
+      for (const i of g.items) if (!i.nameEn) miss.push('стойка: ' + i.id)
+    }
+    for (const e of rackEffects) if (!e.nameEn) miss.push('эффект ' + (e.id || 'clean'))
+    expect(miss).toEqual([])
+  })
+})

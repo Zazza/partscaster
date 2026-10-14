@@ -293,8 +293,13 @@ const libGroup = ref('')
 const libStyle = ref('')
 const groupItems = computed(() => (allGroups.value.find((g) => g.id === libGroup.value) || { items: [] }).items)
 const currentItem = computed(() => groupItems.value.find((i) => i.id === libStyle.value))
-const libGroupOptions = computed(() => allGroups.value.map((g) => ({ value: g.id, label: `${g.name} (${(g.items || []).length})` })))
-const libStyleOptions = computed(() => groupItems.value.map((i) => ({ value: i.id, label: i.name })))
+// имя из библиотеки/стойки на языке интерфейса (свои стили без перевода — как есть)
+const dataName = (o) => (locale.value === 'en' ? (o?.nameEn || o?.name) : o?.name)
+// группы библиотеки — по алфавиту текущего языка; было в порядке массива, искать было трудно
+const libGroupOptions = computed(() => allGroups.value
+  .map((g) => ({ value: g.id, label: `${dataName(g)} (${(g.items || []).length})` }))
+  .sort((a, b) => a.label.localeCompare(b.label, locale.value === 'en' ? 'en' : 'ru')))
+const libStyleOptions = computed(() => groupItems.value.map((i) => ({ value: i.id, label: dataName(i) })))
 
 function onLibGroupChange() { libStyle.value = '' }
 function onLibStyleChange() { if (currentItem.value) applyPreset(currentItem.value, 'slots') }
@@ -1200,15 +1205,15 @@ function onWindowClick(e) {
           <summary>{{ t('form.rack') }} <span class="muted">({{ rackSel.length }})</span></summary>
           <div class="rack">
             <div v-for="g in rackGroups" :key="g.id" class="rack-group">
-              <div class="rack-gname">{{ g.name }}</div>
+              <div class="rack-gname">{{ dataName(g) }}</div>
               <div v-for="it in g.items" :key="it.id" class="rack-item">
                 <label class="rack-pick">
                   <input type="checkbox" :checked="rackSel.some(r => r.id === it.id)" @change="rackToggle(it.id)" />
-                  {{ it.name }}
+                  {{ dataName(it) }}
                 </label>
                 <VSelect v-if="rackSel.some(r => r.id === it.id)"
                         :model-value="rackSel.find(r => r.id === it.id).effect"
-                        :options="rackEffects.map((e) => ({ value: e.id, label: e.name }))"
+                        :options="rackEffects.map((e) => ({ value: e.id, label: dataName(e) }))"
                         style="max-width: 150px"
                         @update:model-value="(v) => rackSetEffect(it.id, v)" />
               </div>
