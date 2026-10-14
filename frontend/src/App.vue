@@ -5,7 +5,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { api } from './api.js'
 import { rackGroups, rackEffects, rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
-import { slotKeys, slotHints, durOptions } from './slotOptions.js'
+import { slotKeys, slotHints, slotHintsEn, durOptions } from './slotOptions.js'
 import { CHARACTER, characterPayload, characterLabel } from './character.js'
 import { useI18n } from './i18n/index.js'
 import { voiceDescriptor, normalizeVoiceParams } from './voiceLab.js'
@@ -156,11 +156,14 @@ function rackSetEffect(itemId, effect) {
 
 // свой выпадающий список подсказок слотов (нативные datalist в WebView2 глючат)
 const openSlot = ref('')
+// подсказки: весь список без обрезки (обрезка в 30 прятала хвост алфавита — металл
+// и прочее в конце списка было не найти), подписи и поиск — на языке интерфейса
 function slotFiltered(key) {
   const v = (slots.value[key] || '').trim().toLowerCase()
-  const opts = slotHints[key] || []
-  const list = v ? opts.filter(([ru]) => ru.toLowerCase().includes(v)) : opts
-  return list.slice(0, 30)
+  const en = locale.value === 'en'
+  const opts = (en ? slotHintsEn : slotHints)[key] || []
+  const label = (o) => (en ? o[1] : o[0])
+  return v ? opts.filter((o) => label(o).toLowerCase().includes(v)) : opts
 }
 
 const compiledStyle = computed(() =>
@@ -1164,8 +1167,9 @@ function onWindowClick(e) {
             <input v-model="slots[key]" :placeholder="t('slot.' + key + '.hint')"
                    @focus="openSlot = key" @click.stop @input="openSlot = key" />
             <ul v-if="openSlot === key && slotFiltered(key).length" class="slot-drop">
-              <li v-for="[ru] in slotFiltered(key)" :key="ru"
-                  @mousedown.prevent="slots[key] = ru; openSlot = ''">{{ ru }}</li>
+              <li v-for="o in slotFiltered(key)" :key="o[0]"
+                  @mousedown.prevent="slots[key] = locale === 'en' ? o[1] : o[0]; openSlot = ''"
+              >{{ locale === 'en' ? o[1] : o[0] }}</li>
             </ul>
           </div>
           <label>
@@ -1458,7 +1462,7 @@ h2 {
 .slot-drop {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin: 2px 0 0; padding: 4px 0;
   list-style: none; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-  max-height: 180px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  max-height: 240px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.4);
 }
 .slot-drop li { padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .slot-drop li:hover { background: var(--panel2); }

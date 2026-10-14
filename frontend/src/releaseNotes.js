@@ -6,6 +6,7 @@ export const RELEASE_NOTES = [
     version: '0.8.0',
     ru: [
       'Теперь мы Partscaster: новое имя — та же программа. Настройки переносятся сами.',
+      'Список жанров больше не обрезается: виден весь алфавит, металл нашёлся. Добавлены блэк-метал, дэт-дум, DSBM, блэкгейз, металкор и ещё десять.',
       'Кнопка «Создать партитуру» у треков без неё — после неё работает пиано-ролл.',
       'Свой значок приложения и единые значки вместо эмодзи.',
       'Строка состояния внизу: модель, видеопамять, очередь.',
@@ -19,6 +20,7 @@ export const RELEASE_NOTES = [
     ],
     en: [
       'We are Partscaster now: a new name, the same app. Your settings carry over.',
+      'The genre list is no longer cut off: the whole alphabet is visible, metal included. Added black metal, death doom, DSBM, blackgaze, metalcore and ten more.',
       '“Create score” for tracks without one — the piano roll works after it.',
       'An app icon of its own and one icon set instead of emoji.',
       'Status bar at the bottom: model, video memory, queue.',

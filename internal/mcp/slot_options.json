@@ -91,6 +91,10 @@
    "ambient"
   ],
   [
+   "анархо-панк",
+   "anarcho punk"
+  ],
+  [
    "арт-панк",
    "art punk"
   ],
@@ -105,6 +109,14 @@
   [
    "бибоп",
    "bebop"
+  ],
+  [
+   "блэк-метал (классический, сырой)",
+   "black metal"
+  ],
+  [
+   "блэкгейз",
+   "blackgaze"
   ],
   [
    "унылый лоу-фай сибирский панк",
@@ -147,6 +159,10 @@
    "chanson"
   ],
   [
+   "чикагский блюз",
+   "Chicago blues"
+  ],
+  [
    "chillwave",
    "chillwave"
   ],
@@ -187,6 +203,10 @@
    "dark folk"
   ],
   [
+   "дарк-джаз",
+   "dark jazz"
+  ],
+  [
    "мрачный пост-панк",
    "dark post-punk"
   ],
@@ -195,12 +215,24 @@
    "darkwave"
   ],
   [
+   "дэт-дум",
+   "death doom metal"
+  ],
+  [
    "дэт-метал",
    "death metal"
   ],
   [
    "дет-рок",
    "deathrock"
+  ],
+  [
+   "дельта-блюз",
+   "delta blues"
+  ],
+  [
+   "депрессивный блэк-метал (DSBM)",
+   "depressive black metal"
   ],
   [
    "диско",
@@ -231,6 +263,10 @@
    "dub techno"
   ],
   [
+   "EBM",
+   "EBM electronic body music"
+  ],
+  [
    "электропанк",
    "electropunk"
   ],
@@ -247,6 +283,10 @@
    "flamenco"
   ],
   [
+   "фолк-панк",
+   "folk punk"
+  ],
+  [
    "фолк-рок с мировой музыкой",
    "folk rock, world music shades"
   ],
@@ -261,6 +301,10 @@
   [
    "гаражный рок",
    "garage rock"
+  ],
+  [
+   "гараж-панк",
+   "garage punk"
   ],
   [
    "глэм-рок",
@@ -287,8 +331,16 @@
    "grindcore"
   ],
   [
+   "грув-метал",
+   "groove metal"
+  ],
+  [
    "гранж",
    "grunge"
+  ],
+  [
+   "джаз-мануш",
+   "gypsy jazz"
   ],
   [
    "хард-рок",
@@ -377,6 +429,10 @@
   [
    "мелодичный хардкор",
    "melodic hardcore"
+  ],
+  [
+   "металкор",
+   "metalcore"
   ],
   [
    "моутаун",
@@ -557,6 +613,10 @@
   [
    "стонер-рок",
    "stoner rock"
+  ],
+  [
+   "стрит-панк (oi!)",
+   "street punk, Oi!"
   ],
   [
    "сёрф-рок",

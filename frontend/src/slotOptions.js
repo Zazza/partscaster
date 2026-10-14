@@ -19,10 +19,13 @@ export const slotOptions = {
     ['acid folk', 'acid folk'],
     ['агрессивный пост-панк', 'aggressive post-punk'],
     ['эмбиент', 'ambient'],
+    ['анархо-панк', 'anarcho punk'],
     ['арт-панк', 'art punk'],
     ['атмосферный блэк-метал', 'atmospheric black metal'],
     ['баллада', 'ballad'],
     ['бибоп', 'bebop'],
+    ['блэк-метал (классический, сырой)', 'black metal'],
+    ['блэкгейз', 'blackgaze'],
     ['унылый лоу-фай сибирский панк', 'bleak lo-fi Siberian punk'],
     ['унылая медленная серая песня', 'bleak slow grey song'],
     ['блюграсс', 'bluegrass'],
@@ -33,6 +36,7 @@ export const slotOptions = {
     ['брит-поп', 'britpop'],
     ['кельтский фолк', 'celtic folk'],
     ['шансон', 'chanson'],
+    ['чикагский блюз', 'Chicago blues'],
     ['chillwave', 'chillwave'],
     ['чиптюн', 'chiptune'],
     ['чиптюн-панк (нинтендо-панк)', 'chiptune punk, 8-bit punk'],
@@ -43,10 +47,14 @@ export const slotOptions = {
     ['дарк-эмбиент', 'dark ambient'],
     ['дарк-кабаре', 'dark cabaret'],
     ['дарк-фолк', 'dark folk'],
+    ['дарк-джаз', 'dark jazz'],
     ['мрачный пост-панк', 'dark post-punk'],
     ['дарквейв', 'darkwave'],
+    ['дэт-дум', 'death doom metal'],
     ['дэт-метал', 'death metal'],
     ['дет-рок', 'deathrock'],
+    ['дельта-блюз', 'delta blues'],
+    ['депрессивный блэк-метал (DSBM)', 'depressive black metal'],
     ['диско', 'disco'],
     ['дум-метал', 'doom metal'],
     ['даунтемпо', 'downtempo'],
@@ -54,21 +62,26 @@ export const slotOptions = {
     ['данжен-синт', 'dungeon synth'],
     ['даб', 'dub'],
     ['даб-техно', 'dub techno'],
+    ['EBM', 'EBM electronic body music'],
     ['электропанк', 'electropunk'],
     ['евродэнс 1997', 'eurodance 1997'],
     ['экспериментальный нойз', 'experimental noise'],
     ['фламенко', 'flamenco'],
+    ['фолк-панк', 'folk punk'],
     ['фолк-рок с мировой музыкой', 'folk rock, world music shades'],
     ['фьюнерал-дум', 'funeral doom'],
     ['фанк', 'funk'],
     ['гаражный рок', 'garage rock'],
+    ['гараж-панк', 'garage punk'],
     ['глэм-рок', 'glam rock'],
     ['госпел', 'gospel'],
     ['готик-метал', 'gothic metal'],
     ['готический пост-панк с диким панком', 'gothic post-punk gloom with raw punk energy'],
     ['грайм', 'grime'],
     ['грайндкор', 'grindcore'],
+    ['грув-метал', 'groove metal'],
     ['гранж', 'grunge'],
+    ['джаз-мануш', 'gypsy jazz'],
     ['хард-рок', 'hard rock'],
     ['хардкор-панк', 'hardcore punk'],
     ['хэви-метал', 'heavy metal'],
@@ -91,6 +104,7 @@ export const slotOptions = {
     ['мэт-рок', 'math rock'],
     ['мелодичный дэт-метал', 'melodic death metal'],
     ['мелодичный хардкор', 'melodic hardcore'],
+    ['металкор', 'metalcore'],
     ['моутаун', 'motown'],
     ['мистический арт-рок', 'mystic art rock'],
     ['неоклассический дарквейв', 'neoclassical darkwave'],
@@ -136,6 +150,7 @@ export const slotOptions = {
     ['саузерн-рок', 'southern rock'],
     ['спейс-рок', 'space rock'],
     ['стонер-рок', 'stoner rock'],
+    ['стрит-панк (oi!)', 'street punk, Oi!'],
     ['сёрф-рок', 'surf rock'],
     ['свинг', 'swing'],
     ['синт-фанк', 'synth-funk'],
@@ -412,6 +427,12 @@ for (const opts of Object.values(slotOptions)) {
 export const slotHints = {}
 for (const [k, opts] of Object.entries(slotOptions)) {
   slotHints[k] = [...opts].sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+}
+
+// английский интерфейс: подписи en, сортировка и поиск по ним
+export const slotHintsEn = {}
+for (const [k, opts] of Object.entries(slotOptions)) {
+  slotHintsEn[k] = [...opts].sort((a, b) => a[1].localeCompare(b[1], 'en'))
 }
 
 export const durOptions = [

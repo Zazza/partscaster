@@ -216,3 +216,23 @@ describe('ТК8: данные MCP (make mcp-data) совпадают с ката
     expect(stale).toEqual([])
   })
 })
+
+describe('ТК7: подсказки жанра — металл и родственное достижимы, порядок следует языку', () => {
+  const en = new Set((slotOptions.genre || []).map(([, e]) => e))
+  // после снятия обрезки списка поиск не нужен — сами значения должны быть в словаре
+  for (const g of [
+    'black metal', 'blackgaze', 'death doom metal', 'depressive black metal', 'groove metal', 'metalcore',
+    'street punk, Oi!', 'anarcho punk', 'garage punk', 'folk punk', 'delta blues', 'Chicago blues',
+    'gypsy jazz', 'dark jazz', 'EBM electronic body music',
+  ]) {
+    it(`в подсказках жанра есть «${g}»`, () => {
+      expect(en.has(g)).toBe(true)
+    })
+  }
+  it('подсказки сортируются по подписи языка интерфейса', async () => {
+    const { slotHints, slotHintsEn } = await import('./slotOptions.js')
+    const sorted = (arr, i, loc) => arr.every((x, k) => k === 0 || arr[k - 1][i].localeCompare(x[i], loc) <= 0)
+    expect(sorted(slotHints.genre, 0, 'ru')).toBe(true)
+    expect(sorted(slotHintsEn.genre, 1, 'en')).toBe(true)
+  })
+})
