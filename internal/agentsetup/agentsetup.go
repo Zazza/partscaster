@@ -69,7 +69,7 @@ func ConnectClaudeCode(ctx context.Context, mcpPath, url string) (string, error)
 	if err != nil {
 		return "", errors.New("не найден Claude Code (команда claude) — установите его или скопируйте команду вручную")
 	}
-	_ = exec.CommandContext(ctx, claude, "mcp", "remove", ServerName, "--scope", "user").Run() // не было — не ошибка
+	_ = exec.CommandContext(ctx, claude, "mcp", "remove", ServerName, "--scope", "user").Run()       // не было — не ошибка
 	_ = exec.CommandContext(ctx, claude, "mcp", "remove", LegacyServerName, "--scope", "user").Run() // регистрация до переименования
 	out, err := exec.CommandContext(ctx, claude, ClaudeAddArgs(mcpPath, url)...).CombinedOutput()
 	if err != nil {
