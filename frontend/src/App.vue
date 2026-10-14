@@ -621,12 +621,6 @@ const studioJob = ref(null)
 // главная — список треков; форма нового трека — отдельная страница
 const newTrackPage = sectionFlag('new')
 
-function closeOverlays() {
-  settingsPage.value = false
-  corpusPage.value = false; voicesPage.value = false; instrumentsPage.value = false; presetsPage.value = false
-  navOpen.value = false
-}
-
 // «＋ Новый трек» — раздел формы (из студии закрывает её и открывает форму)
 function openNewTrack() {
   navGo('new')
@@ -638,13 +632,6 @@ function onNewTrackKey(e) {
 }
 onMounted(() => window.addEventListener('keydown', onNewTrackKey))
 onUnmounted(() => window.removeEventListener('keydown', onNewTrackKey))
-
-// на главную — список треков (клик по названию приложения)
-function goHome() {
-  closeOverlays()
-  studioJob.value = null
-  newTrackPage.value = false
-}
 
 // страницы в меню «⋮»: треки/голоса переключаются, настройки просто открываются
 const navOpen = ref(false)
@@ -895,7 +882,7 @@ function onWindowClick(e) {
   <div class="app-shell">
   <SideBar :logo="logoUrl" :stats="stats" :jobs="jobs" :health="{ up: !!health, title: healthTitle }"
            :section="section" :studio-job="studioJob" :queue="procQueue" :worker-url="serverURL" :theme="theme" :locale="locale"
-           @nav="navGo" @home="goHome" @import-recipes="recipeImport = true" @about="welcome = 'about'"
+           @nav="navGo" @import-recipes="recipeImport = true" @about="welcome = 'about'"
            @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
   <div class="app-col">
 
@@ -1113,6 +1100,8 @@ function onWindowClick(e) {
           <VSelect v-model="qf.draft" :options="qDraftOptions" />
           <VSelect v-model="qf.folder" :options="qFolderOptions" :title="t('queue.folder.tip')" />
           <input v-model="qf.q" :placeholder="t('queue.filter.search')" />
+          <button class="ghost small-btn" :title="t('recipe.importMenu.tip')" @click="recipeImport = true">
+            <AppIcon name="folder" /> {{ t('recipe.importMenu.btn') }}</button>
         </div>
         <p class="muted">{{ filteredJobs.length
           ? t('queue.filter.shown', { shown: queuePage.length, total: filteredJobs.length })

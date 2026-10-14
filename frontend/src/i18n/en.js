@@ -206,6 +206,7 @@ export default {
   'recipe.retry': 'Retry',
   'recipe.dismiss': 'Dismiss',
   'recipe.export.warnings': 'Not included in the recipe:',
+  'recipe.importMenu.btn': 'import recipe',
   'recipe.importMenu': 'Import recipe',
   'recipe.importMenu.tip': 'A new track from a recipe made on another install',
   'recipe.progress': 'Importing “{title}”: {progress}',

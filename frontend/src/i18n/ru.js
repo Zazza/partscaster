@@ -206,6 +206,7 @@ export default {
   'recipe.retry': 'Повторить',
   'recipe.dismiss': 'Убрать',
   'recipe.export.warnings': 'Не вошло в рецепт:',
+  'recipe.importMenu.btn': 'импорт рецепта',
   'recipe.importMenu': 'Импорт рецепта',
   'recipe.importMenu.tip': 'Новый трек по рецепту с другой установки',
   'recipe.progress': 'Импорт «{title}»: {progress}',

@@ -18,7 +18,7 @@ const props = defineProps({
   theme: { type: String, default: 'dark' },    // 'dark' | 'light'
   locale: { type: String, default: 'ru' },     // 'ru' | 'en'
 })
-const emit = defineEmits(['nav', 'home', 'import-recipes', 'about', 'theme', 'locale'])
+const emit = defineEmits(['nav', 'import-recipes', 'about', 'theme', 'locale'])
 const { t } = useI18n()
 
 const collapsed = ref((() => { try { return localStorage.getItem('partscaster_sidebar') === '1' } catch { return false } })())
@@ -62,7 +62,7 @@ function onNav(id) { emit('nav', id) }
 <template>
   <aside class="sidebar" :class="{ collapsed }">
     <!-- логотип и название — одной строкой, без соседей (как в go-sd: div, не кнопка) -->
-    <div class="sb-top" :title="t('nav.home.tip')" @click="emit('home')">
+    <div class="sb-top" :title="t('nav.about.tip')" @click="emit('about')">
       <img v-if="logo" class="app-logo" :src="logo" alt="" width="26" height="26">
       <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
     </div>
