@@ -1896,9 +1896,7 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
           </div>
         </template>
       </div>
-      <div class="set-actions">
-        <button class="ghost" @click="emit('close')">{{ t('common.back') }}</button>
-      </div>
+      <!-- «вернуться» — только в шапке приложения: она всегда на виду -->
     </section>
   </main>
 </template>
