@@ -1441,11 +1441,7 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
 <template>
   <main class="settings-page studio-page">
     <section class="studio-sheet">
-      <!-- «назад» — сверху, у названия: страница длинная, нижняя кнопка не на виду -->
-      <div class="studio-top">
-        <button class="ghost" @click="emit('close')">{{ t('common.back') }}</button>
-        <h2>{{ t('studio.title') }} <span class="muted">#{{ job.id }} {{ job.title }}</span></h2>
-      </div>
+      <!-- «назад» — в шапке приложения (не прокручивается); внизу страницы — вторая кнопка -->
       <!-- шаги работы с треком: ссылки на разделы одной страницы (волна нужна всем шагам — не вкладки) -->
       <nav v-if="rollData" class="studio-steps">
         <button v-for="(st, i) in STUDIO_STEPS" :key="st" class="ghost small-btn" :class="{ on: activeStep === st }"

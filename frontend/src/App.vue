@@ -880,6 +880,9 @@ function onWindowClick(e) {
     <button class="ghost icon" :title="t('common.close')" @click="compat.dismiss"><AppIcon name="x" /></button>
   </div>
   <header>
+    <!-- «вернуться» из студии — в шапке: шапка не прокручивается, кнопка всегда на виду -->
+    <button v-if="studioJob" class="ghost studio-back" :title="t('common.back')"
+            @click="studioJob = null; refresh()">{{ t('common.back') }}<span class="studio-back-title"> #{{ studioJob.id }} {{ studioJob.title }}</span></button>
     <h1 class="home-link" :title="t('nav.home.tip')" @click="goHome"><img class="app-logo" :src="logoUrl" alt="" width="26" height="26">{{ t('app.title') }}</h1>
     <span class="health-dot" :class="health ? 'up' : 'down'" :title="healthTitle"></span>
     <button class="icon-btn" @click="toggleTheme" :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
@@ -1882,34 +1885,32 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 /* студия — без общей панели (секции-блоки лежат прямо на фоне страницы,
    не «форма в форме»); заголовок — строкой, без плашки h2 */
 .studio-page .studio-sheet { width: auto; max-width: none; flex: 1; margin: 0 16px; min-width: 0; padding-bottom: 12px; }
-.studio-sheet > h2, .studio-top > h2 {
+.studio-sheet > h2 {
   margin: 8px 2px 2px; padding: 0; background: none; border: none; text-shadow: none;
 }
-/* шапка студии («вернуться» + название) прилипает самой верхней строкой;
-   высота фиксирована — под неё считаются отступы полосы шагов и волны */
-.studio-top {
-  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
-  height: 40px; background: var(--bg);
-}
-/* полоса шагов прилипает под шапкой; активный шаг — по видимому разделу */
+/* «вернуться» из студии в шапке: название трека рядом, длинное — многоточием */
+.studio-back { flex: none; }
+.studio-back-title { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* полоса шагов прилипает к верху прокрутки; высота фиксирована, отступов нет —
+   под ней без щелей встаёт прилипшая волна (margin не красится, сквозь него
+   просвечивало содержимое) */
 .studio-steps {
-  position: sticky; top: 40px; z-index: 4; display: flex; gap: 6px; flex-wrap: wrap;
-  margin: 10px 0 4px; padding: 6px 0; background: var(--bg);
+  position: sticky; top: 0; z-index: 4; display: flex; gap: 6px; align-items: center;
+  height: 46px; box-sizing: border-box; padding: 0 2px; margin: 0;
+  flex-wrap: nowrap; overflow-x: auto; background: var(--bg);
 }
 .studio-steps .on { color: var(--lcd-text); border-color: var(--lcd-text); }
 /* активная дорожка студии — плашка в полосе шагов */
 .active-stem { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 2px 8px;
   border: 1px solid var(--lcd-text); border-radius: 12px; font-size: 12px; }
 [data-theme="light"] .active-stem { border-color: var(--accent); }
-/* волна прилипает под полосой шагов: видна из любого шага (галочка «волна сверху»).
-   Фон — сплошная панель: полупрозрачный studio-box просвечивал, содержимое
-   прокручивалось сквозь прилипший блок */
-.wave-panel.wave-pinned { position: sticky; top: 86px; z-index: 3; background: var(--panel); }
+/* волна прилипает вплотную под полосой шагов: видна из любого шага (галочка «волна сверху»).
+   Фон — сплошная панель: полупрозрачный studio-box просвечивал */
+.wave-panel.wave-pinned { position: sticky; top: 46px; z-index: 3; margin-top: 0; background: var(--panel); }
 /* в светлой теме янтарь ЖК на светлом не читается — активный шаг акцентным цветом */
 [data-theme="light"] .studio-steps .on { color: var(--accent); border-color: var(--accent); }
-.studio-step { margin: 22px 2px 8px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; scroll-margin-top: 96px; }
+.studio-step { margin: 22px 2px 8px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; scroll-margin-top: 56px; }
 .studio-step .muted { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 400; }
-.studio-top > h2 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .corpus-list { max-width: none; }
 /* секции студии (звук/план/правки/вклейки/стемы/овердаб/эффекты) — рамка
    со шапкой с фоном, как заголовок карточки трека */
