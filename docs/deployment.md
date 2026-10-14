@@ -2,14 +2,14 @@
 
 Три части: GPU-машина с воркером, опционально Ollama, desktop-приложение на ПК.
 Адрес воркера задаётся в «Настройках» приложения (кнопка «Проверить» — без сохранения; можно ввести
-просто IP, порт 8091 подставится) или переменной `YUE_URL`. Тот же адрес берёт MCP-сервер `yue-mcp`.
+просто IP, порт 8091 подставится) или переменной `PARTSCASTER_URL`. Тот же адрес берёт MCP-сервер `partscaster-mcp`.
 
 ## Релизный пакет: скачал, поставил, работает
 
 Релиз (GitHub Release тега `vX.Y.Z`, собирается `.github/workflows/release.yml`; локально — `make release`
 под эту ОС или `make dist-linux` / `make dist-windows` / `make dist-mac`):
 
-- `yue-studio-<версия>-<ОС>-<арх>.tar.gz` (Windows — `.zip`): приложение, `yue-mcp` рядом с ним,
+- `partscaster-<версия>-<ОС>-<арх>.tar.gz` (Windows — `.zip`): приложение, `partscaster-mcp` рядом с ним,
   архив воркера и `INSTALL.txt`;
 - `worker-<версия>.tar.gz` — воркер для машины с GPU.
 
@@ -41,7 +41,7 @@
 | whisper: распознавание текстов треков | по желанию | ~3,2 ГБ | кнопки распознавания неактивны с подписью «не установлен» |
 | Seed-VC: «голос альбома» (эксперимент) | по желанию | ~11 ГБ после установки, ~14 ГБ во время | блок «Голос альбома» в студии с подписью «не установлен» |
 
-Веса Hugging Face (`HF_HOME`) и Seed-VC (`YUE_SEEDVC_DIR`) можно держать на другом диске —
+Веса Hugging Face (`HF_HOME`) и Seed-VC (`PARTSCASTER_SEEDVC_DIR`) можно держать на другом диске —
 место на домашнем тогда нужно меньше. Пути с `~` установщик раскрывает в `$HOME`: systemd читает
 `worker.env` без раскрытия тильды.
 
@@ -51,28 +51,28 @@
 данные `*.json`, фразы, юнит systemd, `install.sh`). Его `install.sh` — установка и обновление базы:
 
 - проверяет видеокарту (`nvidia-smi`) до любых изменений;
-- кладёт код в `~/yue-studio/releases/<время>-<версия>/` и атомарно переключает ссылку
-  `~/yue-studio/current` (юнит запускает воркер из неё); хранит 3 прежние версии;
+- кладёт код в `~/partscaster/releases/<время>-<версия>/` и атомарно переключает ссылку
+  `~/partscaster/current` (юнит запускает воркер из неё); хранит 3 прежние версии;
 - создаёт venv `~/yue/.venv` (если нет) и ставит пакеты — только при новом venv или изменённом
-  `requirements.txt` (отпечаток — `~/yue-studio/.requirements.sha256`); venv, поставленный до архивов,
+  `requirements.txt` (отпечаток — `~/partscaster/.requirements.sha256`); venv, поставленный до архивов,
   не трогается;
 - ставит наборы сэмплов, юнит, `worker.env` (если нет; `--hf-home DIR` — кеш весов);
 - перезапускает воркер и проверяет `/health` (`--no-start` — без запуска).
 
-Данные (`~/yue-studio/data`) и `worker.env` общие для всех версий и не трогаются.
-Откат: `~/yue-studio/current/install.sh --rollback` — на предыдущую версию.
-Переменные `YUE_HOME` (по умолчанию `~/yue-studio`) и `YUE_VENV` (`~/yue/.venv`) меняют пути.
+Данные (`~/partscaster/data`) и `worker.env` общие для всех версий и не трогаются.
+Откат: `~/partscaster/current/install.sh --rollback` — на предыдущую версию.
+Переменные `PARTSCASTER_HOME` (по умолчанию `~/partscaster`) и `PARTSCASTER_VENV` (`~/yue/.venv`) меняют пути.
 
 Вручную (без агента):
 
 1. `tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh` на GPU-машине (Ubuntu + CUDA,
-   нужен `uv`). Машинные настройки — `worker.env.example` → `~/yue-studio/worker.env`.
+   нужен `uv`). Машинные настройки — `worker.env.example` → `~/partscaster/worker.env`.
 2. Веса: `HF_HOME` — каталог кеша Hugging Face (YuE2, SheetSage2, demucs качаются при
    первом вызове; нужен интернет; YuE2 — gated-репо, нужен HF-токен).
 3. Отдельный venv для Whisper (тексты треков корпусов):
    `uv venv ~/whisper-venv && uv pip install --python ~/whisper-venv/bin/python faster-whisper`
-   (воркер вызывает его сам, путь — `YUE_WHISPER_PY`).
-4. Без systemd: `cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091`.
+   (воркер вызывает его сам, путь — `PARTSCASTER_WHISPER_PY`).
+4. Без systemd: `cd ~/partscaster/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091`.
 5. Опционально: `ffmpeg` в PATH — только для спектрограммы в студии
    (`GET /jobs/{id}/spectrum.png`, готовой картинкой showspectrumpic).
    Нет бинарника — режим «спектр» честно откажет (503), волна громкости
@@ -84,9 +84,9 @@
 может работать без ошибок, но без новых возможностей (например, плавные края окна движка в студии).
 
 `make worker` (или `./deploy.sh worker`) — архив воркера на GPU-машину и его `install.sh` (новая версия,
-пакеты при изменении requirements, рестарт `yue-worker`). Хост задаётся `YUE_DEPLOY_HOST=user@gpu-host`.
+пакеты при изменении requirements, рестарт `partscaster-worker`). Хост задаётся `PARTSCASTER_DEPLOY_HOST=user@gpu-host`.
 `worker.env` и данные на машине не перезаписываются. Первый деплой архивом на машину со старой раскладкой
-(файлы прямо в `~/yue-studio/`) переводит юнит на `~/yue-studio/current`; старые `*.py` в `~/yue-studio/`
+(файлы прямо в `~/partscaster/`) переводит юнит на `~/partscaster/current`; старые `*.py` в `~/partscaster/`
 больше не используются (можно удалить вручную).
 
 ### Второй движок генерации — yue2.cpp (необязательно, ЭКСПЕРИМЕНТ)
@@ -101,9 +101,9 @@
   Q8 ~4,5, Q6 и Q5 ~4,2 (пик задают кэш модели и VAE, а не размер весов; у основного движка ~11,4).
 - Программа: готовая сборка из архива воркера (`worker-<версия>/yue2cpp/`, CUDA 12.8; библиотеки CUDA берутся
   из venv воркера — пакеты `nvidia-*` от PyTorch, пакет разработки CUDA не нужен). Нет её или не запускается —
-  install.sh собирает закреплённый коммит в `$YUE_HOME/yue2cpp-src` (нужны git, cmake, nvcc). Не вышло —
+  install.sh собирает закреплённый коммит в `$PARTSCASTER_HOME/yue2cpp-src` (нужны git, cmake, nvcc). Не вышло —
   воркер всё равно установлен и работает на основном движке.
-- Модели — в `<данные>/yue2cpp-models` (`YUE_CPP_MODELS`), скачиваются с проверкой суммы: при установке или
+- Модели — в `<данные>/yue2cpp-models` (`PARTSCASTER_CPP_MODELS`), скачиваются с проверкой суммы: при установке или
   из приложения («Настройки» → «Движок генерации» → «Скачать»), MCP — `engine_model_install`.
 - Переключение — «Настройки» приложения или MCP `config_set engine=cpp|torch`; действует со следующей
   генерации. Откат — выбрать основной движок: он остаётся установленным.
@@ -114,21 +114,21 @@
 
 | Переменная | По умолчанию | Смысл |
 |---|---|---|
-| `YUE_DATA_DIR` | `~/yue-studio/data` | SQLite-очередь, джобы, профили корпусов |
-| `YUE_OLLAMA_URL` | `http://127.0.0.1:11434/api/chat` | Ollama для копайтера/перевода/стиля профиля |
-| `YUE_OLLAMA_MODEL` | `qwen2.5-chat-ru:latest` | модель Ollama |
-| `YUE_WHISPER_PY` | `~/whisper-venv/bin/python` | интерпретатор whisper-venv |
+| `PARTSCASTER_DATA_DIR` | `~/partscaster/data` | SQLite-очередь, джобы, профили корпусов |
+| `PARTSCASTER_OLLAMA_URL` | `http://127.0.0.1:11434/api/chat` | Ollama для копайтера/перевода/стиля профиля |
+| `PARTSCASTER_OLLAMA_MODEL` | `qwen2.5-chat-ru:latest` | модель Ollama |
+| `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | интерпретатор whisper-venv |
 | `HF_HOME` | — | кеш весов Hugging Face |
 | `YUE2_MAX_TOKENS` | `16000` | бюджет семантических токенов на песню ≈ макс. длина (дефолт протокола 9000 ≈ 4.5–6 мин; 16000 ≈ до ~10 мин; пик VRAM растёт с длиной) |
 | `YUE2_CFG_SCALE` | `1.5` | следование стилю (classifier-free guidance): выше — точнее, но суше |
-| `YUE_SEEDVC_DIR` | `~/yue-studio/seedvc` | каталог Seed-VC («голос альбома», необязательно) — см. ниже |
-| `YUE_SEP_PY` | `~/sep-venv/bin/python` | интерпретатор окружения разделения (RoFormer) — см. ниже |
-| `YUE_SEP_MODELS` | `~/sep-models` | каталог весов RoFormer/DrumSep (~1,1 ГБ, качаются при первом разделении) |
-| `YUE_STEMS_MODEL` | — | `demucs` — откат: разделять demucs, даже если RoFormer выбран в настройках и установлен |
-| `YUE_NAM_DEPS` | — | папка с пакетами NAM для блока `amp` звукового движка — см. ниже |
-| `YUE_FX_ENGINE` | — | `0` — откат: звуковой движок выключен (`/jobs/{id}/fx` → 503), что бы ни было в настройках |
-| `YUE_CPP_BIN` | — | своя программа `yue-server` (иначе — из архива, затем собранная install.sh) |
-| `YUE_CPP_MODELS` | `<данные>/yue2cpp-models` | каталог моделей yue2.cpp (GGUF) |
+| `PARTSCASTER_SEEDVC_DIR` | `~/partscaster/seedvc` | каталог Seed-VC («голос альбома», необязательно) — см. ниже |
+| `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | интерпретатор окружения разделения (RoFormer) — см. ниже |
+| `PARTSCASTER_SEP_MODELS` | `~/sep-models` | каталог весов RoFormer/DrumSep (~1,1 ГБ, качаются при первом разделении) |
+| `PARTSCASTER_STEMS_MODEL` | — | `demucs` — откат: разделять demucs, даже если RoFormer выбран в настройках и установлен |
+| `PARTSCASTER_NAM_DEPS` | — | папка с пакетами NAM для блока `amp` звукового движка — см. ниже |
+| `PARTSCASTER_FX_ENGINE` | — | `0` — откат: звуковой движок выключен (`/jobs/{id}/fx` → 503), что бы ни было в настройках |
+| `PARTSCASTER_CPP_BIN` | — | своя программа `yue-server` (иначе — из архива, затем собранная install.sh) |
+| `PARTSCASTER_CPP_MODELS` | `<данные>/yue2cpp-models` | каталог моделей yue2.cpp (GGUF) |
 
 Настройки Ollama также меняются на лету из приложения (⚙ в шапке → `/config` воркера).
 
@@ -147,26 +147,26 @@
 и venv; воркер вызывает его отдельной программой (`seedvc_run.py`), как whisper.
 Без установки воркер работает как раньше, запрос отвечает 503 с подсказкой.
 
-Установка на GPU-машине (после `make worker` файлы уже в `~/yue-studio/`):
+Установка на GPU-машине (после `make worker` файлы уже в `~/partscaster/`):
 
 ```bash
-~/yue-studio/current/seedvc_install.sh                 # в ~/yue-studio/seedvc
-~/yue-studio/current/seedvc_install.sh /data/yue-seedvc  # или в свой каталог
+~/partscaster/current/seedvc_install.sh                 # в ~/partscaster/seedvc
+~/partscaster/current/seedvc_install.sh /data/yue-seedvc  # или в свой каталог
 ```
 
 - Нужно: `git`, [`uv`](https://docs.astral.sh/uv/), CUDA-GPU, **~14 ГБ** на время установки,
   ~10 ГБ после: venv 7,5 (из них CUDA-библиотеки 4,3) + веса 2,4 (скрипт проверит место до установки и уберёт кэш пакетов в конце). Всё — код закреплённой версии, venv, веса,
   кэши uv и Hugging Face — внутри одного каталога: мимо него на системный диск
   ничего не пишется, каталог можно перенести на другой диск целиком.
-- Каталог не по умолчанию — `YUE_SEEDVC_DIR=<каталог>` в `~/yue-studio/worker.env`
+- Каталог не по умолчанию — `PARTSCASTER_SEEDVC_DIR=<каталог>` в `~/partscaster/worker.env`
   и перезапуск воркера. Проверка: MCP `doctor` или `GET /config` (`seedvc_available`).
-- PyTorch ставится с индекса CUDA 12.8; другая CUDA — `YUE_TORCH_INDEX=<индекс>` перед
+- PyTorch ставится с индекса CUDA 12.8; другая CUDA — `PARTSCASTER_TORCH_INDEX=<индекс>` перед
   запуском скрипта.
 - Ресурсы (замер на RTX 4070 Ti SUPER 16 ГБ): +3,8 ГБ видеопамяти на время замены
   (рядом с загруженной YuE2 ~7.7 ГБ помещается); 50 шагов диффузии — ~0.6 от
   длительности голоса.
 - Лицензия Seed-VC — GPL-3.0: ставится пользователем явно и работает отдельной
-  программой, код Yue Studio под неё не попадает.
+  программой, код Partscaster под неё не попадает.
 
 ## Звуковой движок и усилители NAM
 
@@ -180,20 +180,20 @@ neural-amp-modeler **0.12.2** (MIT; читает захваты `.nam` форм�
 uv pip install --python ~/yue/.venv/bin/python --target /opt/yue/nam-deps --no-deps \
   neural-amp-modeler==0.12.2 wavio pytorch_lightning lightning_utilities torchmetrics auraloss \
   matplotlib contourpy cycler fonttools kiwisolver pillow pyparsing python-dateutil
-echo 'YUE_NAM_DEPS=/opt/yue/nam-deps' >> ~/yue-studio/worker.env   # и перезапуск воркера
+echo 'PARTSCASTER_NAM_DEPS=/opt/yue/nam-deps' >> ~/partscaster/worker.env   # и перезапуск воркера
 ```
 
 - Захваты усилителей (`.nam`) и импульсные отклики кабинетов/залов (`.wav`) в поставку не входят:
   пользователь загружает свои (`fx_asset_upload`, у каждого захвата своя лицензия). Лежат в
-  `<YUE_DATA_DIR>/fx/amps` и `fx/irs`. Задержка захвата меряется щелчком при первом применении и
+  `<PARTSCASTER_DATA_DIR>/fx/amps` и `fx/irs`. Задержка захвата меряется щелчком при первом применении и
   кэшируется рядом (`<имя>.nam.latency.json`).
 - Ресурсы (замер на RTX 4070 Ti SUPER): первая загрузка ~13 с (инициализация CUDA), дальше — доли
   секунды; 4 минуты стерео через усилитель — ~2 с; остальные блоки — 0,4–2 с на CPU.
-- Без `YUE_NAM_DEPS` движок работает, недоступен только блок `amp` (ошибка с причиной).
-- Откат: `YUE_FX_ENGINE=0` в `worker.env` или `config_set fx_engine=false` — эндпоинт отвечает 503,
+- Без `PARTSCASTER_NAM_DEPS` движок работает, недоступен только блок `amp` (ошибка с причиной).
+- Откат: `PARTSCASTER_FX_ENGINE=0` в `worker.env` или `config_set fx_engine=false` — эндпоинт отвечает 503,
   эффекты ffmpeg приложения работают как прежде (движок их не заменяет).
 - Наборы сэмплов барабанов (блок `sampler`) воркер качает сам по требованию (`POST /fx/kits/install`, MCP
-  `fx_kit_install`) в `<YUE_DATA_DIR>/fx/kits`, нужен доступ к GitHub. Первый набор — The Open Source Drum Kit
+  `fx_kit_install`) в `<PARTSCASTER_DATA_DIR>/fx/kits`, нужен доступ к GitHub. Первый набор — The Open Source Drum Kit
   (Real Music Media, github.com/crabacus/the-open-source-drumkit): автор объявил сэмплы общественным
   достоянием — можно в своих треках без указания автора (заявление автора на KVR:
   https://www.kvraudio.com/forum/viewtopic.php?t=277132; в репозитории файла лицензии нет). Версия набора
@@ -215,7 +215,7 @@ echo 'YUE_NAM_DEPS=/opt/yue/nam-deps' >> ~/yue-studio/worker.env   # и пере
   имени + поправка октавы части (VSCO почти везде считает C3 = 60; замер по каждому сэмплу).
 - Наборы ставятся заранее: `make worker` и установщик (`install_worker`) после файлов запускают
   `~/yue/.venv/bin/python kits_install.py` — все наборы каталога (~1 ГБ в первый раз, дальше — без сети) с прогрессом
-  по наборам; руками — тот же вызов в `~/yue-studio` (можно с именами: `kits_install.py vsco-violin osdk`). Списки
+  по наборам; руками — тот же вызов в `~/partscaster` (можно с именами: `kits_install.py vsco-violin osdk`). Списки
   файлов новых наборов закреплены в `worker/fx_kit_files.json`: файлы качаются прямыми ссылками
   raw.githubusercontent.com, без API GitHub (его лимит без ключа — 60 запросов в час на адрес; оркестр — 31 часть).
   У каждого файла 3 попытки; оборвалось — повтор докачивает, не начиная заново. Набора нет — приложение докачает его при
@@ -246,18 +246,18 @@ uv pip install --python ~/sep-venv/bin/python "audio-separator[gpu]" audioread
 ```
 
 Окружение ~6,1 ГБ; при нехватке места на домашнем — поставьте на другой диск и укажите
-`YUE_SEP_PY` (и `YUE_SEP_MODELS` для весов) в `worker.env`. Через агента — `install_worker roformer=true
+`PARTSCASTER_SEP_PY` (и `PARTSCASTER_SEP_MODELS` для весов) в `worker.env`. Через агента — `install_worker roformer=true
 stems_model=roformer|htdemucs` (агент спрашивает, чем делать дорожки по умолчанию; выбор пишется в
 настройки воркера, после установки проверяется, что дорожки действительно делает RoFormer; без RoFormer и без выбора
 настройка не меняется), например `install_worker roformer=true stems_model=roformer
 sep_dir=/mnt/d/sep`: окружение встанет в `<sep_dir>/venv`, веса — в `<sep_dir>/models`, пути
 допишутся в `worker.env` сами. Нет окружения или оно упало —
-разделяет demucs, ошибки нет; `YUE_STEMS_MODEL=demucs` выключает RoFormer принудительно, что бы ни
+разделяет demucs, ошибки нет; `PARTSCASTER_STEMS_MODEL=demucs` выключает RoFormer принудительно, что бы ни
 было выбрано в настройках.
 Какая модель активна — в настройках приложения и в `/config` (`stems_model`).
 
 **Лицензия весов:** RoFormer-SW и DrumSep — CC BY-NC-SA (некоммерческие); в репозиторий не
-входят, качаются при первом разделении. Для коммерчески чистого режима — `YUE_STEMS_MODEL=demucs`
+входят, качаются при первом разделении. Для коммерчески чистого режима — `PARTSCASTER_STEMS_MODEL=demucs`
 (веса demucs — MIT).
 
 ## Ollama
@@ -265,14 +265,14 @@ sep_dir=/mnt/d/sep`: окружение встанет в `<sep_dir>/venv`, ве
 Отдельный сервис на `127.0.0.1:11434`, модель `qwen2.5`. Не обязателен: без него
 генерация работает, недоступны копайтер/автоперевод/профиль-стиль.
 
-## Воркер на Windows без WSL — yue-worker.exe
+## Воркер на Windows без WSL — partscaster-worker.exe
 
-В пакете Windows (`yue-studio-<версия>-windows-amd64.zip`) рядом с приложением лежит `yue-worker.exe`.
+В пакете Windows (`partscaster-<версия>-windows-amd64.zip`) рядом с приложением лежит `partscaster-worker.exe`.
 Двойной щелчок открывает окно консоли; окно открыто — воркер работает, закрыли — остановлен (процесс Python
 привязан к программе объектом задания Windows и не остаётся в фоне). Автозапуска нет.
 
 - **Первый запуск:** проверка видеокарты (`nvidia-smi`), выбор папки (по умолчанию
-  `%LOCALAPPDATA%\yue-worker`, выбор запоминается; другая — `yue-worker.exe --home D:\yue-worker`), затем в эту
+  `%LOCALAPPDATA%\partscaster-worker`, выбор запоминается; другая — `partscaster-worker.exe --home D:\partscaster-worker`), затем в эту
   папку ставятся uv (закреплённая версия, проверка sha256), Python 3.12, окружение `venv` и пакеты:
   `requirements.txt` + `torch`/`torchaudio` `2.10.0+cu128` (явная метка: без неё uv на Windows берёт сборку
   без CUDA) + `yue2-infer` архивом закреплённого коммита YuE + `truststore`. Около 25 ГБ вместе с моделью;
@@ -281,7 +281,7 @@ sep_dir=/mnt/d/sep`: окружение встанет в `<sep_dir>/venv`, ве
   закреплённые версии (отпечаток — `packages.sha256` в папке). Новая версия программы кладёт новый код
   воркера в `app\`; данные (`data\`), модели (`hf-cache\`) и пакеты остаются.
 - **Адрес:** `127.0.0.1:8091` — в приложении указать `127.0.0.1`. Для других машин сети —
-  `yue-worker.exe --lan` (воркер без аутентификации, поэтому по умолчанию только этот ПК).
+  `partscaster-worker.exe --lan` (воркер без аутентификации, поэтому по умолчанию только этот ПК).
 - **Сертификаты:** uv берёт их из хранилища Windows (`UV_SYSTEM_CERTS`), Python — через `truststore`;
   так загрузки работают и там, где антивирус или прокси подменяют HTTPS своим сертификатом.
 - **Движок:** при первой установке программа спрашивает — основной (PyTorch, режим
@@ -291,7 +291,7 @@ sep_dir=/mnt/d/sep`: окружение встанет в `<sep_dir>/venv`, ве
   собирается в релизе, см. `tools/yue2cpp-build.ps1` — пакет без неё деградирует до «только основной»).
   Модель (bf16/q8/q6/q5) и экономный режим предлагаются по объёму карты (8 ГБ → q6, экономный),
   веса (~2,6–7,2 ГБ) скачиваются тут же; после скачивания выбор пишется в `data\settings.json` и больше
-  не спрашивается. Без вопросов: `yue-worker.exe --engine cpp --cpp-model q8 [--cpp-low-vram]`
+  не спрашивается. Без вопросов: `partscaster-worker.exe --engine cpp --cpp-model q8 [--cpp-low-vram]`
   (или `--engine torch`). Сменить движок позже — в «Настройках» приложения (модель, «Скачать»,
   экономный режим). Библиотеки CUDA пользователю не нужны: программа yue2.cpp берёт их из venv
   (torch cu128), но пакет разработки CUDA для сборки — нужен только тому, кто собирает релиз.
@@ -312,12 +312,12 @@ wsl --install -d Ubuntu            # один раз; драйвер NVIDIA уж
 #    (пример для диска D:):
 export HF_HOME=/mnt/d/AI/hf-cache
 # 3. общие данные с Linux-бутом — та же папка на общем диске (или своя):
-export YUE_DATA_DIR=/mnt/d/yue-studio-data
+export PARTSCASTER_DATA_DIR=/mnt/d/partscaster-data
 # 4. Ollama под Windows: localhost Windows из WSL2
-export YUE_OLLAMA_URL=http://$(ip route show default | awk '{print $3}'):11434/api/chat
+export PARTSCASTER_OLLAMA_URL=http://$(ip route show default | awk '{print $3}'):11434/api/chat
 #    (в WSL с mirrored-сетью подойдёт и http://127.0.0.1:11434/api/chat)
 # 5. запуск:
-cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
+cd ~/partscaster/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --host 0.0.0.0 --port 8091
 ```
 
 Приложение на Windows подключается к `http://localhost:8091` (или к IP WSL —
@@ -329,13 +329,13 @@ cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --ho
 Требования: Go 1.22+, Node.js 20+, [Wails CLI v2](https://wails.io)
 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`).
 
-**Пакеты по ОС** (приложение + `yue-mcp` + архив воркера + `INSTALL.txt` в `dist/`):
+**Пакеты по ОС** (приложение + `partscaster-mcp` + архив воркера + `INSTALL.txt` в `dist/`):
 
 | Цель | Где собирается | Итог |
 |---|---|---|
-| `make dist-linux` | Linux | `yue-studio-<версия>-linux-<арх>.tar.gz` |
-| `make dist-windows` | Linux или Windows (Wails под Windows собирается без cgo) | `yue-studio-<версия>-windows-amd64.zip` |
-| `make dist-mac` | только Mac (Wails под macOS — cgo и SDK Apple) | `yue-studio-<версия>-darwin-<арх>.tar.gz` |
+| `make dist-linux` | Linux | `partscaster-<версия>-linux-<арх>.tar.gz` |
+| `make dist-windows` | Linux или Windows (Wails под Windows собирается без cgo) | `partscaster-<версия>-windows-amd64.zip` |
+| `make dist-mac` | только Mac (Wails под macOS — cgo и SDK Apple) | `partscaster-<версия>-darwin-<арх>.tar.gz` |
 
 На чужой ОС `dist-linux` и `dist-mac` отказывают с подсказкой; в CI пакет каждой ОС собирается на своём
 раннере. На Linux с docker перед пакетом собирается yue2.cpp (`make yue2cpp`), если его ещё нет в `dist/`, —
@@ -345,20 +345,20 @@ cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --ho
 ```bash
 sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
 make build          # wails build с версией из git (make release — пакет в dist/)
-# бинарник: build/bin/yue-studio
+# бинарник: build/bin/partscaster
 make install-desktop   # ярлык в меню приложений (~/.local/share/applications)
 ```
 Ярлык нужен и ради иконки: GNOME на Wayland берёт её только из `.desktop`-файла
-(сопоставляет по имени `yue-studio`), иконку самого окна там не показывает.
+(сопоставляет по имени `partscaster`), иконку самого окна там не показывает.
 Запуск с ярлыка не видит переменных окружения шелла — адрес воркера задаётся
-в настройках приложения, а не через `YUE_URL`. Убрать — `make uninstall-desktop`.
+в настройках приложения, а не через `PARTSCASTER_URL`. Убрать — `make uninstall-desktop`.
 Звук — через встроенный pw-play плеер (PipeWire): в webkit2gtk у webview нет
 аудиовыхода, это ограничение именно Linux-сборки.
 
 **Windows:**
 ```powershell
 wails build          # webview2 (Edge) — ставится автоматически
-# бинарник: build\bin\yue-studio.exe
+# бинарник: build\bin\partscaster.exe
 ```
 Звук — через WPF MediaPlayer (PowerShell-обёртка). Воркер — архивом из релиза
 (или `make worker` из WSL/Git Bash). Воркер может оставаться на GPU-машине —

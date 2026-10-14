@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"yue-studio/internal/config"
+	"partscaster/internal/config"
 )
 
 // WorkerAPI — версия API воркера, с которой работает этот клиент (приложение и MCP).

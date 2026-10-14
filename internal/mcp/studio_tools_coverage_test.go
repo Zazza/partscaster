@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/config"
+	"partscaster/internal/config"
 )
 
 // Спецификация инструментов MCP:
@@ -66,7 +66,7 @@ func newStudioCovServer(t *testing.T) (*Server, *studioCovFake) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
 	t.Setenv("AppData", dir) // Windows: os.UserConfigDir читает %AppData%
-	t.Setenv("YUE_URL", "")
+	t.Setenv("PARTSCASTER_URL", "")
 	t.Setenv("TMPDIR", t.TempDir())
 	fake := &studioCovFake{fakeService: &fakeService{url: "http://w:8091",
 		fetch: map[string]string{"stem-vocals.flac": "STEM-v1"}}}
@@ -149,7 +149,7 @@ func TestConfigSetWorkerSettingsPassedAsGiven(t *testing.T) {
 	if fake.url != "http://w:8091" {
 		t.Fatalf("адрес воркера изменён без server_url: %q", fake.url)
 	}
-	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "yue-studio", "settings.json")); err == nil {
+	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "partscaster", "settings.json")); err == nil {
 		t.Fatal("настройки приложения перезаписаны без server_url")
 	}
 }

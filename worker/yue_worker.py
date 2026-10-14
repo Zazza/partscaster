@@ -1,4 +1,4 @@
-"""Yue Studio worker — API вокруг резидентной YuE2Pipeline (:8091, 0.0.0.0).
+"""Partscaster worker — API вокруг резидентной YuE2Pipeline (:8091, 0.0.0.0).
 
 Держит модель загруженной между запросами; очередь задач живёт здесь же
 (SQLite), так что закрытие desktop-приложения не прерывает генерации."""
@@ -46,10 +46,10 @@ from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_DEMUCS, MODEL_ROF
                    roformer_enabled, separate as demucs_separate)
 import voice as voicevc
 
-log = logging.getLogger("yue-worker")
+log = logging.getLogger("partscaster-worker")
 logging.basicConfig(level=logging.INFO)
 
-DATA_DIR = Path(os.environ.get("YUE_DATA_DIR", Path.home() / "yue-studio" / "data"))
+DATA_DIR = Path(os.environ.get("PARTSCASTER_DATA_DIR", Path.home() / "partscaster" / "data"))
 JOBS_DIR = DATA_DIR / "jobs"
 REFS_DIR = DATA_DIR / "references"
 TRANSCRIBES_DIR = DATA_DIR / "transcribes"
@@ -59,7 +59,7 @@ DB_PATH = DATA_DIR / "yue.db"
 for d in (JOBS_DIR, REFS_DIR, TRANSCRIBES_DIR, CORPUS_DIR, VOICES_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-WHISPER_PY = Path(os.environ.get("YUE_WHISPER_PY", Path.home() / "whisper-venv" / "bin" / "python"))
+WHISPER_PY = Path(os.environ.get("PARTSCASTER_WHISPER_PY", Path.home() / "whisper-venv" / "bin" / "python"))
 
 # Бюджет семантических токенов на песню (дефолт протокола 9000 ≈ 4.5–6 мин;
 # контекст модели 24576 общий: стиль+лирика+план+песня). 16000 ≈ до ~10 мин,
@@ -75,7 +75,7 @@ LIB_DEFAULT_SEED = 831001
 TEMPERATURE_RANGE = (0.5, 1.5)
 CFG_RANGE = (1.0, 4.0)
 
-app = FastAPI(title="yue-worker")
+app = FastAPI(title="partscaster-worker")
 
 _pipe = None
 _pipe_lock = threading.Lock()   # одна операция с моделью одновременно
@@ -982,8 +982,8 @@ class TranslateIn(BaseModel):
     to: str = "English"
 
 
-OLLAMA_URL = os.environ.get("YUE_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
-OLLAMA_MODEL = os.environ.get("YUE_OLLAMA_MODEL", "qwen2.5-chat-ru:latest")
+OLLAMA_URL = os.environ.get("PARTSCASTER_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
+OLLAMA_MODEL = os.environ.get("PARTSCASTER_OLLAMA_MODEL", "qwen2.5-chat-ru:latest")
 
 
 class ConfigIn(BaseModel):
@@ -991,7 +991,7 @@ class ConfigIn(BaseModel):
     ollama_model: str | None = None
     auto_stems_instrumental: bool | None = None
     stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
-    fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); YUE_FX_ENGINE=0 — выкл всегда
+    fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
     # движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим (~4,5 ГБ)
     engine: str | None = None
     cpp_model: str | None = None
@@ -3059,7 +3059,7 @@ FX_SOURCES = ("mix",) + MAIN_STEMS + DETAIL_STEMS + DRUM_PARTS
 # имя захвата/IR: буквы (в т.ч. кириллица), цифры, пробел и « .,()+-_»; без путей
 FX_NAME_RE = re.compile(r"^[\w][\w .,()+\-]{0,150}$")
 # сторонние пакеты NAM (neural-amp-modeler 0.12.2 + зависимости) — отдельной папкой
-NAM_DEPS = os.environ.get("YUE_NAM_DEPS", "")
+NAM_DEPS = os.environ.get("PARTSCASTER_NAM_DEPS", "")
 
 
 def _fx_dir() -> Path:
@@ -3068,8 +3068,8 @@ def _fx_dir() -> Path:
 
 
 def fx_engine_enabled() -> bool:
-    """Движок включён: YUE_FX_ENGINE=0 выключает принудительно (откат), иначе — настройка."""
-    if os.environ.get("YUE_FX_ENGINE", "").strip() == "0":
+    """Движок включён: PARTSCASTER_FX_ENGINE=0 выключает принудительно (откат), иначе — настройка."""
+    if os.environ.get("PARTSCASTER_FX_ENGINE", "").strip() == "0":
         return False
     return bool(_load_settings().get("fx_engine", True))
 
@@ -3698,7 +3698,7 @@ def job_fx(job_id: int, req: FxIn):
     """Звуковой движок: цепочка блоков (fx_engine) на весь трек или дорожку, в окне
     from/to или целиком. Результат — вариант dsp-fx-*.flac (как варианты эффектов ПК)."""
     if not fx_engine_enabled():
-        raise HTTPException(503, "звуковой движок выключен (настройка fx_engine / YUE_FX_ENGINE=0)")
+        raise HTTPException(503, "звуковой движок выключен (настройка fx_engine / PARTSCASTER_FX_ENGINE=0)")
     return _fx_render(job_id, req)
 
 
@@ -3974,7 +3974,7 @@ def fx_phrase(req: PhraseIn):
     import fx_engine
     import phrases
     if not fx_engine_enabled():
-        raise HTTPException(503, "звуковой движок выключен (настройка fx_engine / YUE_FX_ENGINE=0)")
+        raise HTTPException(503, "звуковой движок выключен (настройка fx_engine / PARTSCASTER_FX_ENGINE=0)")
     if req.phrase not in phrases.PHRASES:
         raise HTTPException(404, f"нет фразы {req.phrase}")
     bad = [s for s in req.stems if s not in phrases.parts_of(req.phrase)]
@@ -4387,7 +4387,7 @@ def listen(job_id: int, f: str | None = None):
         title = f"{title} · {fname}"
     title = html.escape(title)   # название задаёт пользователь — в страницу только текстом
     return HTMLResponse(f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{title} — Yue Studio</title>
+<html><head><meta charset="utf-8"><title>{title} — Partscaster</title>
 <style>
 body {{ background:#101014;color:#e8e8ee;font:15px system-ui,sans-serif;
        display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0 }}
@@ -4397,7 +4397,7 @@ small {{ color:#8b8b9a }}
 audio {{ width:100%;margin-top:18px }}
 </style></head>
 <body><div class="card">
-<h1>{title}</h1><small>Yue Studio — job #{job_id}</small>
+<h1>{title}</h1><small>Partscaster — job #{job_id}</small>
 <audio controls autoplay src="{src}"></audio>
 </div></body></html>""")
 

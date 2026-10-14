@@ -70,8 +70,8 @@ def _semantic_sampling(budget: int, temperature: float, min_tokens: int = 200) -
 
 
 def models_dir() -> Path:
-    data = Path(os.environ.get("YUE_DATA_DIR", Path.home() / "yue-studio" / "data"))
-    return Path(os.environ.get("YUE_CPP_MODELS") or data / "yue2cpp-models")
+    data = Path(os.environ.get("PARTSCASTER_DATA_DIR", Path.home() / "partscaster" / "data"))
+    return Path(os.environ.get("PARTSCASTER_CPP_MODELS") or data / "yue2cpp-models")
 
 
 def _file_ok(spec: dict) -> bool:
@@ -159,10 +159,10 @@ IS_WINDOWS = os.name == "nt"
 def _candidates() -> list[Path]:
     exe = ".exe" if IS_WINDOWS else ""
     out = []
-    if os.environ.get("YUE_CPP_BIN"):
-        out.append(Path(os.environ["YUE_CPP_BIN"]))
+    if os.environ.get("PARTSCASTER_CPP_BIN"):
+        out.append(Path(os.environ["PARTSCASTER_CPP_BIN"]))
     out.append(Path(__file__).resolve().parent / "yue2cpp" / f"yue-server{exe}")   # из архива релиза
-    home = Path(os.environ.get("YUE_HOME", Path.home() / "yue-studio"))
+    home = Path(os.environ.get("PARTSCASTER_HOME", Path.home() / "partscaster"))
     out.append(home / "yue2cpp-src" / "build" / f"yue-server{exe}")               # собран install.sh
     return out
 
@@ -585,7 +585,7 @@ class CppServer:
         import numpy as np
         import soundfile as sf
         z = np.ascontiguousarray(np.asarray(latents, dtype="<f4"))
-        b = b"----yue-studio-vae"
+        b = b"----partscaster-vae"
         req = json.dumps({"output_format": WAV_FORMAT}).encode()
         data = b"".join([
             b"--" + b + b"\r\n", b'Content-Disposition: form-data; name="request"; filename="request.json"\r\n',

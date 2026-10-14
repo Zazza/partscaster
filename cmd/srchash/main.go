@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"yue-studio/internal/buildinfo"
+	"partscaster/internal/buildinfo"
 )
 
 func main() {

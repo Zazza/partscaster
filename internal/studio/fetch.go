@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // baseAudioFiles — где лежит звук трека: у сгенерированных audio.flac, у

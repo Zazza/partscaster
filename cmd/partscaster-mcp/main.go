@@ -1,8 +1,8 @@
-// yue-mcp — MCP-сервер (stdio) для управления Yue Studio через AI-агентов:
+// partscaster-mcp — MCP-сервер (stdio) для управления Partscaster через AI-агентов:
 // генерация музыки, настройки, библиотека стилей, установка воркера.
 //
-// Адрес воркера: переменная YUE_URL или сохранённые настройки приложения.
-// Артефакты скачиваются в YUE_MCP_DIR (по умолчанию ~/yue-mcp-downloads).
+// Адрес воркера: переменная PARTSCASTER_URL или сохранённые настройки приложения.
+// Артефакты скачиваются в PARTSCASTER_MCP_DIR (по умолчанию ~/partscaster-mcp-downloads).
 package main
 
 import (
@@ -10,9 +10,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"yue-studio/internal/config"
-	"yue-studio/internal/mcp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/config"
+	"partscaster/internal/mcp"
+	"partscaster/internal/yue"
 )
 
 // Вшиваются при сборке (make mcp): отпечаток исходников и каталог репозитория —
@@ -27,16 +27,16 @@ func main() {
 	log.SetFlags(0)
 
 	cfg := config.Load()
-	if u := os.Getenv("YUE_URL"); u != "" {
+	if u := os.Getenv("PARTSCASTER_URL"); u != "" {
 		cfg.YueURL = u
 	}
-	dir := os.Getenv("YUE_MCP_DIR")
+	dir := os.Getenv("PARTSCASTER_MCP_DIR")
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			log.Fatalf("home dir: %v", err)
 		}
-		dir = filepath.Join(home, "yue-mcp-downloads")
+		dir = filepath.Join(home, "partscaster-mcp-downloads")
 	}
 
 	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха

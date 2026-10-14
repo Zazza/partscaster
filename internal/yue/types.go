@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-// Service — API воркера Yue Studio. Интерфейс нужен app-слою для тестирования.
+// Service — API воркера Partscaster. Интерфейс нужен app-слою для тестирования.
 type Service interface {
 	Health(ctx context.Context) (*HealthInfo, error)
 	// Version — сборка воркера и версия API (сверка совместимости приложения/MCP с воркером)

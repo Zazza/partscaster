@@ -1,5 +1,5 @@
 // Package agentsetup — раздел настроек «Для AI-агентов»: готовые фрагменты конфига
-// MCP-клиентов и подключение yue-mcp к Claude Code одной кнопкой.
+// MCP-клиентов и подключение partscaster-mcp к Claude Code одной кнопкой.
 package agentsetup
 
 import (
@@ -14,12 +14,16 @@ import (
 	"strings"
 )
 
-const ServerName = "yue-studio"
+const ServerName = "partscaster"
 
-// MCPPath — yue-mcp рядом с исполняемым файлом приложения (так его кладёт релизный пакет,
-// и так же лежат build/bin/yue-studio и build/bin/yue-mcp при сборке из исходников).
+// LegacyServerName — имя сервера до переименования проекта; старую регистрацию
+// снимаем при подключении, чтобы у агентов не осталось битой ссылки на yue-mcp.
+const LegacyServerName = "yue-studio"
+
+// MCPPath — partscaster-mcp рядом с исполняемым файлом приложения (так его кладёт релизный пакет,
+// и так же лежат build/bin/partscaster и build/bin/partscaster-mcp при сборке из исходников).
 func MCPPath(exeDir, goos string) string {
-	name := "yue-mcp"
+	name := "partscaster-mcp"
 	if goos == "windows" {
 		name += ".exe"
 	}
@@ -27,9 +31,9 @@ func MCPPath(exeDir, goos string) string {
 }
 
 // ClaudeAddArgs — аргументы `claude` для регистрации сервера на уровне пользователя
-// (виден во всех проектах); адрес воркера передаётся переменной YUE_URL.
+// (виден во всех проектах); адрес воркера передаётся переменной PARTSCASTER_URL.
 func ClaudeAddArgs(mcpPath, url string) []string {
-	return []string{"mcp", "add", ServerName, "--scope", "user", "-e", "YUE_URL=" + url, "--", mcpPath}
+	return []string{"mcp", "add", ServerName, "--scope", "user", "-e", "PARTSCASTER_URL=" + url, "--", mcpPath}
 }
 
 type Snippets struct {
@@ -45,12 +49,12 @@ func MakeSnippets(mcpPath, url string) Snippets {
 		quoted[i] = shellQuote(a)
 	}
 	desktop := map[string]any{"mcpServers": map[string]any{
-		ServerName: map[string]any{"command": mcpPath, "env": map[string]string{"YUE_URL": url}},
+		ServerName: map[string]any{"command": mcpPath, "env": map[string]string{"PARTSCASTER_URL": url}},
 	}}
 	return Snippets{
 		ClaudeCode:    "claude " + strings.Join(quoted, " "),
 		ClaudeDesktop: jsonText(desktop, "  "),
-		Codex: fmt.Sprintf("[mcp_servers.%s]\ncommand = %s\nenv = { YUE_URL = %s }\n",
+		Codex: fmt.Sprintf("[mcp_servers.%s]\ncommand = %s\nenv = { PARTSCASTER_URL = %s }\n",
 			ServerName, jsonText(mcpPath, ""), jsonText(url, "")),
 	}
 }
@@ -59,13 +63,14 @@ func MakeSnippets(mcpPath, url string) Snippets {
 // сначала снимается, чтобы новый путь и адрес заменили старые.
 func ConnectClaudeCode(ctx context.Context, mcpPath, url string) (string, error) {
 	if _, err := os.Stat(mcpPath); err != nil {
-		return "", fmt.Errorf("yue-mcp не найден рядом с приложением (%s) — соберите его: make mcp", mcpPath)
+		return "", fmt.Errorf("partscaster-mcp не найден рядом с приложением (%s) — соберите его: make mcp", mcpPath)
 	}
 	claude, err := exec.LookPath("claude")
 	if err != nil {
 		return "", errors.New("не найден Claude Code (команда claude) — установите его или скопируйте команду вручную")
 	}
 	_ = exec.CommandContext(ctx, claude, "mcp", "remove", ServerName, "--scope", "user").Run() // не было — не ошибка
+	_ = exec.CommandContext(ctx, claude, "mcp", "remove", LegacyServerName, "--scope", "user").Run() // регистрация до переименования
 	out, err := exec.CommandContext(ctx, claude, ClaudeAddArgs(mcpPath, url)...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("claude mcp add: %w: %s", err, strings.TrimSpace(string(out)))

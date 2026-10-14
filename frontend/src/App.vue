@@ -1,5 +1,5 @@
 <script setup>
-// Yue Studio — корневой компонент: форма новой композиции, очередь/результаты,
+// Partscaster — корневой компонент: форма новой композиции, очередь/результаты,
 // переключение страниц. Экранные компоненты и модалки — в ./components/.
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { api } from './api.js'

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // splice {job_id, parts, crossfade?,

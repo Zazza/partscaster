@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"yue-studio/internal/buildinfo"
+	"partscaster/internal/buildinfo"
 )
 
 const staleInterval = 30 * time.Minute

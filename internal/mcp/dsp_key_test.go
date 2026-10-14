@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Цепочка с ключом

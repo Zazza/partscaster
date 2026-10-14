@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // SplicePart — кусок аудио версии [From, To) (To ≤ 0 — до конца) с громкостью GainDb.

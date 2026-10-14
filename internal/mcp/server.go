@@ -1,4 +1,4 @@
-// Package mcp — MCP-сервер (Model Context Protocol) для управления Yue Studio:
+// Package mcp — MCP-сервер (Model Context Protocol) для управления Partscaster:
 // рабочий флоу генерации, настройки, диагностика и установка воркера.
 // Транспорт — stdio, протокол — JSON-RPC 2.0 (line-delimited).
 package mcp
@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 type Tool struct {
@@ -163,7 +163,7 @@ func (s *Server) dispatch(req rpcRequest) rpcResponse {
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "yue-studio", "version": s.version},
+			"serverInfo":      map[string]any{"name": "partscaster", "version": s.version},
 		}}
 	case "ping":
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{}}

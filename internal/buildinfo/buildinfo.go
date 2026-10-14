@@ -15,7 +15,7 @@ import (
 )
 
 // sourceDirs — что входит в отпечаток: код MCP и всё, что он вызывает.
-var sourceDirs = []string{"internal", filepath.Join("cmd", "yue-mcp")}
+var sourceDirs = []string{"internal", filepath.Join("cmd", "partscaster-mcp")}
 
 // SourceHash — отпечаток Go-исходников (без тестов) под root: пути и
 // содержимое по порядку, sha256, первые 12 hex-знаков.

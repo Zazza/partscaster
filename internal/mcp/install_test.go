@@ -176,7 +176,7 @@ func diskNumbers(t *testing.T, steps []step) []float64 {
 // План: проверки GPU/места → (при host) локальный шаг scp архива на машину → распаковка →
 // install.sh --no-start --hf-home <раскрытый путь> → прежние шаги компонентов, настройка,
 // systemd, health. Файлы воркера по одному не копируются. Seed-VC берёт скрипт из
-// ~/yue-studio/current/.
+// ~/partscaster/current/.
 
 // testArchive — путь к архиву воркера для чистых проверок плана (файл не читается).
 const testArchive = "/tmp/yue-test/worker-9.9.9-test.tar.gz"
@@ -199,7 +199,7 @@ func planSep(host string, whisper, seedvc, roformer bool, hfHome, seedvcDir, sep
 func TestInstallPlanFirstStepsCheckGPUAndDisk(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"", remoteHost} {
-		_, steps := planBase(host, false, false, "~/yue/hf-cache", "~/yue-studio/seedvc")
+		_, steps := planBase(host, false, false, "~/yue/hf-cache", "~/partscaster/seedvc")
 		if len(steps) < 2 {
 			t.Fatalf("host=%q: plan too short: %d", host, len(steps))
 		}
@@ -401,8 +401,8 @@ func TestInstallPlanSeedVCScriptFromCurrent(t *testing.T) {
 		if !ok {
 			t.Fatalf("host=%q: Seed-VC step missing", host)
 		}
-		if !strings.Contains(st.cmd, "yue-studio/current/seedvc_install.sh") {
-			t.Errorf("host=%q: Seed-VC must run ~/yue-studio/current/seedvc_install.sh: %s", host, st.cmd)
+		if !strings.Contains(st.cmd, "partscaster/current/seedvc_install.sh") {
+			t.Errorf("host=%q: Seed-VC must run ~/partscaster/current/seedvc_install.sh: %s", host, st.cmd)
 		}
 	}
 }
@@ -528,8 +528,8 @@ func newInstallSandbox(t *testing.T) *installSandbox {
 			t.Fatal(err)
 		}
 	}
-	// установленная версия: Seed-VC берёт скрипт из ~/yue-studio/current/
-	cur := filepath.Join(sb.home, "yue-studio", "current")
+	// установленная версия: Seed-VC берёт скрипт из ~/partscaster/current/
+	cur := filepath.Join(sb.home, "partscaster", "current")
 	if err := os.MkdirAll(cur, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -538,8 +538,8 @@ func newInstallSandbox(t *testing.T) *installSandbox {
 	}
 	installStub := "#!/bin/sh\n{ echo '== install.sh'; for a in \"$@\"; do printf '%s\\n' \"$a\"; done; } >> " +
 		shellQuoteTest(sb.log) + "\n" +
-		"mkdir -p \"$HOME/yue-studio/data\" \"$HOME/yue-studio/units\"\n" +
-		"[ -f \"$HOME/yue-studio/worker.env\" ] || : > \"$HOME/yue-studio/worker.env\"\nexit 0\n"
+		"mkdir -p \"$HOME/partscaster/data\" \"$HOME/partscaster/units\"\n" +
+		"[ -f \"$HOME/partscaster/worker.env\" ] || : > \"$HOME/partscaster/worker.env\"\nexit 0\n"
 	sb.archive = filepath.Join(sb.stubs, "worker-"+stubVersion+".tar.gz")
 	writeTarGz(t, sb.archive, "worker-"+stubVersion, map[string]tarFile{
 		"install.sh":        {installStub, 0o755},
@@ -608,7 +608,7 @@ func (sb *installSandbox) run(t *testing.T, steps []step) (env, calls string) {
 			t.Logf("step %q failed: %v\n%s", st.name, err, out)
 		}
 	}
-	data, _ := os.ReadFile(filepath.Join(sb.home, "yue-studio", "worker.env"))
+	data, _ := os.ReadFile(filepath.Join(sb.home, "partscaster", "worker.env"))
 	c, _ := os.ReadFile(sb.log)
 	return string(data), string(c)
 }
@@ -798,7 +798,7 @@ func TestInstallWorkerRequiresExplicitRoformer(t *testing.T) {
 func sepEnvSteps(steps []step) []step {
 	var out []step
 	for _, st := range steps {
-		if strings.Contains(st.cmd, "YUE_SEP_PY") || strings.Contains(st.cmd, "YUE_SEP_MODELS") {
+		if strings.Contains(st.cmd, "PARTSCASTER_SEP_PY") || strings.Contains(st.cmd, "PARTSCASTER_SEP_MODELS") {
 			out = append(out, st)
 		}
 	}
@@ -813,9 +813,9 @@ func runEnvStep(t *testing.T, home string, st step) string {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("worker.env step failed: %v\n%s\ncmd: %s", err, out, st.cmd)
 	}
-	data, err := os.ReadFile(filepath.Join(home, "yue-studio", "worker.env"))
+	data, err := os.ReadFile(filepath.Join(home, "partscaster", "worker.env"))
 	if err != nil {
-		t.Fatalf("worker.env not written under $HOME/yue-studio: %v (cmd %s)", err, st.cmd)
+		t.Fatalf("worker.env not written under $HOME/partscaster: %v (cmd %s)", err, st.cmd)
 	}
 	return string(data)
 }
@@ -840,28 +840,28 @@ func TestInstallSepDirWritesWorkerEnv(t *testing.T) {
 	_, steps := planSep("", false, false, true, "~/h", "~/s", "/data/sep")
 	env := sepEnvSteps(steps)
 	if len(env) == 0 {
-		t.Fatalf("no step writes YUE_SEP_PY/YUE_SEP_MODELS to worker.env with sep_dir")
+		t.Fatalf("no step writes PARTSCASTER_SEP_PY/PARTSCASTER_SEP_MODELS to worker.env with sep_dir")
 	}
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "yue-studio"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, "partscaster"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var data string
 	for _, st := range env {
 		data = runEnvStep(t, home, st)
 	}
-	if got := envValues(data, "YUE_SEP_PY"); len(got) != 1 || got[0] != "/data/sep/venv/bin/python" {
-		t.Errorf("YUE_SEP_PY in worker.env = %q, want [/data/sep/venv/bin/python]\n%s", got, data)
+	if got := envValues(data, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != "/data/sep/venv/bin/python" {
+		t.Errorf("PARTSCASTER_SEP_PY in worker.env = %q, want [/data/sep/venv/bin/python]\n%s", got, data)
 	}
-	if got := envValues(data, "YUE_SEP_MODELS"); len(got) != 1 || got[0] != "/data/sep/models" {
-		t.Errorf("YUE_SEP_MODELS in worker.env = %q, want [/data/sep/models]\n%s", got, data)
+	if got := envValues(data, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != "/data/sep/models" {
+		t.Errorf("PARTSCASTER_SEP_MODELS in worker.env = %q, want [/data/sep/models]\n%s", got, data)
 	}
 	// повторная установка не дублирует строки
 	for _, st := range env {
 		data = runEnvStep(t, home, st)
 	}
-	if n := len(envValues(data, "YUE_SEP_PY")); n != 1 {
-		t.Errorf("after second run YUE_SEP_PY appears %d times:\n%s", n, data)
+	if n := len(envValues(data, "PARTSCASTER_SEP_PY")); n != 1 {
+		t.Errorf("after second run PARTSCASTER_SEP_PY appears %d times:\n%s", n, data)
 	}
 }
 
@@ -870,14 +870,14 @@ func TestInstallSepDirKeepsExistingWorkerEnv(t *testing.T) {
 	_, steps := planSep("", false, false, true, "~/h", "~/s", "/data/sep")
 	env := sepEnvSteps(steps)
 	if len(env) == 0 {
-		t.Fatalf("no step writes YUE_SEP_PY/YUE_SEP_MODELS to worker.env with sep_dir")
+		t.Fatalf("no step writes PARTSCASTER_SEP_PY/PARTSCASTER_SEP_MODELS to worker.env with sep_dir")
 	}
 	home := t.TempDir()
-	dir := filepath.Join(home, "yue-studio")
+	dir := filepath.Join(home, "partscaster")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	pre := "HF_HOME=/x/hf\nYUE_SEP_PY=/opt/my/python\nYUE_SEP_MODELS=/opt/my/models\n"
+	pre := "HF_HOME=/x/hf\nPARTSCASTER_SEP_PY=/opt/my/python\nPARTSCASTER_SEP_MODELS=/opt/my/models\n"
 	if err := os.WriteFile(filepath.Join(dir, "worker.env"), []byte(pre), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -885,11 +885,11 @@ func TestInstallSepDirKeepsExistingWorkerEnv(t *testing.T) {
 	for _, st := range env {
 		data = runEnvStep(t, home, st)
 	}
-	if got := envValues(data, "YUE_SEP_PY"); len(got) != 1 || got[0] != "/opt/my/python" {
-		t.Errorf("already set YUE_SEP_PY overwritten/duplicated: %q\n%s", got, data)
+	if got := envValues(data, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != "/opt/my/python" {
+		t.Errorf("already set PARTSCASTER_SEP_PY overwritten/duplicated: %q\n%s", got, data)
 	}
-	if got := envValues(data, "YUE_SEP_MODELS"); len(got) != 1 || got[0] != "/opt/my/models" {
-		t.Errorf("already set YUE_SEP_MODELS overwritten/duplicated: %q\n%s", got, data)
+	if got := envValues(data, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != "/opt/my/models" {
+		t.Errorf("already set PARTSCASTER_SEP_MODELS overwritten/duplicated: %q\n%s", got, data)
 	}
 	if got := envValues(data, "HF_HOME"); len(got) != 1 || got[0] != "/x/hf" {
 		t.Errorf("other worker.env lines lost: %q\n%s", got, data)
@@ -1009,11 +1009,11 @@ func TestInstallSepDirSpecialCharsLiteral(t *testing.T) {
 				t.Fatalf("substitution in sep_dir %q was executed", dir)
 			}
 			base := expandHome(dir, sb.home)
-			if got := envValues(env, "YUE_SEP_PY"); len(got) != 1 || got[0] != base+"/venv/bin/python" {
-				t.Errorf("YUE_SEP_PY = %q, want [%s]\n%s", got, base+"/venv/bin/python", env)
+			if got := envValues(env, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != base+"/venv/bin/python" {
+				t.Errorf("PARTSCASTER_SEP_PY = %q, want [%s]\n%s", got, base+"/venv/bin/python", env)
 			}
-			if got := envValues(env, "YUE_SEP_MODELS"); len(got) != 1 || got[0] != base+"/models" {
-				t.Errorf("YUE_SEP_MODELS = %q, want [%s]\n%s", got, base+"/models", env)
+			if got := envValues(env, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != base+"/models" {
+				t.Errorf("PARTSCASTER_SEP_MODELS = %q, want [%s]\n%s", got, base+"/models", env)
 			}
 			if !hasArg(calls, base+"/venv") {
 				t.Errorf("uv did not get venv path %q literally; stub calls:\n%s", base+"/venv", calls)
@@ -1058,8 +1058,8 @@ func TestInstallSeedVCDirSpecialCharsLiteral(t *testing.T) {
 			if !strings.Contains(calls, "== seedvc_install.sh") || !hasArg(calls, want) {
 				t.Errorf("seedvc_install.sh did not get %q literally; stub calls:\n%s", want, calls)
 			}
-			if got := envValues(env, "YUE_SEEDVC_DIR"); len(got) != 1 || got[0] != want {
-				t.Errorf("YUE_SEEDVC_DIR = %q, want [%s]\n%s", got, want, env)
+			if got := envValues(env, "PARTSCASTER_SEEDVC_DIR"); len(got) != 1 || got[0] != want {
+				t.Errorf("PARTSCASTER_SEEDVC_DIR = %q, want [%s]\n%s", got, want, env)
 			}
 		})
 	}
@@ -1068,14 +1068,14 @@ func TestInstallSeedVCDirSpecialCharsLiteral(t *testing.T) {
 func TestInstallDefaultPathsExpandHome(t *testing.T) {
 	t.Parallel()
 	sb := newInstallSandbox(t)
-	env, calls := sb.run(t, sb.plan(false, true, false, "~/yue/hf-cache", "~/yue-studio/seedvc", "", ""))
+	env, calls := sb.run(t, sb.plan(false, true, false, "~/yue/hf-cache", "~/partscaster/seedvc", "", ""))
 	if got := installShHFHome(t, calls); got != sb.home+"/yue/hf-cache" {
 		t.Errorf("--hf-home = %q, want %q", got, sb.home+"/yue/hf-cache")
 	}
-	if got := envValues(env, "YUE_SEEDVC_DIR"); len(got) != 1 || got[0] != sb.home+"/yue-studio/seedvc" {
-		t.Errorf("YUE_SEEDVC_DIR = %q, want [%s]", got, sb.home+"/yue-studio/seedvc")
+	if got := envValues(env, "PARTSCASTER_SEEDVC_DIR"); len(got) != 1 || got[0] != sb.home+"/partscaster/seedvc" {
+		t.Errorf("PARTSCASTER_SEEDVC_DIR = %q, want [%s]", got, sb.home+"/partscaster/seedvc")
 	}
-	if !hasArg(calls, sb.home+"/yue-studio/seedvc") {
+	if !hasArg(calls, sb.home+"/partscaster/seedvc") {
 		t.Errorf("seedvc_install.sh did not get expanded default dir; calls:\n%s", calls)
 	}
 }
@@ -1150,7 +1150,7 @@ func TestInstallAllStepsBashSyntax(t *testing.T) {
 			for mask := 0; mask < 8; mask++ {
 				for _, sepDir := range []string{"", "/data/sep", "~/my sep$(id)"} {
 					w, sv, rf := mask&1 != 0, mask&2 != 0, mask&4 != 0
-					_, steps := workerInstallPlanFull(host, archive, w, sv, rf, "~/yue/hf-cache", "~/yue-studio/seedvc", sepDir, "")
+					_, steps := workerInstallPlanFull(host, archive, w, sv, rf, "~/yue/hf-cache", "~/partscaster/seedvc", sepDir, "")
 					for _, st := range steps {
 						cmd := exec.Command(bash, "-n", "-c", st.cmd)
 						if out, err := cmd.CombinedOutput(); err != nil {
@@ -1182,11 +1182,11 @@ func TestInstallSystemdStepFallbackHint(t *testing.T) {
 			t.Parallel()
 			home := t.TempDir()
 			if withUnit {
-				units := filepath.Join(home, "yue-studio", "units")
+				units := filepath.Join(home, "partscaster", "units")
 				if err := os.MkdirAll(units, 0o755); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(filepath.Join(units, "yue-worker.service"), []byte("[Unit]\n"), 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(units, "partscaster-worker.service"), []byte("[Unit]\n"), 0o644); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.MkdirAll(filepath.Join(home, ".config", "systemd", "user"), 0o755); err != nil {
@@ -1218,7 +1218,7 @@ func TestInstallSystemdStepFallbackHint(t *testing.T) {
 // stems_model (htdemucs | roformer): при roformer=true и установке обязателен —
 // агент спрашивает пользователя; roformer без roformer=true — ошибка; без
 // RoFormer и без выбора — настройка не меняется (переустановка не сбрасывает
-// выбранный ранее RoFormer). Выбор пишется в ~/yue-studio/data/settings.json
+// выбранный ранее RoFormer). Выбор пишется в ~/partscaster/data/settings.json
 // слиянием до запуска юнита; план показывает выбор; при roformer после
 // установки — проверка действующей модели (/config stems_model = bs-roformer-sw)
 // с понятным предупреждением.
@@ -1343,7 +1343,7 @@ func TestInstallStemsModelReinstallKeepsRoformerSetting(t *testing.T) {
 	}
 	sb := newInstallSandbox(t)
 	fakeWorkerVenv(t, sb.home)
-	dir := filepath.Join(sb.home, "yue-studio", "data")
+	dir := filepath.Join(sb.home, "partscaster", "data")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1442,7 +1442,7 @@ func fakeWorkerVenv(t *testing.T, home string) {
 }
 
 // runSettingsStep выполняет шаг с HOME во временном каталоге и возвращает
-// разобранный ~/yue-studio/data/settings.json.
+// разобранный ~/partscaster/data/settings.json.
 func runSettingsStep(t *testing.T, home string, st step) map[string]any {
 	t.Helper()
 	fakeWorkerVenv(t, home)
@@ -1452,9 +1452,9 @@ func runSettingsStep(t *testing.T, home string, st step) map[string]any {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("settings step failed: %v\n%s\ncmd: %s", err, out, st.cmd)
 	}
-	data, err := os.ReadFile(filepath.Join(home, "yue-studio", "data", "settings.json"))
+	data, err := os.ReadFile(filepath.Join(home, "partscaster", "data", "settings.json"))
 	if err != nil {
-		t.Fatalf("settings.json not written under $HOME/yue-studio/data: %v (cmd %s)", err, st.cmd)
+		t.Fatalf("settings.json not written under $HOME/partscaster/data: %v (cmd %s)", err, st.cmd)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
@@ -1474,7 +1474,7 @@ func TestInstallStemsModelWritesSettingsMerged(t *testing.T) {
 				t.Errorf("settings step does not contain value %q: %s", model, st.cmd)
 			}
 			home := t.TempDir()
-			dir := filepath.Join(home, "yue-studio", "data")
+			dir := filepath.Join(home, "partscaster", "data")
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -1507,7 +1507,7 @@ func TestInstallStemsModelWritesSettingsFresh(t *testing.T) {
 	_, steps := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", "roformer")
 	_, st := settingsStep(t, steps)
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "yue-studio", "data"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, "partscaster", "data"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	m := runSettingsStep(t, home, st)
@@ -1526,7 +1526,7 @@ func TestInstallStemsModelFullRunWritesSettings(t *testing.T) {
 	sb := newInstallSandbox(t)
 	fakeWorkerVenv(t, sb.home)
 	sb.run(t, sb.plan(false, false, false, "~/h", "~/s", "", "htdemucs"))
-	data, err := os.ReadFile(filepath.Join(sb.home, "yue-studio", "data", "settings.json"))
+	data, err := os.ReadFile(filepath.Join(sb.home, "partscaster", "data", "settings.json"))
 	if err != nil {
 		t.Fatalf("settings.json not written by install steps: %v", err)
 	}

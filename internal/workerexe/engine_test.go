@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Спецификация выбора движка yue-worker.exe (карточка internal-yue-worker-exe, ТК9–ТК12):
+// Спецификация выбора движка partscaster-worker.exe (карточка internal-partscaster-worker-exe, ТК9–ТК12):
 //   - настройки воркера пишутся атомарно, существующие ключи сохраняются (TК9);
 //   - settings.json в папке установки — признак «выбор уже сделан» (ТК10);
 //   - бинарник yue2.cpp ищется в каталоге кода воркера: yue2cpp/yue-server(.exe на Windows) (ТК11);

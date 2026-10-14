@@ -14,7 +14,7 @@ GET/POST /fx/assets, флаг fx_engine в /config.
   kits: [{name, samples}]};
   POST /fx/assets?kind=amp|ir&name=... — сырые байты; 422 на неверное, 413 > 50 МБ;
   хранение <data>/fx/amps, <data>/fx/irs;
-- /config: fx_engine (по умолчанию да), POST сохраняет, YUE_FX_ENGINE=0 выключает.
+- /config: fx_engine (по умолчанию да), POST сохраняет, PARTSCASTER_FX_ENGINE=0 выключает.
 
 Внешние границы подменяются: модель NAM (FakeAmp из test_fx_engine), загрузка
 захвата fx_nam.load_nam (torch), demucs (stems._run_model). Дорожки кладутся
@@ -101,7 +101,7 @@ def _lufs_only_metrics(path):
 
 
 class _FxApiCase(tp._WorkerApiCase):
-    """Своя БД, каталог джоб, каталог данных и настройки на тест; YUE_FX_ENGINE снят;
+    """Своя БД, каталог джоб, каталог данных и настройки на тест; PARTSCASTER_FX_ENGINE снят;
     fx_resources — фейк с захватом «fake» (задержка 5 сэмплов)."""
 
     def setUp(self):
@@ -117,7 +117,7 @@ class _FxApiCase(tp._WorkerApiCase):
         p = mock.patch.dict(os.environ)
         p.start()
         self.addCleanup(p.stop)
-        os.environ.pop("YUE_FX_ENGINE", None)
+        os.environ.pop("PARTSCASTER_FX_ENGINE", None)
         self.amp_model = FakeAmp(shift=5)
         self.real_fx_resources = self.w.fx_resources  # для тестов с настоящим хранилищем
         self.resources = FakeResources(amps={"fake": self.amp_model})
@@ -377,7 +377,7 @@ class TestFxEngineFlag(_FxApiCase):
     def test_env_forces_off(self):
         jid, d = self._audio_job()
         self.assertLess(self.client.post("/config", json={"fx_engine": True}).status_code, 300)
-        os.environ["YUE_FX_ENGINE"] = "0"
+        os.environ["PARTSCASTER_FX_ENGINE"] = "0"
         self.assertIs(self._config().get("fx_engine"), False)
         r = self._fx(jid, source="vocals", chain=CUT_1K)
         self.assertEqual(r.status_code, 503, r.text)

@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // PreviewSpec — что послушать: эффекты Steps на весь трек (Stem "") или на

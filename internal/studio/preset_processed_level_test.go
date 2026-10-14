@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Цель громкости по обработанной

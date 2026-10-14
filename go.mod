@@ -1,4 +1,4 @@
-module yue-studio
+module partscaster
 
 go 1.24
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 type lyricsFake struct {

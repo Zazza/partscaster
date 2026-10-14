@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/dsp"
+	"partscaster/internal/dsp"
 )
 
 // Кэш файлов воркера

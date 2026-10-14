@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // YuePlayPreview играет кусок превью по имени слота ("", "P", "A"–"D") и куска

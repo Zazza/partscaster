@@ -7,14 +7,14 @@ import (
 	"slices"
 	"time"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // fxCacheDirPattern — каталог кэша превью эффектов: свой у каждого запуска
 // приложения (второй экземпляр или тест не стирает кэш работающего)
-const fxCacheDirPattern = "yue-studio-fx-*"
+const fxCacheDirPattern = "partscaster-fx-*"
 
 // previewPieces — куски превью: стало/было в миксе и соло дорожки.
 var previewPieces = []string{"wet", "dry", "wet_solo", "dry_solo"}
@@ -29,7 +29,7 @@ func (a *App) fxCache() *studio.Cache {
 	a.fxOnce.Do(func() {
 		dir, err := os.MkdirTemp("", fxCacheDirPattern)
 		if err != nil {
-			dir = filepath.Join(os.TempDir(), fmt.Sprintf("yue-studio-fx-%d", os.Getpid()))
+			dir = filepath.Join(os.TempDir(), fmt.Sprintf("partscaster-fx-%d", os.Getpid()))
 		}
 		a.fxDir = dir
 		a.fx = studio.NewCache(filepath.Join(a.fxDir, "files"))

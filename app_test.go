@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // fakeService — мок yue.Service: по умолчанию всё падает, тесты

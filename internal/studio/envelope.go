@@ -6,8 +6,8 @@ import (
 	"os"
 	"slices"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // VolumeEnvelope — линия громкости, нарисованная по волне (точки время → дБ).

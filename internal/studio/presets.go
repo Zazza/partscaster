@@ -13,8 +13,8 @@ import (
 	"slices"
 	"strings"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // Пресеты звука: рецепт обработки готового трека (правки дорожек на весь трек + финальная

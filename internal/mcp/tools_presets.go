@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // argJSON — аргумент инструмента в Go-тип через JSON (списки объектов пресета); нет — без ошибки

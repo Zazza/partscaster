@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-log = logging.getLogger("yue-worker.sheetsage")
+log = logging.getLogger("partscaster-worker.sheetsage")
 
 _model = None
 _lock = threading.Lock()

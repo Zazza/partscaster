@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // Тесты инструментов «голос по частям» (revoice_start / revoice_apply),

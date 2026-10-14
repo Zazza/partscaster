@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 const compatInterval = 30 * time.Minute

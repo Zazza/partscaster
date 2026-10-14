@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-SEEDVC_DIR = Path(os.environ.get("YUE_SEEDVC_DIR", Path.home() / "yue-studio" / "seedvc"))
+SEEDVC_DIR = Path(os.environ.get("PARTSCASTER_SEEDVC_DIR", Path.home() / "partscaster" / "seedvc"))
 SEEDVC_PY = SEEDVC_DIR / "venv" / "bin" / "python"
 RUNNER = Path(__file__).parent / "seedvc_run.py"
 

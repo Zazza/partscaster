@@ -297,7 +297,7 @@ class TestRecipeRefusals(unittest.TestCase):
 
 # Фикстура общая с Go-тестом ведущего: он проигрывает её на фейке сервиса.
 GOLDEN = Path(__file__).resolve().parent.parent / "internal" / "studio" / "testdata" / "recipe_e2e.json"
-GOLDEN_ENV = "YUE_UPDATE_GOLDEN"
+GOLDEN_ENV = "PARTSCASTER_UPDATE_GOLDEN"
 
 
 def _e2e_recipe():

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // fakeService — мок yue.Service для инструментного слоя MCP.
@@ -434,7 +434,7 @@ func TestProtocolHandshakeAndToolsList(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &init); err != nil {
 		t.Fatal(err)
 	}
-	if init.Result.ProtocolVersion == "" || init.Result.ServerInfo.Name != "yue-studio" {
+	if init.Result.ProtocolVersion == "" || init.Result.ServerInfo.Name != "partscaster" {
 		t.Fatalf("init: %+v", init)
 	}
 	var list struct {

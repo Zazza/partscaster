@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // источник голоса версии — VoiceSrc, если задан; сгенерированная версия

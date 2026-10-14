@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // pedalsFile — вариант «педали на весь трек»

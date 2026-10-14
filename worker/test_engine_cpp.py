@@ -3,12 +3,12 @@
 Что должно работать:
 M1. MODELS — закреплённый список bf16/q8/q6/q5 {file, sha256, size} + общий VAE, репозиторий
     Serveurperso/YuE2-GGUF, ревизия e630f2b8…, коммит программы c893629.
-M2. models_dir(): $YUE_CPP_MODELS, иначе <данные>/yue2cpp-models.
+M2. models_dir(): $PARTSCASTER_CPP_MODELS, иначе <данные>/yue2cpp-models.
     model_installed(name): файл модели И VAE есть с нужным размером.
 M3. download(name, progress_cb, base_url): качает недостающее (модель и VAE) через .part,
     сверяет sha256 и переименовывает; сумма не сошлась → RuntimeError, нет ни файла, ни .part;
     готовый файл с верной суммой — без обращения к источнику.
-M4. find_binary(): $YUE_CPP_BIN → <каталог воркера>/yue2cpp/yue-server → $YUE_HOME/yue2cpp-src/
+M4. find_binary(): $PARTSCASTER_CPP_BIN → <каталог воркера>/yue2cpp/yue-server → $PARTSCASTER_HOME/yue2cpp-src/
     build/yue-server; нет — None. cuda_lib_dirs(): каталоги lib пакетов nvidia из venv.
     На Windows имена с .exe, cuda_lib_dirs — torch/lib и nvidia <pkg>/bin, каталоги добавляются
     в PATH (LD_LIBRARY_PATH на Windows нет).
@@ -503,12 +503,12 @@ class _EnvCase(unittest.TestCase):
         self.tmp = Path(self._td.name)
         self.models = self.tmp / "models"
         self.models.mkdir()
-        env = {"YUE_CPP_MODELS": str(self.models), "YUE_HOME": str(self.tmp / "home"),
-               "YUE_DATA_DIR": str(self.tmp / "data")}
+        env = {"PARTSCASTER_CPP_MODELS": str(self.models), "PARTSCASTER_HOME": str(self.tmp / "home"),
+               "PARTSCASTER_DATA_DIR": str(self.tmp / "data")}
         p = mock.patch.dict(os.environ, env)
         p.start()
         self.addCleanup(p.stop)
-        os.environ.pop("YUE_CPP_BIN", None)
+        os.environ.pop("PARTSCASTER_CPP_BIN", None)
         self.e = _import()
 
 
@@ -546,7 +546,7 @@ class TestModelsDir(_EnvCase):
         self.assertEqual(Path(self.e.models_dir()), self.models)
 
     def test_default_under_data(self):
-        os.environ.pop("YUE_CPP_MODELS", None)
+        os.environ.pop("PARTSCASTER_CPP_MODELS", None)
         self.assertEqual(Path(self.e.models_dir()), self.tmp / "data" / "yue2cpp-models")
 
     def test_installed_needs_model_and_vae(self):
@@ -659,7 +659,7 @@ class TestFindBinary(_EnvCase):
 
     def test_env_bin(self):
         b = self._exe(self.tmp / "bin" / "yue-server")
-        os.environ["YUE_CPP_BIN"] = str(b)
+        os.environ["PARTSCASTER_CPP_BIN"] = str(b)
         self.assertEqual(Path(self.e.find_binary()), b)
 
     def test_built_by_install_sh(self):
@@ -671,7 +671,7 @@ class TestFindBinary(_EnvCase):
         name = "yue-server.exe" if self.e.IS_WINDOWS else "yue-server"
         self._exe(self.tmp / "home" / "yue2cpp-src" / "build" / name)
         b = self._exe(self.tmp / "bin" / "yue-server")
-        os.environ["YUE_CPP_BIN"] = str(b)
+        os.environ["PARTSCASTER_CPP_BIN"] = str(b)
         self.assertEqual(Path(self.e.find_binary()), b)
 
 

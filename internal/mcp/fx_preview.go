@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // окно превью по умолчанию: кусок с 20-й секунды
@@ -19,9 +19,9 @@ const mcpPreviewFrom, mcpPreviewTo = 20.0, 35.0
 func (s *Server) fxCache() *studio.Cache {
 	s.fxOnce.Do(func() {
 		// свой каталог у каждого сервера: два сервера одного процесса (тесты) не пишут в одни файлы превью
-		dir, err := os.MkdirTemp("", "yue-mcp-fx-*")
+		dir, err := os.MkdirTemp("", "partscaster-mcp-fx-*")
 		if err != nil {
-			dir = filepath.Join(os.TempDir(), fmt.Sprintf("yue-mcp-fx-%d", os.Getpid()))
+			dir = filepath.Join(os.TempDir(), fmt.Sprintf("partscaster-mcp-fx-%d", os.Getpid()))
 		}
 		s.fxDir = dir
 		s.fx = studio.NewCache(filepath.Join(s.fxDir, "files"))

@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // Импорт рецепта трека: ведущий проигрывает рецепт тем же кодом, что делал трек, —

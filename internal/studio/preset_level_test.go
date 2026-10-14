@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Громкость дорожки по замеру.

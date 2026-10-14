@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // jobs brief=true: vocal_leak виден у джоб, где он непустой, и отсутствует у остальных.

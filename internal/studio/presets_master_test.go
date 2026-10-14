@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Мастер пресета звука.

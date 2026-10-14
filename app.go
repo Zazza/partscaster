@@ -11,10 +11,10 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"yue-studio/internal/config"
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/config"
+	"partscaster/internal/dsp"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // jobs brief=true: число миксов (mixes) видно у трека с миксами,

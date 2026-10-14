@@ -3,10 +3,10 @@
 install.sh --engine torch|cpp (по умолчанию torch), --cpp-model auto|bf16|q8|q6|q5, --cpp-low-vram.
 Песочница — та же, что в test_install_sh (временный HOME, заглушки в PATH, журнал вызовов), плюс:
 - nvidia-smi печатает объём видеопамяти (МиБ) из файла <заглушки>/vram, если в аргументах есть memory.total;
-- venv-python дополнительно пишет каталог запуска и YUE_DATA_DIR/YUE_CPP_MODELS в py-ctx.log;
+- venv-python дополнительно пишет каталог запуска и PARTSCASTER_DATA_DIR/PARTSCASTER_CPP_MODELS в py-ctx.log;
 - программа yue2.cpp из архива — <каталог версии>/yue2cpp/yue-server (заглушка; fail-yue-server → код 1);
 - git, cmake, nvcc — заглушки (сеть и настоящая сборка не нужны): git clone/init создаёт каталог,
-  cmake --build кладёт собранную программу в $YUE_HOME/yue2cpp-src/build/yue-server .
+  cmake --build кладёт собранную программу в $PARTSCASTER_HOME/yue2cpp-src/build/yue-server .
 
 Что должно работать:
 E1. Без --engine: settings.json данных не создаётся и не меняется, engine_cpp.py download не вызывается,
@@ -14,7 +14,7 @@ E1. Без --engine: settings.json данных не создаётся и не 
     cpp_low_vram не трогает, загрузки нет.
 E2. --engine cpp --cpp-model auto (и --engine cpp без --cpp-model): видеопамять — первая строка
     nvidia-smi; ≥ 11776 МиБ → q8 и cpp_low_vram false; 7680–11775 → q8 и true; < 7680 → q5 и true.
-    В $YUE_HOME/data/settings.json — engine "cpp", cpp_model, cpp_low_vram; прочие ключи сохраняются.
+    В $PARTSCASTER_HOME/data/settings.json — engine "cpp", cpp_model, cpp_low_vram; прочие ключи сохраняются.
 E3. Явная модель (--cpp-model q6) — без авто, экономный режим false; --cpp-low-vram → true.
     --cpp-model / --cpp-low-vram без --engine cpp → код 2 до изменений.
 E4. Модель качается: <venv>/bin/python engine_cpp.py download <имя> из каталога установленной версии,
@@ -23,7 +23,7 @@ E5. Программа из архива отвечает на --help → она
 E6. Программы нет (или не запускается) и нет nvcc → код 0, воркер установлен, сообщение
     «yue2.cpp не собран: нужны git, cmake, nvcc», в settings.json нет engine=cpp.
 E7. Программы нет, git/cmake/nvcc есть → сборка закреплённого коммита c893629; повтор при уже собранной
-    программе — без пересборки; пометка $YUE_HOME/yue2cpp-src/.commit с другим коммитом → пересборка.
+    программе — без пересборки; пометка $PARTSCASTER_HOME/yue2cpp-src/.commit с другим коммитом → пересборка.
 E9. Загрузка модели не удалась → код 0, воркер установлен, «модель yue2.cpp не скачана», нет engine=cpp.
 E8. Неизвестное значение (--cpp-model q4, --engine foo) → код 2 до любых изменений.
 """
@@ -46,7 +46,7 @@ exit 0
 # venv-python: как в test_install_sh, плюс контекст вызова (каталог, переменные данных) в py-ctx.log
 VENV_PY = r"""#!/bin/sh
 { echo "== venv-python"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
-printf '%s\t%s\t%s\t%s\n' "$PWD" "${YUE_DATA_DIR-}" "${YUE_CPP_MODELS-}" "$*" >> "$STUB_DIR/py-ctx.log"
+printf '%s\t%s\t%s\t%s\n' "$PWD" "${PARTSCASTER_DATA_DIR-}" "${PARTSCASTER_CPP_MODELS-}" "$*" >> "$STUB_DIR/py-ctx.log"
 case "$1" in *kits_install.py) [ -f "$STUB_DIR/fail-kits" ] && exit 1;; esac
 case "$1" in *engine_cpp.py) [ -f "$STUB_DIR/fail-download" ] && exit 1;; esac
 exit 0
@@ -122,7 +122,7 @@ class _EngineCase(base._InstallCase):
         return json.loads((path or self.settings_path).read_text(encoding="utf-8"))
 
     def py_ctx(self):
-        """[(cwd, YUE_DATA_DIR, YUE_CPP_MODELS, [аргументы])] вызовов venv-python (за все запуски)."""
+        """[(cwd, PARTSCASTER_DATA_DIR, PARTSCASTER_CPP_MODELS, [аргументы])] вызовов venv-python (за все запуски)."""
         f = self.stubs / "py-ctx.log"
         out = []
         for ln in (f.read_text().splitlines() if f.exists() else []):
@@ -301,13 +301,14 @@ class TestModelDownload(_EngineCase):
         """Каталог моделей по умолчанию — <данные>/yue2cpp-models: данные — те, что у юнита."""
         x = Path(self._td.name) / "other-home"
         (self.stubs / "yue-home").write_text(str(x))
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", YUE_HOME=str(x))
+        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", PARTSCASTER_HOME=str(x))
         dl = [c for c in self.py_ctx() if c[3][0].endswith("engine_cpp.py")]
         self.assertEqual(len(dl), 1, self.py_ctx())
         _, data, models, _ = dl[0]
         want = x / "data"
         self.assertTrue(data == str(want) or (models and Path(models).is_relative_to(want)),
-                        f"download not pointed at {want}: YUE_DATA_DIR={data!r} YUE_CPP_MODELS={models!r}")
+                        f"download not pointed at {want}: "
+                        f"PARTSCASTER_DATA_DIR={data!r} PARTSCASTER_CPP_MODELS={models!r}")
         self.assertEqual(self.settings(want / "settings.json").get("engine"), "cpp")
 
     def test_download_failure_not_fatal(self):

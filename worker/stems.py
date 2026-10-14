@@ -1,6 +1,6 @@
 """Разделение трека на стемы: demucs (htdemucs, по умолчанию — быстро) или по выбору
 BS-Roformer-SW (чище, ~4,5× дольше; отдельное окружение, см. sep_run.py); demucs — и
-запасной путь при сбое RoFormer, и откат (YUE_STEMS_MODEL=demucs).
+запасной путь при сбое RoFormer, и откат (PARTSCASTER_STEMS_MODEL=demucs).
 
 Модель грузится на вызов и выгружается: не держим VRAM рядом с YuE2.
 """
@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-log = logging.getLogger("yue-worker.stems")
+log = logging.getLogger("partscaster-worker.stems")
 
 # основные дорожки (htdemucs): в сумме дают трек — по ним минус и замены
 MAIN_STEMS = ("drums", "bass", "other", "vocals")
@@ -29,24 +29,24 @@ SEP_TIMEOUT = 1800  # с: 4-минутный трек — около минут�
 
 
 def _sep_python() -> Path:
-    """python отдельного окружения разделения (YUE_SEP_PY, по умолчанию ~/sep-venv)."""
-    return Path(os.environ.get("YUE_SEP_PY") or Path.home() / "sep-venv" / "bin" / "python")
+    """python отдельного окружения разделения (PARTSCASTER_SEP_PY, по умолчанию ~/sep-venv)."""
+    return Path(os.environ.get("PARTSCASTER_SEP_PY") or Path.home() / "sep-venv" / "bin" / "python")
 
 
 def _sep_models() -> Path:
-    """Каталог весов RoFormer/DrumSep (YUE_SEP_MODELS, по умолчанию ~/sep-models)."""
-    return Path(os.environ.get("YUE_SEP_MODELS") or Path.home() / "sep-models")
+    """Каталог весов RoFormer/DrumSep (PARTSCASTER_SEP_MODELS, по умолчанию ~/sep-models)."""
+    return Path(os.environ.get("PARTSCASTER_SEP_MODELS") or Path.home() / "sep-models")
 
 
 def roformer_available() -> bool:
-    """Окружение RoFormer установлено (YUE_SEP_PY есть)."""
+    """Окружение RoFormer установлено (PARTSCASTER_SEP_PY есть)."""
     return _sep_python().is_file()
 
 
 def roformer_enabled(prefer: str = MODEL_DEMUCS) -> bool:
     """RoFormer — только если его выбрали (prefer), окружение есть и не включён
-    принудительный откат YUE_STEMS_MODEL=demucs."""
-    if os.environ.get("YUE_STEMS_MODEL", "").strip().lower() == "demucs":
+    принудительный откат PARTSCASTER_STEMS_MODEL=demucs."""
+    if os.environ.get("PARTSCASTER_STEMS_MODEL", "").strip().lower() == "demucs":
         return False
     return prefer in ("roformer", MODEL_ROFORMER) and roformer_available()
 

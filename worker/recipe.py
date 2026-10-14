@@ -192,7 +192,7 @@ def build_recipe(jobs: dict[int, dict], ops: list[dict], root_id: int, worker_mo
 def check_recipe(recipe) -> str:
     """Проверка файла рецепта перед импортом: "" — годен, иначе причина."""
     if not isinstance(recipe, dict) or recipe.get("format") != FORMAT:
-        return "это не рецепт трека Yue Studio"
+        return "это не рецепт трека Partscaster"
     if recipe.get("version") != VERSION:
         return f"версия рецепта {recipe.get('version')} не поддерживается (нужна {VERSION}) — обновите приложение"
     root = recipe.get("root")

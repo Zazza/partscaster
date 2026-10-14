@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Спецификация инструмента beat_grid {job_id, from?, to?}: вызывает JobGrid с этими

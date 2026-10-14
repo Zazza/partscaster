@@ -1,4 +1,4 @@
-// Package yue — HTTP-клиент воркера Yue Studio: джобы, план, стемы,
+// Package yue — HTTP-клиент воркера Partscaster: джобы, план, стемы,
 // корпус, DSP-варианты, стриминг артефактов.
 package yue
 

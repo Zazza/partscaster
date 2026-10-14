@@ -80,10 +80,10 @@
 - Стиль: UI-тексты и комментарии — **на русском**, идентификаторы — на английском.
 - `src/wailsjs/**` — сгенерировано Wails, руками не править.
 
-### MCP-сервер (cmd/yue-mcp, internal/mcp)
+### MCP-сервер (cmd/partscaster-mcp, internal/mcp)
 
 - Протокол — JSON-RPC over stdio, без внешних зависимостей; инструменты — в
-  `internal/mcp/tools_*.go`, регистрируются в `cmd/yue-mcp/main.go`.
+  `internal/mcp/tools_*.go`, регистрируются в `cmd/partscaster-mcp/main.go`.
 - Клиентская логика — через `yue.Service` (тот же интерфейс, что у приложения).
 - **Паритет**: новый метод API воркера → метод `yue.Service` → инструмент MCP.
 - Данные библиотеки `internal/mcp/*.json` генерируются из `frontend/src/`
@@ -103,8 +103,8 @@
   не предполагается (единственное исключение — спектрограмма студии:
   `waveform.render_spectrum_png` использует ffmpeg, если он есть в PATH;
   нет — эндпоинт спектра отвечает 503, волна громкости работает).
-- Env-переменные: чтение в одном месте при старте (`YUE_DATA_DIR`, `YUE_OLLAMA_URL`,
-  `YUE_OLLAMA_MODEL`, `YUE_WHISPER_PY`); новую переменную — в `worker.env.example`
+- Env-переменные: чтение в одном месте при старте (`PARTSCASTER_DATA_DIR`, `PARTSCASTER_OLLAMA_URL`,
+  `PARTSCASTER_OLLAMA_MODEL`, `PARTSCASTER_WHISPER_PY`); новую переменную — в `worker.env.example`
   и таблицу в `docs/deployment.md`.
 
 ## Осознанные решения (не «чинить» без вопроса)
@@ -124,7 +124,7 @@
 - Коммитить только то, что относится к задаче; `build/bin/`, `dist/`, `__pycache__/`,
   `.idea/`, `.zcode/` — не трекаются (см. .gitignore).
 - Сборка: `make build` (wails); MCP-сервер: `make mcp` (+ `make mcp-data` после правок
-  слотов/групп/пресетов во фронте); деплой воркера: `make worker` (хост — `YUE_DEPLOY_HOST`).
+  слотов/групп/пресетов во фронте); деплой воркера: `make worker` (хост — `PARTSCASTER_DEPLOY_HOST`).
 
 ## Частые команды
 

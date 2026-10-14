@@ -12,8 +12,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // Рецепт трека: экспорт песни правилами в файл и импорт на этой установке.

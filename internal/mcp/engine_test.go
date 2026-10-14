@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // rebuild_sections принимает в записи поле engine (массив блоков движка) →

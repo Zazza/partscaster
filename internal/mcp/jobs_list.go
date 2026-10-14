@@ -3,7 +3,7 @@ package mcp
 import (
 	"strings"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // jobsNoFolder — значение фильтра folder «только песни без папки».

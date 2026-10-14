@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Описание блоков движка (копия worker/fx_blocks.json) и готовые цепочки (из

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Тесты RebuildSections — по контракту «+ инструмент/приём»: кусок трека

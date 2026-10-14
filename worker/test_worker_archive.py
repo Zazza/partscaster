@@ -5,7 +5,7 @@ A1. `tools/worker-tar.sh OUTDIR [VERSION]` создаёт OUTDIR/worker-<VERSION
     его путь последней строкой stdout; без VERSION — версия из `git describe --tags --always --dirty`.
 A2. Внутри один каталог верхнего уровня worker-<VERSION>/.
 A3. В архиве: модули воркера *.py (кроме test_*), *.json, requirements*.txt, seedvc_install.sh,
-    install.sh, VERSION (= версии), phrases/ (как worker/phrases), units/yue-worker.service.
+    install.sh, VERSION (= версии), phrases/ (как worker/phrases), units/partscaster-worker.service.
 A4. Список — одним правилом: каждый локальный модуль, который импортирует код воркера,
     есть в архиве (вычисляется по исходникам); тестов и __pycache__ в архиве нет.
 """
@@ -126,7 +126,7 @@ class TestWorkerArchive(unittest.TestCase):
         self.assertEqual(self.version_text.strip(), VERSION)
 
     def test_unit(self):
-        self.assertIn("units/yue-worker.service", self.rel())
+        self.assertIn("units/partscaster-worker.service", self.rel())
 
     def test_phrases_like_worker(self):
         want = {f"phrases/{p.name}" for p in (WORKER_DIR / "phrases").iterdir() if p.is_file()}

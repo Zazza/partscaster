@@ -1,17 +1,17 @@
-# MCP-сервер (yue-mcp)
+# MCP-сервер (partscaster-mcp)
 
-`yue-mcp` — [Model Context Protocol](https://modelcontextprotocol.io)-сервер (stdio) для
-управления Yue Studio через AI-агента (Claude Desktop, Codex и др.): весь рабочий флоу
+`partscaster-mcp` — [Model Context Protocol](https://modelcontextprotocol.io)-сервер (stdio) для
+управления Partscaster через AI-агента (Claude Desktop, Codex и др.): весь рабочий флоу
 генерации, настройки, библиотека стилей, диагностика и установка.
 
 ## Сборка
 
 ```bash
-make mcp          # → build/bin/yue-mcp
+make mcp          # → build/bin/partscaster-mcp
 make mcp-data     # перегенерировать данные библиотеки из фронтендовых источников
 ```
 
-MCP-сервер — отдельный бинарник: правки в `internal/` или `cmd/yue-mcp` подхватываются только
+MCP-сервер — отдельный бинарник: правки в `internal/` или `cmd/partscaster-mcp` подхватываются только
 после `make mcp` и переподключения клиента (в Claude Code — `/mcp`). Чтобы старый бинарник не терял
 молча новые поля и инструменты, `make mcp` вшивает в него отпечаток исходников; при первом вызове и
 дальше раз в 30 минут MCP сверяет его с репозиторием и, если код уже другой, добавляет к ответу
@@ -26,11 +26,11 @@ MCP-сервер — отдельный бинарник: правки в `inter
 ## Конфигурация
 
 Проще всего — из приложения: «Настройки» → «Для AI-агентов» показывает готовые фрагменты ниже с
-настоящим путём к `yue-mcp` (рядом с приложением) и текущим адресом, а кнопка «Подключить к Claude Code»
-выполняет `claude mcp add yue-studio --scope user …` (с подтверждением).
+настоящим путём к `partscaster-mcp` (рядом с приложением) и текущим адресом, а кнопка «Подключить к Claude Code»
+выполняет `claude mcp add partscaster --scope user …` (с подтверждением).
 
-- `YUE_URL` — адрес воркера (по умолчанию — сохранённые настройки приложения).
-- `YUE_MCP_DIR` — куда скачивать артефакты (по умолчанию `~/yue-mcp-downloads`).
+- `PARTSCASTER_URL` — адрес воркера (по умолчанию — сохранённые настройки приложения).
+- `PARTSCASTER_MCP_DIR` — куда скачивать артефакты (по умолчанию `~/partscaster-mcp-downloads`).
 
 ### Claude Desktop
 
@@ -39,9 +39,9 @@ MCP-сервер — отдельный бинарник: правки в `inter
 ```json
 {
   "mcpServers": {
-    "yue-studio": {
-      "command": "/путь/к/build/bin/yue-mcp",
-      "env": { "YUE_URL": "http://gpu-host:8091" }
+    "partscaster": {
+      "command": "/путь/к/build/bin/partscaster-mcp",
+      "env": { "PARTSCASTER_URL": "http://gpu-host:8091" }
     }
   }
 }
@@ -53,15 +53,15 @@ MCP-сервер — отдельный бинарник: правки в `inter
 
 ```bash
 make mcp
-claude mcp add yue-studio --scope local -e YUE_URL=http://gpu-host:8091 -- "$PWD/build/bin/yue-mcp"
+claude mcp add partscaster --scope local -e PARTSCASTER_URL=http://gpu-host:8091 -- "$PWD/build/bin/partscaster-mcp"
 ```
 
 ### Codex (~/.codex/config.toml)
 
 ```toml
-[mcp_servers.yue-studio]
-command = "/путь/к/build/bin/yue-mcp"
-env = { "YUE_URL" = "http://gpu-host:8091" }
+[mcp_servers.partscaster]
+command = "/путь/к/build/bin/partscaster-mcp"
+env = { "PARTSCASTER_URL" = "http://gpu-host:8091" }
 ```
 
 ## Инструменты
@@ -159,7 +159,7 @@ chain+params | steps, db; final — цепочка на микс) · `sound_pres
 
 Воркер ставится архивом (`worker-<версия>.tar.gz`, его `install.sh` — база воркера, см. docs/deployment.md);
 архив — аргумент `archive`, иначе MCP из исходников соберёт его `make worker-tar`, а релизный — возьмёт
-лежащий рядом с `yue-mcp`. Необязательные компоненты (whisper, Seed-VC, RoFormer) MCP ставит сам после базы.
+лежащий рядом с `partscaster-mcp`. Необязательные компоненты (whisper, Seed-VC, RoFormer) MCP ставит сам после базы.
 
 - **Всё на одном ПК**: `install_worker` без `host` — распаковка и `install.sh` локально.
 - **GPU-машина отдельно**: `install_worker` с `host=user@gpu-host` — архив копируется scp, остальное по ssh
@@ -168,7 +168,7 @@ chain+params | steps, db; final — цепочка на микс) · `sound_pres
 ## Разработка
 
 - Сервер — `internal/mcp/` (протокол JSON-RPC stdio, без внешних зависимостей),
-  точка входа `cmd/yue-mcp`.
+  точка входа `cmd/partscaster-mcp`.
 - Клиентская логика переиспользует `internal/yue.Service` (моки — в server_test.go).
 - Данные библиотеки (`internal/mcp/*.json`) генерируются из фронтенда
   (`tools/mcp-gendata.sh`) и вшиваются через `go:embed`; **руками их не править** —

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Спецификация audioProxy (ассет-сервер webview → воркер, тот же origin):

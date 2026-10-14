@@ -1,4 +1,4 @@
-// Package workerexe — установка и запуск воркера одной программой (yue-worker.exe): uv, Python, пакеты,
+// Package workerexe — установка и запуск воркера одной программой (partscaster-worker.exe): uv, Python, пакеты,
 // код воркера из архива в папку пользователя, затем uvicorn. Здесь — то, что не зависит от консоли.
 package workerexe
 
@@ -189,7 +189,7 @@ func writeFile(dst string, r io.Reader, mode os.FileMode) error {
 
 func WorkerEnv(home, goos string) map[string]string {
 	env := map[string]string{
-		"YUE_DATA_DIR": filepath.Join(home, "data"),
+		"PARTSCASTER_DATA_DIR": filepath.Join(home, "data"),
 		"HF_HOME":      filepath.Join(home, "hf-cache"),
 		"PYTHONUTF8":   "1",
 	}
@@ -212,7 +212,7 @@ func ServeArgs(lan bool) []string {
 	return []string{"-c", code}
 }
 
-func homeFile(configDir string) string { return filepath.Join(configDir, "yue-worker", "home.txt") }
+func homeFile(configDir string) string { return filepath.Join(configDir, "partscaster-worker", "home.txt") }
 
 func ResolveHome(configDir, def string) (string, bool) {
 	b, err := os.ReadFile(homeFile(configDir))

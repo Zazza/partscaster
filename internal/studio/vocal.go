@@ -1,6 +1,6 @@
 package studio
 
-import "yue-studio/internal/yue"
+import "partscaster/internal/yue"
 
 // VoiceSource — источник голоса версии: рендер, чей голос в ней звучит
 // («перепеть с места» продолжает от него). VoiceSrc версии; сгенерированный

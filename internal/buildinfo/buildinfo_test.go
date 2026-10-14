@@ -18,13 +18,13 @@ func writeFile(t *testing.T, root, rel, content string) {
 	}
 }
 
-// newTree — минимальное дерево репозитория: internal/ и cmd/yue-mcp/.
+// newTree — минимальное дерево репозитория: internal/ и cmd/partscaster-mcp/.
 func newTree(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeFile(t, root, "internal/mcp/server.go", "package mcp\n")
 	writeFile(t, root, "internal/mcp/server_test.go", "package mcp\n// test\n")
-	writeFile(t, root, "cmd/yue-mcp/main.go", "package main\n")
+	writeFile(t, root, "cmd/partscaster-mcp/main.go", "package main\n")
 	return root
 }
 
@@ -59,7 +59,7 @@ func TestSourceHashDeterministic(t *testing.T) {
 
 func TestSourceHashChangesOnGoContent(t *testing.T) {
 	t.Parallel()
-	for _, rel := range []string{"internal/mcp/server.go", "cmd/yue-mcp/main.go"} {
+	for _, rel := range []string{"internal/mcp/server.go", "cmd/partscaster-mcp/main.go"} {
 		t.Run(rel, func(t *testing.T) {
 			t.Parallel()
 			root := newTree(t)
@@ -74,7 +74,7 @@ func TestSourceHashChangesOnGoContent(t *testing.T) {
 
 func TestSourceHashChangesOnGoFileAdded(t *testing.T) {
 	t.Parallel()
-	for _, rel := range []string{"internal/yue/new.go", "cmd/yue-mcp/extra.go"} {
+	for _, rel := range []string{"internal/yue/new.go", "cmd/partscaster-mcp/extra.go"} {
 		t.Run(rel, func(t *testing.T) {
 			t.Parallel()
 			root := newTree(t)
@@ -112,7 +112,7 @@ func TestSourceHashIgnoresNonGoFiles(t *testing.T) {
 func TestSourceHashMissingInternal(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	writeFile(t, root, "cmd/yue-mcp/main.go", "package main\n")
+	writeFile(t, root, "cmd/partscaster-mcp/main.go", "package main\n")
 	if h, err := SourceHash(root); err == nil {
 		t.Fatalf("want error for missing internal/, got hash %q", h)
 	}

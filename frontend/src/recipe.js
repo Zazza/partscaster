@@ -7,7 +7,7 @@ export function recipePreview(recipe, workerModel) {
   if (typeof r === 'string') {
     try { r = JSON.parse(r) } catch { return { error: 'файл не читается как рецепт трека' } }
   }
-  if (!r || r.format !== 'yue-track-recipe') return { error: 'это не рецепт трека Yue Studio' }
+  if (!r || r.format !== 'yue-track-recipe') return { error: 'это не рецепт трека Partscaster' }
   if (r.version !== 1) return { error: `версия рецепта ${r.version} не поддерживается — обновите приложение` }
   const title = r.track?.title || r.root?.title || 'трек'
   const steps = 1 + (Array.isArray(r.ops) ? r.ops.length : 0)

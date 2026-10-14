@@ -1,7 +1,7 @@
-// yue-align — замер синхронности вклейки: где партия (мини-рендер) совпадает
+// partscaster-align — замер синхронности вклейки: где партия (мини-рендер) совпадает
 // по атакам с окном трека и насколько с ним расходятся способы вклейки.
 //
-//	yue-align -track audio.flac -party child.flac -from 32 -to 40 -lead 2 -beat 0.5
+//	partscaster-align -track audio.flac -party child.flac -from 32 -to 40 -lead 2 -beat 0.5
 //
 // Печатает найденные сдвиг/скорость/score и ошибку (мс) на краях окна для
 // «наивной» вклейки (начало партии в from) и для подгонки (сдвиг+темп).
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 
-	"yue-studio/internal/dsp"
+	"partscaster/internal/dsp"
 )
 
 func main() {

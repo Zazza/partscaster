@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Спецификация yue-worker.exe (карточка internal-yue-worker-exe, ТК1–ТК8):
+// Спецификация partscaster-worker.exe (карточка internal-partscaster-worker-exe, ТК1–ТК8):
 //   - uv скачивается с проверкой sha256;
 //   - пакеты ставятся один раз: отпечаток (requirements + закреплённые версии)
 //     решает, нужна ли переустановка;
@@ -130,7 +130,7 @@ func TestNeedInstall_MatchedThenChanged(t *testing.T) {
 }
 
 func TestVenvPython(t *testing.T) {
-	home := filepath.Join("base", "yue-worker")
+	home := filepath.Join("base", "partscaster-worker")
 	if got, want := VenvPython(home, "windows"), filepath.Join(home, "venv", "Scripts", "python.exe"); got != want {
 		t.Errorf("windows: %q, ждали %q", got, want)
 	}
@@ -407,11 +407,11 @@ func TestExtractWorker_NotGzip(t *testing.T) {
 // --- ТК6: окружение воркера ---
 
 func TestWorkerEnv(t *testing.T) {
-	home := filepath.Join("base", "yue-worker")
+	home := filepath.Join("base", "partscaster-worker")
 	for _, goos := range []string{"windows", "linux"} {
 		env := WorkerEnv(home, goos)
-		if got, want := env["YUE_DATA_DIR"], filepath.Join(home, "data"); got != want {
-			t.Errorf("%s: YUE_DATA_DIR=%q, ждали %q", goos, got, want)
+		if got, want := env["PARTSCASTER_DATA_DIR"], filepath.Join(home, "data"); got != want {
+			t.Errorf("%s: PARTSCASTER_DATA_DIR=%q, ждали %q", goos, got, want)
 		}
 		if got, want := env["HF_HOME"], filepath.Join(home, "hf-cache"); got != want {
 			t.Errorf("%s: HF_HOME=%q, ждали %q", goos, got, want)
@@ -469,7 +469,7 @@ func TestServeArgs(t *testing.T) {
 
 func TestResolveHome_Default(t *testing.T) {
 	cfg := t.TempDir()
-	def := filepath.Join("C:", "Users", "u", "AppData", "Local", "yue-worker")
+	def := filepath.Join("C:", "Users", "u", "AppData", "Local", "partscaster-worker")
 	home, saved := ResolveHome(cfg, def)
 	if home != def || saved {
 		t.Errorf("нет сохранённой: (%q, %v), ждали (%q, false)", home, saved, def)
@@ -483,7 +483,7 @@ func TestResolveHome_Default(t *testing.T) {
 
 func TestResolveHome_Saved(t *testing.T) {
 	cfg := t.TempDir()
-	chosen := filepath.Join(t.TempDir(), "D диск", "yue-worker")
+	chosen := filepath.Join(t.TempDir(), "D диск", "partscaster-worker")
 	if err := SaveHome(cfg, chosen); err != nil {
 		t.Fatal(err)
 	}

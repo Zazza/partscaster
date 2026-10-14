@@ -1,6 +1,6 @@
 name: Release
 
-# Релиз по тегу v*: приложение + yue-mcp + архив воркера под Linux/Windows/macOS,
+# Релиз по тегу v*: приложение + partscaster-mcp + архив воркера под Linux/Windows/macOS,
 # всё выкладывается в GitHub Release этого тега. Тег ставит и пушит человек.
 on:
   push:
@@ -54,6 +54,6 @@ jobs:
         with:
           # архив воркера одинаков на всех ОС — отдельным файлом выкладывается один раз (Linux)
           files: |
-            dist/yue-studio-*.tar.gz
-            dist/yue-studio-*.zip
+            dist/partscaster-*.tar.gz
+            dist/partscaster-*.zip
             ${{ runner.os == 'Linux' && 'dist/worker-*.tar.gz' || '' }}

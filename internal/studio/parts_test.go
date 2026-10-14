@@ -11,7 +11,7 @@ import (
 	"slices"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Партии-рецепты пресета.

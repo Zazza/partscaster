@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Запись пересборки ChildID 0 с Engine — цепочка движка на дорожки Stems в окне

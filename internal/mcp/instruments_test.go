@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // инструмент fx_instruments (action list|create|update|delete) — свои инструменты воркера.

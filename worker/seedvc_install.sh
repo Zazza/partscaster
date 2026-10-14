@@ -4,16 +4,16 @@
 # него не пишется: каталог можно перенести на другой диск целиком.
 #
 # usage: seedvc_install.sh [каталог]
-#   каталог по умолчанию — $YUE_SEEDVC_DIR или ~/yue-studio/seedvc;
-#   не по умолчанию — пропиши YUE_SEEDVC_DIR=<каталог> в ~/yue-studio/worker.env
+#   каталог по умолчанию — $PARTSCASTER_SEEDVC_DIR или ~/partscaster/seedvc;
+#   не по умолчанию — пропиши PARTSCASTER_SEEDVC_DIR=<каталог> в ~/partscaster/worker.env
 # Нужно: git, uv (https://docs.astral.sh/uv/), CUDA-GPU, ~14 ГБ на время установки, ~10 ГБ после.
 # Лицензия Seed-VC — GPL-3.0; воркер вызывает его отдельной программой.
 set -euo pipefail
 
-DIR="${1:-${YUE_SEEDVC_DIR:-$HOME/yue-studio/seedvc}}"
+DIR="${1:-${PARTSCASTER_SEEDVC_DIR:-$HOME/partscaster/seedvc}}"
 REPO=https://github.com/Plachtaa/seed-vc.git
 COMMIT=51383efd921027683c89e5348211d93ff12ac2a8   # проверенная версия кода
-TORCH_INDEX="${YUE_TORCH_INDEX:-https://download.pytorch.org/whl/cu128}"
+TORCH_INDEX="${PARTSCASTER_TORCH_INDEX:-https://download.pytorch.org/whl/cu128}"
 NEED_GB=14   # на пике: venv ~7.5 (из них CUDA-библиотеки ~4.3) + кэш пакетов ~3.5 + веса ~2.4
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -47,6 +47,6 @@ echo "веса и пробный запуск…"
 uv cache clean -q 2>/dev/null || true
 du -sh "$DIR"
 echo "Seed-VC готов: $DIR"
-if [ "$DIR" != "$HOME/yue-studio/seedvc" ]; then
-  echo "пропиши в ~/yue-studio/worker.env: YUE_SEEDVC_DIR=$DIR  (и перезапусти воркер)"
+if [ "$DIR" != "$HOME/partscaster/seedvc" ]; then
+  echo "пропиши в ~/partscaster/worker.env: PARTSCASTER_SEEDVC_DIR=$DIR  (и перезапусти воркер)"
 fi

@@ -12,29 +12,29 @@ import (
 )
 
 // Спецификация раздела «Для AI-агентов»:
-//   - команда «Подключить к Claude Code» — `claude mcp add yue-studio --scope user
-//     -e YUE_URL=<адрес> -- <путь к yue-mcp>`; путь и адрес — отдельными аргументами
+//   - команда «Подключить к Claude Code» — `claude mcp add partscaster --scope user
+//     -e PARTSCASTER_URL=<адрес> -- <путь к partscaster-mcp>`; путь и адрес — отдельными аргументами
 //     (с пробелами — одним аргументом);
 //   - фрагменты конфига (Claude Code / Claude Desktop / Codex) — валидные (sh / JSON / TOML)
 //     с тем же путём и адресом;
-//   - путь yue-mcp — рядом с приложением, на Windows с .exe.
+//   - путь partscaster-mcp — рядом с приложением, на Windows с .exe.
 
 // samples — пути и адреса, в том числе с пробелами, кавычками и обратными слэшами.
 var samples = []struct{ path, url string }{
-	{"/opt/yue/yue-mcp", "http://localhost:8091"},
-	{"/home/u/Yue Studio/yue-mcp", "http://192.168.1.5:8091"},
-	{"/Applications/Yue Studio.app/Contents/MacOS/yue-mcp", "https://gpu.lan"},
-	{"/home/u/it's mine/yue-mcp", "http://h:9000"},
-	{`/data/say "hi"/yue-mcp`, "http://h:8091"},
-	{`C:\Program Files\Yue Studio\yue-mcp.exe`, "http://10.0.0.2:8091"},
-	{"/home/u/$HOME `x`/yue-mcp", "http://h:8091"},
+	{"/opt/yue/partscaster-mcp", "http://localhost:8091"},
+	{"/home/u/Partscaster/partscaster-mcp", "http://192.168.1.5:8091"},
+	{"/Applications/Partscaster.app/Contents/MacOS/partscaster-mcp", "https://gpu.lan"},
+	{"/home/u/it's mine/partscaster-mcp", "http://h:9000"},
+	{`/data/say "hi"/partscaster-mcp`, "http://h:8091"},
+	{`C:\Program Files\Partscaster\partscaster-mcp.exe`, "http://10.0.0.2:8091"},
+	{"/home/u/$HOME `x`/partscaster-mcp", "http://h:8091"},
 }
 
 func TestClaudeAddArgs(t *testing.T) {
 	t.Parallel()
 	for _, s := range samples {
 		got := ClaudeAddArgs(s.path, s.url)
-		want := []string{"mcp", "add", "yue-studio", "--scope", "user", "-e", "YUE_URL=" + s.url, "--", s.path}
+		want := []string{"mcp", "add", "partscaster", "--scope", "user", "-e", "PARTSCASTER_URL=" + s.url, "--", s.path}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("ClaudeAddArgs(%q, %q) =\n %q\nwant\n %q", s.path, s.url, got, want)
 		}
@@ -93,16 +93,16 @@ func TestSnippetClaudeDesktopJSON(t *testing.T) {
 			t.Errorf("ClaudeDesktop snippet is not valid JSON: %v\n%s", err, raw)
 			continue
 		}
-		srv, ok := cfg.MCPServers["yue-studio"]
+		srv, ok := cfg.MCPServers["partscaster"]
 		if !ok {
-			t.Errorf("no mcpServers.yue-studio in:\n%s", raw)
+			t.Errorf("no mcpServers.partscaster in:\n%s", raw)
 			continue
 		}
 		if srv.Command != s.path {
 			t.Errorf("command = %q, want %q", srv.Command, s.path)
 		}
-		if srv.Env["YUE_URL"] != s.url {
-			t.Errorf("env.YUE_URL = %q, want %q", srv.Env["YUE_URL"], s.url)
+		if srv.Env["PARTSCASTER_URL"] != s.url {
+			t.Errorf("env.PARTSCASTER_URL = %q, want %q", srv.Env["PARTSCASTER_URL"], s.url)
 		}
 	}
 }
@@ -120,8 +120,8 @@ func TestSnippetCodexTOML(t *testing.T) {
 	}
 	for _, s := range samples {
 		raw := MakeSnippets(s.path, s.url).Codex
-		if !strings.Contains(raw, "[mcp_servers.yue-studio]") {
-			t.Errorf("Codex snippet lacks [mcp_servers.yue-studio]:\n%s", raw)
+		if !strings.Contains(raw, "[mcp_servers.partscaster]") {
+			t.Errorf("Codex snippet lacks [mcp_servers.partscaster]:\n%s", raw)
 		}
 		cmd := exec.Command(py, "-I", "-c",
 			"import json,sys,tomllib; print(json.dumps(tomllib.loads(sys.stdin.read())))")
@@ -140,31 +140,31 @@ func TestSnippetCodexTOML(t *testing.T) {
 		if err := json.Unmarshal(out, &cfg); err != nil {
 			t.Fatalf("decode tomllib output: %v\n%s", err, out)
 		}
-		srv, ok := cfg.MCPServers["yue-studio"]
+		srv, ok := cfg.MCPServers["partscaster"]
 		if !ok {
-			t.Errorf("no mcp_servers.yue-studio in parsed TOML: %s", out)
+			t.Errorf("no mcp_servers.partscaster in parsed TOML: %s", out)
 			continue
 		}
 		if srv.Command != s.path {
 			t.Errorf("command = %q, want %q\n%s", srv.Command, s.path, raw)
 		}
-		if srv.Env["YUE_URL"] != s.url {
-			t.Errorf("env.YUE_URL = %q, want %q\n%s", srv.Env["YUE_URL"], s.url, raw)
+		if srv.Env["PARTSCASTER_URL"] != s.url {
+			t.Errorf("env.PARTSCASTER_URL = %q, want %q\n%s", srv.Env["PARTSCASTER_URL"], s.url, raw)
 		}
 	}
 }
 
 func TestMCPPath(t *testing.T) {
 	t.Parallel()
-	dir := filepath.Join(string(filepath.Separator)+"opt", "Yue Studio")
+	dir := filepath.Join(string(filepath.Separator)+"opt", "Partscaster")
 	for _, goos := range []string{"linux", "darwin"} {
-		if got, want := MCPPath(dir, goos), filepath.Join(dir, "yue-mcp"); got != want {
+		if got, want := MCPPath(dir, goos), filepath.Join(dir, "partscaster-mcp"); got != want {
 			t.Errorf("MCPPath(%q, %s) = %q, want %q", dir, goos, got, want)
 		}
 	}
 	got := MCPPath(dir, "windows")
-	if !strings.HasSuffix(got, "yue-mcp.exe") || !strings.HasPrefix(got, dir) {
-		t.Errorf("MCPPath(%q, windows) = %q, want %s/…/yue-mcp.exe", dir, got, dir)
+	if !strings.HasSuffix(got, "partscaster-mcp.exe") || !strings.HasPrefix(got, dir) {
+		t.Errorf("MCPPath(%q, windows) = %q, want %s/…/partscaster-mcp.exe", dir, got, dir)
 	}
 	if filepath.Dir(got) != dir {
 		t.Errorf("MCPPath windows must be next to the app: dir(%q) != %q", got, dir)

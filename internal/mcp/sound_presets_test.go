@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // sound_presets — список; sound_preset_create / _update / _delete

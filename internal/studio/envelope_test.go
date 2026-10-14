@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"yue-studio/internal/dsp"
+	"partscaster/internal/dsp"
 )
 
 // stem "" — весь трек (звук трека по FetchBase) через EnvelopeGraph, загрузка

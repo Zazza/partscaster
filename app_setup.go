@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"yue-studio/internal/agentsetup"
-	"yue-studio/internal/yue"
+	"partscaster/internal/agentsetup"
+	"partscaster/internal/yue"
 )
 
 // version — версия сборки (git describe), вшивается при make build/release.
@@ -48,7 +48,7 @@ func (a *App) mcpPath() string {
 	return agentsetup.MCPPath(filepath.Dir(exe), runtime.GOOS)
 }
 
-// YueAgentSetup — путь yue-mcp рядом с приложением и готовые фрагменты конфига с текущим адресом.
+// YueAgentSetup — путь partscaster-mcp рядом с приложением и готовые фрагменты конфига с текущим адресом.
 func (a *App) YueAgentSetup() AgentSetup {
 	p, url := a.mcpPath(), a.yue.GetURL()
 	_, err := os.Stat(p)

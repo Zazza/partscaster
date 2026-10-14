@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Ведущий импорта рецепта

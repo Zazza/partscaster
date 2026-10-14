@@ -1,21 +1,50 @@
 #!/usr/bin/env bash
-# Установка/обновление воркера Yue Studio из распакованного архива (worker-<версия>/install.sh).
+# Установка/обновление воркера Partscaster из распакованного архива (worker-<версия>/install.sh).
 #
 #   ./install.sh [--no-start] [--hf-home DIR]   установить эту версию и (без --no-start) перезапустить
-#   ~/yue-studio/current/install.sh --rollback   вернуть предыдущую версию
+#   ~/partscaster/current/install.sh --rollback   вернуть предыдущую версию
 #   движок генерации: --engine torch (основной) | cpp (yue2.cpp — ЭКСПЕРИМЕНТ, меньше видеопамяти);
 #     для cpp: --cpp-model auto|bf16|q8|q6|q5 (auto — по видеопамяти), --cpp-low-vram (экономный, ~4,5 ГБ)
 #   без --engine движок не меняется (новая установка — основной)
 #
-# Раскладка: код — $YUE_HOME/releases/<время>-<версия>/, ссылка $YUE_HOME/current — действующая версия;
-# данные ($YUE_HOME/data) и настройки машины ($YUE_HOME/worker.env) общие для всех версий и не трогаются.
+# Раскладка: код — $PARTSCASTER_HOME/releases/<время>-<версия>/, ссылка $PARTSCASTER_HOME/current — действующая версия;
+# данные ($PARTSCASTER_HOME/data) и настройки машины ($PARTSCASTER_HOME/worker.env) общие для всех версий и не трогаются.
 # Необязательные компоненты (whisper, Seed-VC, RoFormer) ставит MCP-инструмент install_worker.
 set -euo pipefail
 
 # pwd -P: запуск через ссылку current/install.sh копирует саму версию, а не ссылку на неё
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-YUE_HOME="${YUE_HOME:-$HOME/yue-studio}"
-YUE_VENV="${YUE_VENV:-$HOME/yue/.venv}"
+
+# миграция со старого имени проекта: ~/yue-studio → ~/partscaster. Переносим данные,
+# версии и worker.env, снимаем старый юнит yue-worker (иначе после перезагрузки поднялись
+# бы оба и спорили за порт). Каталог ~/partscaster уже может существовать — deploy.sh
+# кладёт архив в ~/partscaster/incoming, поэтому вливаем старое содержимое, а не mv целиком.
+# Ссылку-синоним ~/yue-studio оставляем — страховка на случай абсолютных путей в старых
+# данных. Явно заданный PARTSCASTER_HOME или уже мигрированные данные — миграция не нужна.
+if [[ -z "${PARTSCASTER_HOME:-}" && -d "$HOME/yue-studio" && ! -d "$HOME/partscaster/releases" && ! -d "$HOME/partscaster/data" ]]; then
+  echo "== миграция: ~/yue-studio → ~/partscaster =="
+  XDG="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  XDG_RUNTIME_DIR="$XDG" systemctl --user disable --now yue-worker >/dev/null 2>&1 || true
+  mkdir -p "$HOME/partscaster"
+  shopt -s dotglob nullglob
+  for f in "$HOME/yue-studio"/*; do
+    dest="$HOME/partscaster/$(basename "$f")"
+    [[ -e "$dest" ]] || mv -T "$f" "$dest" # занято только свежим incoming/ из deploy.sh
+  done
+  shopt -u dotglob nullglob
+  rm -f "$HOME/.config/systemd/user/yue-worker.service" "$HOME/partscaster/units/yue-worker.service"
+  XDG_RUNTIME_DIR="$XDG" systemctl --user daemon-reload || true
+  rmdir "$HOME/yue-studio" 2>/dev/null || true # не пустой (что-то заняло имя) — просто без ссылки
+  [[ -e "$HOME/yue-studio" ]] || ln -s partscaster "$HOME/yue-studio"
+  # ключи worker.env со старым префиксом YUE_* — к этим же значениям новыми именами
+  if [[ -f "$HOME/partscaster/worker.env" ]] && grep -q '^YUE_[A-Z_]' "$HOME/partscaster/worker.env"; then
+    sed -i -e 's/^YUE_\([A-Z][A-Z_]*\)=/PARTSCASTER_\1=/' "$HOME/partscaster/worker.env"
+    echo "worker.env: ключи YUE_* переименованы в PARTSCASTER_*"
+  fi
+fi
+
+PARTSCASTER_HOME="${PARTSCASTER_HOME:-$HOME/partscaster}"
+PARTSCASTER_VENV="${PARTSCASTER_VENV:-$HOME/yue/.venv}"
 KEEP=3 # сколько прежних версий хранить кроме действующей
 
 NO_START=0
@@ -52,7 +81,7 @@ fi
 
 # пути уходят в юнит systemd: кавычки, обратный слэш, % (спецификаторы systemd) и перевод строки там
 # не записать буквально — такие пути отклоняются до любых изменений (пробелы — можно, юнит их кавычит)
-for p in "$YUE_HOME" "$YUE_VENV"; do
+for p in "$PARTSCASTER_HOME" "$PARTSCASTER_VENV"; do
   if [[ "$p" == *[\"\\%]* || "$p" == *$'\n'* ]]; then
     echo "путь не годится для юнита systemd (кавычка, \\, % или перевод строки): $p" >&2
     exit 2
@@ -72,8 +101,8 @@ expand_home() { # «~» и «~/…» → $HOME (systemd тильду в Environm
 
 # ссылка current меняется атомарно: новая ссылка рядом и rename поверх старой
 switch_current() {
-  ln -sfn "$1" "$YUE_HOME/current.new"
-  mv -T "$YUE_HOME/current.new" "$YUE_HOME/current"
+  ln -sfn "$1" "$PARTSCASTER_HOME/current.new"
+  mv -T "$PARTSCASTER_HOME/current.new" "$PARTSCASTER_HOME/current"
 }
 
 # health_ok — воркер отвечает на /health; curl есть не везде (на GPU-машине его может не быть) —
@@ -82,51 +111,51 @@ health_ok() {
   if command -v curl >/dev/null; then
     curl -sf --max-time 5 http://localhost:8091/health >/dev/null
   else
-    "$YUE_VENV/bin/python" -c 'import urllib.request; urllib.request.urlopen("http://localhost:8091/health", timeout=5)' \
+    "$PARTSCASTER_VENV/bin/python" -c 'import urllib.request; urllib.request.urlopen("http://localhost:8091/health", timeout=5)' \
       >/dev/null 2>&1
   fi
 }
 
 start_worker() {
   systemctl --user daemon-reload
-  systemctl --user enable yue-worker
-  systemctl --user restart yue-worker
+  systemctl --user enable partscaster-worker
+  systemctl --user restart partscaster-worker
   # модель грузится после старта, но API отвечает сразу; ждём до ~30 с
   for _ in $(seq 1 15); do
     if health_ok; then
-      echo "воркер запущен: $(readlink "$YUE_HOME/current")"
+      echo "воркер запущен: $(readlink "$PARTSCASTER_HOME/current")"
       return 0
     fi
     sleep 2
   done
-  echo "воркер не отвечает на http://localhost:8091/health — journalctl --user -u yue-worker -n 50" >&2
+  echo "воркер не отвечает на http://localhost:8091/health — journalctl --user -u partscaster-worker -n 50" >&2
   return 1
 }
 
 sed_repl() { printf '%s' "$1" | sed -e 's/[|&\\]/\\&/g'; } # путь как замена в s|…|…| буквально
 
 install_unit() {
-  mkdir -p "$YUE_HOME/units" "$HOME/.config/systemd/user"
-  local unit="$YUE_HOME/units/yue-worker.service"
+  mkdir -p "$PARTSCASTER_HOME/units" "$HOME/.config/systemd/user"
+  local unit="$PARTSCASTER_HOME/units/partscaster-worker.service"
   # пути юнита — те, куда ставили: каталог воркера (код, worker.env, данные) и venv с пакетами;
   # по умолчанию юнит остаётся в переносимой форме %h/…
   local args=(-e "")
-  [[ "$YUE_HOME" == "$HOME/yue-studio" ]] || args+=(-e "s|%h/yue-studio|$(sed_repl "$YUE_HOME")|g")
-  [[ "$YUE_VENV" == "$HOME/yue/.venv" ]] || args+=(-e "s|%h/yue/.venv|$(sed_repl "$YUE_VENV")|g")
-  sed "${args[@]}" "$YUE_HOME/current/units/yue-worker.service" > "$unit"
+  [[ "$PARTSCASTER_HOME" == "$HOME/partscaster" ]] || args+=(-e "s|%h/partscaster|$(sed_repl "$PARTSCASTER_HOME")|g")
+  [[ "$PARTSCASTER_VENV" == "$HOME/yue/.venv" ]] || args+=(-e "s|%h/yue/.venv|$(sed_repl "$PARTSCASTER_VENV")|g")
+  sed "${args[@]}" "$PARTSCASTER_HOME/current/units/partscaster-worker.service" > "$unit"
   cp "$unit" "$HOME/.config/systemd/user/"
 }
 
 # с окружением worker.env (данные, кеши) — как его читает systemd: КЛЮЧ=значение, не исполняется
 with_worker_env() {
   (
-    export YUE_DATA_DIR="$YUE_HOME/data" YUE_HOME
-    if [[ -f "$YUE_HOME/worker.env" ]]; then
+    export PARTSCASTER_DATA_DIR="$PARTSCASTER_HOME/data" PARTSCASTER_HOME
+    if [[ -f "$PARTSCASTER_HOME/worker.env" ]]; then
       while IFS='=' read -r key val; do
         [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
         if [[ ${#val} -ge 2 && ( "$val" == \"*\" || "$val" == \'*\' ) ]]; then val="${val:1:${#val}-2}"; fi
         export "$key=$val"
-      done < "$YUE_HOME/worker.env"
+      done < "$PARTSCASTER_HOME/worker.env"
     fi
     "$@"
   )
@@ -135,11 +164,11 @@ with_worker_env() {
 # settings.json данных воркера: дописать ключи engine/cpp_* (остальные сохраняются)
 settings_set() { # settings_set '{"engine": "cpp", ...}'
   local py=python3
-  command -v python3 >/dev/null || py="$YUE_VENV/bin/python"
+  command -v python3 >/dev/null || py="$PARTSCASTER_VENV/bin/python"
   with_worker_env "$py" -c '
 import json, os, sys
 from pathlib import Path
-p = Path(os.environ["YUE_DATA_DIR"]) / "settings.json"
+p = Path(os.environ["PARTSCASTER_DATA_DIR"]) / "settings.json"
 try:
     st = json.loads(p.read_text(encoding="utf-8"))
 except (OSError, ValueError):
@@ -157,7 +186,7 @@ CPP_REPO="https://github.com/ServeurpersoCom/yue2.cpp.git"
 
 cpp_runs() { # программа запускается (--help); библиотеки CUDA — из venv воркера
   local libs
-  libs="$(find "$YUE_VENV"/lib/python3*/site-packages/nvidia/cuda_runtime/lib "$YUE_VENV"/lib/python3*/site-packages/nvidia/cublas/lib \
+  libs="$(find "$PARTSCASTER_VENV"/lib/python3*/site-packages/nvidia/cuda_runtime/lib "$PARTSCASTER_VENV"/lib/python3*/site-packages/nvidia/cublas/lib \
     -maxdepth 0 -type d 2>/dev/null | paste -sd: -)"
   [[ -x "$1" ]] || return 1
   local out rc=0
@@ -166,8 +195,8 @@ cpp_runs() { # программа запускается (--help); библио�
   [[ $rc == 0 ]] || grep -qi usage <<<"$out"
 }
 
-cpp_build() { # сборка закреплённого коммита в $YUE_HOME/yue2cpp-src (нужны git, cmake, nvcc)
-  local src="$YUE_HOME/yue2cpp-src" nvcc
+cpp_build() { # сборка закреплённого коммита в $PARTSCASTER_HOME/yue2cpp-src (нужны git, cmake, nvcc)
+  local src="$PARTSCASTER_HOME/yue2cpp-src" nvcc
   nvcc="$(command -v nvcc || true)"
   [[ -z "$nvcc" && -x /usr/local/cuda/bin/nvcc ]] && nvcc=/usr/local/cuda/bin/nvcc
   if ! command -v git >/dev/null || ! command -v cmake >/dev/null || [[ -z "$nvcc" ]]; then
@@ -187,8 +216,8 @@ cpp_build() { # сборка закреплённого коммита в $YUE_H
 }
 
 cpp_binary() { # путь к рабочей программе yue2.cpp (из архива или собранной), иначе — сборка
-  local rel="$YUE_HOME/current/yue2cpp/yue-server" built="$YUE_HOME/yue2cpp-src/build/yue-server"
-  local mark="$YUE_HOME/yue2cpp-src/.commit"
+  local rel="$PARTSCASTER_HOME/current/yue2cpp/yue-server" built="$PARTSCASTER_HOME/yue2cpp-src/build/yue-server"
+  local mark="$PARTSCASTER_HOME/yue2cpp-src/.commit"
   if cpp_runs "$rel"; then echo "$rel"; return 0; fi
   # собранная раньше — если пометки нет или коммит тот же (пометка другая — закреплён новый коммит)
   if cpp_runs "$built" && { [[ ! -f "$mark" ]] || [[ "$(cat "$mark")" == "$CPP_COMMIT" ]]; }; then
@@ -228,7 +257,7 @@ engine_setup() {
     return 1
   fi
   echo "программа yue2.cpp: $bin"
-  if ! (cd "$YUE_HOME/current" && with_worker_env "$YUE_VENV/bin/python" engine_cpp.py download "$model"); then
+  if ! (cd "$PARTSCASTER_HOME/current" && with_worker_env "$PARTSCASTER_VENV/bin/python" engine_cpp.py download "$model"); then
     echo "модель yue2.cpp не скачана: $model (повтор install.sh докачает)"
     return 1
   fi
@@ -237,13 +266,13 @@ engine_setup() {
 }
 
 if [[ $ROLLBACK == 1 ]]; then
-  cur="$(basename "$(readlink -f "$YUE_HOME/current")")"
-  prev="$(ls -1 "$YUE_HOME/releases" | sort | awk -v c="$cur" '$0 < c' | tail -1 || true)"
+  cur="$(basename "$(readlink -f "$PARTSCASTER_HOME/current")")"
+  prev="$(ls -1 "$PARTSCASTER_HOME/releases" | sort | awk -v c="$cur" '$0 < c' | tail -1 || true)"
   if [[ -z "$prev" ]]; then
     echo "откатываться некуда: до $cur версий нет" >&2
     exit 1
   fi
-  switch_current "$YUE_HOME/releases/$prev"
+  switch_current "$PARTSCASTER_HOME/releases/$prev"
   install_unit
   echo "откат: $cur → $prev"
   start_worker
@@ -257,30 +286,30 @@ if ! command -v nvidia-smi >/dev/null || ! nvidia-smi >/dev/null; then
 fi
 
 VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
-mkdir -p "$YUE_HOME/releases" "$YUE_HOME/data"
+mkdir -p "$PARTSCASTER_HOME/releases" "$PARTSCASTER_HOME/data"
 # имя — время до секунды: повтор в ту же секунду ждёт следующую, а не вкладывается в чужой каталог;
 # временный .<имя> занимается mkdir (атомарно) — две установки сразу не возьмут одно имя
 for attempt in 1 2 3 4 5; do
   NAME="$(date +%Y%m%d%H%M%S)-$VERSION"
-  if [[ ! -e "$YUE_HOME/releases/$NAME" && ! -e "$YUE_HOME/releases/.$NAME" ]]; then
-    mkdir "$YUE_HOME/releases/.$NAME" && break # не занято, а mkdir упал (права, место) — ошибка сразу
+  if [[ ! -e "$PARTSCASTER_HOME/releases/$NAME" && ! -e "$PARTSCASTER_HOME/releases/.$NAME" ]]; then
+    mkdir "$PARTSCASTER_HOME/releases/.$NAME" && break # не занято, а mkdir упал (права, место) — ошибка сразу
   fi
-  [[ $attempt == 5 ]] && { echo "не удалось выбрать имя версии в $YUE_HOME/releases" >&2; exit 1; }
+  [[ $attempt == 5 ]] && { echo "не удалось выбрать имя версии в $PARTSCASTER_HOME/releases" >&2; exit 1; }
   sleep 1
 done
 # пока версия не стала действующей, сбой (копия, venv, пакеты) убирает её каталоги: иначе --rollback
 # выбрал бы по имени версию, которая ни разу не работала, а недокопированная копия занимала бы место
-trap 'rm -rf "$YUE_HOME/releases/.$NAME" "$YUE_HOME/releases/$NAME"' EXIT
+trap 'rm -rf "$PARTSCASTER_HOME/releases/.$NAME" "$PARTSCASTER_HOME/releases/$NAME"' EXIT
 # копия во временный каталог и rename — недокопированная версия не станет действующей
-cp -R "$SRC/." "$YUE_HOME/releases/.$NAME"
-mv -T "$YUE_HOME/releases/.$NAME" "$YUE_HOME/releases/$NAME"
+cp -R "$SRC/." "$PARTSCASTER_HOME/releases/.$NAME"
+mv -T "$PARTSCASTER_HOME/releases/.$NAME" "$PARTSCASTER_HOME/releases/$NAME"
 
 # пакеты: только если venv новый или requirements.txt изменился
-FP="$YUE_HOME/.requirements.sha256"
-MARK="$YUE_VENV/.yue-installing" # venv создан этим установщиком, пакеты ещё не встали
+FP="$PARTSCASTER_HOME/.requirements.sha256"
+MARK="$PARTSCASTER_VENV/.yue-installing" # venv создан этим установщиком, пакеты ещё не встали
 want="$(sha256sum "$SRC/requirements.txt" | cut -d' ' -f1)"
-if [[ ! -x "$YUE_VENV/bin/python" ]]; then
-  uv venv "$YUE_VENV" --python 3.12
+if [[ ! -x "$PARTSCASTER_VENV/bin/python" ]]; then
+  uv venv "$PARTSCASTER_VENV" --python 3.12
   touch "$MARK"
 elif [[ ! -f "$FP" && ! -f "$MARK" ]]; then
   # venv из установки до архивов: рабочее окружение не трогаем, запоминаем отпечаток
@@ -288,35 +317,35 @@ elif [[ ! -f "$FP" && ! -f "$MARK" ]]; then
 fi
 if [[ -f "$MARK" || "$(cat "$FP" 2>/dev/null)" != "$want" ]]; then
   echo "== пакеты (torch cu128 + API; первый раз — долго) =="
-  uv pip install --python "$YUE_VENV/bin/python" -r "$SRC/requirements.txt" \
+  uv pip install --python "$PARTSCASTER_VENV/bin/python" -r "$SRC/requirements.txt" \
     --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple
   echo "$want" > "$FP"
   rm -f "$MARK"
 fi
 
 # worker.env — настройки машины; создаётся один раз
-if [[ ! -f "$YUE_HOME/worker.env" ]]; then
-  printf 'HF_HOME=%s\n' "$(expand_home "$HF_HOME_DIR")" > "$YUE_HOME/worker.env"
+if [[ ! -f "$PARTSCASTER_HOME/worker.env" ]]; then
+  printf 'HF_HOME=%s\n' "$(expand_home "$HF_HOME_DIR")" > "$PARTSCASTER_HOME/worker.env"
 fi
 
 # действующей версия становится, когда пакеты под неё встали: сбой pip выше оставляет прежнюю
-switch_current "$YUE_HOME/releases/$NAME"
+switch_current "$PARTSCASTER_HOME/releases/$NAME"
 trap - EXIT
 install_unit
-echo "версия $VERSION → $YUE_HOME/releases/$NAME"
+echo "версия $VERSION → $PARTSCASTER_HOME/releases/$NAME"
 
 # наборы сэмплов (барабаны, басы, оркестр ~1 ГБ) — заранее; не встали — приложение докачает.
 # worker.env читается как данные (КЛЮЧ=значение, как его читает systemd), а не исполняется:
 # путь с пробелом или $(…) в значении не ломает шаг и не выполняется
 echo "== наборы сэмплов =="
 (
-  cd "$YUE_HOME/current"
+  cd "$PARTSCASTER_HOME/current"
   while IFS='=' read -r key val; do
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
     if [[ ${#val} -ge 2 && ( "$val" == \"*\" || "$val" == \'*\' ) ]]; then val="${val:1:${#val}-2}"; fi # кавычки — как у systemd
     export "$key=$val"
-  done < "$YUE_HOME/worker.env"
-  "$YUE_VENV/bin/python" kits_install.py
+  done < "$PARTSCASTER_HOME/worker.env"
+  "$PARTSCASTER_VENV/bin/python" kits_install.py
 ) || echo "!! не все наборы поставились — следующий запуск install.sh докачает"
 
 # движок генерации: без --engine не трогаем. yue2.cpp — ЭКСПЕРИМЕНТ: программа из архива релиза
@@ -332,9 +361,9 @@ if [[ -n "$ENGINE" ]]; then
 fi
 
 # хранятся действующая и KEEP последних прочих версий
-cur="$(basename "$(readlink -f "$YUE_HOME/current")")"
+cur="$(basename "$(readlink -f "$PARTSCASTER_HOME/current")")"
 others=()
-for d in "$YUE_HOME"/releases/*; do # глоб отсортирован, скрытые .<имя> (недокопированные) не попадают
+for d in "$PARTSCASTER_HOME"/releases/*; do # глоб отсортирован, скрытые .<имя> (недокопированные) не попадают
   [[ "$(basename "$d")" == "$cur" ]] || others+=("$d")
 done
 for ((i = 0; i < ${#others[@]} - KEEP; i++)); do

@@ -34,14 +34,14 @@ func exeName(name string) string {
 	return name
 }
 
-// ErrHomeBusy — папкой уже занят другой запуск yue-worker.
-var ErrHomeBusy = errors.New("в этой папке уже работает yue-worker")
+// ErrHomeBusy — папкой уже занят другой запуск partscaster-worker.
+var ErrHomeBusy = errors.New("в этой папке уже работает partscaster-worker")
 
 // LockHome занимает папку установки на всё время работы программы: второй запуск (двойной щелчок во время
 // долгой установки) иначе ставил бы пакеты в то же окружение одновременно с первым. Отпускается закрытием
 // файла — или системой при выходе процесса.
 func LockHome(home string) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(home, "yue-worker.lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(filepath.Join(home, "partscaster-worker.lock"), os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, err
 	}

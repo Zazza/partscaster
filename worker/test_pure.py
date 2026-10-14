@@ -325,9 +325,9 @@ _SEM_TOK_PER_SEC_SPEC = 25  # спецификация: 25 семантичес�
 
 def _import_worker(tmp: str):
     """Импорт воркера с данными во временном каталоге: при импорте он создаёт
-    БД в YUE_DATA_DIR — домашний каталог трогать нельзя."""
+    БД в PARTSCASTER_DATA_DIR — домашний каталог трогать нельзя."""
     import os
-    os.environ["YUE_DATA_DIR"] = tmp
+    os.environ["PARTSCASTER_DATA_DIR"] = tmp
     import yue_worker
     return yue_worker
 

@@ -13,7 +13,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		YueURL: env("YUE_URL", loadSettings().ServerURL),
+		YueURL: env("PARTSCASTER_URL", loadSettings().ServerURL),
 	}
 }
 
@@ -37,7 +37,37 @@ func settingsPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "yue-studio", "settings.json")
+	return filepath.Join(dir, "partscaster", "settings.json")
+}
+
+// migrateLegacySettings — разовый перенос настроек со старого имени проекта:
+// до переименования файл лежал в «yue-studio». Копируем, если нового ещё нет;
+// оригинал не удаляем — откат на старую версию не теряет настройки.
+func migrateLegacySettings(p string) {
+	if p == "" {
+		return
+	}
+	if _, err := os.Stat(p); err == nil {
+		return // уже есть — ничего не делаем
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return
+	}
+	old := filepath.Join(dir, "yue-studio", "settings.json")
+	b, err := os.ReadFile(old)
+	if err != nil {
+		return // старых настроек нет — чистая установка
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		log.Printf("settings: migrate mkdir: %v", err)
+		return
+	}
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		log.Printf("settings: migrate copy: %v", err)
+		return
+	}
+	log.Printf("settings: перенесены из %s", old)
 }
 
 func loadSettings() Settings {
@@ -46,6 +76,7 @@ func loadSettings() Settings {
 	if p == "" {
 		return s
 	}
+	migrateLegacySettings(p)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return s

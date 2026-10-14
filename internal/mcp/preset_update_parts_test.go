@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // sound_preset_update

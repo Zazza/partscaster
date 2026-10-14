@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Спецификация:
@@ -61,7 +61,7 @@ func newEngineServer(t *testing.T) (*Server, *engineFakeWorker) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
-	t.Setenv("YUE_URL", "")
+	t.Setenv("PARTSCASTER_URL", "")
 	t.Setenv("TMPDIR", t.TempDir())
 
 	fw := &engineFakeWorker{cfg: map[string]any{}}

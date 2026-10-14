@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // Инструменты слоя над моделью, которых нет у YuE: пересборка дорожек

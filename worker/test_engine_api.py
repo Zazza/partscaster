@@ -10,7 +10,7 @@ C2. POST /engine/models/install?name=: качает модель и VAE (ест�
     сети); сумма не сошлась → 502, нет ни файла, ни .part; неизвестное имя → 422; две загрузки
     одной модели — по очереди (файл скачан один раз). GET /engine/models/progress →
     {name, file, done, total} во время загрузки, {} после.
-C3. Воркер сам запускает yue-server ($YUE_CPP_BIN) на 127.0.0.1 с --model/--vae модели из
+C3. Воркер сам запускает yue-server ($PARTSCASTER_CPP_BIN) на 127.0.0.1 с --model/--vae модели из
     настроек; экономный режим → --max-seq 8192; смена модели → следующая генерация на новом
     процессе, старый остановлен; идущую генерацию смена не трогает; перед стартом yue2.cpp
     модель PyTorch выгружается; перед загрузкой PyTorch yue2.cpp остановлен.
@@ -69,11 +69,11 @@ def _setup_cpp(case):
         case.addCleanup(p.stop)
     case.models = tmp / "models"
     case.models.mkdir(exist_ok=True)
-    env = {"YUE_CPP_MODELS": str(case.models), "YUE_HOME": str(tmp / "home")}
+    env = {"PARTSCASTER_CPP_MODELS": str(case.models), "PARTSCASTER_HOME": str(tmp / "home")}
     p = mock.patch.dict(os.environ, env)
     p.start()
     case.addCleanup(p.stop)
-    os.environ.pop("YUE_CPP_BIN", None)
+    os.environ.pop("PARTSCASTER_CPP_BIN", None)
     import engine_cpp
     case.e = engine_cpp
     patch_model_sums(case, engine_cpp, ("q8", "q6"))
@@ -83,7 +83,7 @@ def _setup_cpp(case):
 
 def _use_fake(case, **scenario):
     b = make_fake_server(case.fake_dir, **scenario)
-    os.environ["YUE_CPP_BIN"] = str(b)
+    os.environ["PARTSCASTER_CPP_BIN"] = str(b)
     return b
 
 

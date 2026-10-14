@@ -1,4 +1,4 @@
-# Архитектура Yue Studio
+# Архитектура Partscaster
 
 ## Общая схема
 
@@ -6,7 +6,7 @@
 ┌─────────────────────────────┐         HTTP (локальная сеть)
 │  ПК: desktop-приложение     │ ──────────────────────────────┐
 │  Wails v2 (Go + Vue 3)      │                               ▼
-│  /srv/yue-studio            │                    ┌────────────────────┐
+│  /srv/partscaster            │                    ┌────────────────────┐
 └─────────────────────────────┘                    │ GPU-машина         │
    • окно = webview (Vue)                          │ воркер FastAPI     │
    • вся логика на Go (app.go)                     │ :8091              │
@@ -19,7 +19,7 @@
 ```
 
 Два независимых процесса: закрытие приложения не прерывает генерации —
-очередь живёт на GPU-машине в SQLite (`~/yue-studio/data/yue.db`).
+очередь живёт на GPU-машине в SQLite (`~/partscaster/data/yue.db`).
 
 ## Сторона ПК (репозиторий)
 
@@ -32,11 +32,11 @@
 | `internal/dsp/` | ffmpeg-цепочки эффектов (локальные, на готовом flac) |
 | `internal/studio/` | эффекты на дорожки в пересборке — ffmpeg (Chain/Steps) или цепочка звукового движка воркера (Engine: кусок окна считает воркер, в трек — «обработанная − исходная»); вклейки инструментов/приёмов: кусок трека перерендерен моделью целой группой, в треке заменяются только нужные стемы (drums/bass/other, голос — никогда), подгонка по стему бочки, громкость — дБ к старой дорожке; пересборка со всеми заменами с чистого `audio.flac`; место дорожки в стерео — матрица 2×2 на все её вставки (+ «исходная → на месте»), мастер — последним шагом на воркере (`/fx` `file` + `in_place`), рядом «микс без мастера» |
 | `internal/studio/presets.go` | пресеты звука: `ApplySoundPreset` — дорожки (нет — разделение, части барабанов — RoFormer), наборы сэмплов, пересборка правок «весь трек», финал ffmpeg на результате пересборки, мастер и громкость к цели — на воркере (`/fx` с `file`, `in_place`: блоки `glue`, `limiter`), версия-трек; цели `level_db` у правок с обработкой — по замеру обработанного куска (`dsp.LoudLevelDb`, как `rms_p95_db` воркера), после мастера — сверка по итогу (разделение версии RoFormer, до двух исправляющих пересборок, промежуточные версии удаляются); `PresetRunner` — авто-применение выбранных при создании трека (приложение тикает раз в 10 с, ждёт пустой очереди GPU, захват статуса на воркере); `RunGraph` — общий конвейер «граф ffmpeg на файл трека → вариант» приложения и MCP; `livelayer.go` — слой «живой звук» поверх любого пресета (воздух выше 16 кГц, тарелки у живых наборов; docs/effects.md). Рецепты и статусы хранит воркер (таблица `sound_presets`, поле джобы `sound_presets`), применяет ПК — ffmpeg и пересборка живут здесь |
-| `cmd/yue-align` | замер синхронности вклейки: сдвиг/скорость партии против окна трека, ошибка в мс |
+| `cmd/partscaster-align` | замер синхронности вклейки: сдвиг/скорость партии против окна трека, ошибка в мс |
 | `frontend/src/App.vue` | весь UI (один компонент) |
 | `frontend/src/presets.js` | библиотека пресетов стилей |
 | `frontend/src/rack.js` | инструментальная стойка |
-| `deploy.sh` | `worker` = архив воркера (`tools/worker-tar.sh`) на GPU-машину и его `install.sh` (версии в `~/yue-studio/releases`, ссылка `current`); `build` = сборка приложения |
+| `deploy.sh` | `worker` = архив воркера (`tools/worker-tar.sh`) на GPU-машину и его `install.sh` (версии в `~/partscaster/releases`, ссылка `current`); `build` = сборка приложения |
 
 ## Сторона GPU-машины (воркер)
 
@@ -46,18 +46,18 @@
 | `dsp.py` | librosa-анализатор (метрики) |
 | `sheetsage.py` | SheetSage2 (транскрипция трека → ABC, m-a-p/SheetSage2, 57M) |
 | `stems.py` | разделение на дорожки: demucs htdemucs (по умолчанию, грузится на вызов) или по выбору BS-Roformer-SW подпроцессом в отдельном окружении (`sep_run.py`); при сбое RoFormer — demucs |
-| `sep_run.py` | RoFormer-SW + DrumSep (барабаны по частям); запускается `~/sep-venv`-интерпретатором (`YUE_SEP_PY`) |
+| `sep_run.py` | RoFormer-SW + DrumSep (барабаны по частям); запускается `~/sep-venv`-интерпретатором (`PARTSCASTER_SEP_PY`) |
 | `presets.py` | пресеты звука: проверка рецепта (правки дорожек + финал), встроенные пресеты, переходы статуса пресета у трека (`/sound-presets`, `/jobs/{id}/sound-presets/{pid}/state`) |
 | `genres.py` | жанровые пресеты звука (34 течения × 3): собирает встроенные из готовых цепочек студии по id — `fx_presets.json`, копия `frontend/src/fxPresets.js` (make mcp-data, деплоится вместе с воркером) |
 | `drumsynth.py` | драм-машины и синт-басы, которые воркер синтезирует сам (`fx_kit_install tr808 …`) |
 | `fx_engine.py` | звуковой движок: цепочка блоков gate/eq/comp/drive/amp/cab/reverb/delay/…/air на numpy/scipy, без сдвига во времени (`POST /jobs/{id}/fx`) |
-| `fx_nam.py` | усилитель NAM (neural-amp-modeler 0.12.2 из `YUE_NAM_DEPS`): загрузка захвата `.nam`, замер задержки щелчком |
+| `fx_nam.py` | усилитель NAM (neural-amp-modeler 0.12.2 из `PARTSCASTER_NAM_DEPS`): загрузка захвата `.nam`, замер задержки щелчком |
 | `abcparse.py` | парсер score.abc → таймлайн для пиано-ролла |
 | `waveform.py` | волна громкости (пики soundfile+numpy) и спектрограмма (ffmpeg showspectrumpic — опционален) |
 | `whisper_run.py` | скрипт текста песни; запускается `~/whisper-venv`-интерпретатором |
 | `engine_cpp.py` | второй движок генерации **yue2.cpp** (ЭКСПЕРИМЕНТ): модели (закреплённые файлы и суммы), программа `yue-server` (воркер запускает и гасит её сам, только 127.0.0.1), перевод заявок, разбор ответа и журнала |
 
-Данные: `~/yue-studio/data/jobs/<id>/` — audio.flac/mp3/wav, score.abc,
+Данные: `~/partscaster/data/jobs/<id>/` — audio.flac/mp3/wav, score.abc,
 request.abc, latent.npy (25 кадров/с — для превью фрагментов), semantic.npy,
 metrics.json, dsp-*/overdub-*/preview-*/stem-*.flac. Профили корпусов —
 `data/corpus/<id>/`.
@@ -121,7 +121,7 @@ metrics.json, dsp-*/overdub-*/preview-*/stem-*.flac. Профили корпус
 (BS-Roformer-SW, чище, ~4,5× дольше; разово — `POST /jobs/{id}/stems?model=roformer`). У RoFormer
 «прочее» не включает гитару и клавиши, поэтому `other` приложения = other + guitar + piano модели,
 а остаток «трек − сумма основных» раздаётся дорожкам по их вкладу на частоте — сумма точная.
-Нет окружения RoFormer, его сбой или `YUE_STEMS_MODEL=demucs` — demucs (htdemucs + htdemucs_6s),
+Нет окружения RoFormer, его сбой или `PARTSCASTER_STEMS_MODEL=demucs` — demucs (htdemucs + htdemucs_6s),
 частей барабанов нет. Какая модель сработала — поле `model` ответа; в `/config` — `stems_pref`
 (выбор), `stems_model` (на деле), `roformer_available`.
 

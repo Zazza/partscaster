@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Релизный пакет под ОС: приложение + yue-mcp + архив воркера + INSTALL.txt.
+# Релизный пакет под ОС: приложение + partscaster-mcp + архив воркера + INSTALL.txt.
 # usage: [TARGET_OS=linux|windows|darwin] tools/release.sh [VERSION]   (версия по умолчанию — git describe)
 # ОС по умолчанию — эта. С Linux собирается и Windows (Wails там без cgo); macOS — только на Mac.
-# Итог в dist/: yue-studio-<ver>-<os>-<arch>.tar.gz (Windows — .zip) и worker-<ver>.tar.gz.
+# Итог в dist/: partscaster-<ver>-<os>-<arch>.tar.gz (Windows — .zip) и worker-<ver>.tar.gz.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -31,7 +31,7 @@ EXE=""
 mkdir -p dist
 # второй движок yue2.cpp (эксперимент) — готовой сборкой в архиве воркера: на Linux — в контейнере CUDA 12.8
 # (нужен docker), на Windows — локально (нужны VS Build Tools C++, CUDA Toolkit, cmake, ninja); без сборки
-# install.sh --engine cpp соберёт программу сам, а yue-worker.exe просто не предложит этот движок
+# install.sh --engine cpp соберёт программу сам, а partscaster-worker.exe просто не предложит этот движок
 if [[ "$HOST_OS" == "linux" && ! -x dist/yue2cpp-linux-x86_64/yue-server ]] && command -v docker >/dev/null; then
   tools/yue2cpp-build.sh || echo "!! сборка yue2.cpp не удалась — архив воркера без неё" >&2
 fi
@@ -46,30 +46,30 @@ LDFLAGS="-X main.version=$VERSION"
 "$WAILS" build -clean ${WAILS_ARGS[@]+"${WAILS_ARGS[@]}"} -ldflags "$LDFLAGS"
 # релизный MCP без srcDir: проверка «MCP старше исходников» в релизе не нужна
 HASH="$(go run ./cmd/srchash)"
-GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS -X main.buildHash=$HASH" -o "build/bin/yue-mcp$EXE" ./cmd/yue-mcp
+GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS -X main.buildHash=$HASH" -o "build/bin/partscaster-mcp$EXE" ./cmd/partscaster-mcp
 if [[ "$GOOS" == "windows" ]]; then
-  # yue-worker.exe — воркер без WSL: код воркера вшивается в программу (go:embed из payload/)
-  PAYLOAD=cmd/yue-worker/payload
+  # partscaster-worker.exe — воркер без WSL: код воркера вшивается в программу (go:embed из payload/)
+  PAYLOAD=cmd/partscaster-worker/payload
   mkdir -p "$PAYLOAD"
   rm -f "$PAYLOAD"/worker-*.tar.gz
   cp "$WORKER_TAR" "$PAYLOAD/"
-  GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o build/bin/yue-worker.exe ./cmd/yue-worker
+  GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o build/bin/partscaster-worker.exe ./cmd/partscaster-worker
   rm -f "$PAYLOAD"/worker-*.tar.gz
 fi
 
-NAME="yue-studio-$VERSION-$GOOS-$GOARCH"
+NAME="partscaster-$VERSION-$GOOS-$GOARCH"
 PKG="dist/$NAME"
 rm -rf "$PKG"
 mkdir -p "$PKG"
 if [[ "$GOOS" == "darwin" ]]; then
-  cp -R build/bin/yue-studio.app "$PKG/"
-  # приложение ищет yue-mcp рядом со своим исполняемым файлом — он внутри .app
-  cp "build/bin/yue-mcp" "$WORKER_TAR" "$PKG/yue-studio.app/Contents/MacOS/" # и архив: install_worker ищет его рядом с собой
+  cp -R build/bin/partscaster.app "$PKG/"
+  # приложение ищет partscaster-mcp рядом со своим исполняемым файлом — он внутри .app
+  cp "build/bin/partscaster-mcp" "$WORKER_TAR" "$PKG/partscaster.app/Contents/MacOS/" # и архив: install_worker ищет его рядом с собой
 else
-  cp "build/bin/yue-studio$EXE" "$PKG/"
+  cp "build/bin/partscaster$EXE" "$PKG/"
 fi
-[[ "$GOOS" == "windows" ]] && cp build/bin/yue-worker.exe "$PKG/"
-cp "build/bin/yue-mcp$EXE" "$PKG/"
+[[ "$GOOS" == "windows" ]] && cp build/bin/partscaster-worker.exe "$PKG/"
+cp "build/bin/partscaster-mcp$EXE" "$PKG/"
 cp "$WORKER_TAR" "$PKG/"
 sed "s/@VERSION@/$VERSION/g" deploy/INSTALL.txt > "$PKG/INSTALL.txt"
 

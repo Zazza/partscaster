@@ -6,16 +6,16 @@ sleep) — заглушки в PATH, пишут вызовы в журнал. `u
 из архива tools/worker-tar.sh (явная версия), для каждой версии — копия с её VERSION.
 
 Что должно работать:
-I1. Установка: current → $YUE_HOME/releases/<YYYYmmddHHMMSS>-<ver> (атомарная ссылка),
-    юнит в $YUE_HOME/units/ (WorkingDirectory=%h/yue-studio/current).
+I1. Установка: current → $PARTSCASTER_HOME/releases/<YYYYmmddHHMMSS>-<ver> (атомарная ссылка),
+    юнит в $PARTSCASTER_HOME/units/ (WorkingDirectory=%h/partscaster/current).
 I2. worker.env создаётся, если нет: HF_HOME=<HOME>/yue/hf-cache; --hf-home DIR → HF_HOME=DIR
     (~ раскрывается); существующий worker.env не меняется.
 I3. venv создаётся, если нет; пакеты (uv pip) — только если venv новый или requirements.txt
-    изменился; отпечаток $YUE_HOME/.requirements.sha256 — после успешной установки (сбой pip →
+    изменился; отпечаток $PARTSCASTER_HOME/.requirements.sha256 — после успешной установки (сбой pip →
     нет отпечатка, следующий запуск ставит снова); venv есть, а отпечатка нет (установка до
     архивов) → uv pip не зовётся, отпечаток пишется.
 I4. Наборы сэмплов (kits_install.py через python venv), их сбой — не провал.
-I5. Хранятся 3 последних версии + текущая; $YUE_HOME/data и worker.env не трогаются.
+I5. Хранятся 3 последних версии + текущая; $PARTSCASTER_HOME/data и worker.env не трогаются.
 I6. nvidia-smi нет или падает → ошибка ДО изменений (releases/ не создан).
 I7. Без --no-start — daemon-reload, enable, restart, проверка /health (нет ответа → ошибка);
     с --no-start — restart не вызывается.
@@ -108,7 +108,7 @@ class _InstallCase(unittest.TestCase):
         self.unpacked.mkdir()
         self._last_run = 0.0
         self._n = 0
-        self.yue_home = self.home / "yue-studio"
+        self.yue_home = self.home / "partscaster"
         self.venv = self.home / "yue" / ".venv"
 
     def make_version(self, ver, requirements=None):
@@ -194,9 +194,9 @@ class TestInstallBasic(_InstallCase):
 
     def test_unit_installed(self):
         self.install("1.0.0", "--no-start")
-        unit = self.yue_home / "units" / "yue-worker.service"
+        unit = self.yue_home / "units" / "partscaster-worker.service"
         self.assertTrue(unit.is_file())
-        self.assertIn("WorkingDirectory=%h/yue-studio/current", unit.read_text())
+        self.assertIn("WorkingDirectory=%h/partscaster/current", unit.read_text())
 
     def test_worker_env_default_hf_home(self):
         self.install("1.0.0", "--no-start")
@@ -232,7 +232,7 @@ class TestInstallBasic(_InstallCase):
 
     def test_yue_home_and_venv_overrides(self):
         other_home, other_venv = self.home / "elsewhere", self.home / "venvs" / "w"
-        self.install("1.0.0", "--no-start", YUE_HOME=str(other_home), YUE_VENV=str(other_venv))
+        self.install("1.0.0", "--no-start", PARTSCASTER_HOME=str(other_home), PARTSCASTER_VENV=str(other_venv))
         self.assertTrue((other_home / "current").is_symlink())
         self.assertEqual(self.called("uv", "venv")[0][1], str(other_venv))
         self.assertFalse((self.yue_home / "current").exists())
@@ -258,7 +258,7 @@ class TestInstallBasic(_InstallCase):
         sysargs = [a for n, a in self.calls() if n == "systemctl"]
         for want in ("daemon-reload", "enable", "restart"):
             self.assertTrue(any(want in a for a in sysargs), f"systemctl {want} not called: {sysargs}")
-        self.assertTrue(any("restart" in a and "yue-worker" in a for a in sysargs), sysargs)
+        self.assertTrue(any("restart" in a and "partscaster-worker" in a for a in sysargs), sysargs)
         self.assertTrue(all("--user" in a for a in sysargs), f"systemctl without --user: {sysargs}")
         curls = [a for n, a in self.calls() if n == "curl"]
         self.assertTrue(any(any("localhost:8091/health" in x for x in a) for a in curls), curls)
@@ -269,23 +269,23 @@ class TestInstallBasic(_InstallCase):
         self.assertNotEqual(p.returncode, 0, p.stdout)
 
     def test_unit_follows_yue_home(self):
-        """YUE_HOME доходит до юнита — код, worker.env и данные от $YUE_HOME."""
+        """PARTSCASTER_HOME доходит до юнита — код, worker.env и данные от $PARTSCASTER_HOME."""
         x = Path(self._td.name) / "x"
-        self.install("1.0.0", "--no-start", YUE_HOME=str(x))
-        unit = (x / "units" / "yue-worker.service").read_text().splitlines()
+        self.install("1.0.0", "--no-start", PARTSCASTER_HOME=str(x))
+        unit = (x / "units" / "partscaster-worker.service").read_text().splitlines()
         for want in (f"WorkingDirectory={x}/current", f"EnvironmentFile={x}/worker.env",
-                     f'Environment="YUE_DATA_DIR={x}/data"',
-                     # воркер ищет собранную install.sh программу yue2.cpp в $YUE_HOME/yue2cpp-src
-                     f'Environment="YUE_HOME={x}"'):
+                     f'Environment="PARTSCASTER_DATA_DIR={x}/data"',
+                     # воркер ищет собранную install.sh программу yue2.cpp в $PARTSCASTER_HOME/yue2cpp-src
+                     f'Environment="PARTSCASTER_HOME={x}"'):
             self.assertIn(want, unit)
-        self.assertFalse(any("%h/yue-studio" in ln for ln in unit), unit)
+        self.assertFalse(any("%h/partscaster" in ln for ln in unit), unit)
 
     def test_unit_default_yue_home(self):
-        """При умолчаниях юнит остаётся с %h/yue-studio."""
+        """При умолчаниях юнит остаётся с %h/partscaster."""
         self.install("1.0.0", "--no-start")
-        unit = (self.yue_home / "units" / "yue-worker.service").read_text().splitlines()
-        for want in ("WorkingDirectory=%h/yue-studio/current", "EnvironmentFile=%h/yue-studio/worker.env",
-                     'Environment="YUE_DATA_DIR=%h/yue-studio/data"'):
+        unit = (self.yue_home / "units" / "partscaster-worker.service").read_text().splitlines()
+        for want in ("WorkingDirectory=%h/partscaster/current", "EnvironmentFile=%h/partscaster/worker.env",
+                     'Environment="PARTSCASTER_DATA_DIR=%h/partscaster/data"'):
             self.assertIn(want, unit)
 
 
@@ -301,16 +301,16 @@ class TestInstallPathsAndFailures(_InstallCase):
 
     def test_yue_home_with_space_quoted_in_unit(self):
         x = Path(self._td.name) / "my yue"
-        p = self.run_direct("1.0.0", "--no-start", YUE_HOME=str(x))
+        p = self.run_direct("1.0.0", "--no-start", PARTSCASTER_HOME=str(x))
         self.assertEqual(p.returncode, 0, f"{p.stdout}\n{p.stderr}")
-        unit = (x / "units" / "yue-worker.service").read_text().splitlines()
-        self.assertIn(f'Environment="YUE_DATA_DIR={x}/data"', unit)
+        unit = (x / "units" / "partscaster-worker.service").read_text().splitlines()
+        self.assertIn(f'Environment="PARTSCASTER_DATA_DIR={x}/data"', unit)
 
     def test_yue_home_with_bad_chars_refused(self):
         for bad in ("pct%x", 'quo"te'):
             with self.subTest(bad=bad):
                 x = Path(self._td.name) / bad
-                p = self.run_direct("1.0.0", "--no-start", YUE_HOME=str(x))
+                p = self.run_direct("1.0.0", "--no-start", PARTSCASTER_HOME=str(x))
                 self.assertEqual(p.returncode, 2, f"{p.stdout}\n{p.stderr}")
                 self.assertFalse((x / "releases").exists(), "releases/ created despite bad path")
 

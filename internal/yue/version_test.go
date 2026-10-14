@@ -158,7 +158,7 @@ func isolateSettings(t *testing.T) string {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("HOME", dir)
 	t.Setenv("APPDATA", dir)
-	t.Setenv("YUE_URL", "")
+	t.Setenv("PARTSCASTER_URL", "")
 	return dir
 }
 

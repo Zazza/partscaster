@@ -19,10 +19,10 @@ for f in worker/*.py; do
 done
 cp worker/*.json worker/requirements*.txt worker/seedvc_install.sh worker/install.sh "$D/"
 cp worker/phrases/* "$D/phrases/"
-cp deploy/units/yue-worker.service "$D/units/"
+cp deploy/units/partscaster-worker.service "$D/units/"
 # готовая сборка yue2.cpp (tools/yue2cpp-build.sh / yue2cpp-build.ps1) — второй движок генерации, ЭКСПЕРИМЕНТ;
 # каталог — по TARGET_OS (по умолчанию linux); нет сборки — install.sh соберёт сам при --engine cpp,
-# а yue-worker.exe просто не предложит этот движок
+# а partscaster-worker.exe просто не предложит этот движок
 case "${TARGET_OS:-linux}" in
   windows)
     CPP_DIR="dist/yue2cpp-windows-x86_64"; CPP_BIN="yue-server.exe" ;;

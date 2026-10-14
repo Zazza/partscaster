@@ -10,13 +10,13 @@ htdemucs + барабаны по частям (DrumSep).
 - модель выбирается: по умолчанию htdemucs; RoFormer — если выбран
   (stems.separate(..., prefer="roformer"), настройка воркера stems_model,
   разово POST /jobs/{id}/stems?model=roformer|htdemucs);
-- RoFormer выбран, но окружения нет / он упал / YUE_STEMS_MODEL=demucs →
+- RoFormer выбран, но окружения нет / он упал / PARTSCASTER_STEMS_MODEL=demucs →
   demucs, model = htdemucs, частей нет, это не ошибка;
 - ответ разделения содержит model (bs-roformer-sw | htdemucs); неизвестная
   модель → 422; /config отдаёт stems_pref, stems_model, roformer_available.
 
 Внешние границы подменяются: подпроцесс RoFormer (subprocess.run на python
-из YUE_SEP_PY со скриптом sep_run.py) — фейком, который пишет известные
+из PARTSCASTER_SEP_PY со скриптом sep_run.py) — фейком, который пишет известные
 сигналы и печатает JSON по контракту sep_run.py; demucs — stems._run_model.
 torch и веса моделей не нужны.
 
@@ -171,9 +171,9 @@ RF = "roformer"  # выбор RoFormer (значение настройки/па
 
 
 class _SepEnv:
-    """Окружение разделения на тест: временный файл YUE_SEP_PY (по умолчанию
+    """Окружение разделения на тест: временный файл PARTSCASTER_SEP_PY (по умолчанию
     существует — окружение RoFormer «установлено»), каталог весов
-    YUE_SEP_MODELS, откат YUE_STEMS_MODEL — только если задан; фейки на
+    PARTSCASTER_SEP_MODELS, откат PARTSCASTER_STEMS_MODEL — только если задан; фейки на
     подпроцессе и demucs."""
 
     def _setup_sep(self, tmp: Path, sep_mode="ok", sep_py_exists=True, rollback_env=None, fail_6s=False):
@@ -183,14 +183,14 @@ class _SepEnv:
             sep_py.write_text("")
         elif sep_py.exists():
             sep_py.unlink()
-        env = {"YUE_SEP_PY": str(sep_py), "YUE_SEP_MODELS": str(tmp / "sep-models")}
+        env = {"PARTSCASTER_SEP_PY": str(sep_py), "PARTSCASTER_SEP_MODELS": str(tmp / "sep-models")}
         p = mock.patch.dict(os.environ, env)
         p.start()
         self.addCleanup(p.stop)
         if rollback_env is None:
-            os.environ.pop("YUE_STEMS_MODEL", None)
+            os.environ.pop("PARTSCASTER_STEMS_MODEL", None)
         else:
-            os.environ["YUE_STEMS_MODEL"] = rollback_env
+            os.environ["PARTSCASTER_STEMS_MODEL"] = rollback_env
         self.sep = FakeSep(sep_mode)
         self.demucs = FakeDemucs(fail_6s)
         for p in (mock.patch.object(stems.subprocess, "run", self.sep),
@@ -308,7 +308,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
             self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"stem-{n}.flac без DrumSep")
 
     def test_subprocess_error_falls_back_with_log(self):
-        with self.assertLogs("yue-worker", level="WARNING") as cm:
+        with self.assertLogs("partscaster-worker", level="WARNING") as cm:
             res = self._separate(sep_mode="fail")
         self.assertEqual(len(self.sep.calls), 1)
         self.assertEqual(res.get("model"), "htdemucs")
@@ -319,7 +319,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         self.assertTrue(cm.records, "сбой RoFormer не записан в лог")
 
     def test_subprocess_timeout_falls_back(self):
-        with self.assertLogs("yue-worker", level="WARNING"):
+        with self.assertLogs("partscaster-worker", level="WARNING"):
             res = self._separate(sep_mode="raise")
         self.assertEqual(res.get("model"), "htdemucs")
         self.assertTrue((self.out / "stem-vocals.flac").is_file())
@@ -330,7 +330,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
 
     def test_rollback_env_never_calls_roformer(self):
         res = self._separate(rollback_env="demucs")  # RoFormer выбран и окружение есть
-        self.assertEqual(self.sep.calls, [], "YUE_STEMS_MODEL=demucs, а RoFormer вызван")
+        self.assertEqual(self.sep.calls, [], "PARTSCASTER_STEMS_MODEL=demucs, а RoFormer вызван")
         self.assertEqual(res.get("model"), "htdemucs")
         self.assertTrue((self.out / "stem-drums.flac").is_file())
 
@@ -394,7 +394,7 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
                 self.assertAlmostEqual(self._gain(n), _K6[n], delta=0.01, msg=f"stem-{n} не из htdemucs_6s")
 
     def test_demucs_6s_load_failure_keeps_main_stems(self):
-        with self.assertLogs("yue-worker", level="WARNING"):
+        with self.assertLogs("partscaster-worker", level="WARNING"):
             res = self._separate(prefer=None, fail_6s=True)  # исключение наружу не выходит
         names = {Path(s).name for s in res.get("stems", [])}
         self.assertEqual(names, {f"stem-{n}.flac" for n in MAIN})
@@ -407,8 +407,8 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
 
 class TestRoformerAvailability(unittest.TestCase):
     """Без аудио-зависимостей: roformer_available отражает наличие файла
-    YUE_SEP_PY; выбор RoFormer действует, только если он выбран, окружение
-    есть и нет отката YUE_STEMS_MODEL=demucs."""
+    PARTSCASTER_SEP_PY; выбор RoFormer действует, только если он выбран, окружение
+    есть и нет отката PARTSCASTER_STEMS_MODEL=demucs."""
 
     def _check(self, exists, prefer=None, rollback=None):
         import stems
@@ -416,10 +416,10 @@ class TestRoformerAvailability(unittest.TestCase):
             py = Path(td) / "python"
             if exists:
                 py.write_text("")
-            with mock.patch.dict(os.environ, {"YUE_SEP_PY": str(py)}):
-                os.environ.pop("YUE_STEMS_MODEL", None)
+            with mock.patch.dict(os.environ, {"PARTSCASTER_SEP_PY": str(py)}):
+                os.environ.pop("PARTSCASTER_STEMS_MODEL", None)
                 if rollback is not None:
-                    os.environ["YUE_STEMS_MODEL"] = rollback
+                    os.environ["PARTSCASTER_STEMS_MODEL"] = rollback
                 avail = stems.roformer_available()
                 enabled = stems.roformer_enabled() if prefer is None else stems.roformer_enabled(prefer)
                 return avail, enabled
@@ -552,7 +552,7 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
     def test_subprocess_error_200_htdemucs(self):
         self._setup_sep(Path(self._td.name), sep_mode="fail")
         jid, d = self._audio_job()
-        with self.assertLogs("yue-worker", level="WARNING"):
+        with self.assertLogs("partscaster-worker", level="WARNING"):
             r = self._stems(jid, RF)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json().get("model"), "htdemucs")

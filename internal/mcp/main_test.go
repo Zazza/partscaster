@@ -9,7 +9,7 @@ import (
 // TestMain — свой TMPDIR на прогон пакета: каждый тестовый сервер заводит каталог кэша превью
 // (fxCache, os.MkdirTemp), после прогона каталог удаляется целиком — в системном /tmp ничего не копится.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "yue-mcp-test-*")
+	dir, err := os.MkdirTemp("", "partscaster-mcp-test-*")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "TMPDIR для тестов:", err)
 		os.Exit(1)

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Спецификация версий в MCP:

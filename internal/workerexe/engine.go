@@ -1,4 +1,4 @@
-// Выбор движка генерации при установке yue-worker: yue2.cpp (меньше видеопамяти) вместо основного
+// Выбор движка генерации при установке partscaster-worker: yue2.cpp (меньше видеопамяти) вместо основного
 // PyTorch. Бинарник yue-server приходит из архива воркера (собирает релиз), веса скачивает сам воркер
 // (worker/engine_cpp.py download) — здесь только пути, дефолты по видеокарте и запись настроек.
 package workerexe
@@ -73,7 +73,7 @@ func DefaultCppModel(vramMiB int) string {
 func LowVramDefault(vramMiB int) bool { return vramMiB < 10*1024 }
 
 // DownloadEngineModel — скачать веса модели+VAE (engine_cpp.py download) в консоль out.
-// pythonFromVenv — готовая команда питона из venv (VenvPython); WorkerEnv задаёт YUE_DATA_DIR/HF_HOME.
+// pythonFromVenv — готовая команда питона из venv (VenvPython); WorkerEnv задаёт PARTSCASTER_DATA_DIR/HF_HOME.
 func DownloadEngineModel(home, workerDir, model string) *exec.Cmd {
 	code := "import truststore; truststore.inject_into_ssl(); import sys, engine_cpp; " + // сертификаты системы — до сети
 		"engine_cpp.download(sys.argv[1], lambda f, d, t: print(f'{f}: {d}/{t}', flush=True))"

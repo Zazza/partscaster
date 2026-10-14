@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // dsp_presets отдаёт

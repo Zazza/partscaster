@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // инструмент fx_phrase — список фраз / расчёт фразы с цепочкой → file, cycle_sec.

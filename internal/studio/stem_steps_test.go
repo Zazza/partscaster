@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yue-studio/internal/dsp"
+	"partscaster/internal/dsp"
 )
 
 // «Применить к треку» — одна

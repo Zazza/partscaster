@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // rebuild_sections передаёт place и master записей; fx_apply — file и in_place;

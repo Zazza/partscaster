@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 func idp(v int64) *int64 { return &v }

@@ -1,7 +1,7 @@
 """Тесты очереди к GPU (gpu_queue/_gpu_lock в yue_worker).
 
 Импорт yue_worker создаёт каталоги данных и БД — уводим их во временную
-папку через YUE_DATA_DIR до импорта. GPU в тестах не трогаем: проверяем
+папку через PARTSCASTER_DATA_DIR до импорта. GPU в тестах не трогаем: проверяем
 только сам лок (взаимоисключение, реентерабельность, освобождение при ошибке).
 """
 import os
@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 _tmp = tempfile.TemporaryDirectory(prefix="yue-gpuq-test-")
-os.environ["YUE_DATA_DIR"] = str(Path(_tmp.name) / "data")
+os.environ["PARTSCASTER_DATA_DIR"] = str(Path(_tmp.name) / "data")
 
 import yue_worker  # noqa: E402
 

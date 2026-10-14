@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Cache — скачанные с воркера звук трека и стемы на ПК: превью эффекта на

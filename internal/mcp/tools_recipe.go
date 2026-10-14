@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"yue-studio/internal/studio"
+	"partscaster/internal/studio"
 )
 
 // Рецепт трека: экспорт песни правилами без аудио и импорт на этой установке.
@@ -81,7 +81,7 @@ func registerRecipeTools(s *Server) {
 			}
 			var rec studio.Recipe
 			if err := json.Unmarshal(data, &rec); err != nil || rec.Format != "yue-track-recipe" {
-				return "", errors.New("это не рецепт трека Yue Studio")
+				return "", errors.New("это не рецепт трека Partscaster")
 			}
 			mode := argString(args, "mode")
 			if mode == "" {

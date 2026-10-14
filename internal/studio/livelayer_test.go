@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Живой слой пресета: «воздух» (верх выше 16 кГц) на голос/прочее или на весь микс

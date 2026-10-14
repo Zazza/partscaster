@@ -12,8 +12,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // SectionSpec — замена дорожек трека в окне на дорожки перерендера куска.

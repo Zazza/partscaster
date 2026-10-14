@@ -1,8 +1,8 @@
-// yue-worker — воркер Yue Studio одной программой для Windows (без WSL): при первом запуске ставит Python,
+// partscaster-worker — воркер Partscaster одной программой для Windows (без WSL): при первом запуске ставит Python,
 // пакеты и код воркера в папку пользователя, дальше просто запускает воркер. Окно открыто — воркер работает,
 // закрыли — остановлен. Код воркера вшит в программу при сборке (tools/release.sh, пакет Windows).
 //
-//	yue-worker [--home ПАПКА] [--lan] [--engine torch|cpp] [--cpp-model q8] [--cpp-low-vram]
+//	partscaster-worker [--home ПАПКА] [--lan] [--engine torch|cpp] [--cpp-model q8] [--cpp-low-vram]
 package main
 
 import (
@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"yue-studio/internal/workerexe"
+	"partscaster/internal/workerexe"
 )
 
 //go:embed payload
@@ -41,7 +41,7 @@ func main() {
 	cppLowVram := flag.Bool("cpp-low-vram", false, "yue2.cpp в экономном режиме (контекст 8192 — меньше видеопамяти)")
 	flag.Parse()
 
-	fmt.Printf("Yue Studio — воркер %s\n\n", version)
+	fmt.Printf("Partscaster — воркер %s\n\n", version)
 	opts, err := parseEngineFlags(*engineFlag, *cppModelFlag, *cppLowVram)
 	if err != nil {
 		fmt.Printf("\nОшибка: %v\n", err)
@@ -276,12 +276,12 @@ func chooseHome(homeFlag string) (string, error) {
 
 func defaultHome() string {
 	if d := os.Getenv("LOCALAPPDATA"); d != "" {
-		return filepath.Join(d, "yue-worker")
+		return filepath.Join(d, "partscaster-worker")
 	}
 	if d, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(d, "yue-worker")
+		return filepath.Join(d, "partscaster-worker")
 	}
-	return "yue-worker"
+	return "partscaster-worker"
 }
 
 // unpackWorker кладёт вшитую версию кода воркера в home/app и убирает прежние: данные, пакеты и модели
@@ -337,7 +337,7 @@ func serve(home, workerDir string, lan bool) error {
 			}
 		}
 	}()
-	fmt.Printf("\nВоркер: http://127.0.0.1:%d — в Yue Studio укажите адрес 127.0.0.1.\n", workerexe.Port)
+	fmt.Printf("\nВоркер: http://127.0.0.1:%d — в Partscaster укажите адрес 127.0.0.1.\n", workerexe.Port)
 	fmt.Println("Модель скачивается при первой генерации. Закройте окно, чтобы остановить воркер.")
 	err := cmd.Wait()
 	if stopping.Load() {

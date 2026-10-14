@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/dsp"
-	"yue-studio/internal/yue"
+	"partscaster/internal/dsp"
+	"partscaster/internal/yue"
 )
 
 // Цепочка с ключом (ducking,

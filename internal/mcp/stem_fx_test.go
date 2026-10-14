@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"yue-studio/internal/studio"
-	"yue-studio/internal/yue"
+	"partscaster/internal/studio"
+	"partscaster/internal/yue"
 )
 
 // rebuild_sections — спека

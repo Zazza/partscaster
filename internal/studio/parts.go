@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 var (

@@ -13,8 +13,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 
-	"yue-studio/internal/config"
-	"yue-studio/internal/yue"
+	"partscaster/internal/config"
+	"partscaster/internal/yue"
 )
 
 //go:embed all:frontend/dist
@@ -31,7 +31,7 @@ func main() {
 	app := NewApp(client, NewPlayer())
 
 	if err := wails.Run(&options.App{
-		Title:     "Yue Studio",
+		Title:     "Partscaster",
 		Width:     1200,
 		Height:    800,
 		Frameless: false,

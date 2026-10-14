@@ -5,6 +5,7 @@ export const RELEASE_NOTES = [
   {
     version: '0.8.0',
     ru: [
+      'Теперь мы Partscaster: новое имя — та же программа. Настройки переносятся сами.',
       'Кнопка «Создать партитуру» у треков без неё — после неё работает пиано-ролл.',
       'Свой значок приложения и единые значки вместо эмодзи.',
       'Строка состояния внизу: модель, видеопамять, очередь.',
@@ -17,6 +18,7 @@ export const RELEASE_NOTES = [
       'Распознавание нот, дорожки и текст больше не мешают рендеру — общая очередь к видеокарте.',
     ],
     en: [
+      'We are Partscaster now: a new name, the same app. Your settings carry over.',
       '“Create score” for tracks without one — the piano roll works after it.',
       'An app icon of its own and one icon set instead of emoji.',
       'Status bar at the bottom: model, video memory, queue.',

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"yue-studio/internal/yue"
+	"partscaster/internal/yue"
 )
 
 // Слой «живой звук» — общий для всех пресетов, применяется вместе с пресетом (сырой трек без пресета —

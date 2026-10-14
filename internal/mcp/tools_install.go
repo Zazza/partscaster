@@ -68,13 +68,13 @@ func RegisterInstallTools(s *Server) {
 			"stems_model": prop("модель дорожек по умолчанию: htdemucs (быстро) | roformer (чище, только при roformer=true); "+
 				"при roformer=true обязательна — спроси пользователя; без RoFormer и без выбора — настройка не меняется", "string"),
 			"sep_dir":    prop("каталог RoFormer: окружение <dir>/venv и веса <dir>/models, можно на другом диске (пусто — ~/sep-venv и ~/sep-models)", "string"),
-			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/yue-studio/seedvc; можно на другом диске)", "string"),
+			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/partscaster/seedvc; можно на другом диске)", "string"),
 			"hf_home":    prop("каталог кеша весов HF (по умолчанию ~/yue/hf-cache)", "string"),
 			"engine": prop("движок генерации: torch — основной (по умолчанию) | cpp — yue2.cpp, ЭКСПЕРИМЕНТ: меньше видеопамяти "+
 				"(~8 ГБ, в экономном режиме ~4,5 ГБ против ~11), но тот же сид даёт другую песню (спроси пользователя)", "string"),
 			"cpp_model": prop("модель yue2.cpp (только при engine=cpp): auto — по видеопамяти (по умолчанию) | bf16 | q8 | q6 | q5", "string"),
 			"archive": prop("архив воркера worker-<версия>.tar.gz (пусто — собрать из исходников make worker-tar, "+
-				"либо взять лежащий рядом с yue-mcp из релизного пакета)", "string"),
+				"либо взять лежащий рядом с partscaster-mcp из релизного пакета)", "string"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			dryRun := true
@@ -113,7 +113,7 @@ func RegisterInstallTools(s *Server) {
 			}
 			seedvcDir := argString(args, "seedvc_dir")
 			if seedvcDir == "" {
-				seedvcDir = "~/yue-studio/seedvc"
+				seedvcDir = "~/partscaster/seedvc"
 			}
 			sepDir := argString(args, "sep_dir")
 			// пути уходят в shell-команды экранированными (shellQuote) и в worker.env строкой:
@@ -126,7 +126,7 @@ func RegisterInstallTools(s *Server) {
 			archive := argString(args, "archive")
 			if archive == "" {
 				if dryRun {
-					archive = "<архив воркера: соберётся make worker-tar или возьмётся рядом с yue-mcp>"
+					archive = "<архив воркера: соберётся make worker-tar или возьмётся рядом с partscaster-mcp>"
 				} else {
 					a, err := s.workerArchive()
 					if err != nil {
@@ -151,7 +151,7 @@ func RegisterInstallTools(s *Server) {
 
 	s.Register(Tool{
 		Name:        "install_app",
-		Description: "Собрать desktop-приложение Yue Studio на этом ПК (wails build; нужны Go, Node, wails CLI). Сухой прогон по умолчанию — только план.",
+		Description: "Собрать desktop-приложение Partscaster на этом ПК (wails build; нужны Go, Node, wails CLI). Сухой прогон по умолчанию — только план.",
 		InputSchema: props(map[string]any{
 			"dry_run": prop("только показать план, ничего не выполняя (по умолчанию true)", "boolean"),
 			"confirm": prop("выполнить сборку (спроси пользователя)", "boolean"),
@@ -282,18 +282,18 @@ func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool,
 	// настройка — до запуска юнита (воркер читает settings.json на каждый запрос, но так проще проверить);
 	// слияние с существующим файлом: прочие настройки пользователя не теряются
 	set := step{name: "настройка: дорожки по умолчанию — " + stemsLabel[stemsModel], cmd: fmt.Sprintf(
-		`~/yue/.venv/bin/python -c 'import json,pathlib; p=pathlib.Path.home()/"yue-studio/data/settings.json"; `+
+		`~/yue/.venv/bin/python -c 'import json,pathlib; p=pathlib.Path.home()/"partscaster/data/settings.json"; `+
 			`p.parent.mkdir(parents=True, exist_ok=True); d=json.loads(p.read_text()) if p.is_file() else {}; d["stems_model"]=%q; p.write_text(json.dumps(d, ensure_ascii=False, indent=1))'`,
 		stemsModel)}
 	last := len(steps) - 2 // перед systemd-юнитом и health
 	steps = append(steps[:last], append([]step{set}, steps[last:]...)...)
 	if stemsModel == "roformer" {
-		// действующая модель, а не «установлен»: выбор мог лечь не туда (YUE_DATA_DIR) или его
-		// перекрывает YUE_STEMS_MODEL=demucs — тогда «доступен» был бы неправдой
+		// действующая модель, а не «установлен»: выбор мог лечь не туда (PARTSCASTER_DATA_DIR) или его
+		// перекрывает PARTSCASTER_STEMS_MODEL=demucs — тогда «доступен» был бы неправдой
 		steps = append(steps, step{name: "проверка: дорожки делает RoFormer", cmd: "sleep 2 && " + workerGet("/config", 10) + " | " +
 			`grep -q '"stems_model": *"bs-roformer-sw"' && echo 'дорожки делает RoFormer' || ` +
 			`{ echo 'ВНИМАНИЕ: RoFormer выбран по умолчанию, но воркер делает дорожки demucs. ` +
-			`Проверьте шаг установки RoFormer, YUE_SEP_PY, YUE_DATA_DIR и YUE_STEMS_MODEL в ~/yue-studio/worker.env'; exit 1; }`})
+			`Проверьте шаг установки RoFormer, PARTSCASTER_SEP_PY, PARTSCASTER_DATA_DIR и PARTSCASTER_STEMS_MODEL в ~/partscaster/worker.env'; exit 1; }`})
 	}
 	return plan, steps
 }
@@ -372,7 +372,7 @@ func installSteps(host, archive string, whisper, seedvc, roformer bool, need flo
 		{name: "проверка: видеокарта NVIDIA и драйвер", cmd: checkGPUCmd, must: true},
 		{name: "проверка: место на диске", cmd: fmt.Sprintf(checkDiskCmd, int(math.Ceil(need))), must: true},
 	}
-	// база воркера — install.sh из архива: версия в ~/yue-studio/releases, ссылка current, venv и пакеты,
+	// база воркера — install.sh из архива: версия в ~/partscaster/releases, ссылка current, venv и пакеты,
 	// наборы сэмплов, юнит, worker.env (HF_HOME); запуск — позже, после компонентов
 	src, cleanup := shellQuote(archive), `rm -rf "$d"`
 	if host != "" {
@@ -402,21 +402,21 @@ func installSteps(host, archive string, whisper, seedvc, roformer bool, need flo
 	}
 	if roformer && sepDir != "" { // нестандартный каталог — воркер узнаёт его из worker.env
 		steps = append(steps, step{name: "worker.env: пути RoFormer", cmd: fmt.Sprintf(
-			`(grep -q '^YUE_SEP_PY=' ~/yue-studio/worker.env || printf 'YUE_SEP_PY=%%s\n' %s >> ~/yue-studio/worker.env) && `+
-				`(grep -q '^YUE_SEP_MODELS=' ~/yue-studio/worker.env || printf 'YUE_SEP_MODELS=%%s\n' %s >> ~/yue-studio/worker.env)`,
+			`(grep -q '^PARTSCASTER_SEP_PY=' ~/partscaster/worker.env || printf 'PARTSCASTER_SEP_PY=%%s\n' %s >> ~/partscaster/worker.env) && `+
+				`(grep -q '^PARTSCASTER_SEP_MODELS=' ~/partscaster/worker.env || printf 'PARTSCASTER_SEP_MODELS=%%s\n' %s >> ~/partscaster/worker.env)`,
 			shellQuote(sepDir+"/venv/bin/python"), shellQuote(sepDir+"/models"))})
 	}
 	if seedvc {
 		dir := shellQuote(seedvcDir)
 		steps = append(steps, step{name: "Seed-VC («голос альбома», эксперимент)", cmd: fmt.Sprintf(
-			`~/yue-studio/current/seedvc_install.sh %[1]s && (grep -q '^YUE_SEEDVC_DIR=' ~/yue-studio/worker.env || `+
-				`printf 'YUE_SEEDVC_DIR=%%s\n' %[1]s >> ~/yue-studio/worker.env)`, dir)})
+			`~/partscaster/current/seedvc_install.sh %[1]s && (grep -q '^PARTSCASTER_SEEDVC_DIR=' ~/partscaster/worker.env || `+
+				`printf 'PARTSCASTER_SEEDVC_DIR=%%s\n' %[1]s >> ~/partscaster/worker.env)`, dir)})
 	}
 	return append(steps,
-		step{name: "systemd-юнит", cmd: "cp ~/yue-studio/units/yue-worker.service ~/.config/systemd/user/ 2>/dev/null && " +
+		step{name: "systemd-юнит", cmd: "cp ~/partscaster/units/partscaster-worker.service ~/.config/systemd/user/ 2>/dev/null && " +
 			// restart, а не только enable --now: при переустановке работающий воркер должен взять новую версию
-			"systemctl --user daemon-reload && systemctl --user enable yue-worker && systemctl --user restart yue-worker || " +
-			"echo 'юнит пропущен (запуск вручную: cd ~/yue-studio/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --port 8091)'"},
+			"systemctl --user daemon-reload && systemctl --user enable partscaster-worker && systemctl --user restart partscaster-worker || " +
+			"echo 'юнит пропущен (запуск вручную: cd ~/partscaster/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --port 8091)'"},
 		step{name: "health", cmd: "sleep 3 && " + workerGet("/health", 10)},
 	)
 }

@@ -84,7 +84,7 @@ POST /jobs/{id}/fx     звуковой движок: {source: mix|vocals|drums|
                        chain: [{type: gate|eq|comp|drive|amp|cab|reverb|delay, …}], from?, to?,
                        output?: mix|solo, label?} → вариант dsp-fx-<source>-<хэш>.flac (как у /dsp,
                        + clipped). Без сдвига во времени; amp (NAM) — через очередь GPU. 422 — неверная
-                       цепочка (причина в detail), 503 — движок выключен (fx_engine / YUE_FX_ENGINE=0)
+                       цепочка (причина в detail), 503 — движок выключен (fx_engine / PARTSCASTER_FX_ENGINE=0)
                        preview: true (+ обязательные from/to) — только прослушать кусок: файл
                        preview-fx-<хэш>.flac (окно + хвост реверба/дилея до 3 с), без метрик, не в
                        вариантах; тот же запрос — тот же файл без пересчёта; на джобу ≤ 8 таких файлов
