@@ -1317,6 +1317,8 @@ function onWindowClick(e) {
                 @close="copOpen = false" @insert="onCopInsert" />
   <MetricsModal ref="metricsModal" :jobs="jobs" />
   <WelcomeModal v-if="welcome" :tab="welcome" @close="closeWelcome" />
+  <MyStylesModal v-if="myStylesOpen" @close="myStylesOpen = false"
+                 @apply="(item) => { applyPreset(item, 'slots'); myStylesOpen = false }" />
   <ConfirmModal />
 
   <!-- «сохранить стиль»: спросить имя и положить форму в свои стили -->
@@ -1335,8 +1337,7 @@ function onWindowClick(e) {
       </div>
     </div>
   </div>
-  <MyStylesModal v-if="myStylesOpen" @close="myStylesOpen = false"
-                 @apply="(item) => { applyPreset(item, 'slots'); myStylesOpen = false }" />
+
 </template>
 
 <style>
