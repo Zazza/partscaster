@@ -11,12 +11,13 @@ import (
 
 // Item — запись очереди. State: waiting | running | done | error | canceled.
 type Item struct {
-	ID    int64  `json:"id"`
-	Kind  string `json:"kind"` // 'preset' — применение пресета звука к треку
-	Title string `json:"title"`
-	JobID int64  `json:"job_id"` // трек, к которому относится операция
-	State string `json:"state"`
-	Err   string `json:"err,omitempty"`
+	ID          int64  `json:"id"`
+	Kind        string `json:"kind"` // 'preset' — применение пресета звука к треку
+	Title       string `json:"title"`
+	JobID       int64  `json:"job_id"` // трек, к которому относится операция
+	State       string `json:"state"`
+	Err         string `json:"err,omitempty"`
+	ResultJobID int64  `json:"result_job_id,omitempty"` // итог: для пресета — id версии-трека
 }
 
 // Snapshot — состояние очереди для интерфейса.
@@ -29,7 +30,7 @@ const keepDone = 8 // сколько последних завершённых �
 
 type entry struct {
 	Item
-	run func(context.Context) error
+	run func(context.Context) (int64, error)
 }
 
 type Queue struct {
@@ -54,8 +55,9 @@ func (q *Queue) poke() {
 }
 
 // Enqueue — поставить операцию в конец очереди; fn вызывается контекстом Run
-// (отменяется завершением приложения).
-func (q *Queue) Enqueue(kind, title string, jobID int64, fn func(context.Context) error) Item {
+// (отменяется завершением приложения) и возвращает id результата (для пресета —
+// id новой версии-трека; он попадает в снимок для интерфейса).
+func (q *Queue) Enqueue(kind, title string, jobID int64, fn func(context.Context) (int64, error)) Item {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.seq++
@@ -78,20 +80,22 @@ func (q *Queue) Run(ctx context.Context) {
 			}
 			continue
 		}
-		if err := safeRun(ctx, e.run); err != nil {
+		res, err := safeRun(ctx, e.run)
+		if err != nil {
 			e.Err = err.Error()
 			e.State = "error"
 		} else {
+			e.ResultJobID = res
 			e.State = "done"
 		}
 		q.finish(e)
 	}
 }
 
-func safeRun(ctx context.Context, fn func(context.Context) error) (err error) {
+func safeRun(ctx context.Context, fn func(context.Context) (int64, error)) (res int64, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic: %v", r)
+			res, err = 0, fmt.Errorf("panic: %v", r)
 		}
 	}()
 	return fn(ctx)

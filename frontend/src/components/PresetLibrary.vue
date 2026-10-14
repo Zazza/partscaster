@@ -3,17 +3,20 @@
 // переименовать, поправить описание, удалить; редактор (PresetEditor) — полноценная правка рецепта
 // с предпрослушиванием на демо-эталоне жанра; «▶ на демо» — применить пресет к демо и послушать.
 // Встроенные не меняются: копия («Сохранить как свой») открывается в редакторе.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { useConfirm } from '../composables/useConfirm.js'
+import { usePlayer } from '../composables/usePlayer.js'
 import { usePresetDemo } from '../composables/usePresetDemo.js'
+import { watchQueueItem } from '../composables/useProcQueue.js'
 import { presetTree, PRESET_FAMILIES } from '../soundPresets.js'
 import PresetEditor from './PresetEditor.vue'
 
 const { t } = useI18n()
 const { askConfirm } = useConfirm()
 const demo = usePresetDemo()
+const { toggleArtifact } = usePlayer()
 const presets = ref([])
 const tree = computed(() => presetTree(presets.value))   // по семьям: Рок, Тяжёлое, Электроника, Поп и другое, Мои
 const open = ref(null)       // id раскрытого
@@ -22,6 +25,9 @@ const err = ref('')
 const msg = ref('')
 const editorPreset = ref(false)  // false — закрыт; null — новый; объект — правка/копия
 const demoBusy = ref(new Set())  // id пресетов, применяемых к демо (каждый — своя кнопка, параллельно)
+let disposed = false             // страницу закрыли — итог очереди не играет молча
+let demoUnwatch = null           // слежение за записью очереди текущего применения
+onBeforeUnmount(() => { disposed = true; if (demoUnwatch) demoUnwatch() })
 
 onMounted(load)
 async function load() {
@@ -60,7 +66,8 @@ function makeCopy(p) {
   editorPreset.value = p
 }
 
-// «послушать на демо»: применить пресет к демо-эталону жанра — версия под демо-джобой
+// «послушать на демо»: приготовить демо-эталон → пресет через очередь обработки
+// (стадии видны в сообщении) → по готовности сыграть версию демо сразу
 async function playOnDemo(p) {
   err.value = ''
   msg.value = ''
@@ -69,13 +76,35 @@ async function playOnDemo(p) {
   try {
     const fam = p.family || PRESET_FAMILIES[0]
     await demo.ensure(fam)
-    const st = await demo.waitReady(fam)
+    if ((demo.demos.value[fam] || {}).status !== 'ready') {
+      msg.value = t('preset.edit.demo.cooking')   // первый раз демо генерируется — минуты
+    }
+    const st = await demo.waitReady(fam, 600, () => disposed)
+    if (disposed) return                        // страницу закрыли, пока демо готовилось
     if (st !== 'ready' || !demo.demos.value[fam]?.jobId) {
       throw new Error(t('preset.edit.demo.err', { err: (demo.demos.value[fam] || {}).err || st }))
     }
     msg.value = t('preset.applying', { name: p.name })
-    const child = await api.applySoundPresetWith(demo.demos.value[fam].jobId, p)
-    msg.value = t('preset.edit.applied', { id: child })
+    const qid = await api.applySoundPresetWith(demo.demos.value[fam].jobId, p)
+    // очередь обработки: ждём → применяется → итог; интерфейс не блокируется
+    const it = await new Promise((resolve) => {
+      demoUnwatch = watchQueueItem(qid, (item) => {
+        if (item.state === 'waiting') { msg.value = t('preset.apply.wait', { name: p.name }); return }
+        if (item.state === 'running') { msg.value = t('preset.applying', { name: p.name }); return }
+        resolve(item)
+      })
+    })
+    demoUnwatch = null
+    if (disposed) return                        // страницу закрыли — молча
+    if (it.state === 'error') throw new Error(it.err || t('preset.apply.err', { name: p.name }))
+    if (it.state === 'canceled') { msg.value = t('preset.apply.canceled'); return }
+    // версия демо спрятана в папке «Демо» — играем её сразу, искать в списке незачем
+    const v = ((await api.jobs()) || []).find((j) => j.id === it.result_job_id)
+    msg.value = t(v ? 'preset.applied' : 'preset.applied.list', { name: p.name, id: it.result_job_id })
+    if (v) {
+      await toggleArtifact(`demo${v.id}`, `#${v.id} ${v.title}`, () => api.playAudio(v.id),
+        { jobId: v.id, file: v.audio_file, dur: v.duration_sec })
+    }
   } catch (e) { msg.value = ''; err.value = String(e) } finally {
     const s = new Set(demoBusy.value)
     s.delete(p.id)
@@ -107,7 +136,7 @@ async function playOnDemo(p) {
         <span v-if="p.builtin" class="badge">{{ t('preset.lib.builtin') }}</span>
         <span class="muted preset-note">{{ p.note }}</span>
         <button class="ghost small-btn" :disabled="demoBusy.has(p.id)" :title="t('preset.lib.play.tip')"
-                @click="playOnDemo(p)"><AppIcon name="play" /></button>
+                @click="playOnDemo(p)"><template v-if="demoBusy.has(p.id)">…</template><AppIcon v-else name="play" /></button>
         <button v-if="p.builtin" class="ghost small-btn" :title="t('preset.lib.dup.tip')" @click="makeCopy(p)"><AppIcon name="save" /></button>
         <template v-else>
           <button class="ghost small-btn" :title="t('preset.lib.editFull')" @click="editorPreset = p"><AppIcon name="sliders" /></button>

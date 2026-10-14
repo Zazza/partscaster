@@ -118,9 +118,12 @@ func (a *App) YueApplySoundPresetWith(jobID int64, p yue.SoundPreset) (int64, er
 }
 
 func (a *App) enqueuePreset(jobID int64, p yue.SoundPreset) int64 {
-	it := a.queue.Enqueue("preset", p.Name, jobID, func(ctx context.Context) error {
-		_, err := studio.ApplySoundPreset(ctx, a.yue, jobID, p)
-		return err
+	it := a.queue.Enqueue("preset", p.Name, jobID, func(ctx context.Context) (int64, error) {
+		res, err := studio.ApplySoundPreset(ctx, a.yue, jobID, p)
+		if err != nil {
+			return 0, err
+		}
+		return res.ChildID, nil // итог записи очереди: интерфейс покажет и сыграет версию
 	})
 	return it.ID
 }

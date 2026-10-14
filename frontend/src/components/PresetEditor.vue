@@ -11,6 +11,7 @@ import PresetCatalog from './PresetCatalog.vue'
 import { usePlayer } from '../composables/usePlayer.js'
 import { useWindowPlay } from '../composables/useWindowPlay.js'
 import { usePresetDemo } from '../composables/usePresetDemo.js'
+import { watchQueueItem } from '../composables/useProcQueue.js'
 import { presetMasterChain, editorSnapshot } from '../presetEdit.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import BLOCKS from '../fxBlocks.json'
@@ -44,7 +45,9 @@ if (props.preset && props.preset.builtin) {
 
 const busy = ref('')               // превью, скачивание набора
 const action = ref('')             // 'save' | 'apply' — не сбрасывается концом превью
+const applyLive = ref(false)       // применение идёт в очереди обработки: ход — в msg
 let closed = false                 // окно закрыто — ждущее демо не применяет пресет молча
+let applyUnwatch = null            // слежение за записью очереди применения
 const msg = ref('')
 const err = ref('')
 
@@ -292,10 +295,11 @@ async function save() {
 }
 
 async function applyToRef() {
-  if (action.value) return
+  if (action.value || applyLive.value) return
   action.value = 'apply'
   msg.value = ''
   err.value = ''
+  if (applyUnwatch) { applyUnwatch(); applyUnwatch = null }
   try {
     syncEdit()
     model.value.master = masterEdit.value.length ? toWorkerChain(masterEdit.value) : []
@@ -305,6 +309,9 @@ async function applyToRef() {
     } else {
       // демо должно доготовиться — применять к недоделанному бессмысленно; семья — та, что была при нажатии
       const fam = refFamily.value
+      if ((demo.demos.value[fam] || {}).status !== 'ready') {
+        msg.value = t('preset.edit.demo.cooking')
+      }
       await demo.ensure(fam)
       const st = await demo.waitReady(fam, 600, () => closed)
       if (closed) return                 // окно закрыли, пока демо доготавливалось — не применять
@@ -312,9 +319,38 @@ async function applyToRef() {
       jobId = demo.demos.value[fam]?.jobId || 0
     }
     if (!jobId) throw new Error(t('preset.edit.noStems'))
-    const child = await api.applySoundPresetWith(jobId, bodyFromModel(model.value))
-    msg.value = t('preset.edit.applied', { id: child })
-  } catch (e) { msg.value = ''; err.value = String(e) } finally { action.value = '' }
+    // применение идёт в очереди обработки (минуты): ход — в сообщении, редактор жив
+    msg.value = t('preset.applying', { name: model.value.name })
+    const qid = await api.applySoundPresetWith(jobId, bodyFromModel(model.value))
+    action.value = ''                    // дальше фон: можно править и сохранять дальше
+    applyLive.value = true
+    const it = await new Promise((resolve) => {
+      applyUnwatch = watchQueueItem(qid, (item) => {
+        if (closed) { if (applyUnwatch) applyUnwatch(); applyUnwatch = null; resolve(null); return }
+        if (item.state === 'waiting') { msg.value = t('preset.apply.wait', { name: model.value.name }); return }
+        if (item.state === 'running') { msg.value = t('preset.applying', { name: model.value.name }); return }
+        resolve(item)
+      })
+    })
+    applyUnwatch = null
+    if (!it) return                      // окно закрыли, пока применялось
+    if (it.state === 'error') throw new Error(it.err || t('preset.apply.err', { name: model.value.name }))
+    if (it.state === 'canceled') { msg.value = t('preset.apply.canceled'); return }
+    // версия демо спрятана в папке «Демо» — играем её сразу, искать в списке незачем
+    if (!ownJobId.value) {
+      const v = ((await api.jobs()) || []).find((j) => j.id === it.result_job_id)
+      if (v) {
+        msg.value = t('preset.edit.applied.play', { id: it.result_job_id })
+        await toggleArtifact(`demo${v.id}`, `#${v.id} ${v.title}`, () => api.playAudio(v.id),
+          { jobId: v.id, file: v.audio_file, dur: v.duration_sec })
+        return
+      }
+    }
+    msg.value = t('preset.edit.applied', { id: it.result_job_id })
+  } catch (e) { msg.value = ''; err.value = String(e) } finally {
+    applyLive.value = false
+    action.value = ''
+  }
 }
 
 // закрытие: несохранённые правки — подтверждение
@@ -329,7 +365,7 @@ function close() {
   if (snapshot() === savedSnap) { emit('close'); return }
   askConfirm(t('preset.edit.unsaved.title'), t('preset.edit.unsaved.body'), () => emit('close'))
 }
-onBeforeUnmount(() => { closed = true })
+onBeforeUnmount(() => { closed = true; if (applyUnwatch) applyUnwatch() })
 </script>
 
 <template>
@@ -432,8 +468,8 @@ onBeforeUnmount(() => { closed = true })
       <div class="modal-actions">
         <button class="primary" :disabled="!canSave" @click="save">
           {{ action === 'save' ? '…' : isCopy ? t('preset.edit.save.dup') : t('common.save') }}</button>
-        <button class="ghost small" :disabled="busy !== '' || action !== ''" :title="t('preset.edit.apply.tip')" @click="applyToRef">
-          {{ action === 'apply' ? t('instr.busy') : t('preset.edit.apply') }}</button>
+        <button class="ghost small" :disabled="busy !== '' || action !== '' || applyLive" :title="t('preset.edit.apply.tip')" @click="applyToRef">
+          {{ action === 'apply' ? '…' : applyLive ? t('instr.busy') : t('preset.edit.apply') }}</button>
         <span class="spacer"></span>
         <button class="ghost" @click="close">{{ t('common.cancel') }}</button>
       </div>
