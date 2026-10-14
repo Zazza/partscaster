@@ -62,12 +62,10 @@ function onNav(id) { emit('nav', id) }
 
 <template>
   <aside class="sidebar" :class="{ collapsed }">
-    <!-- логотип и название — одной строкой, без соседей -->
-    <div class="sb-top">
-      <button class="sb-logo" :title="t('nav.home.tip')" @click="emit('home')">
-        <img v-if="logo" class="app-logo" :src="logo" alt="" width="26" height="26">
-        <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
-      </button>
+    <!-- логотип и название — одной строкой, без соседей (как в go-sd: div, не кнопка) -->
+    <div class="sb-top" :title="t('nav.home.tip')" @click="emit('home')">
+      <img v-if="logo" class="app-logo" :src="logo" alt="" width="26" height="26">
+      <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
     </div>
 
     <!-- статус воркера: где он есть; нет — красная точка и «недоступен» -->
@@ -170,10 +168,10 @@ function onNav(id) { emit('nav', id) }
   min-height: 0;
 }
 .sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
-.sb-top { display: flex; align-items: center; padding-bottom: 14px; }
-.sb-logo { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;
-  background: none; border: none; padding: 0; cursor: pointer; color: var(--text); }
-.sb-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; flex: 1; min-width: 0;
+.sb-top { display: flex; align-items: center; gap: 9px; padding-bottom: 14px;
+  cursor: pointer; color: var(--text); }
+.sidebar.collapsed .sb-top { justify-content: center; }
+.sb-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-worker { display: flex; align-items: center; justify-content: center; gap: 6px;
   font-size: 11px; color: var(--muted); }
