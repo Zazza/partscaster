@@ -50,6 +50,13 @@ function setLevel(i, v) {
   levels.value = next
 }
 watch(presetId, () => { levels.value = {} })
+// есть ли что слушать: правка ползунка (или простой db в specs). Баланс встроенных
+// пресетов задают level_db-цели с цепочками — превью их не изображает, только дельты
+const previewable = computed(() => {
+  const p = current.value
+  if (!p) return false
+  return (p.specs || []).some((sp, i) => (sp.stems || []).length && levelOf(i) !== 0)
+})
 const finalPreset = computed(() => presets.value.find((p) => p.id === finalFrom.value) || {})
 // мастер пресета: свой из «Правок трека», иначе — как у пресета, чей финал взят
 const masterOut = computed(() => (fromEdits.value.master.length ? fromEdits.value.master : finalPreset.value.master || []))
@@ -143,7 +150,8 @@ async function save() {
     <VSelect v-model="presetId" :options="options" :disabled="!!busy" searchable style="max-width: 320px" />
     <button class="primary small" :disabled="!!busy || presetId == null" :title="t('preset.apply.tip')" @click="apply">
       {{ busy === 'apply' ? t('instr.busy') : t('preset.apply') }}</button>
-    <button class="ghost small" :disabled="!!busy || presetId == null" :title="t('preset.preview.tip')" @click="preview">
+    <button class="ghost small" :disabled="!!busy || presetId == null || !previewable"
+            :title="previewable ? t('preset.preview.tip') : t('preset.preview.empty')" @click="preview">
       {{ busy === 'preview' ? t('instr.busy') : t('preset.preview') }}</button>
     <button class="ghost small-btn" :class="{ on: saveOpen }" :disabled="!!busy" @click="saveOpen = !saveOpen">{{ t('preset.save') }}</button>
   </div>

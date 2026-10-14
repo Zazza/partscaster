@@ -859,6 +859,7 @@ export default {
   'preset.apply.tip': 'The preset on this track: no stems — splits, rebuilds the stems, final chain — as a new version “track · preset” (minutes)',
   'preset.preview': 'preview',
   'preset.preview.tip': 'A stems-only remix with the slider levels (track edits included), no preset chains — seconds; the first time the worker separates stems first',
+  'preset.preview.empty': "Move a level slider first — the preview plays slider edits; a built-in preset's balance comes from its processing (level_db), which the preview does not imitate",
   'preset.preview.none': 'This preset does not change stem levels',
   'preset.preview.mixing': 'Mixing a variant with these levels…',
   'preset.preview.done': '▶ Playing the mix with these levels — track edits included, preset chains not applied',
