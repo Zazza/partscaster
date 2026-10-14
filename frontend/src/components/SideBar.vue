@@ -3,12 +3,14 @@
 // и очередь генераций; внизу прижато меню разделов, ещё ниже — тема и язык.
 // Сворачивается в узкую полосу с иконками (очередь — счётчиком на «треках»).
 import { computed, ref } from 'vue'
+import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
 
 const props = defineProps({
   logo: { type: String, default: '' },
   stats: { type: Object, default: null },
   jobs: { type: Array, default: () => [] },
+  queue: { type: Object, default: () => ({ paused: false, items: [] }) }, // очередь обработки (Go)
   health: { type: Object, default: null },     // {up, title}
   section: { type: String, default: '' },      // '' — список треков (главная)
   studioJob: { type: Object, default: null },  // открытая студия трека
@@ -24,13 +26,19 @@ function toggleCollapse() {
   try { localStorage.setItem('partscaster_sidebar', collapsed.value ? '1' : '0') } catch { /* без localStorage — до закрытия */ }
 }
 
-// очередь генераций: идущие и ждущие джобы воркера (обработка студии — этапом 2)
+// очередь генераций: идущие и ждущие джобы воркера
 const activeJobs = computed(() => (props.jobs || []).filter((j) => j.status === 'queued' || j.status === 'running'))
 const queueN = computed(() => activeJobs.value.length)
 const runningPct = computed(() => {
   const r = props.stats && props.stats.running
   return r && r.progress_pct != null ? r.progress_pct : null
 })
+// очередь обработки (Go): применение пресетов и другие долгие прогоны
+const procItems = computed(() => (props.queue && props.queue.items) || [])
+const procPaused = computed(() => !!(props.queue && props.queue.paused))
+const procActiveN = computed(() => procItems.value.filter((it) => it.state === 'waiting' || it.state === 'running').length)
+function togglePause() { api.queueSetPaused(!procPaused.value) }
+const stateDot = (it) => ({ waiting: 'queued', running: 'running', done: 'done', error: 'err', canceled: 'off' }[it.state] || 'off')
 
 const NAV = [
   { id: 'new', icon: 'plus' },
@@ -97,6 +105,27 @@ function onNav(id) { emit('nav', id) }
         <div v-if="queueN > 8" class="muted sb-q-more">+{{ queueN - 8 }}</div>
       </div>
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
+
+      <!-- обработка: применение пресетов и другие долгие прогоны приложения;
+           порядок меняется, ждущие отменяются, очередь ставится на паузу -->
+      <div class="sb-q-head sb-q-proc-head">
+        <span>{{ t('pq.processing') }} <span class="muted">{{ procActiveN }}</span></span>
+        <button class="icon-btn sb-q-pause" :class="{ on: procPaused }"
+                :title="procPaused ? t('pq.resume') : t('pq.pause')" @click="togglePause"><AppIcon :name="procPaused ? 'play' : 'pause'" /></button>
+      </div>
+      <div v-if="procItems.length" class="sb-q-list">
+        <div v-for="(it, k) in procItems.slice(0, 8)" :key="it.id" class="sb-q-item"
+             :title="it.err ? it.err : it.title + (it.job_id ? ' · #' + it.job_id : '')">
+          <span class="sb-q-dot" :class="stateDot(it)"></span>
+          <span class="sb-q-title">{{ it.title }}</span>
+          <span v-if="it.state === 'waiting'" class="sb-q-ctl">
+            <button v-if="k > 1" class="sb-mini" :title="t('pq.move.up')" @click.stop="api.queueMove(it.id, -1)">▲</button>
+            <button class="sb-mini" :title="t('pq.cancel')" @click.stop="api.queueCancel(it.id)">✕</button>
+          </span>
+        </div>
+        <div v-if="procItems.length > 8" class="muted sb-q-more">+{{ procItems.length - 8 }}</div>
+      </div>
+      <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
     </div>
 
     <!-- меню разделов прижато к низу; тема/язык/о программе — самой нижней строкой -->
@@ -150,6 +179,18 @@ function onNav(id) { emit('nav', id) }
 .sb-q-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .sb-q-dot.running { background: var(--ok, #7ec16c); animation: sbpulse 1.2s ease-in-out infinite; }
 .sb-q-dot.queued { background: var(--muted); }
+.sb-q-dot.done { background: var(--ok, #7ec16c); }
+.sb-q-dot.err { background: var(--err, #e06c75); }
+.sb-q-dot.off { background: var(--muted); opacity: .4; }
+/* обработка: пауза очереди и мини-кнопки управления записью */
+.sb-q-proc-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.sb-q-pause { padding: 0 4px; font-size: 10px; }
+.sb-q-pause.on { color: var(--accent, #7aa2f7); }
+.sb-q-ctl { flex: none; display: none; gap: 2px; }
+.sb-q-item:hover .sb-q-ctl { display: inline-flex; }
+.sb-mini { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 9px;
+  padding: 0 2px; line-height: 1; }
+.sb-mini:hover { color: var(--text); }
 @keyframes sbpulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
 .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }

@@ -278,6 +278,22 @@ export function YuePlayPreview(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['YuePlayPreview'](arg1, arg2, arg3, arg4);
 }
 
+export function YueQueueCancel(arg1) {
+  return window['go']['main']['App']['YueQueueCancel'](arg1);
+}
+
+export function YueQueueList() {
+  return window['go']['main']['App']['YueQueueList']();
+}
+
+export function YueQueueMove(arg1, arg2) {
+  return window['go']['main']['App']['YueQueueMove'](arg1, arg2);
+}
+
+export function YueQueueSetPaused(arg1) {
+  return window['go']['main']['App']['YueQueueSetPaused'](arg1);
+}
+
 export function YueRebuildSections(arg1, arg2) {
   return window['go']['main']['App']['YueRebuildSections'](arg1, arg2);
 }

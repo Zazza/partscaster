@@ -97,20 +97,20 @@ async function preview() {
   } finally { busy.value = '' }
 }
 
+// применение — через очередь обработки: интерфейс не блокируется, можно
+// поставить несколько пресетов подряд и сравнить готовые версии
 async function apply() {
   const jobId = props.job.id
   const p = presets.value.find((x) => x.id === presetId.value)
   if (!p) return
-  busy.value = 'apply'
   err.value = ''
-  msg.value = t('preset.applying', { name: p.name })
   try {
     // громкость поправлена — применяется копия пресета, сам пресет не меняется
-    const child = changed.value ? await api.applySoundPresetWith(jobId, withLevels(p, levels.value))
-      : await api.applySoundPreset(jobId, p.id)
-    msg.value = t('preset.applied', { name: p.name, id: child })
+    if (changed.value) await api.applySoundPresetWith(jobId, withLevels(p, levels.value))
+    else await api.applySoundPreset(jobId, p.id)
+    msg.value = t('preset.queued', { name: p.name })
     emit('applied')
-  } catch (e) { msg.value = ''; err.value = String(e) } finally { busy.value = '' }
+  } catch (e) { msg.value = ''; err.value = String(e) }
 }
 
 // «сохранить как мой»: копия выбранного пресета с поправленной громкостью — новый свой пресет

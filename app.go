@@ -14,6 +14,7 @@ import (
 	"partscaster/internal/config"
 	"partscaster/internal/dsp"
 	"partscaster/internal/studio"
+	"partscaster/internal/wq"
 	"partscaster/internal/yue"
 )
 
@@ -38,6 +39,7 @@ type App struct {
 	ctx    context.Context
 	yue    yue.Service
 	player Player
+	queue  *wq.Queue
 
 	// fx — кэш трека/стемов на ПК для быстрого превью эффектов (app_preview.go)
 	fxOnce sync.Once
@@ -49,11 +51,12 @@ type App struct {
 
 func NewApp(client *yue.Client, player Player) *App {
 	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха
-	return &App{yue: yue.Journaled(client), player: player}
+	return &App{yue: yue.Journaled(client), player: player, queue: wq.New()}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	go a.queue.Run(ctx)
 	go a.presetLoop(ctx)
 	go a.recipeLoop(ctx)
 }
@@ -91,7 +94,10 @@ func (a *App) YueSoundPresetDelete(id int64) error {
 	return a.yue.SoundPresetDelete(a.ctx, id)
 }
 
-// YueApplySoundPreset — применить пресет к треку сейчас (вручную, без статуса у трека) → id версии.
+// YueApplySoundPreset — пресет к треку через очередь обработки: интерфейс не
+// блокируется (можно поставить несколько и сравнить версии), ход и порядок —
+// в очереди левого блока; версия трека появится в списке по готовности.
+// Возвращает id записи очереди.
 func (a *App) YueApplySoundPreset(jobID, presetID int64) (int64, error) {
 	list, err := a.yue.SoundPresets(a.ctx)
 	if err != nil {
@@ -99,25 +105,37 @@ func (a *App) YueApplySoundPreset(jobID, presetID int64) (int64, error) {
 	}
 	for _, p := range list {
 		if p.ID == presetID {
-			res, err := studio.ApplySoundPreset(a.ctx, a.yue, jobID, p)
-			if err != nil {
-				return 0, err
-			}
-			return res.ChildID, nil
+			return a.enqueuePreset(jobID, p), nil
 		}
 	}
 	return 0, fmt.Errorf("нет пресета %d", presetID)
 }
 
-// YueApplySoundPresetWith — применить копию пресета (громкость записей поправлена в студии) → id версии;
-// пресет на воркере не меняется.
+// YueApplySoundPresetWith — копия пресета (громкость записей поправлена в студии)
+// в очередь обработки; пресет на воркере не меняется.
 func (a *App) YueApplySoundPresetWith(jobID int64, p yue.SoundPreset) (int64, error) {
-	res, err := studio.ApplySoundPreset(a.ctx, a.yue, jobID, p)
-	if err != nil {
-		return 0, err
-	}
-	return res.ChildID, nil
+	return a.enqueuePreset(jobID, p), nil
 }
+
+func (a *App) enqueuePreset(jobID int64, p yue.SoundPreset) int64 {
+	it := a.queue.Enqueue("preset", p.Name, jobID, func(ctx context.Context) error {
+		_, err := studio.ApplySoundPreset(ctx, a.yue, jobID, p)
+		return err
+	})
+	return it.ID
+}
+
+// YueQueueList — очередь обработки: идущая, ждущие и последние завершённые.
+func (a *App) YueQueueList() wq.Snapshot { return a.queue.Snapshot() }
+
+// YueQueueMove — ждущую запись подвинуть (dir < 0 — ближе к исполнению).
+func (a *App) YueQueueMove(id int64, dir int) { a.queue.Move(id, dir) }
+
+// YueQueueCancel — ждущую запись убрать из очереди (идущую не прервать).
+func (a *App) YueQueueCancel(id int64) { a.queue.Cancel(id) }
+
+// YueQueueSetPaused — пауза очереди обработки: новое не начинается, идущая доигрывает.
+func (a *App) YueQueueSetPaused(v bool) { a.queue.SetPaused(v) }
 
 // YueSoundPresetRetry — повторить пресет у трека (ошибка или застрял «применяется»): снова в ожидание.
 func (a *App) YueSoundPresetRetry(jobID, presetID int64) error {

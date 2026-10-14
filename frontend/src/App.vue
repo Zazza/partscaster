@@ -310,6 +310,7 @@ const jobs = ref([])
 const health = ref(null)
 const compat = useWorkerCompat()   // плашка «воркер/приложение разных версий»
 const stats = ref(null)
+const procQueue = ref({ paused: false, items: [] })   // очередь обработки (Go)
 let timer = null
 
 const qf = ref(defaultJobFilter())
@@ -467,8 +468,9 @@ const qDraftOptions = computed(() => [
 
 async function refresh() {
   try {
-    const [j, h] = await Promise.all([api.jobs(), api.status()])
+    const [j, h, q] = await Promise.all([api.jobs(), api.status(), api.queueList()])
     jobs.value = j || []
+    procQueue.value = q || { paused: false, items: [] }
     // у трека пресет, которого нет в названиях (создан из MCP / в другой вкладке) — перечитать
     // (один раз на незнакомый id: удалённый пресет иначе перечитывался бы на каждом опросе)
     const unknown = jobs.value.flatMap((x) => (x.sound_presets || []).map((sp) => sp.id))
@@ -885,7 +887,7 @@ function onWindowClick(e) {
   </div>
   <div class="app-shell">
   <SideBar :logo="logoUrl" :stats="stats" :jobs="jobs" :health="{ up: !!health, title: healthTitle }"
-           :section="section" :studio-job="studioJob" :theme="theme" :locale="locale"
+           :section="section" :studio-job="studioJob" :queue="procQueue" :theme="theme" :locale="locale"
            @nav="navGo" @home="goHome" @import-recipes="recipeImport = true" @about="welcome = 'about'"
            @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
   <div class="app-col">
