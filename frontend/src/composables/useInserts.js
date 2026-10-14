@@ -44,19 +44,33 @@ let chain = Promise.resolve()
 // студия не даёт его слушать как «микс с правками» и делать из него версию
 const building = ref({})
 function rebuild(parentId) {
+  return queued(parentId, () => doRebuild(parentId))
+}
+// «послушать громкости пресета до применения»: пересборка активных правок трека
+// с временными записями громкости ВПЕРЕДИ (в реестр не попадают — трек не меняется,
+// следующая пересборка из реестра вернёт микс без них). Идёт общей очередью пересборок
+function previewSpecs(parentId, extra) {
+  return queued(parentId, async () => {
+    const own = appliedFor(parentId).filter((it) => !it.off).map(specOf)
+    const all = [...(extra || []), ...own]
+    if (!all.length) return { empty: true }
+    const r = await api.rebuildSections(parentId, all)
+    if (r && r.variant) mixMetricsBy.value = { ...mixMetricsBy.value, [parentId]: r.variant.metrics || null }
+    return r
+  })
+}
+function queued(parentId, fn) {
   building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
-  const run = chain.then(() => doRebuild(parentId)).finally(() => {
+  const run = chain.then(fn).finally(() => {
     building.value = { ...building.value, [parentId]: building.value[parentId] - 1 }
   })
   chain = run.catch(() => {})
   return run
 }
 const isBuilding = (parentId) => (building.value[parentId] || 0) > 0
-async function doRebuild(parentId) {
-  // выключенные записи остаются в реестре, но в пересборку не идут; активных нет — звучит оригинал
-  const list = appliedFor(parentId).filter((it) => !it.off)
-  if (!list.length) return { empty: true }
-  const r = await api.rebuildSections(parentId, list.map((it) => ({
+// запись реестра правок → спецификация пересборки
+function specOf(it) {
+  return {
     child_id: it.childId > 0 ? it.childId : 0, from: it.from, to: it.to,
     // у «громкости дорожек» (childId ≤ 0) db без зажима: −100 — заглушить
     lead: it.lead || 0, beat_sec: it.beat || 0, db: it.childId > 0 ? clampDb(it.db) : it.db,
@@ -76,7 +90,13 @@ async function doRebuild(parentId) {
     ...(it.place ? { place: it.place } : {}),
     // мастер: цепочка движка на весь собранный микс на воркере
     ...(it.master ? { master: true } : {}),
-  })))
+  }
+}
+async function doRebuild(parentId) {
+  // выключенные записи остаются в реестре, но в пересборку не идут; активных нет — звучит оригинал
+  const list = appliedFor(parentId).filter((it) => !it.off)
+  if (!list.length) return { empty: true }
+  const r = await api.rebuildSections(parentId, list.map(specOf))
   // отчёт Go: встала ли вклейка по бочке или по плану (UI предупреждает).
   // Пишем в АКТУАЛЬНЫЙ реестр, а не в снимок до await: пока шла пересборка,
   // tick мог добавить готовую вклейку — снимок её бы затёр
@@ -364,5 +384,5 @@ async function tickOnce() {
 setInterval(tick, 3000)
 
 export function useInserts() {
-  return { pending, applied, register, byParent, appliedFor, rebuild, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }

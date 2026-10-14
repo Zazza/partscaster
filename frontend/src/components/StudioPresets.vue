@@ -62,6 +62,30 @@ async function load() {
   if (presetId.value == null && presets.value.length) presetId.value = presets.value[0].id
 }
 
+// «послушать громкости»: пересборка микса с правками трека и текущими уровнями
+// ползунков — без цепочек пресета, поэтому секунды, а не минуты; играет вариант
+async function preview() {
+  const p = current.value
+  if (!p || busy.value) return
+  const gains = (p.specs || [])
+    .map((sp, i) => ({ child_id: 0, from: 0, to: 0, stems: sp.stems || [], db: levelOf(i) }))
+    .filter((sp) => sp.stems.length && sp.db !== 0)
+  if (!gains.length) { msg.value = ''; err.value = t('preset.preview.none'); return }
+  busy.value = 'preview'
+  err.value = ''
+  msg.value = t('preset.preview.mixing')
+  try {
+    const r = await inserts.previewSpecs(props.job.id, gains)
+    if (!r || !r.variant) throw new Error(t('preset.preview.none'))
+    await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
+    msg.value = t('preset.preview.done')
+    emit('applied')
+  } catch (e) {
+    msg.value = ''
+    err.value = String(e)
+  } finally { busy.value = '' }
+}
+
 async function apply() {
   const jobId = props.job.id
   const p = presets.value.find((x) => x.id === presetId.value)
@@ -119,6 +143,8 @@ async function save() {
     <VSelect v-model="presetId" :options="options" :disabled="!!busy" searchable style="max-width: 320px" />
     <button class="primary small" :disabled="!!busy || presetId == null" :title="t('preset.apply.tip')" @click="apply">
       {{ busy === 'apply' ? t('instr.busy') : t('preset.apply') }}</button>
+    <button class="ghost small" :disabled="!!busy || presetId == null" :title="t('preset.preview.tip')" @click="preview">
+      {{ busy === 'preview' ? t('instr.busy') : t('preset.preview') }}</button>
     <button class="ghost small-btn" :class="{ on: saveOpen }" :disabled="!!busy" @click="saveOpen = !saveOpen">{{ t('preset.save') }}</button>
   </div>
   <p v-if="current" class="muted studio-box-hint">{{ current.note }}</p>

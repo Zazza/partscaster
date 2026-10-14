@@ -1384,3 +1384,32 @@ describe('addStemEngine с add — синт поверх трека', () => {
     expect(lastCall().find(s => !s.engine).add ?? false).toBe(false)
   })
 })
+
+describe('previewSpecs: «послушать громкости пресета» до применения', () => {
+  it('временные громкости впереди правок трека, реестр не меняется', async () => {
+    const ins = await load({ applied: { P: [A] } })
+    const r = await ins.previewSpecs('P', [{ child_id: 0, from: 0, to: 0, stems: ['drums'], db: 3 }])
+    expect(r.variant.file).toBe('out.wav')
+    const [parent, specs] = apiMock.rebuildSections.mock.calls.at(-1)
+    expect(parent).toBe('P')
+    expect(specs[0]).toMatchObject({ child_id: 0, stems: ['drums'], db: 3 })
+    expect(specs[1]).toMatchObject({ child_id: 1, db: -6 })   // правка трека рядом
+    expect(ins.appliedFor('P')).toHaveLength(1)               // в реестр ничего не попало
+  })
+
+  it('нет правок и нет громкостей — пустой результат без запроса к воркеру', async () => {
+    const ins = await load({})
+    const r = await ins.previewSpecs('P', [])
+    expect(r).toEqual({ empty: true })
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+  })
+
+  it('после превью обычная пересборка из реестра идёт без временных громкостей', async () => {
+    const ins = await load({ applied: { P: [A] } })
+    await ins.previewSpecs('P', [{ child_id: 0, from: 0, to: 0, stems: ['bass'], db: -2 }])
+    await ins.rebuild('P')
+    const specs = apiMock.rebuildSections.mock.calls.at(-1)[1]
+    expect(specs).toHaveLength(1)
+    expect(specs[0]).toMatchObject({ child_id: 1 })
+  })
+})
