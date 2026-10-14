@@ -34,7 +34,9 @@ if [[ -z "${PARTSCASTER_HOME:-}" && -d "$HOME/yue-studio" && ! -d "$HOME/partsca
   shopt -u dotglob nullglob
   rm -f "$HOME/.config/systemd/user/yue-worker.service" "$HOME/partscaster/units/yue-worker.service"
   XDG_RUNTIME_DIR="$XDG" systemctl --user daemon-reload || true
-  rmdir "$HOME/yue-studio" 2>/dev/null || true # не пустой (что-то заняло имя) — просто без ссылки
+  # пустые каталоги (например incoming, чьё имя занял свежий deploy.sh) убираем — освобождаем имя
+  find "$HOME/yue-studio" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+  rmdir "$HOME/yue-studio" 2>/dev/null || true # всё равно не пустой — просто без ссылки-синонима
   [[ -e "$HOME/yue-studio" ]] || ln -s partscaster "$HOME/yue-studio"
   # ключи worker.env со старым префиксом YUE_* — к этим же значениям новыми именами
   if [[ -f "$HOME/partscaster/worker.env" ]] && grep -q '^YUE_[A-Z_]' "$HOME/partscaster/worker.env"; then
