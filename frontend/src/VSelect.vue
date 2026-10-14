@@ -23,6 +23,9 @@ const drop = ref(null)
 const dropStyle = ref({})   // fixed-координаты по кнопке
 const query = ref('')
 const search = ref(null)
+// момент открытия: scroll/resize сразу после него — не пользовательские (фокус строки
+// поиска, донастройка fixed-позиции), список из-за них не закрываем
+let openedAt = 0
 const shown = computed(() => (props.searchable ? matchOptions(props.options, query.value) : props.options))
 
 function place() {
@@ -58,9 +61,13 @@ const toggle = async () => {
   if (!open.value) {
     open.value = true
     query.value = ''
+    openedAt = performance.now()
     await nextTick()
     place()
-    if (search.value) search.value.focus()
+    // preventScroll: WebView2/Chromium при программном фокусе прокручивает контейнеры,
+    // а любой scroll рядом закрывает список (onReflow) — на Windows это выглядело как
+    // «выбрать пункт можно только со второго клика»
+    if (search.value) search.value.focus({ preventScroll: true })
   } else {
     open.value = false
   }
@@ -95,6 +102,7 @@ const onDocClick = (e) => {
 // Но прокрутка САМОГО списка (длинные группы стилей) — не закрывает
 const onReflow = (e) => {
   if (!open.value) return
+  if (performance.now() - openedAt < 150) return // события сразу после открытия — не пользовательские
   if (drop.value && e && e.target && drop.value.contains(e.target)) return
   open.value = false
 }
@@ -124,7 +132,7 @@ onUnmounted(() => {
         </li>
         <li v-if="searchable && !shown.length" class="off">—</li>
         <li v-for="o in shown" :key="o.value" :class="{ sel: String(o.value) === String(modelValue), off: o.disabled }" :title="o.title"
-            @mousedown.prevent="pick(o)"><template v-if="o.icon"><AppIcon :name="o.icon" /> </template>{{ o.label }}</li>
+            @mousedown.prevent="pick(o)" @click="pick(o)"><template v-if="o.icon"><AppIcon :name="o.icon" /> </template>{{ o.label }}</li>
       </ul>
     </Teleport>
   </div>

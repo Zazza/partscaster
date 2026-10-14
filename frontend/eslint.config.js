@@ -23,6 +23,7 @@ export default [
         cancelAnimationFrame: 'readonly',
         getComputedStyle: 'readonly',
         ResizeObserver: 'readonly',
+        performance: 'readonly',
         URL: 'readonly',
         CustomEvent: 'readonly',
         clearInterval: 'readonly',
