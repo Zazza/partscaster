@@ -125,7 +125,8 @@ test('подложки модалок найдены (обход исходни�
   const names = files.map((f) => f.rel)
   // У этих подложка есть.
   for (const n of [
-    'App.vue',
+    // App.vue больше не держит собственных модалок: форма нового трека и разделы —
+    // страницы основного контекста, диалоги — отдельные компоненты
     'components/WelcomeModal.vue',
     'components/PlanModal.vue',
     'components/PresetsPage.vue',

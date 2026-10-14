@@ -9,6 +9,7 @@ export const ICONS = {
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   info: `<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1.1" ${F}/>`,
   plus: '<path d="M12 5v14M5 12h14"/>',
+  inbox: '<path d="M4 4h16v9h-5l-3 3-3-3H4z"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>',
   alert: `<path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><circle cx="12" cy="17" r="1.1" ${F}/>`,
   play: `<path d="M7 4.5v15l12.5-7.5z" ${F}/>`,
   stop: `<rect x="6" y="6" width="12" height="12" rx="1.5" ${F}/>`,

@@ -11,7 +11,7 @@ const props = defineProps({
   jobs: { type: Array, default: () => [] },
   health: { type: Object, default: null },     // {up, title}
   section: { type: String, default: '' },      // '' — список треков (главная)
-  studio: { type: Boolean, default: false },
+  studioJob: { type: Object, default: null },  // открытая студия трека
   theme: { type: String, default: 'dark' },    // 'dark' | 'light'
   locale: { type: String, default: 'ru' },     // 'ru' | 'en'
 })
@@ -33,14 +33,16 @@ const runningPct = computed(() => {
 })
 
 const NAV = [
+  { id: 'new', icon: 'plus' },
   { id: 'tracks', icon: 'music' },
+  { id: 'library', icon: 'inbox' },
   { id: 'voices', icon: 'mic' },
   { id: 'instruments', icon: 'pedal' },
   { id: 'presets', icon: 'disc' },
   { id: 'settings', icon: 'sliders' },
 ]
 const navTarget = (id) => (id === 'tracks' ? '' : id)
-const isActive = (id) => !props.studio && props.section === navTarget(id)
+const isActive = (id) => !props.studioJob && props.section === navTarget(id)
 function onNav(id) { emit('nav', id) }
 </script>
 
@@ -78,6 +80,11 @@ function onNav(id) { emit('nav', id) }
          :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }">{{ Math.round(100 * stats.vram_used / stats.vram_total) }}%</div>
 
     <!-- очередь генераций: что сейчас и что дальше -->
+    <!-- открытая студия: какой трек правим (выход — любой раздел или логотип) -->
+    <div v-if="studioJob && !collapsed" class="sb-studio" :title="'#' + studioJob.id + ' ' + studioJob.title">
+      студия · #{{ studioJob.id }} {{ studioJob.title }}
+    </div>
+
     <div class="sb-queue" v-if="!collapsed">
       <div class="sb-q-head">{{ t('nav.queue') }} <span class="muted">{{ queueN }}</span></div>
       <div v-if="queueN" class="sb-q-list">
@@ -127,6 +134,8 @@ function onNav(id) { emit('nav', id) }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-collapse { margin-left: auto; flex: none; }
 .sidebar.collapsed .sb-collapse { margin: 0 auto; }
+.sb-studio { font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
+  padding-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* статистика — те же классы, что были в шапке (глобальные стили App) */
 .sb-stats { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 11px; color: var(--muted);
   border-bottom: 1px solid var(--border); padding-bottom: 8px; }
