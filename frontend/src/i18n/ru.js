@@ -41,6 +41,7 @@ export default {
   'nav.queue': 'Очередь',
   'nav.queue.empty': 'пусто — всё спокойно',
   'nav.collapse': 'Свернуть панель',
+  'sb.worker.down': 'воркер недоступен',
   'nav.expand': 'Развернуть панель',
   'preset.queued': '«{name}» — в очередь обработки; версия появится в списке под этим треком',
   'pq.processing': 'обработка',

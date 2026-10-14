@@ -887,7 +887,7 @@ function onWindowClick(e) {
   </div>
   <div class="app-shell">
   <SideBar :logo="logoUrl" :stats="stats" :jobs="jobs" :health="{ up: !!health, title: healthTitle }"
-           :section="section" :studio-job="studioJob" :queue="procQueue" :theme="theme" :locale="locale"
+           :section="section" :studio-job="studioJob" :queue="procQueue" :worker-url="serverURL" :theme="theme" :locale="locale"
            @nav="navGo" @home="goHome" @import-recipes="recipeImport = true" @about="welcome = 'about'"
            @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
   <div class="app-col">

@@ -41,6 +41,7 @@ export default {
   'nav.queue': 'Queue',
   'nav.queue.empty': 'empty — all quiet',
   'nav.collapse': 'Collapse the panel',
+  'sb.worker.down': 'worker unavailable',
   'nav.expand': 'Expand the panel',
   'preset.queued': '“{name}” queued; the version will appear in the list under this track',
   'pq.processing': 'processing',

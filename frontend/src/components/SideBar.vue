@@ -12,6 +12,7 @@ const props = defineProps({
   jobs: { type: Array, default: () => [] },
   queue: { type: Object, default: () => ({ paused: false, items: [] }) }, // очередь обработки (Go)
   health: { type: Object, default: null },     // {up, title}
+  workerUrl: { type: String, default: '' },    // адрес воркера из настроек
   section: { type: String, default: '' },      // '' — список треков (главная)
   studioJob: { type: Object, default: null },  // открытая студия трека
   theme: { type: String, default: 'dark' },    // 'dark' | 'light'
@@ -25,6 +26,11 @@ function toggleCollapse() {
   collapsed.value = !collapsed.value
   try { localStorage.setItem('partscaster_sidebar', collapsed.value ? '1' : '0') } catch { /* без localStorage — до закрытия */ }
 }
+
+// адрес воркера: где он есть (хост из настроек), рядом со статусом
+const workerHost = computed(() => {
+  try { return new URL(props.workerUrl).host } catch { return props.workerUrl }
+})
 
 // очередь генераций: идущие и ждущие джобы воркера
 const activeJobs = computed(() => (props.jobs || []).filter((j) => j.status === 'queued' || j.status === 'running'))
@@ -56,16 +62,21 @@ function onNav(id) { emit('nav', id) }
 
 <template>
   <aside class="sidebar" :class="{ collapsed }">
+    <!-- логотип и название — одной строкой, без соседей -->
     <div class="sb-top">
       <button class="sb-logo" :title="t('nav.home.tip')" @click="emit('home')">
         <img v-if="logo" class="app-logo" :src="logo" alt="" width="24" height="24">
         <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
       </button>
-      <span v-if="health" class="health-dot" :class="health.up ? 'up' : 'down'" :title="health.title"></span>
-      <button class="icon-btn sb-collapse" :title="collapsed ? t('nav.expand') : t('nav.collapse')" @click="toggleCollapse">{{ collapsed ? '»' : '«' }}</button>
     </div>
 
-    <!-- статистика воркера: видеопамять, очереди, текущая джоба -->
+    <!-- статус воркера: где он есть; нет — красная точка и «недоступен» -->
+    <div class="sb-worker" :class="{ down: health && !health.up }" :title="health && health.title">
+      <span class="health-dot" :class="health && health.up ? 'up' : 'down'"></span>
+      <span v-if="!collapsed" class="sb-worker-text">{{ health && health.up ? workerHost : t('sb.worker.down') }}</span>
+    </div>
+
+    <!-- линия видеопамяти (и очереди воркера, текущей джобы) -->
     <div v-if="stats && !collapsed" class="sb-stats">
       <span v-if="stats.vram_total" class="sb-vram" :title="t('footer.vram.tip')">
         <span class="sb-vram-bar">
@@ -87,12 +98,24 @@ function onNav(id) { emit('nav', id) }
          :title="t('footer.vram.tip') + ': ' + (stats.vram_used / 1024).toFixed(1) + '/' + Math.round(stats.vram_total / 1024) + ' ' + t('footer.vram.gb')"
          :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }">{{ Math.round(100 * stats.vram_used / stats.vram_total) }}%</div>
 
-    <!-- очередь генераций: что сейчас и что дальше -->
     <!-- открытая студия: какой трек правим (выход — любой раздел или логотип) -->
     <div v-if="studioJob && !collapsed" class="sb-studio" :title="'#' + studioJob.id + ' ' + studioJob.title">
       студия · #{{ studioJob.id }} {{ studioJob.title }}
     </div>
 
+    <!-- меню разделов; очередь ниже занимает остаток блока -->
+    <nav class="sb-nav">
+      <button v-for="n in NAV" :key="n.id" class="sb-nav-item" :class="{ on: isActive(n.id) }"
+              :title="t('nav.' + n.id + '.tip')" @click="onNav(n.id)">
+        <AppIcon class="nav-ico" :name="n.icon" /><span v-if="!collapsed">{{ t('nav.' + n.id) }}</span>
+        <span v-if="collapsed && n.id === 'tracks' && queueN" class="sb-badge">{{ queueN > 9 ? '9+' : queueN }}</span>
+      </button>
+      <button class="sb-nav-item" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')">
+        <AppIcon class="nav-ico" name="folder" /><span v-if="!collapsed">{{ t('recipe.importMenu') }}</span>
+      </button>
+    </nav>
+
+    <!-- очередь генераций: что сейчас и что дальше -->
     <div class="sb-queue" v-if="!collapsed">
       <div class="sb-q-head">{{ t('nav.queue') }} <span class="muted">{{ queueN }}</span></div>
       <div v-if="queueN" class="sb-q-list">
@@ -128,18 +151,9 @@ function onNav(id) { emit('nav', id) }
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
     </div>
 
-    <!-- меню разделов прижато к низу; тема/язык/о программе — самой нижней строкой -->
-    <nav class="sb-nav">
-      <button v-for="n in NAV" :key="n.id" class="sb-nav-item" :class="{ on: isActive(n.id) }"
-              :title="t('nav.' + n.id + '.tip')" @click="onNav(n.id)">
-        <AppIcon class="nav-ico" :name="n.icon" /><span v-if="!collapsed">{{ t('nav.' + n.id) }}</span>
-        <span v-if="collapsed && n.id === 'tracks' && queueN" class="sb-badge">{{ queueN > 9 ? '9+' : queueN }}</span>
-      </button>
-      <button class="sb-nav-item" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')">
-        <AppIcon class="nav-ico" name="folder" /><span v-if="!collapsed">{{ t('recipe.importMenu') }}</span>
-      </button>
-    </nav>
+    <!-- нижняя строка: сворачивание, о программе, тема, язык -->
     <div class="sb-foot">
+      <button class="icon-btn" :title="collapsed ? t('nav.expand') : t('nav.collapse')" @click="toggleCollapse">{{ collapsed ? '»' : '«' }}</button>
       <button class="icon-btn" :title="t('nav.about.tip')" @click="emit('about')"><AppIcon name="info" /></button>
       <button class="icon-btn" @click="emit('theme')"
               :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
@@ -161,8 +175,9 @@ function onNav(id) { emit('nav', id) }
   background: none; border: none; padding: 0; cursor: pointer; color: var(--text); }
 .sb-title { font-size: 14px; font-weight: 700; letter-spacing: .3px; flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-collapse { margin-left: auto; flex: none; }
-.sidebar.collapsed .sb-collapse { margin: 0 auto; }
+.sb-worker { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.sb-worker.down .sb-worker-text { color: var(--err, #e06c75); }
+.sidebar.collapsed .sb-worker { justify-content: center; }
 .sb-studio { font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
   padding-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* статистика — те же классы, что были в шапке (глобальные стили App) */
@@ -195,9 +210,9 @@ function onNav(id) { emit('nav', id) }
 .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }
 .sb-q-more, .sb-q-empty { font-size: 11px; }
-/* меню разделов прижато к низу */
-.sb-nav { margin-top: auto; display: flex; flex-direction: column; gap: 2px;
-  border-top: 1px solid var(--border); padding-top: 8px; }
+/* меню разделов — над очередью; очередь занимает остаток блока */
+.sb-nav { display: flex; flex-direction: column; gap: 2px;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 .sb-nav-item {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px;
   background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text);
