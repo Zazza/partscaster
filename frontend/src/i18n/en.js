@@ -309,6 +309,7 @@ export default {
   'studio.trick.hint.select': 'Select bars on the plan or a piece of the wave — tricks become available. The original is not changed',
   'studio.trick.hint.pick': 'Pick a trick for the selection — it piles up in the plan (orange mark), you can add more',
   'studio.trick.hint.build': 'Tricks are queued — “rebuild track” makes a new version (or “draft” for a quick listen)',
+  'studio.windowTitle': 'Studio · #{id} — {title}',
   'studio.title': 'Track studio',
   'studio.parsing': 'Parsing the score…',
   'studio.noScore': 'This track has no score (imported without transcription, or it failed) — piano roll and bar tricks are unavailable; waveform, stems and effects work.',

@@ -209,6 +209,9 @@ const selRange = computed(() => {
   return { from: Math.min(from, Math.max(0, cappedTo - 1)), to: cappedTo }
 })
 
+watch(() => props.job.id, setWindowTitle, { immediate: true })
+onUnmounted(() => { document.title = t('app.title') })
+
 onMounted(async () => {
   waveRafId = requestAnimationFrame(waveCursorLoop)
   loadWave()
@@ -1457,6 +1460,11 @@ function openVariantMetrics(v) {
 
 window.addEventListener('mouseup', onWindowMouseup)
 onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
+
+// заголовок нативного окна: в студии — какой трек правим, вне — просто название
+function setWindowTitle() {
+  document.title = t('studio.windowTitle', { id: props.job.id, title: props.job.title })
+}
 </script>
 
 <template>
@@ -1467,6 +1475,8 @@ onUnmounted(() => window.removeEventListener('mouseup', onWindowMouseup))
       <nav v-if="rollData" class="studio-steps">
         <button v-for="(st, i) in STUDIO_STEPS" :key="st" class="ghost small-btn" :class="{ on: activeStep === st }"
                 @click="goStep(st)">{{ i + 1 }} · {{ t('studio.step.' + st) }}</button>
+        <!-- какой трек правим: справа от шагов (полоса прилипает — название всегда на виду) -->
+        <span class="studio-title muted">#{{ job.id }} {{ job.title }}</span>
         <!-- качается набор сэмплов (пульт, синт, перкуссия) — прогресс в прилипшей полосе шагов, виден из любого раздела -->
         <!-- активная дорожка: с ней работают волна, линия громкости, эффекты, педали; ✕ — весь трек -->
         <span v-if="activeStem" class="active-stem" :title="t('studio.active.tip')">

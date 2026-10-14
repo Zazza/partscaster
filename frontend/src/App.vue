@@ -1455,7 +1455,9 @@ h2 {
 .roll-cell.trick::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
 .plan-marks { font-size: 13px; margin: 0; color: var(--accent); }
 .plan-marks .muted { display: block; font-size: 12px; }
-.queue-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.queue-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  /* прилипает к верху прокрутки: фильтры и поиск всегда под рукой, как волна в студии */
+  position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 6px 0; }
 .queue-tools input { flex: 1 1 150px; min-width: 0; }
 .pager { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 6px; font-size: 13px; }
 .nav-wrap { position: relative; }
@@ -1908,6 +1910,8 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
   flex-wrap: nowrap; overflow-x: auto; background: var(--bg);
 }
 .studio-steps .on { color: var(--lcd-text); border-color: var(--lcd-text); }
+.studio-title { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 13px; flex: none; max-width: 40%; }
 /* активная дорожка студии — плашка в полосе шагов */
 .active-stem { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 2px 8px;
   border: 1px solid var(--lcd-text); border-radius: 12px; font-size: 12px; }

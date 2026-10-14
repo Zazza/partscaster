@@ -95,11 +95,6 @@ function onNav(id) { emit('nav', id) }
          :title="t('footer.vram.tip') + ': ' + (stats.vram_used / 1024).toFixed(1) + '/' + Math.round(stats.vram_total / 1024) + ' ' + t('footer.vram.gb')"
          :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }">{{ Math.round(100 * stats.vram_used / stats.vram_total) }}%</div>
 
-    <!-- открытая студия: какой трек правим (выход — любой раздел или логотип) -->
-    <div v-if="studioJob && !collapsed" class="sb-studio" :title="'#' + studioJob.id + ' ' + studioJob.title">
-      студия · #{{ studioJob.id }} {{ studioJob.title }}
-    </div>
-
     <!-- меню разделов; очередь ниже занимает остаток блока -->
     <nav class="sb-nav">
       <button v-for="n in NAV" :key="n.id" class="sb-nav-item" :class="{ on: isActive(n.id) }"
@@ -171,8 +166,6 @@ function onNav(id) { emit('nav', id) }
   font-size: 11px; color: var(--muted); }
 .sb-worker.down .sb-worker-text { color: var(--err, #e06c75); }
 .sidebar.collapsed .sb-worker { justify-content: center; }
-.sb-studio { font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
-  padding-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* статистика — те же классы, что были в шапке (глобальные стили App) */
 .sb-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; font-size: 11px;
   color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
