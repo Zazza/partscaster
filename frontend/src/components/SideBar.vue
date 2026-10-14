@@ -168,9 +168,8 @@ function onNav(id) { emit('nav', id) }
   min-height: 0;
 }
 .sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
-.sb-top { display: flex; align-items: center; gap: 9px; padding-bottom: 14px;
-  cursor: pointer; color: var(--text); }
-.sidebar.collapsed .sb-top { justify-content: center; }
+.sb-top { display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding-bottom: 14px; cursor: pointer; color: var(--text); }
 .sb-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-worker { display: flex; align-items: center; justify-content: center; gap: 6px;
