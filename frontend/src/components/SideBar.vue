@@ -65,7 +65,7 @@ function onNav(id) { emit('nav', id) }
     <!-- логотип и название — одной строкой, без соседей -->
     <div class="sb-top">
       <button class="sb-logo" :title="t('nav.home.tip')" @click="emit('home')">
-        <img v-if="logo" class="app-logo" :src="logo" alt="" width="24" height="24">
+        <img v-if="logo" class="app-logo" :src="logo" alt="" width="26" height="26">
         <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
       </button>
     </div>
@@ -170,19 +170,20 @@ function onNav(id) { emit('nav', id) }
   min-height: 0;
 }
 .sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
-.sb-top { display: flex; align-items: center; gap: 8px; }
-.sb-logo { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+.sb-top { display: flex; align-items: center; padding-bottom: 14px; }
+.sb-logo { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;
   background: none; border: none; padding: 0; cursor: pointer; color: var(--text); }
-.sb-title { font-size: 14px; font-weight: 700; letter-spacing: .3px; flex: 1; min-width: 0;
+.sb-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-worker { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.sb-worker { display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11px; color: var(--muted); }
 .sb-worker.down .sb-worker-text { color: var(--err, #e06c75); }
 .sidebar.collapsed .sb-worker { justify-content: center; }
 .sb-studio { font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
   padding-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* статистика — те же классы, что были в шапке (глобальные стили App) */
-.sb-stats { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 11px; color: var(--muted);
-  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.sb-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; font-size: 11px;
+  color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 .sb-stats-mini { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0;
   border-bottom: 1px solid var(--border); }
 .sb-stats-mini.hot { color: var(--err, #e06c75); }
@@ -224,6 +225,6 @@ function onNav(id) { emit('nav', id) }
 .sb-badge { position: absolute; top: -3px; right: 2px; font-size: 9px; line-height: 1;
   background: var(--accent, #7aa2f7); color: #fff; border-radius: 7px; padding: 2px 4px; }
 .sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px;
-  border-top: 1px solid var(--border); }
+  border-top: 1px solid var(--border); margin-top: auto; }
 .sidebar.collapsed .sb-foot { flex-direction: column; align-items: center; }
 </style>
