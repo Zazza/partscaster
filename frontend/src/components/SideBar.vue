@@ -145,11 +145,9 @@ function onNav(id) { emit('nav', id) }
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
     </div>
 
-    <!-- нижняя строка — действия, не разделы: сворачивание, импорт рецепта (файл), о программе, тема, язык -->
+    <!-- нижняя строка: сворачивание, тема, язык -->
     <div class="sb-foot">
       <button class="icon-btn" :title="collapsed ? t('nav.expand') : t('nav.collapse')" @click="toggleCollapse">{{ collapsed ? '»' : '«' }}</button>
-      <button class="icon-btn" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')"><AppIcon name="folder" /></button>
-      <button class="icon-btn" :title="t('nav.about.tip')" @click="emit('about')"><AppIcon name="info" /></button>
       <button class="icon-btn" @click="emit('theme')"
               :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
       <button class="icon-btn sb-lang" @click="emit('locale')"
