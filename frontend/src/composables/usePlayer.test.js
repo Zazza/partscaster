@@ -209,3 +209,74 @@ describe('▶ панели: память последнего артефакта
     expect(apiMock.toggleAudio).toHaveBeenCalled()
   })
 })
+
+describe('▶ панели: студийный контекст (togglePlay в студии)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('localStorage', new MemStorage())
+    apiMock.playFile = vi.fn().mockResolvedValue({})
+    apiMock.seekAudio = vi.fn().mockResolvedValue({})
+    apiMock.toggleAudio = vi.fn().mockResolvedValue({})
+    apiMock.stopAudio = vi.fn().mockResolvedValue({})
+    apiMock.audioState = vi.fn().mockResolvedValue({ playing: false, position_sec: 0, duration_sec: 0, job_id: 0 })
+  })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  const CTX = (over = {}) => ({ jobId: 882, file: 'audio.flac', mainFile: 'audio.flac', mixFile: null, dur: 200, label: '#882 трек', ...over })
+
+  it('зашёл в студию, ничего не слушал — плей играет сам трек', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setStudioCtx(CTX())
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'audio.flac', 200)
+  })
+
+  it('в студии есть правки — плей играет свежий микс (последнюю правку)', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setStudioCtx(CTX({ file: 'overdub-inst-0.flac', mixFile: 'overdub-inst-0.flac' }))
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-0.flac', 200)
+  })
+
+  it('слушали в этом треке превью — плей возвращает превью, а не микс', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setStudioCtx(CTX({ file: 'overdub-inst-0.flac', mixFile: 'overdub-inst-0.flac' }))
+    p.markNow('v882:overdub-inst-0.flac', '#882 превью', 882, 'overdub-inst-0.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-0.flac', 200)
+    expect(apiMock.playFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('слушали другой трек в списке, зашли в студию — плей играет трек студии', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.markNow('m7', '#7', 7, 'audio.flac', 180)
+    p.setStudioCtx(CTX())
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'audio.flac', 200)
+  })
+
+  it('устаревшая память «просто оригинал» при появившихся правках — играет микс', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.markNow('w882:main', '#882', 882, 'audio.flac', 200)
+    p.setStudioCtx(CTX({ file: 'overdub-inst-0.flac', mixFile: 'overdub-inst-0.flac' }))
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-0.flac', 200)
+  })
+
+  it('загружен трек студии на паузе в середине — плей продолжает, не перезапускает', async () => {
+    const p = await freshPlayer({ job_id: 882, playing: false, position_sec: 60, duration_sec: 200 })
+    p.setStudioCtx(CTX())
+    await p.togglePlay()
+    expect(apiMock.toggleAudio).toHaveBeenCalled()
+    expect(apiMock.playFile).not.toHaveBeenCalled()
+  })
+
+  it('студию закрыли (контекст снят) — прежняя логика списка', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    p.setStudioCtx(CTX())
+    p.setStudioCtx(null)
+    p.markNow('m7', '#7', 7, 'audio.flac', 180)
+    await p.togglePlay(); await flush()
+    expect(apiMock.playFile).toHaveBeenCalledWith(7, 'audio.flac', 180)
+  })
+})

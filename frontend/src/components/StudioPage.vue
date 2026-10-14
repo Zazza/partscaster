@@ -41,7 +41,7 @@ const IMPORT_STYLE = '(импорт внешнего трека)'
 const props = defineProps({ job: { type: Object, required: true }, autoTranslate: Boolean })
 const emit = defineEmits(['close', 'open-metrics'])
 
-const { isPlaying, playBusy, playBtn, toggleArtifact, markNow, playerState, nowPlayingKey, refreshPlayer, setPlayRange, rangeUntil } = usePlayer()
+const { isPlaying, playBusy, playBtn, toggleArtifact, markNow, playerState, nowPlayingKey, refreshPlayer, setPlayRange, setStudioCtx, rangeUntil } = usePlayer()
 const { askConfirm } = useConfirm()
 const inserts = useInserts()
 const revoice = useRevoice()
@@ -858,6 +858,18 @@ const deskRef = ref(null)
 const deskBox = ref(null)
 const activeEdits = computed(() => appliedInserts.value.filter((it) => !it.off))
 const mixFile = computed(() => inserts.mixFile(props.job.id))
+// контекст плеера: «плей» панели в студии без истории прослушивания играет сам
+// трек, а с активными правками — свежий микс (последняя правка); прослушанное
+// этого трека поновее (превью, вариант) главнее. Студию закрыли — контекст снят
+watch([mixFile, () => props.job.id, () => props.job.title], () => {
+  const main = props.job.audio_file || 'audio.flac'
+  setStudioCtx(mixFile.value
+    ? { jobId: props.job.id, file: mixFile.value, mainFile: main, mixFile: mixFile.value,
+        dur: props.job.duration_sec, label: t('studio.edits.mix') + ' · #' + props.job.id + ' ' + props.job.title }
+    : { jobId: props.job.id, file: main, mainFile: main, mixFile: null,
+        dur: props.job.duration_sec, label: `#${props.job.id} ${props.job.title}` })
+}, { immediate: true })
+onUnmounted(() => setStudioCtx(null))
 const mixBuilding = computed(() => inserts.isBuilding(props.job.id))
 // prev — файл микса с правками до правки: его и остановить, если правок не осталось (готовые
 // варианты в «Готово» не трогаем); новый микс играет под своим ключом — ▶/■ и стоп его видят

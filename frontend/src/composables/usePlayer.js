@@ -11,6 +11,12 @@ const nowPlayingKey = ref('')
 // последний запущенный артефакт: «плей» панели после «стопа»/конца играет его снова,
 // а не что попало (в студии — превью пресета, волна или микс; в списке — трек)
 const lastArtifact = ref(null)   // {key, label, jobId, file, dur} | null
+// студийный контекст панели: открытая студия трека. «Плей» без истории
+// прослушивания играет сам трек, с активными правками — свежий микс
+// (последняя правка); прослушанное этого трека поновее (превью, вариант)
+// главнее. Вне студии играет последний запущенный артефакт
+const studioCtx = ref(null)      // {jobId, file, mainFile, mixFile, dur, label} | null
+function setStudioCtx(v) { studioCtx.value = v }
 const volume = ref(parseFloat(localStorage.getItem('yue_volume') ?? '0.8'))
 
 // рельса перемотки: тянем локально, на отпускании — команда в плеер
@@ -122,20 +128,29 @@ async function togglePlay() {
     return playRangeOnce(r)
   }
   const st = playerState.value
-  // играет или на паузе в середине — пауза/продолжение загруженного
-  if (st.job_id > 0 && !playbackEnded(st) && st.position_sec > 0) return api.toggleAudio()
-  // после «стопа»/конца (или с нуля) — последний запущенный артефакт заново
-  if (a && a.file) {
-    if (playBusy.value[a.key]) return
-    playBusy.value = { ...playBusy.value, [a.key]: true }
-    nowPlaying.value = a.label
+  // цель «плея»: последнее прослушанное трека студии (превью, вариант, микс);
+  // в студии без него — сам трек, а с активными правками — свежий микс;
+  // вне студии — последний запущенный артефакт
+  const ctx = studioCtx.value
+  let target = a && (!ctx || a.jobId === ctx.jobId) ? a : ctx
+  if (ctx && a && a.jobId === ctx.jobId && ctx.mixFile && a.file === ctx.mainFile) target = ctx
+  // загружено то же, что целью, и не остановлено — пауза/продолжение
+  if (st.job_id > 0 && (!target || target.jobId === st.job_id) && !playbackEnded(st) && st.position_sec > 0) {
+    return api.toggleAudio()
+  }
+  // после «стопа»/конца (или с нуля) — цель заново
+  if (target && target.file) {
+    if (playBusy.value[target.key || target.file]) return
+    const busyKey = target.key || target.file
+    playBusy.value = { ...playBusy.value, [busyKey]: true }
+    nowPlaying.value = target.label
     try {
-      await api.playFile(a.jobId, a.file, a.dur)
-      nowPlayingKey.value = a.key
+      await api.playFile(target.jobId, target.file, target.dur)
+      nowPlayingKey.value = busyKey
     } catch (e) {
       nowPlaying.value = `звук: ${String(e)}`
     } finally {
-      playBusy.value = { ...playBusy.value, [a.key]: false }
+      playBusy.value = { ...playBusy.value, [busyKey]: false }
       setTimeout(() => refreshCb && refreshCb(), 300)
     }
     return
@@ -170,8 +185,8 @@ export function fmtDur(s) {
 
 export function usePlayer() {
   return {
-    playerState, nowPlaying, playBusy, nowPlayingKey, lastArtifact, volume, seekPos,
-    refreshPlayer, isPlaying, toggleArtifact, markNow, playBtn, stopAll,
+    playerState, nowPlaying, playBusy, nowPlayingKey, lastArtifact, studioCtx, volume, seekPos,
+    refreshPlayer, isPlaying, toggleArtifact, markNow, setStudioCtx, playBtn, stopAll,
     onVolume, onSeekInput, onSeekChange, onRefresh,
     playRange, rangeUntil, setPlayRange, togglePlay,
   }
