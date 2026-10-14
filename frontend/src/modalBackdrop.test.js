@@ -135,7 +135,6 @@ test('подложки модалок найдены (обход исходни�
     'components/MetricsModal.vue',
     'components/InstrumentsPage.vue',
     'components/ConfirmModal.vue',
-    'components/LibraryPage.vue',
     'components/VoicesPage.vue',
     'components/SettingsPage.vue',
   ]) {

@@ -49,7 +49,6 @@ const stateDot = (it) => ({ waiting: 'queued', running: 'running', done: 'done',
 const NAV = [
   { id: 'new', icon: 'plus' },
   { id: 'tracks', icon: 'music' },
-  { id: 'library', icon: 'inbox' },
   { id: 'voices', icon: 'mic' },
   { id: 'instruments', icon: 'pedal' },
   { id: 'presets', icon: 'disc' },

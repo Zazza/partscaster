@@ -24,7 +24,7 @@ import VSelect from './VSelect.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import SideBar from './components/SideBar.vue'
 import SettingsPage from './components/SettingsPage.vue'
-import LibraryPage from './components/LibraryPage.vue'
+import MyStylesModal from './components/MyStylesModal.vue'
 import CorpusPage from './components/CorpusPage.vue'
 import VoicesPage from './components/VoicesPage.vue'
 import InstrumentsPage from './components/InstrumentsPage.vue'
@@ -266,14 +266,22 @@ function applyPreset(p, mode) {
   if (noLyrics.value) applyInstrumental(true)
 }
 
-// текущая форма → своя группа библиотеки: строка (или слоты+BPM) как есть
+// «сохранить стиль» — модалка имени; пустое имя — по названию трека
+const styleSaveOpen = ref(false)
+const styleSaveName = ref('')
+const myStylesOpen = ref(false)
+function openStyleSave() {
+  styleSaveName.value = (title.value || '').trim()
+  styleSaveOpen.value = true
+}
+// текущая форма → свои стили: строка (или слоты+BPM) как есть
 function saveStyleToLibrary() {
   const gid = 'c-from-form'
   if (!customGroups.value.find((g) => g.id === gid)) {
     customGroups.value = [...customGroups.value, { id: gid, name: 'Из формы', items: [] }]
   }
   const g = customGroups.value.find((x) => x.id === gid)
-  const name = (title.value || '').trim() || 'стиль ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const name = styleSaveName.value.trim() || 'стиль ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   const item = {
     id: 'c-' + Date.now().toString(36),
     name,
@@ -602,7 +610,6 @@ const sectionFlag = (name) => computed({
   },
 })
 const settingsPage = sectionFlag('settings')
-const libraryPage = sectionFlag('library')
 const corpusPage = sectionFlag('corpus')
 const voicesPage = sectionFlag('voices')
 const instrumentsPage = sectionFlag('instruments')   // «Инструменты»: дорожка через цепочку звукового движка
@@ -615,7 +622,7 @@ const studioJob = ref(null)
 const newTrackPage = sectionFlag('new')
 
 function closeOverlays() {
-  libraryPage.value = false; settingsPage.value = false
+  settingsPage.value = false
   corpusPage.value = false; voicesPage.value = false; instrumentsPage.value = false; presetsPage.value = false
   navOpen.value = false
 }
@@ -627,7 +634,7 @@ function openNewTrack() {
 
 // Esc закрывает модалку нового трека — но не из-под открытых поверх плана/копайтера/библиотеки
 function onNewTrackKey(e) {
-  if (e.key === 'Escape' && newTrackPage.value && !planOpen.value && !copOpen.value && !libraryPage.value) newTrackPage.value = false
+  if (e.key === 'Escape' && newTrackPage.value && !planOpen.value && !copOpen.value && !myStylesOpen.value) newTrackPage.value = false
 }
 onMounted(() => window.addEventListener('keydown', onNewTrackKey))
 onUnmounted(() => window.removeEventListener('keydown', onNewTrackKey))
@@ -690,7 +697,7 @@ function profileStyleToLibrary({ corpus, profile }) {
   libGroup.value = gid
   libStyle.value = item.id
   corpusPage.value = false
-  libraryPage.value = true
+  myStylesOpen.value = true
 }
 
 function applyProfileStyle(style) {
@@ -908,8 +915,8 @@ function onWindowClick(e) {
           <VSelect v-model="libGroup" :options="libGroupOptions" :placeholder="t('form.lib.group')" @update:model-value="onLibGroupChange()" />
           <VSelect v-model="libStyle" :options="libStyleOptions" :disabled="!libGroup" :placeholder="t('form.lib.style')" @update:model-value="onLibStyleChange()" />
           <button v-if="currentItem" class="ghost small-btn" :title="t('form.lib.exact.tip')" @click="onLibExact">{{ t('form.lib.exact') }}</button>
-          <button class="ghost small-btn" :title="t('form.lib.save.tip')" @click="saveStyleToLibrary">{{ t('form.lib.save') }}</button>
-          <button class="ghost small-btn" :title="t('form.lib.manage.tip')" @click="libraryPage = true"><AppIcon name="sliders" /></button>
+          <button class="ghost small-btn" :title="t('my.save.tip')" @click="openStyleSave">{{ t('my.save') }}</button>
+          <button class="ghost small-btn" :title="t('my.list.tip')" @click="myStylesOpen = true">{{ t('my.list') }}</button>
         </div>
         <input v-model="title" :placeholder="t('form.name')" style="margin-top:8px" />
 
@@ -1073,7 +1080,6 @@ function onWindowClick(e) {
                 @apply-voice="applyVoice" />
     <InstrumentsPage v-if="section === 'instruments'" @close="instrumentsPage = false; refresh()" />
     <PresetsPage v-if="section === 'presets'" @close="presetsPage = false; loadPresetNames()" />
-    <LibraryPage v-if="section === 'library'" @close="section = ''" />
     <CorpusPage v-if="section === 'corpus'"
                 @close="section = ''"
                 @imported="onImported"
@@ -1312,6 +1318,25 @@ function onWindowClick(e) {
   <MetricsModal ref="metricsModal" :jobs="jobs" />
   <WelcomeModal v-if="welcome" :tab="welcome" @close="closeWelcome" />
   <ConfirmModal />
+
+  <!-- «сохранить стиль»: спросить имя и положить форму в свои стили -->
+  <div v-if="styleSaveOpen" class="modal-backdrop">
+    <div class="modal" style="width: min(480px, 92vw)">
+      <div class="modal-head">
+        <h2>{{ t('my.save.title') }}</h2>
+        <span class="spacer"></span>
+        <button class="ghost" :title="t('common.close')" @click="styleSaveOpen = false"><AppIcon name="x" /></button>
+      </div>
+      <p class="muted">{{ t('my.save.body') }}</p>
+      <div class="set-row">
+        <input v-model="styleSaveName" :placeholder="t('my.save.name')" maxlength="80"
+               @keyup.enter="styleSaveOpen = false; saveStyleToLibrary()" @keyup.esc="styleSaveOpen = false">
+        <button class="primary" :title="t('my.save.tip')" @click="styleSaveOpen = false; saveStyleToLibrary()">{{ t('common.save') }}</button>
+      </div>
+    </div>
+  </div>
+  <MyStylesModal v-if="myStylesOpen" @close="myStylesOpen = false"
+                 @apply="(item) => { applyPreset(item, 'slots'); myStylesOpen = false }" />
 </template>
 
 <style>
