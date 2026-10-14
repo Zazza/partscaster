@@ -10,7 +10,7 @@ export default {
   'common.add': 'добавить',
   'common.close': 'Закрыть',
   'common.none': '— нет —',
-  'common.empty': 'Пока пусто. Сгенерируйте трек кнопкой «Новый трек» или загрузите свой: меню ⋮ в шапке → «свои треки».',
+  'common.empty': 'Пока пусто. Сгенерируйте трек кнопкой «Новый трек» или загрузите свой: «свои треки» → импорт.',
 
   'app.title': 'Partscaster',
   'app.health.up': 'сервер: готов',
@@ -35,6 +35,11 @@ export default {
   'nav.settings': 'настройки',
   'nav.settings.tip': 'Страница настроек',
   'nav.about': 'О приложении',
+  'nav.menu.tip': 'Разделы',
+  'nav.queue': 'Очередь',
+  'nav.queue.empty': 'пусто — всё спокойно',
+  'nav.collapse': 'Свернуть панель',
+  'nav.expand': 'Развернуть панель',
   'nav.about.tip': 'Что это за приложение и что нового в версии',
   'welcome.tab.about': 'Что это',
   'welcome.tab.news': 'Что нового',
@@ -54,7 +59,6 @@ export default {
   'welcome.news.title': 'Что нового в {v}',
   'welcome.dontShow': 'Не показывать при запуске',
   'welcome.ok': 'Понятно',
-  'nav.menu.tip': 'Меню: свои треки · голоса · инструменты · пресеты звука · настройки',
 
   'player.prev': 'Предыдущий готовый трек',
   'player.next': 'Следующий готовый трек',

@@ -1,0 +1,164 @@
+<script setup>
+// Левый блок: логотип с названием, статистика воркера (видеопамять, очереди)
+// и очередь генераций; внизу прижато меню разделов, ещё ниже — тема и язык.
+// Сворачивается в узкую полосу с иконками (очередь — счётчиком на «треках»).
+import { computed, ref } from 'vue'
+import { useI18n } from '../i18n/index.js'
+
+const props = defineProps({
+  logo: { type: String, default: '' },
+  stats: { type: Object, default: null },
+  jobs: { type: Array, default: () => [] },
+  health: { type: Object, default: null },     // {up, title}
+  section: { type: String, default: '' },      // '' — список треков (главная)
+  studio: { type: Boolean, default: false },
+  theme: { type: String, default: 'dark' },    // 'dark' | 'light'
+  locale: { type: String, default: 'ru' },     // 'ru' | 'en'
+})
+const emit = defineEmits(['nav', 'home', 'import-recipes', 'about', 'theme', 'locale'])
+const { t } = useI18n()
+
+const collapsed = ref((() => { try { return localStorage.getItem('partscaster_sidebar') === '1' } catch { return false } })())
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  try { localStorage.setItem('partscaster_sidebar', collapsed.value ? '1' : '0') } catch { /* без localStorage — до закрытия */ }
+}
+
+// очередь генераций: идущие и ждущие джобы воркера (обработка студии — этапом 2)
+const activeJobs = computed(() => (props.jobs || []).filter((j) => j.status === 'queued' || j.status === 'running'))
+const queueN = computed(() => activeJobs.value.length)
+const runningPct = computed(() => {
+  const r = props.stats && props.stats.running
+  return r && r.progress_pct != null ? r.progress_pct : null
+})
+
+const NAV = [
+  { id: 'tracks', icon: 'music' },
+  { id: 'voices', icon: 'mic' },
+  { id: 'instruments', icon: 'pedal' },
+  { id: 'presets', icon: 'disc' },
+  { id: 'settings', icon: 'sliders' },
+]
+const navTarget = (id) => (id === 'tracks' ? '' : id)
+const isActive = (id) => !props.studio && props.section === navTarget(id)
+function onNav(id) { emit('nav', id) }
+</script>
+
+<template>
+  <aside class="sidebar" :class="{ collapsed }">
+    <div class="sb-top">
+      <button class="sb-logo" :title="t('nav.home.tip')" @click="emit('home')">
+        <img v-if="logo" class="app-logo" :src="logo" alt="" width="24" height="24">
+        <span v-if="!collapsed" class="sb-title">{{ t('app.title') }}</span>
+      </button>
+      <span v-if="health" class="health-dot" :class="health.up ? 'up' : 'down'" :title="health.title"></span>
+      <button class="icon-btn sb-collapse" :title="collapsed ? t('nav.expand') : t('nav.collapse')" @click="toggleCollapse">{{ collapsed ? '»' : '«' }}</button>
+    </div>
+
+    <!-- статистика воркера: видеопамять, очереди, текущая джоба -->
+    <div v-if="stats && !collapsed" class="sb-stats">
+      <span v-if="stats.vram_total" class="sb-vram" :title="t('footer.vram.tip')">
+        <span class="sb-vram-bar">
+          <span class="sb-vram-fill" :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }"
+                :style="{ width: Math.min(100, 100 * stats.vram_used / stats.vram_total) + '%' }"></span>
+        </span>
+        <span class="sb-text">{{ (stats.vram_used / 1024).toFixed(1) }}/{{ Math.round(stats.vram_total / 1024) }} {{ t('footer.vram.gb') }}</span>
+      </span>
+      <span v-if="stats.queue && stats.queue.queued" class="sb-text">· {{ t('footer.queue', { n: stats.queue.queued }) }}</span>
+      <span v-if="stats.gpu_waiting" class="sb-text">· {{ t('footer.gpu_queue', { n: stats.gpu_waiting }) }}</span>
+      <span v-if="stats.running" class="sb-text sb-job" :title="stats.running.title">
+        · #{{ stats.running.job_id }}
+        <template v-if="stats.running.progress_pct != null">{{ stats.running.progress_pct }}%</template>
+        <template v-else>{{ t('queue.progress.' + (stats.running.stage || 'plan')) }}</template>
+        <template v-if="stats.running.tok_per_s"> · {{ stats.running.tok_per_s }} {{ t('queue.progress.tps') }}</template>
+      </span>
+    </div>
+    <div v-else-if="stats && collapsed && stats.vram_total" class="sb-stats-mini"
+         :title="t('footer.vram.tip') + ': ' + (stats.vram_used / 1024).toFixed(1) + '/' + Math.round(stats.vram_total / 1024) + ' ' + t('footer.vram.gb')"
+         :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }">{{ Math.round(100 * stats.vram_used / stats.vram_total) }}%</div>
+
+    <!-- очередь генераций: что сейчас и что дальше -->
+    <div class="sb-queue" v-if="!collapsed">
+      <div class="sb-q-head">{{ t('nav.queue') }} <span class="muted">{{ queueN }}</span></div>
+      <div v-if="queueN" class="sb-q-list">
+        <div v-for="j in activeJobs.slice(0, 8)" :key="j.id" class="sb-q-item" :title="'#' + j.id + ' ' + j.title">
+          <span class="sb-q-dot" :class="j.status"></span>
+          <span class="sb-q-title">#{{ j.id }} {{ j.title }}</span>
+          <span v-if="j.status === 'running' && stats && stats.running && stats.running.job_id === j.id && runningPct != null"
+                class="sb-q-pct">{{ runningPct }}%</span>
+        </div>
+        <div v-if="queueN > 8" class="muted sb-q-more">+{{ queueN - 8 }}</div>
+      </div>
+      <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
+    </div>
+
+    <!-- меню разделов прижато к низу; тема/язык/о программе — самой нижней строкой -->
+    <nav class="sb-nav">
+      <button v-for="n in NAV" :key="n.id" class="sb-nav-item" :class="{ on: isActive(n.id) }"
+              :title="t('nav.' + n.id + '.tip')" @click="onNav(n.id)">
+        <AppIcon class="nav-ico" :name="n.icon" /><span v-if="!collapsed">{{ t('nav.' + n.id) }}</span>
+        <span v-if="collapsed && n.id === 'tracks' && queueN" class="sb-badge">{{ queueN > 9 ? '9+' : queueN }}</span>
+      </button>
+      <button class="sb-nav-item" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')">
+        <AppIcon class="nav-ico" name="folder" /><span v-if="!collapsed">{{ t('recipe.importMenu') }}</span>
+      </button>
+    </nav>
+    <div class="sb-foot">
+      <button class="icon-btn" :title="t('nav.about.tip')" @click="emit('about')"><AppIcon name="info" /></button>
+      <button class="icon-btn" @click="emit('theme')"
+              :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
+      <button class="icon-btn sb-lang" @click="emit('locale')"
+              :title="locale === 'ru' ? 'Switch to English' : 'Переключить на русский'">{{ locale === 'ru' ? 'EN' : 'RU' }}</button>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+.sidebar {
+  flex: none; width: 216px; display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--border);
+  min-height: 0;
+}
+.sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
+.sb-top { display: flex; align-items: center; gap: 8px; }
+.sb-logo { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  background: none; border: none; padding: 0; cursor: pointer; color: var(--text); }
+.sb-title { font-size: 14px; font-weight: 700; letter-spacing: .3px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-collapse { margin-left: auto; flex: none; }
+.sidebar.collapsed .sb-collapse { margin: 0 auto; }
+/* статистика — те же классы, что были в шапке (глобальные стили App) */
+.sb-stats { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 11px; color: var(--muted);
+  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.sb-stats-mini { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0;
+  border-bottom: 1px solid var(--border); }
+.sb-stats-mini.hot { color: var(--err, #e06c75); }
+/* очередь генераций */
+.sb-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.sb-q-head { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.sb-q-list { display: flex; flex-direction: column; gap: 3px; }
+.sb-q-item { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.sb-q-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.sb-q-dot.running { background: var(--ok, #7ec16c); animation: sbpulse 1.2s ease-in-out infinite; }
+.sb-q-dot.queued { background: var(--muted); }
+@keyframes sbpulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+.sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }
+.sb-q-more, .sb-q-empty { font-size: 11px; }
+/* меню разделов прижато к низу */
+.sb-nav { margin-top: auto; display: flex; flex-direction: column; gap: 2px;
+  border-top: 1px solid var(--border); padding-top: 8px; }
+.sb-nav-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px;
+  background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text);
+  cursor: pointer; text-align: left; position: relative; width: 100%;
+}
+.sb-nav-item:hover { background: var(--panel2); }
+.sb-nav-item.on { color: var(--lcd-text, var(--accent)); border-color: var(--lcd-text, var(--accent)); }
+.sidebar.collapsed .sb-nav-item { justify-content: center; padding: 6px 0; }
+.sb-badge { position: absolute; top: -3px; right: 2px; font-size: 9px; line-height: 1;
+  background: var(--accent, #7aa2f7); color: #fff; border-radius: 7px; padding: 2px 4px; }
+.sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px;
+  border-top: 1px solid var(--border); }
+.sidebar.collapsed .sb-foot { flex-direction: column; align-items: center; }
+</style>

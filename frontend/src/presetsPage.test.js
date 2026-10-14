@@ -36,11 +36,11 @@ const APP = join(srcDir, 'App.vue')
 const PRESETS_PAGE = join(srcDir, 'components', 'PresetsPage.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
 
-test('в меню ⋮ App.vue есть пункт li, открывающий страницу пресетов: navGo(\'presets\')', () => {
-  const tpl = templateOf(read(APP))
-  const items = [...tpl.matchAll(/<li\b[^>]*>/g)].map((m) => m[0])
-  const presetsItems = items.filter((li) => /@click="navGo\(\s*'presets'\s*\)"/.test(li))
-  expect(presetsItems, 'нет <li @click="navGo(\'presets\')"> в шаблоне App.vue').toHaveLength(1)
+test('в левом блоке SideBar есть пункт раздела пресетов, App вешает на navGo', () => {
+  const sb = read(join(srcDir, 'components', 'SideBar.vue'))
+  expect(sb, 'нет пункта presets в NAV сайдбара').toMatch(/\{ id: 'presets'/)
+  const app = read(APP)
+  expect(app, 'SideBar не подключён к navGo').toMatch(/<SideBar[^>]*@nav="navGo"/)
 })
 
 test('страница PresetsPage.vue существует, импортирует и рендерит PresetLibrary', () => {

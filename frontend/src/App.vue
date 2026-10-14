@@ -22,6 +22,7 @@ import { usePlayer, fmtDur } from './composables/usePlayer.js'
 import { useConfirm } from './composables/useConfirm.js'
 import VSelect from './VSelect.vue'
 import PlayerBar from './components/PlayerBar.vue'
+import SideBar from './components/SideBar.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import LibraryPage from './components/LibraryPage.vue'
 import CorpusPage from './components/CorpusPage.vue'
@@ -588,12 +589,22 @@ async function saveAudio(j, file) {
   if (f) await api.saveAudio(j.id, f)
 }
 
-const settingsPage = ref(false)
-const libraryPage = ref(false)
-const corpusPage = ref(false)
-const voicesPage = ref(false)
-const instrumentsPage = ref(false)   // «Инструменты»: дорожка через цепочку звукового движка
-const presetsPage = ref(false)       // «Пресеты звука»: библиотека пресетов
+// раздел в основном контексте: '' — список треков (главная). Прежние флаги —
+// алиасы на section, вся логика открытия/зактия работает как раньше
+const section = ref('')
+const sectionFlag = (name) => computed({
+  get: () => section.value === name,
+  set: (v) => {
+    if (v) section.value = name
+    else if (section.value === name) section.value = ''
+  },
+})
+const settingsPage = sectionFlag('settings')
+const libraryPage = sectionFlag('library')
+const corpusPage = sectionFlag('corpus')
+const voicesPage = sectionFlag('voices')
+const instrumentsPage = sectionFlag('instruments')   // «Инструменты»: дорожка через цепочку звукового движка
+const presetsPage = sectionFlag('presets')           // «Пресеты звука»: библиотека пресетов
 const recipeImport = ref(false)      // окно «Импорт рецепта»
 const imports = ref([])             // импорты рецептов: ход над списком треков
 const replayJob = ref(null)          // «переиграть в другом стиле»: трек или null
@@ -605,6 +616,16 @@ function closeOverlays() {
   libraryPage.value = false; settingsPage.value = false
   corpusPage.value = false; voicesPage.value = false; instrumentsPage.value = false; presetsPage.value = false
   navOpen.value = false
+}
+
+// «вернуться» в шапке: из студии — к списку, из раздела — к списку
+function goBack() {
+  if (studioJob.value) {
+    studioJob.value = null
+    refresh()
+  } else {
+    section.value = ''
+  }
 }
 
 // «＋ Новый трек»: модалка поверх любого экрана (список, студия, библиотека)
@@ -880,53 +901,35 @@ function onWindowClick(e) {
     <AppIcon name="alert" /> {{ compat.warning.value }}
     <button class="ghost icon" :title="t('common.close')" @click="compat.dismiss"><AppIcon name="x" /></button>
   </div>
+  <div class="app-shell">
+  <SideBar :logo="logoUrl" :stats="stats" :jobs="jobs" :health="{ up: !!health, title: healthTitle }"
+           :section="section" :studio="!!studioJob" :theme="theme" :locale="locale"
+           @nav="navGo" @home="goHome" @import-recipes="recipeImport = true" @about="welcome = 'about'"
+           @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
+  <div class="app-col">
   <header>
-    <!-- «вернуться» из студии — в шапке: шапка не прокручивается, кнопка всегда на виду -->
-    <button v-if="studioJob" class="ghost studio-back" :title="t('common.back')"
-            @click="studioJob = null; refresh()">{{ t('common.back') }}<span class="studio-back-title"> #{{ studioJob.id }} {{ studioJob.title }}</span></button>
-    <h1 class="home-link" :title="t('nav.home.tip')" @click="goHome"><img class="app-logo" :src="logoUrl" alt="" width="26" height="26">{{ t('app.title') }}</h1>
-    <span class="health-dot" :class="health ? 'up' : 'down'" :title="healthTitle"></span>
-    <button class="icon-btn" @click="toggleTheme" :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
-    <button class="icon-btn" @click="setLocale(locale === 'ru' ? 'en' : 'ru')"
-            :title="locale === 'ru' ? 'Switch to English' : 'Переключить на русский'">{{ locale === 'ru' ? 'EN' : 'RU' }}</button>
-    <!-- статус воркера компактно в шапке: VRAM, очередь рендеров, очередь к GPU, текущая джоба -->
-    <div v-if="stats" class="head-stats">
-      <span v-if="stats.vram_total" class="sb-vram" :title="t('footer.vram.tip')">
-        <span class="sb-vram-bar">
-          <span class="sb-vram-fill" :class="{ hot: stats.vram_used / stats.vram_total > 0.9 }"
-                :style="{ width: Math.min(100, 100 * stats.vram_used / stats.vram_total) + '%' }"></span>
-        </span>
-        <span class="sb-text">{{ (stats.vram_used / 1024).toFixed(1) }}/{{ Math.round(stats.vram_total / 1024) }} {{ t('footer.vram.gb') }}</span>
-      </span>
-      <span v-if="stats.queue && stats.queue.queued" class="sb-text">· {{ t('footer.queue', { n: stats.queue.queued }) }}</span>
-      <span v-if="stats.gpu_waiting" class="sb-text">· {{ t('footer.gpu_queue', { n: stats.gpu_waiting }) }}</span>
-      <span v-if="stats.running" class="sb-text sb-job" :title="stats.running.title">
-        · #{{ stats.running.job_id }}
-        <template v-if="stats.running.progress_pct != null">{{ stats.running.progress_pct }}%</template>
-        <template v-else>{{ t('queue.progress.' + (stats.running.stage || 'plan')) }}</template>
-        <template v-if="stats.running.tok_per_s"> · {{ stats.running.tok_per_s }} {{ t('queue.progress.tps') }}</template>
-      </span>
-    </div>
+    <!-- «вернуться» из студии или раздела — шапка не прокручивается, кнопка всегда на виду -->
+    <button v-if="studioJob || section" class="ghost studio-back" :title="t('common.back')"
+            @click="goBack">{{ t('common.back') }}<span v-if="studioJob" class="studio-back-title"> #{{ studioJob.id }} {{ studioJob.title }}</span></button>
     <span class="spacer"></span>
     <button class="primary new-track-btn" :class="{ on: newTrackPage }"
             :title="t('nav.new.tip')" @click="openNewTrack"><AppIcon name="plus" /><span class="new-track-txt"> {{ t('nav.new.short') }}</span></button>
-    <div class="nav-wrap">
-      <button class="icon-btn" :title="t('nav.menu.tip')" @click.stop="navOpen = !navOpen"><AppIcon name="more-v" /></button>
-      <ul v-if="navOpen" class="nav-menu">
-        <li :title="t('nav.tracks.tip')" @click="navGo('tracks')"><AppIcon class="nav-ico" name="music" />{{ t('nav.tracks') }}</li>
-        <li :title="t('nav.voices.tip')" @click="navGo('voices')"><AppIcon class="nav-ico" name="mic" />{{ t('nav.voices') }}</li>
-        <li :title="t('nav.instruments.tip')" @click="navGo('instruments')"><AppIcon class="nav-ico" name="pedal" />{{ t('nav.instruments') }}</li>
-        <li :title="t('nav.presets.tip')" @click="navGo('presets')"><AppIcon class="nav-ico" name="disc" />{{ t('nav.presets') }}</li>
-        <li :title="t('recipe.importMenu.tip')" @click="navOpen = false; recipeImport = true"><AppIcon class="nav-ico" name="folder" />{{ t('recipe.importMenu') }}</li>
-        <li :title="t('nav.settings.tip')" @click="navGo('settings')"><AppIcon class="nav-ico" name="sliders" />{{ t('nav.settings') }}</li>
-        <li :title="t('nav.about.tip')" @click="navOpen = false; welcome = 'about'"><AppIcon class="nav-ico" name="info" />{{ t('nav.about') }}</li>
-      </ul>
-    </div>
   </header>
 
   <!-- всё под шапкой прокручивается само: шапка с плеером всегда на виду -->
   <div class="app-body">
-  <StudioPage v-if="studioJob" :job="studioJob" :auto-translate="autoTranslate"
+  <!-- разделы — в основном контексте (не модалками): закрываются «вернуться» в шапке и ✕;
+       библиотека своих треков и корпуса — по-прежнему модалки поверх формы -->
+  <div v-if="!studioJob && ['settings', 'voices', 'instruments', 'presets'].includes(section)" class="ctx-view">
+    <SettingsPage v-if="section === 'settings'" v-model:server-url="serverURL"
+                  @close="settingsPage = false" @saved="refresh(); loadEngine()" />
+    <VoicesPage v-if="section === 'voices'"
+                @close="voicesPage = false; loadVoiceCards()"
+                @apply-voice="applyVoice" />
+    <InstrumentsPage v-if="section === 'instruments'" @close="instrumentsPage = false; refresh()" />
+    <PresetsPage v-if="section === 'presets'" @close="presetsPage = false; loadPresetNames()" />
+  </div>
+  <StudioPage v-else-if="studioJob" :job="studioJob" :auto-translate="autoTranslate"
               @close="studioJob = null; refresh()"
               @open-metrics="openMetrics" />
 
@@ -1139,6 +1142,8 @@ function onWindowClick(e) {
   <footer class="playerbar-footer">
     <PlayerBar :jobs="jobs" @play-job="togglePlay" @refresh="refresh" />
   </footer>
+  </div><!-- /.app-col -->
+  </div><!-- /.app-shell -->
 
   <!-- страницы-модалки поверх основного контента: ✕/Esc/клик по фону закрывают -->
   <!-- библиотека — после формы нового трека: открывается поверх неё, закрылась — форма на месте -->
@@ -1312,24 +1317,16 @@ function onWindowClick(e) {
     </section>
   </div>
 
-  <SettingsPage v-if="settingsPage" v-model:server-url="serverURL"
-                @close="settingsPage = false" @saved="refresh(); loadEngine()" />
+  <RecipeImportModal v-if="recipeImport" @close="recipeImport = false" @started="refresh()" />
+  <ReplayModal v-if="replayJob" :job="replayJob" :auto-translate="autoTranslate" @close="replayJob = null" @submitted="refresh()" />
+
+  <LibraryPage v-if="libraryPage" @close="libraryPage = false" />
   <CorpusPage v-if="corpusPage"
               @close="corpusPage = false"
               @imported="onImported"
               @apply-style="applyProfileStyle"
               @apply-abc="(abc) => setPlanAbc(abc, { seed: null, seconds: null, truncated: false, fromProfile: true })"
               @style-to-library="profileStyleToLibrary" />
-  <VoicesPage v-if="voicesPage"
-              @close="voicesPage = false; loadVoiceCards()"
-              @apply-voice="applyVoice" />
-
-  <InstrumentsPage v-if="instrumentsPage" @close="instrumentsPage = false; refresh()" />
-  <PresetsPage v-if="presetsPage" @close="presetsPage = false; loadPresetNames()" />
-  <RecipeImportModal v-if="recipeImport" @close="recipeImport = false" @started="refresh()" />
-  <ReplayModal v-if="replayJob" :job="replayJob" :auto-translate="autoTranslate" @close="replayJob = null" @submitted="refresh()" />
-
-  <LibraryPage v-if="libraryPage" @close="libraryPage = false" />
 
   <PlanModal v-model:abc="planAbc" :open="planOpen" :busy="planBusy" :err="planErr"
              :info="planInfo"
@@ -1348,7 +1345,18 @@ function onWindowClick(e) {
 html, body, #app { height: 100%; }
 body { overflow: hidden; }
 #app { display: flex; flex-direction: column; }
+/* каркас: слева статичный блок (лого, статистика, очередь, меню), справа колонка
+   из шапки, прокручиваемого контекста и плеера */
+.app-shell { flex: 1 1 auto; min-height: 0; display: flex; }
+.app-col { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .app-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* раздел в основном контексте: страница-модалка встраивается потоком — без
+   фиксированной подложки и затемнения (сами компоненты не меняем) */
+.ctx-view { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.ctx-view .modal-backdrop { position: static; inset: auto; background: none; z-index: auto;
+  display: block; padding: 0; overflow: visible; }
+.ctx-view .page-backdrop { padding: 16px; overflow: visible; }
+.ctx-view .page-modal { width: auto; max-width: none; max-height: none; }
 header { flex: 0 0 auto; }
 header {
   /* выше панелей main (стекинг-контексты из backdrop-filter), но ниже модалок (z-index 70) */

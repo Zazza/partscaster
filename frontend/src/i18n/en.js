@@ -10,7 +10,7 @@ export default {
   'common.add': 'add',
   'common.close': 'Close',
   'common.none': '— none —',
-  'common.empty': 'Nothing yet. Generate a track with “New track” or import your own: the ⋮ menu in the header → “my tracks”.',
+  'common.empty': 'Nothing yet. Generate a track with “New track” or import your own: “my tracks” → import.',
 
   'app.title': 'Partscaster',
   'app.health.up': 'server: ready',
@@ -35,6 +35,11 @@ export default {
   'nav.settings': 'settings',
   'nav.settings.tip': 'Settings page',
   'nav.about': 'About',
+  'nav.menu.tip': 'Sections',
+  'nav.queue': 'Queue',
+  'nav.queue.empty': 'empty — all quiet',
+  'nav.collapse': 'Collapse the panel',
+  'nav.expand': 'Expand the panel',
   'nav.about.tip': 'What this app is and what is new in this version',
   'welcome.tab.about': 'What it is',
   'welcome.tab.news': 'What\'s new',
@@ -54,7 +59,6 @@ export default {
   'welcome.news.title': 'What\'s new in {v}',
   'welcome.dontShow': 'Don\'t show on start',
   'welcome.ok': 'Got it',
-  'nav.menu.tip': 'Menu: my tracks · voices · instruments · sound presets · settings',
 
   'player.prev': 'Previous finished track',
   'player.next': 'Next finished track',
