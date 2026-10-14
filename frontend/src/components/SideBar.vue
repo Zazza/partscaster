@@ -107,9 +107,6 @@ function onNav(id) { emit('nav', id) }
         <AppIcon class="nav-ico" :name="n.icon" /><span v-if="!collapsed">{{ t('nav.' + n.id) }}</span>
         <span v-if="collapsed && n.id === 'tracks' && queueN" class="sb-badge">{{ queueN > 9 ? '9+' : queueN }}</span>
       </button>
-      <button class="sb-nav-item" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')">
-        <AppIcon class="nav-ico" name="folder" /><span v-if="!collapsed">{{ t('recipe.importMenu') }}</span>
-      </button>
     </nav>
 
     <!-- очередь генераций: что сейчас и что дальше -->
@@ -148,9 +145,10 @@ function onNav(id) { emit('nav', id) }
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
     </div>
 
-    <!-- нижняя строка: сворачивание, о программе, тема, язык -->
+    <!-- нижняя строка — действия, не разделы: сворачивание, импорт рецепта (файл), о программе, тема, язык -->
     <div class="sb-foot">
       <button class="icon-btn" :title="collapsed ? t('nav.expand') : t('nav.collapse')" @click="toggleCollapse">{{ collapsed ? '»' : '«' }}</button>
+      <button class="icon-btn" :title="t('recipe.importMenu.tip')" @click="emit('import-recipes')"><AppIcon name="folder" /></button>
       <button class="icon-btn" :title="t('nav.about.tip')" @click="emit('about')"><AppIcon name="info" /></button>
       <button class="icon-btn" @click="emit('theme')"
               :title="theme === 'dark' ? t('app.theme.light') : t('app.theme.dark')"><AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" /></button>
