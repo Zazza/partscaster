@@ -58,8 +58,12 @@ func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, err
 	}
-	yue.Record(ctx, svc, jobID, yue.JobOp{Op: "sound_preset", Params: yue.Params(map[string]any{"preset": p}),
-		Result: yue.JobResult(res.ChildID)})
+	// запись в журнал — когда операция очереди закрыта итогом «готово»: при отмене в последний миг версия
+	// откатывается, и запись о ней не должна остаться (импорт по журналу применил бы отменённый пресет)
+	AfterDone(ctx, func(c context.Context) {
+		yue.Record(c, svc, jobID, yue.JobOp{Op: "sound_preset", Params: yue.Params(map[string]any{"preset": p}),
+			Result: yue.JobResult(res.ChildID)})
+	})
 	return res, nil
 }
 

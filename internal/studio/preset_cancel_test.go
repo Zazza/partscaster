@@ -155,3 +155,105 @@ func TestStartOpPresetCanceledAfterSuccessDeletesVersion(t *testing.T) {
 		t.Fatalf("удалена не та версия: %v, нужна #%d", f.deleted, psChild)
 	}
 }
+
+// psJrRec — внешняя граница «журнал воркера» (OpRecorder) поверх фейка пресета; запись идёт
+// из фона StartOp, поэтому под замком и с сигналом.
+type psJrRec struct {
+	yue.Service
+	mu    sync.Mutex
+	recs  []jrEntry
+	recCh chan struct{}
+}
+
+func (r *psJrRec) RecordOp(_ context.Context, jobID int64, op yue.JobOp) error {
+	r.mu.Lock()
+	r.recs = append(r.recs, jrEntry{jobID, op})
+	r.mu.Unlock()
+	r.recCh <- struct{}{}
+	return nil
+}
+
+func (r *psJrRec) presetRecs() []jrEntry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []jrEntry
+	for _, e := range r.recs {
+		if e.op.Op == "sound_preset" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// startPresetOp — пресет из окна: StartOp по очереди воркера q, внутри — вложенный ApplySoundPreset
+// через журналируемый сервис svc (обёртка Journaled очередь не пробрасывает).
+func startPresetOp(t *testing.T, q yue.Service, svc yue.Service) {
+	t.Helper()
+	p := psPreset(5, []yue.PresetSpec{psVocalCut()}, psFinal())
+	if _, err := StartOp(context.Background(), q, "preset", "Warm Wire — пресет", psJobID,
+		func(ctx context.Context) (int64, error) {
+			res, err := ApplySoundPreset(withoutLiveLayer(ctx), svc, psJobID, p)
+			if err != nil {
+				return 0, err
+			}
+			return res.ChildID, nil
+		}); err != nil {
+		t.Fatalf("StartOp: %v", err)
+	}
+}
+
+// Доработка кросс-ревью: пресет из окна отменён в последний миг (на «готово» воркер ответил canceled) —
+// в журнале трека НЕТ записи sound_preset. Старое поведение: вложенный ApplySoundPreset писал запись
+// сразу после своего успеха, до итога операции, — запись отменённого пресета оставалась.
+func TestStartOpPresetCanceledAfterSuccessNoJournalRecord(t *testing.T) {
+	t.Parallel()
+	f := &psLateCancelFake{
+		psQueueFake: &psQueueFake{psFake: psSetup(t, nil), q: newOpFake()},
+		delCh:       make(chan struct{}, 8),
+	}
+	rec := &psJrRec{Service: f, recCh: make(chan struct{}, 8)}
+	startPresetOp(t, f, yue.Journaled(rec))
+	select {
+	case <-f.q.finishCh:
+	case <-time.After(waitLimit):
+		t.Fatal("операция StartOp не закрыта")
+	}
+	select {
+	case <-f.delCh: // откат версии завершает обработку отмены
+	case <-time.After(waitLimit):
+		t.Fatal("сценарий: откат версии после отмены не дошёл")
+	}
+	time.Sleep(100 * time.Millisecond) // запоздалая запись, если бы она была, успела бы прийти
+	if recs := rec.presetRecs(); len(recs) != 0 {
+		t.Fatalf("у отменённого пресета в журнале запись sound_preset: %+v", recs)
+	}
+}
+
+// Пресет из окна успешен (итог done) — в журнале трека ровно одна запись sound_preset.
+func TestStartOpPresetDoneJournalsOnce(t *testing.T) {
+	t.Parallel()
+	f := &psQueueFake{psFake: psSetup(t, nil), q: newOpFake()}
+	rec := &psJrRec{Service: f, recCh: make(chan struct{}, 8)}
+	startPresetOp(t, f, yue.Journaled(rec))
+	select {
+	case <-f.q.finishCh:
+	case <-time.After(waitLimit):
+		t.Fatal("операция StartOp не закрыта")
+	}
+	if fin := onlyFinish(t, f.q); fin.State != "done" {
+		t.Fatalf("сценарий: итог %+v, нужно done", fin)
+	}
+	deadline := time.After(waitLimit)
+	for len(rec.presetRecs()) == 0 {
+		select {
+		case <-rec.recCh:
+		case <-deadline:
+			t.Fatal("у успешного пресета нет записи sound_preset в журнале")
+		}
+	}
+	time.Sleep(100 * time.Millisecond) // лишняя запись, если бы она была, успела бы прийти
+	recs := rec.presetRecs()
+	if len(recs) != 1 || recs[0].jobID != psJobID {
+		t.Fatalf("записи sound_preset: %+v, нужна ровно одна у трека %d", recs, psJobID)
+	}
+}

@@ -562,3 +562,151 @@ func TestOnCanceledCalledOnInterrupted(t *testing.T) {
 	}
 	waitCalled(t, called, "прерывание")
 }
+
+// AfterDone (доработка кросс-ревью: запись в журнал только после итога «готово»):
+// вне операции очереди — fn сразу; внутри RunOp/StartOp — fn после QueueFinish(done);
+// при отмене, прерывании и ошибке — не вызывается.
+
+// AfterDone вне операции — fn вызвана сразу, до возврата AfterDone, ровно раз.
+func TestAfterDoneOutsideOpCallsImmediately(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	AfterDone(context.Background(), func(context.Context) { calls++ })
+	if calls != 1 {
+		t.Fatalf("вне операции fn вызвана %d раз до возврата AfterDone, нужно 1 сразу", calls)
+	}
+}
+
+// afterDoneCall — снимок очереди в момент вызова fn из AfterDone.
+type afterDoneCall struct {
+	finished []yue.QueueFinishIn
+}
+
+// afterDoneRun — RunOp, внутри fn регистрирует AfterDone; inFn — была ли fn AfterDone вызвана
+// ещё до возврата шага (то есть до итога операции).
+func afterDoneRun(t *testing.T, f yue.Service, q *opFake, fn func(ctx context.Context) (int64, error)) (r runResult, calls chan afterDoneCall, inFn bool) {
+	t.Helper()
+	calls = make(chan afterDoneCall, 4)
+	r = waitRun(t, runAsync(context.Background(), f, func(ctx context.Context) (int64, error) {
+		AfterDone(ctx, func(context.Context) {
+			_, _, fin := q.snapshot()
+			calls <- afterDoneCall{finished: fin}
+		})
+		id, err := fn(ctx)
+		inFn = len(calls) > 0
+		return id, err
+	}))
+	return r, calls, inFn
+}
+
+func noAfterDone(t *testing.T, calls <-chan afterDoneCall, what string) {
+	t.Helper()
+	select {
+	case c := <-calls:
+		t.Fatalf("AfterDone вызвана при %s (итоги очереди в момент вызова: %+v)", what, c.finished)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// Успех: fn AfterDone вызвана ровно раз, не во время шага, а после того, как операция закрыта done.
+func TestAfterDoneCalledOnceAfterFinishDone(t *testing.T) {
+	t.Parallel()
+	f := newOpFake()
+	r, calls, inFn := afterDoneRun(t, f, f, func(ctx context.Context) (int64, error) { return 812, nil })
+	if r.err != nil || r.id != 812 {
+		t.Fatalf("RunOp = %d, %v", r.id, r.err)
+	}
+	if inFn {
+		t.Fatal("AfterDone вызвана во время шага, до итога операции")
+	}
+	var c afterDoneCall
+	select {
+	case c = <-calls:
+	case <-time.After(waitLimit):
+		t.Fatal("AfterDone не вызвана у успешной операции")
+	}
+	if len(c.finished) != 1 || c.finished[0].State != "done" {
+		t.Fatalf("в момент вызова AfterDone итоги очереди %+v, нужен уже записанный done", c.finished)
+	}
+	noAfterDone(t, calls, "повторе (второй вызов у одной операции)")
+}
+
+// Метка отмены в beat во время шага — AfterDone не вызывается.
+func TestAfterDoneNotCalledOnCancel(t *testing.T) {
+	t.Parallel()
+	f := newOpFake()
+	started := make(chan struct{})
+	f.beat = func(int) (*yue.QueueOp, error) {
+		select {
+		case <-started:
+			return &yue.QueueOp{ID: fakeOpID, State: "running", CancelRequested: true}, nil
+		default:
+			return &yue.QueueOp{ID: fakeOpID, State: "running"}, nil
+		}
+	}
+	r, calls, _ := afterDoneRun(t, f, f, func(ctx context.Context) (int64, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(waitLimit):
+			return 0, errors.New("ctx шага не отменён")
+		}
+	})
+	if !errors.Is(r.err, ErrCanceled) {
+		t.Fatalf("RunOp err = %v, нужно ErrCanceled", r.err)
+	}
+	noAfterDone(t, calls, "отмене меткой в beat")
+}
+
+// Шаг успешен, но воркер на «готово» ответил canceled — AfterDone не вызывается.
+func TestAfterDoneNotCalledWhenFinishAnswersCanceled(t *testing.T) {
+	t.Parallel()
+	f := &finishCancelsFake{newOpFake()}
+	r, calls, _ := afterDoneRun(t, f, f.opFake, func(ctx context.Context) (int64, error) { return 812, nil })
+	if !errors.Is(r.err, ErrCanceled) {
+		t.Fatalf("RunOp err = %v, нужно ErrCanceled", r.err)
+	}
+	noAfterDone(t, calls, "ответе canceled на «готово»")
+}
+
+// Операция пропала посреди шага (404) — AfterDone не вызывается.
+func TestAfterDoneNotCalledOnInterrupted(t *testing.T) {
+	t.Parallel()
+	f := newOpFake()
+	started := make(chan struct{})
+	f.beat = func(int) (*yue.QueueOp, error) {
+		select {
+		case <-started:
+			return nil, &yue.StatusError{Code: http.StatusNotFound, Msg: "нет операции"}
+		default:
+			return &yue.QueueOp{ID: fakeOpID, State: "running"}, nil
+		}
+	}
+	r, calls, _ := afterDoneRun(t, f, f, func(ctx context.Context) (int64, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(waitLimit):
+			return 0, errors.New("ctx шага не отменён")
+		}
+	})
+	if !errors.Is(r.err, ErrInterrupted) {
+		t.Fatalf("RunOp err = %v, нужно ErrInterrupted", r.err)
+	}
+	noAfterDone(t, calls, "пропаже операции (404)")
+}
+
+// Ошибка шага — AfterDone не вызывается.
+func TestAfterDoneNotCalledOnError(t *testing.T) {
+	t.Parallel()
+	f := newOpFake()
+	r, calls, _ := afterDoneRun(t, f, f, func(ctx context.Context) (int64, error) {
+		return 0, errors.New("нет стемов")
+	})
+	if r.err == nil {
+		t.Fatal("RunOp без ошибки, нужна ошибка шага")
+	}
+	noAfterDone(t, calls, "ошибке шага")
+}

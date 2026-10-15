@@ -33,8 +33,9 @@ type opQueue interface {
 type undoKey struct{}
 
 type undoList struct {
-	mu  sync.Mutex
-	fns []func(context.Context)
+	mu   sync.Mutex
+	fns  []func(context.Context)
+	done []func(context.Context) // AfterDone: только после итога «готово»
 }
 
 // OnCanceled — откат на случай, если операция очереди, внутри которой идёт ctx, кончится отменой или
@@ -45,6 +46,30 @@ func OnCanceled(ctx context.Context, fn func(context.Context)) {
 		u.mu.Lock()
 		u.fns = append(u.fns, fn)
 		u.mu.Unlock()
+	}
+}
+
+// AfterDone — fn после того, как операция очереди, внутри которой идёт ctx, закрыта итогом «готово»
+// (отменённая или прерванная — fn не вызывается). Вне операции — сразу.
+func AfterDone(ctx context.Context, fn func(context.Context)) {
+	u, ok := ctx.Value(undoKey{}).(*undoList)
+	if !ok {
+		fn(ctx)
+		return
+	}
+	u.mu.Lock()
+	u.done = append(u.done, fn)
+	u.mu.Unlock()
+}
+
+func (u *undoList) runDone(ctx context.Context) {
+	u.mu.Lock()
+	fns := u.done
+	u.done = nil
+	u.mu.Unlock()
+	dctx := context.WithoutCancel(ctx)
+	for _, fn := range fns {
+		fn(dctx)
 	}
 }
 
@@ -206,6 +231,7 @@ func runOp(ctx context.Context, q opQueue, op *yue.QueueOp, fn func(context.Cont
 		undo.run(ctx)
 		return 0, ErrCanceled
 	}
+	undo.runDone(ctx)
 	return res, nil
 }
 
