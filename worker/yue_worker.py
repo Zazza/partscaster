@@ -15,6 +15,7 @@ import os
 import random
 import re
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -695,10 +696,44 @@ def _cpp_plan(cpp, style: str, lyrics: str, cot: str, seed: int) -> str:
     return parts["replay"].get("abc") or ""
 
 
+def job_budget(draft: bool, max_tokens: int, role: "str | None") -> int:
+    """Бюджет семантических токенов джобы. Превью — ~18 с (450); без явной длины —
+    MAX_SEM_TOKENS; явная длина — с потолком MAX_SEM_TOKENS: KV-кеш yue2 выделяется
+    под весь бюджет заранее, и на 16 ГБ модель + кес на 16000 не помещаются.
+    Кусок — ровно до конца окна + хвост (минимум 200 шагов держит _continue_song);
+    общий минимум 500 добавлял короткому куску лишние секунды генерации."""
+    budget = 450 if draft else MAX_SEM_TOKENS
+    if not draft and max_tokens:
+        floor = 200 if role == "fragment" else 500
+        budget = max(floor, min(int(max_tokens), MAX_SEM_TOKENS, 30000))
+    return budget
+
+
+def _gpu_holders():
+    """Процессы с выделенной видеопамятью [(pid, ГБ)] по nvidia-smi; None — спросить
+    не вышло (нет nvidia-smi, таймаут): подсказку про соседей не показываем наугад."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:  # noqa: BLE001 - nvidia-smi нет/упал
+        return None
+    holders = []
+    for line in out.splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) == 2 and parts[0].isdigit():
+            try:
+                holders.append((int(parts[0]), float(parts[1]) / 1024))
+            except ValueError:
+                continue
+    return holders
+
+
 def friendly_error(e: BaseException) -> str:
-    """Текст ошибки для человека. Нехватка видеопамяти (частое на общем GPU:
-    рядом Ollama, Stable Diffusion) — вместо стека CUDA «GPU занят» со
-    свободной/общей памятью и подсказкой, что делать; остальное — как есть."""
+    """Текст ошибки для человека. Нехватка видеопамяти: если карту держат чужие
+    процессы (Ollama, Stable Diffusion) — «GPU занят» со свободной/общей памятью
+    и подсказкой; если держит сам воркер (модель и бюджет длины не поместились) —
+    честное сообщение про длину трека, без обвинения соседей; остальное — как есть."""
     s = str(e)
     if not _is_cuda_oom(e):
         return s
@@ -709,6 +744,11 @@ def friendly_error(e: BaseException) -> str:
         mem = f" (свободно {free / 2**30:.1f} из {total / 2**30:.1f} ГБ)"
     except Exception:  # noqa: BLE001 - без torch/CUDA — сообщение без цифр
         pass
+    holders = _gpu_holders()
+    if holders is not None and all(pid == os.getpid() for pid, _ in holders):
+        return (f"Не хватило видеопамяти самому воркеру{mem}: модель и бюджет длины трека "
+                "не поместились. Уменьшите длительность в форме нового трека (или поднимите "
+                "YUE2_MAX_TOKENS на карте побольше) и нажмите «повторить».")
     return (f"GPU занят: не хватило видеопамяти{mem}. Освободите память от других программ "
             "(модель в Ollama, Stable Diffusion и т. п.) и нажмите «повторить».")
 
@@ -728,12 +768,7 @@ def _run_job(job_id: int):
     with _state_lock:
         cancel_ev = _cancel_flags.setdefault(job_id, threading.Event())
     on_token, counters = _on_token_cb(job_id)
-    budget = 450 if row["draft"] else MAX_SEM_TOKENS   # ~18 с превью
-    if not row["draft"] and row["max_tokens"]:
-        # кусок — ровно до конца окна + хвост (минимум 200 шагов держит _continue_song); общий минимум 500 добавлял
-        # короткому куску лишние секунды генерации
-        floor = 200 if row["role"] == "fragment" else 500
-        budget = max(floor, min(int(row["max_tokens"]), 30000))
+    budget = job_budget(row["draft"], row["max_tokens"], row["role"])
     if row["role"] == "voice":
         _run_voice_job(job_id, row, job_dir)
         return

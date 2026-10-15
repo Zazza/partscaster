@@ -665,7 +665,7 @@ export default {
   'dur.s1': '1–2 min',
   'dur.s2': '2–5 min',
   'dur.s3': '5–10 min',
-  'dur.s4': '10–30 min',
+  'dur.s4': '10–30 min (needs more than 16 GB VRAM)',
   'queue.cancel.tip': 'Remove the job from the queue / stop the render',
   'queue.cancel': 'cancel',
   'queue.progress.plan': 'planning…',

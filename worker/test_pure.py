@@ -1667,10 +1667,61 @@ class TestFriendlyError(_WorkerDbCase):
             for text in self.OOM_TEXTS:
                 self._assert_friendly(self.w.friendly_error(RuntimeError(text)))
 
+
+    def test_oom_self_holder_honest_message(self):
+        """Держит только сам воркер — без обвинения соседей, с подсказкой про длину."""
+        import os
+        from unittest import mock
+        with mock.patch.object(self.w, "_gpu_holders", return_value=[(os.getpid(), 6.9)]):
+            msg = self.w.friendly_error(RuntimeError("CUDA out of memory"))
+        self.assertIn("самому воркеру", msg)
+        self.assertIn("длительность", msg)
+        self.assertNotIn("Ollama", msg)
+
+    def test_oom_foreign_holder_blames_neighbours(self):
+        import os
+        from unittest import mock
+        with mock.patch.object(self.w, "_gpu_holders", return_value=[(999999, 5.0), (os.getpid(), 2.0)]):
+            msg = self.w.friendly_error(RuntimeError("CUDA out of memory"))
+        self.assertIn("GPU занят", msg)
+        self.assertIn("Ollama", msg)
+
+    def test_oom_holders_unknown_old_message(self):
+        from unittest import mock
+        with mock.patch.object(self.w, "_gpu_holders", return_value=None):
+            self._assert_friendly(self.w.friendly_error(RuntimeError("CUDA out of memory")))
+
     def test_other_errors_unchanged(self):
         for e in (RuntimeError("ffmpeg failed: exit 1"), ValueError("bad seed"),
                   KeyError("x"), RuntimeError("out of memory"), Exception("")):
             self.assertEqual(self.w.friendly_error(e), str(e), repr(e))
+
+
+@unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
+class TestJobBudget(_WorkerDbCase):
+    """job_budget: превью — 450; без длины — MAX_SEM_TOKENS; явная длина — с потолком
+    MAX_SEM_TOKENS (KV-кес yue2 выделяется под весь бюджет заранее — 16 ГБ не вмещают
+    модель и 16000); кусок — свой минимум."""
+
+    def test_draft_preview(self):
+        self.assertEqual(self.w.job_budget(True, 0, None), 450)
+        self.assertEqual(self.w.job_budget(True, 90000, "section"), 450)
+
+    def test_default(self):
+        self.assertEqual(self.w.job_budget(False, 0, None), self.w.MAX_SEM_TOKENS)
+
+    def test_explicit_clamped_to_max(self):
+        from unittest import mock
+        with mock.patch.object(self.w, "MAX_SEM_TOKENS", 9000):
+            self.assertEqual(self.w.job_budget(False, 16000, None), 9000)
+            self.assertEqual(self.w.job_budget(False, 15000, None), 9000)
+            self.assertEqual(self.w.job_budget(False, 7000, None), 7000)
+
+    def test_fragment_floor(self):
+        from unittest import mock
+        with mock.patch.object(self.w, "MAX_SEM_TOKENS", 9000):
+            self.assertEqual(self.w.job_budget(False, 100, "fragment"), 200)
+            self.assertEqual(self.w.job_budget(False, 100, None), 500)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
