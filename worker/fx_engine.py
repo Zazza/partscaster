@@ -1725,8 +1725,10 @@ GTR_ENV_WIN_S = 0.4      # огибающая входа: окно, шаг и с
 GTR_ENV_HOP_S = 0.1
 GTR_ENV_SMOOTH = 10      # шагов сглаживания (~1 с)
 GTR_ENV_LIMIT_DB = 12.0  # громкость выхода по ходу — не дальше от средней
-GTR_SAMPLE_RMS = 0.1     # сэмпл набора приводится к этому RMS (первые 0,3 с): наборы записаны разной громкостью
+GTR_SAMPLE_RMS = 0.1     # сэмпл набора приводится к этому RMS (самое громкое окно в 0,3 с): наборы разной громкости
+GTR_SAMPLE_WIN_S = 0.05  # … окно громкости сэмпла
 GTR_STRIKE_RMS = 0.2     # опорная громкость удара из нескольких струн — с ней выход ≈ вход по громкости
+GTR_STRIKE_N = 4         # удар из стольких струн — громкость 1; из n — × √(4/n)
 GTR_UP_GAIN = 0.8        # удар вверх тише
 GTR_MUTE_S = 0.035       # глушёный удар без набора глушения — обрывок ноты
 GTR_PALM_DECAY_S = 0.08  # глушение ладонью: спад
@@ -1775,7 +1777,9 @@ def _gtr_kit(res, name: str, sr_out: int) -> dict:
     for smp, nm in zip(raw, names, strict=False):
         x = np.asarray(smp, dtype=np.float64)
         x = x.mean(axis=1) if x.ndim == 2 else x
-        r = _rms(x[: int(0.3 * ksr)])
+        w = max(1, int(GTR_SAMPLE_WIN_S * ksr))   # громкость — самое громкое окно: короткий «чук» не раздувается
+        head = x[: int(0.3 * ksr)]
+        r = max((_rms(head[i:i + w]) for i in range(0, max(1, len(head) - w + 1), max(1, w // 4))), default=0.0)
         if r <= EPS:
             continue
         midi, lay = gtr_sample_info(nm)
@@ -1834,11 +1838,12 @@ def _gtr_palm(y: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _gtrnotes(x, sr, p, res):
-    """Гитара по нотам: ноты (распознанные у трека — ставит воркер) играются сэмплами другой гитары. Вход — старая
-    гитара: в выход не идёт, задаёт громкость (сила удара — к _ref_rms, громкость по ходу — огибающая). strum=1 — бой:
-    удар вниз (на долю) — струны снизу вверх с разбегом spread_ms (тише — шире), вверх — сверху вниз и тише; глушёный
-    удар — «чук» набора mute_kit (нет — обрывки нот); одиночная короткая низкая — глушение ладонью; новый удар глушит
-    звенящие струны прежнего. strum=0 — ноты как распознаны."""
+    """Гитара по нотам: ноты (партию трека «по аккордам плана» или готовые ноты фразы — ставит воркер) играются
+    сэмплами другой гитары. Вход — старая гитара: в выход не идёт, задаёт громкость (сила удара — к _ref_rms,
+    громкость по ходу — огибающая). strum=1 — бой: удар вниз (на долю) — струны снизу вверх с разбегом spread_ms
+    (тише — шире), вверх — сверху вниз и тише; глушёный удар — один «чук» набора mute_kit (нет — обрывки нот);
+    одиночная короткая низкая — глушение ладонью; новый удар глушит звенящие струны прежнего; громкость удара
+    × √(GTR_STRIKE_N / струн). strum=0 — каждая нота сама по себе. Параметр style (манера партии) читает воркер."""
     import guitarnotes
     notes = p.get("notes") or []
     if not notes and "_t0" in p:   # окно воркера, куда нот не попало (гитара вступает позже) — тишина, не ошибка
@@ -1901,7 +1906,7 @@ def _gtrnotes(x, sr, p, res):
     rows = [[nt["t"], nt["t"] + nt["d"], nt["midi"][0], nt.get("vel", 0.8)] for nt in notes if nt["t"] < until]
     if strum:
         groups = guitarnotes.strikes(rows, p.get("_beats") or [])
-    else:   # ноты как распознаны: каждая — сама по себе
+    else:   # каждая нота — сама по себе
         groups = [{"t": r[0], "notes": [r], "dir": "single", "muted": False, "palm": False} for r in rows]
     for st in groups:
         t = float(st["t"])
@@ -1922,25 +1927,29 @@ def _gtrnotes(x, sr, p, res):
                     keep.append(item)
             ringing = keep
         ns = st["notes"]
+        sg = (GTR_STRIKE_N / max(1, len(ns))) ** 0.5   # удар одинаково громок: одна струна твёрже, аккорд легче
         if not strum:
             for s0, e0, m, _v in ns:
                 ringing.append(play(s0, m, e0 - s0, layer, 1.0))
             continue
         if st["muted"]:
-            for k, (_s0, _e0, m, _v) in enumerate(ns):
-                ringing.append(play(t + k * 0.002, m, 0.0, layer, 1.0, "mute" if mute else "frag"))
+            if mute:   # глушёный удар — один «чук» набора, не по числу струн
+                ringing.append(play(t, ns[0][2], 0.0, layer, 1.0, "mute"))
+            else:
+                for k, (_s0, _e0, m, _v) in enumerate(ns):
+                    ringing.append(play(t + k * 0.002, m, 0.0, layer, 1.0, "frag"))
             continue
         if st["palm"]:
             s0, e0, m, _v = ns[0]
-            ringing.append(play(s0, m, e0 - s0, layer, 1.0, "palm"))
+            ringing.append(play(s0, m, e0 - s0, layer, sg, "palm"))
             continue
         if st["dir"] == "single":
             s0, e0, m, _v = ns[0]
-            ringing.append(play(s0, m, e0 - s0, layer, 1.0))
+            ringing.append(play(s0, m, e0 - s0, layer, sg))
             continue
         spread = float(p.get("spread_ms", 8.0)) / 1000 * (0.5 + (1.0 - v))
         order = ns if st["dir"] == "down" else list(reversed(ns))
-        gain = 1.0 if st["dir"] == "down" else GTR_UP_GAIN
+        gain = (1.0 if st["dir"] == "down" else GTR_UP_GAIN) * sg
         for k, (s0, e0, m, _v) in enumerate(order):
             ringing.append(play(t + k * spread, m, e0 - s0, layer, gain))
     for item in ringing:

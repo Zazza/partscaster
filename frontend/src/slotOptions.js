@@ -153,6 +153,7 @@ export const slotOptions = {
     ['стрит-панк (oi!)', 'street punk, Oi!'],
     ['сёрф-рок', 'surf rock'],
     ['свинг', 'swing'],
+    ['симфо-метал', 'symphonic metal'],
     ['синт-фанк', 'synth-funk'],
     ['синтпоп', 'synthpop'],
     ['синтвейв', 'synthwave'],

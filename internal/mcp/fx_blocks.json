@@ -1502,6 +1502,18 @@
   },
   "params": [
    {
+    "id": "style",
+    "default": 0,
+    "min": 0,
+    "max": 4,
+    "step": 1,
+    "integer": true,
+    "label": {
+     "ru": "манера: 0 авто по частям песни, 1 бой, 2 перебор, 3 бас + аккорд, 4 квинты",
+     "en": "manner: 0 auto by song part, 1 strumming, 2 fingerpicking, 3 bass + chord, 4 power chords"
+    }
+   },
+   {
     "id": "strum",
     "default": 1,
     "min": 0,
@@ -1509,8 +1521,8 @@
     "step": 1,
     "integer": true,
     "label": {
-     "ru": "бой: удары вниз/вверх, глушение (0 — ноты как распознаны)",
-     "en": "strumming: down/up strokes, muting (0 — notes as recognized)"
+     "ru": "бой: удары вниз/вверх, глушение (0 — каждая нота сама по себе)",
+     "en": "strumming: down/up strokes, muting (0 — each note on its own)"
     }
    },
    {

@@ -272,6 +272,21 @@ export const groups = [
     ],
   },
   {
+    id: 'symphonic', name: 'Симфо-метал', nameEn: 'Symphonic metal',
+    items: [
+      {
+        id: 'symphonic-choir', name: 'Хор и орган', nameEn: 'Choir and organ',
+        style: 'English, symphonic metal, heavy down-tuned guitar riffs with full choir and church organ, orchestral string section, dramatic operatic female soprano vocals, double-kick drums, epic gothic grandeur, 140 BPM',
+        slots: { language: 'English', genre: 'symphonic metal, gothic metal', rhythm: 'steady double-kick, processional', guitars: 'heavy down-tuned riffs under the orchestra', keys: 'choir, church organ, string section', vocals: 'dramatic operatic female soprano', mood: 'epic gothic grandeur', production: 'orchestral, wide, powerful' }, bpm: 140,
+      },
+      {
+        id: 'symphonic-piano', name: 'С роялем и струнными', nameEn: 'With piano and strings',
+        style: 'English, symphonic metal, intimate piano intro growing into heavy riffs with string section, clear expressive female vocals, half-time drums with orchestral crashes, melancholic cinematic drama, 120 BPM',
+        slots: { language: 'English', genre: 'symphonic metal', rhythm: 'half-time with orchestral crashes', guitars: 'riffs entering after piano intros', keys: 'grand piano, string section', vocals: 'clear expressive female', mood: 'melancholic cinematic drama', production: 'cinematic, detailed, wide' }, bpm: 120,
+      },
+    ],
+  },
+  {
     id: 'doom', name: 'Дум и стоунер', nameEn: 'Doom & stoner',
     items: [
       {

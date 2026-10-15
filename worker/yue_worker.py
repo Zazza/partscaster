@@ -44,7 +44,6 @@ from dsp import analyze_file, beat_grid, vocal_activity
 from sheetsage import transcribe as ss_transcribe
 from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_DEMUCS, MODEL_ROFORMER, roformer_available,
                    roformer_enabled, separate as demucs_separate)
-import notes as notesmod
 import voice as voicevc
 
 log = logging.getLogger("partscaster-worker")
@@ -1087,9 +1086,6 @@ def get_config():
         "whisper_available": WHISPER_PY.is_file(),
         "seedvc_dir": str(voicevc.SEEDVC_DIR),
         "seedvc_available": voicevc.available(),
-        # распознавание нот гитары (блок gtrnotes «Гитара по нотам»): окружение worker/notes_install.sh
-        "notes_available": notesmod.available(),
-        "notes_engines": notesmod.engines(),
         "auto_stems_instrumental": auto_stems_instrumental(),
         # выбор пользователя и чем дорожки будут делаться на деле (RoFormer — если выбран и установлен)
         "stems_pref": stems_pref(),
@@ -1553,6 +1549,12 @@ CHORD_HOP = 2048   # шаг хромы, сэмплов
 def job_chord_grid(job_id: int):
     """Аккорды и секции плана трека → такты звука: доли по барабанам (нет — по миксу), сдвиг плана — по хроме
     гармонии (бас+прочее, нет — микс). Синт по аккордам ложится в такт звука, а не во время плана."""
+    return chord_grid_bars(job_id)
+
+
+def chord_grid_bars(job_id: int) -> dict:
+    """Сетка аккордов трека {bpm, bars [{start, end, chord, section}]} — для синта (эндпоинт) и гитариста
+    (guitar_part). Нет плана — 404 с подсказкой про транскрипцию."""
     import librosa
     import numpy as np
     import soundfile as sf
@@ -2621,131 +2623,124 @@ def job_stems(job_id: int, model: str | None = None):
     return result
 
 
-NOTES_NOT_INSTALLED = "распознавание нот не установлено: worker/notes_install.sh"
-# распознавание трека — одно за раз: параллельный запрос ждёт и берёт готовый кэш
-_notes_locks: dict[int, threading.Lock] = {}
-_notes_locks_guard = threading.Lock()
+GUITAR_PART_CACHE = "guitar-part.json"
+GUITAR_PART_VERSION = 1
+# партия трека считается одним запросом за раз: соседний ждёт и берёт готовый кэш
+_part_locks: dict[int, threading.Lock] = {}
+_part_locks_guard = threading.Lock()
 
 
-def _stem_print(path: Path) -> dict:
-    """Отпечаток дорожки гитары: дорожку пересобрали («разделить подробнее») — ноты распознаются заново."""
+def _file_print(path: Path) -> dict | None:
+    """Отпечаток файла (дорожка гитары, план): пересобрали — партия считается заново."""
+    if not path.is_file():
+        return None
     st = path.stat()
     return {"mtime_ns": st.st_mtime_ns, "size": st.st_size}
 
 
-def _notes_cache_fresh(cache: Path, gpath: Path) -> dict | None:
-    """Кэш нот трека, если он про текущую дорожку гитары; битый или устаревший — None. Кэш без отпечатка (старый
-    формат) свеж, пока дорожка не новее его файла."""
-    try:
-        data = json.loads(cache.read_text())
-    except (OSError, ValueError):
-        return None
-    if not gpath.is_file():
-        return data
-    stem = data.get("stem")
-    if isinstance(stem, dict):
-        return data if stem == _stem_print(gpath) else None
-    return data if cache.stat().st_mtime_ns >= gpath.stat().st_mtime_ns else None
-
-
-def _guitar_notes(job_id: int, force: bool = False) -> tuple[dict, bool]:
-    """Ноты гитары трека (кэш jobs/<id>/guitar-notes.json; нет или force — распознать под очередью видеокарты):
-    ансамбль YourMT3+ ∪ basic-pitch (notes.ensemble), сила — громкость дорожки гитары, доли — по барабанам (или
-    миксу), строй — основной тон баса и голоса. → (кэш, был ли готов). Ошибки — HTTPException с понятным текстом."""
+def _guitar_part(job_id: int) -> dict:
+    """Партия гитариста трека «по аккордам плана» (кэш jobs/<id>/guitar-part.json): удары — пики атак дорожки
+    гитары, такты и аккорды — сетка chord_grid, доли — барабаны (или микс), строй — основной тон баса и голоса.
+    Ноты из этого строит guitarpart.part по манере блока. Без видеокарты, секунды. Ошибки — HTTPException."""
+    import guitarpart
     row = _job_row(job_id)
     if row is None or not row["audio_file"]:
         raise HTTPException(404, "job or audio not found")
     jdir = JOBS_DIR / str(job_id)
-    cache = jdir / notesmod.CACHE_NAME
+    abc = jdir / (row["abc_file"] or "score.abc")
+    if not abc.is_file():
+        raise HTTPException(422, "у трека нет плана — сделайте транскрипцию: гитарист играет по аккордам плана")
     gpath = jdir / "stem-guitar.flac"
-    if cache.is_file() and not force:
-        data = _notes_cache_fresh(cache, gpath)
-        if data is not None:
-            return data, True
     if not gpath.is_file():
         try:
             _ensure_stems(job_id)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
     if not gpath.is_file():
-        raise HTTPException(422, "у трека нет дорожки гитары (guitar) — нечего распознавать")
-    if not notesmod.available():
-        raise HTTPException(503, NOTES_NOT_INSTALLED)
-    with _notes_locks_guard:
-        lock = _notes_locks.setdefault(job_id, threading.Lock())
-    with lock:   # весь расчёт и запись кэша — одним запросом на трек; соседний ждёт и берёт готовое
-        if cache.is_file() and not force:
-            data = _notes_cache_fresh(cache, gpath)
-            if data is not None:
-                return data, True
-        return _guitar_notes_compute(row, jdir, cache, gpath), False
+        raise HTTPException(422, "у трека нет дорожки гитары (guitar) — гитаристу не за кем вписываться")
+    cache = jdir / GUITAR_PART_CACHE
 
-
-def _guitar_notes_compute(row, jdir: Path, cache: Path, gpath: Path) -> dict:
-    """Распознать ноты дорожки гитары (под очередью видеокарты) и записать кэш трека (под блокировкой трека)."""
-    import soundfile as sf
-    import uuid
-    stem_print = _stem_print(gpath)
-    try:
-        with gpu_queue("notes"), tempfile.TemporaryDirectory(prefix="notes-") as tmp:
-            raw = notesmod.run(gpath, Path(tmp) / "raw.json")
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        if _is_cuda_oom(e):
-            raise HTTPException(503, f"распознавание нот: {friendly_error(e)}") from e
-        log.exception("guitar notes failed")
-        raise HTTPException(500, f"распознавание нот не удалось: {e}") from e
-    guitar, sr = sf.read(str(gpath), always_2d=True, dtype="float32")
-    notes = notesmod.velocities(notesmod.ensemble(raw), guitar, sr)
-
-    def _stem(name):
-        p = jdir / name
-        if not p.is_file():
+    def fresh() -> dict | None:
+        try:
+            data = json.loads(cache.read_text())
+        except (OSError, ValueError):
             return None
-        x, xsr = sf.read(str(p), always_2d=True, dtype="float32")
-        return x if xsr == sr else None
+        ok = (data.get("version") == GUITAR_PART_VERSION and data.get("stem") == _file_print(gpath)
+              and data.get("plan") == _file_print(abc))
+        return data if ok else None
 
-    drums = _stem("stem-drums.flac")
-    if drums is None:
-        drums = _stem(row["audio_file"])
-    tune_src = [(x, lo, hi) for x, lo, hi in ((_stem("stem-bass.flac"), 35, 300), (_stem("stem-vocals.flac"), 80, 700))
-                if x is not None]
-    out = {"version": notesmod.CACHE_VERSION, "engines": list(raw.get("engines") or notesmod.engines()),
-           "stem": stem_print,
-           "notes": [[round(s0, 4), round(e0, 4), int(m), round(v, 3)] for s0, e0, m, v in notes],
-           "beats": notesmod.beats(drums, sr) if drums is not None else [],
-           "tune_cents": notesmod.tuning(tune_src, sr)}
-    tmp_cache = cache.with_name(f"{cache.name}.{uuid.uuid4().hex[:8]}.part")
-    tmp_cache.write_text(json.dumps(out))
-    tmp_cache.replace(cache)
-    return out
+    data = fresh()
+    if data is not None:
+        return data
+    with _part_locks_guard:
+        lock = _part_locks.setdefault(job_id, threading.Lock())
+    with lock:
+        data = fresh()
+        if data is not None:
+            return data
+        import soundfile as sf
+        import uuid
+        stem_p, plan_p = _file_print(gpath), _file_print(abc)
+        guitar, sr = sf.read(str(gpath), always_2d=True, dtype="float32")
+
+        def stem(name):
+            p_ = jdir / name
+            if not p_.is_file():
+                return None
+            x, xsr = sf.read(str(p_), always_2d=True, dtype="float32")
+            return x if xsr == sr else None
+
+        drums = stem("stem-drums.flac")
+        if drums is None:
+            drums = stem(row["audio_file"])
+        tune_src = [(x, lo, hi) for x, lo, hi in ((stem("stem-bass.flac"), 35, 300), (stem("stem-vocals.flac"), 80, 700))
+                    if x is not None]
+        data = {"version": GUITAR_PART_VERSION, "stem": stem_p, "plan": plan_p,
+                "onsets": guitarpart.onsets(guitar, sr),
+                "bars": chord_grid_bars(job_id)["bars"],
+                "beats": guitarpart.beats(drums, sr) if drums is not None else [],
+                "tune_cents": guitarpart.tuning(tune_src, sr)}
+        tmp = cache.with_name(f"{cache.name}.{uuid.uuid4().hex}.part")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(cache)
+        return data
 
 
-@app.post("/jobs/{job_id}/guitar_notes")
-def job_guitar_notes(job_id: int, force: bool = False):
-    """Распознать ноты гитары трека для блока gtrnotes («Ноты переиграны другой гитарой»): результат хранится у трека
-    и переиспользуется всеми звуками; ?force=1 — заново. → {notes, engines, cached}."""
-    out, cached = _guitar_notes(job_id, force)
-    return {"notes": len(out.get("notes") or []), "engines": out.get("engines") or [], "cached": cached}
+@app.get("/jobs/{job_id}/guitar_part")
+def job_guitar_part(job_id: int, style: int = 0):
+    """Что сыграет гитарист «по аккордам плана» на этом треке: такты (аккорд, часть песни) и удары с нотами в
+    манере style (0 авто, 1 бой, 2 перебор, 3 бас + аккорд, 4 квинты). Кэш — у трека."""
+    import guitarpart
+    if style not in guitarpart.STYLES:
+        raise HTTPException(422, "style — 0…4: авто, бой, перебор, бас + аккорд, квинты")
+    data = _guitar_part(job_id)
+    by_t: dict[float, list] = {}
+    for s0, _e0, m, _v in guitarpart.part(data["onsets"], data["bars"], style):
+        by_t.setdefault(round(float(s0), 4), []).append(int(m))
+    return {"style": style, "bars": data["bars"],
+            "strikes": [{"t": t, "midi": sorted(ms)} for t, ms in sorted(by_t.items())],
+            "beats": data.get("beats") or [], "tune_cents": data.get("tune_cents") or 0.0}
 
 
 GTR_LEAD_S = 8.0   # gtrnotes: нота, начатая раньше окна, ещё звучит (сэмпл гитары — до нескольких секунд)
 
 
 def gtrnotes_fill(chain: list, job_id: int) -> list:
-    """Блоки gtrnotes цепочки (присланной для трека): ноты, доли и строй — из кэша трека (секунды трека; нет кэша —
-    распознать). Присланные ноты и служебные поля не берутся: их ставит только воркер."""
+    """Блоки gtrnotes цепочки (присланной для трека): ноты — партия гитариста «по аккордам плана» в манере блока
+    (style), доли и строй — из кэша партии трека. Присланные ноты и служебные поля не берутся: их ставит воркер."""
     if not any(b.get("type") == "gtrnotes" for b in chain):
         return chain
-    data, _ = _guitar_notes(job_id)
-    notes = [{"t": float(s0), "d": max(0.01, float(e0) - float(s0)), "midi": [int(m)], "vel": float(v)}
-             for s0, e0, m, v in data.get("notes") or []]
-    if not notes:
-        raise HTTPException(422, "у трека не распознано ни одной ноты гитары — нечего играть другой гитарой")
+    import guitarpart
+    data = _guitar_part(job_id)
     out = []
     for b in chain:
         if b.get("type") == "gtrnotes":
+            style = int(b.get("style") or 0)
+            notes = [{"t": float(s0), "d": max(0.01, float(e0) - float(s0)), "midi": [int(m)], "vel": float(v)}
+                     for s0, e0, m, v in guitarpart.part(data.get("onsets") or [], data.get("bars") or [], style)]
+            if not notes:
+                raise HTTPException(422, "гитаристу нечего играть: в дорожке гитары не найдено ударов или в плане нет "
+                                         "аккордов")
             b = {k: v for k, v in b.items() if not k.startswith("_") and k != "notes"}
             b.update(notes=notes, _beats=[float(x) for x in data.get("beats") or []],
                      _tune=float(data.get("tune_cents") or 0.0))
@@ -3435,12 +3430,12 @@ def _fx_render(job_id: int, req: FxIn) -> dict:
         if part.shape[1] != track.shape[1]:
             part = np.repeat(part.mean(axis=1, keepdims=True), track.shape[1], axis=1)
 
-    # гитара по нотам: ноты, доли и строй — из распознавания трека (нет — распознать сейчас, под очередью видеокарты)
+    # гитара по нотам: партия гитариста по аккордам плана и ударам дорожки гитары (кэш у трека)
     chain = gtrnotes_fill(chain, job_id)
     if req.preview:
         used = [src] if req.source == "mix" else [src, jdir / f"stem-{req.source}.flac"]
         if any(b["type"] == "gtrnotes" for b in chain):
-            used.append(jdir / notesmod.CACHE_NAME)   # ноты распознали заново — превью новое
+            used.append(jdir / GUITAR_PART_CACHE)   # партию пересчитали — превью новое
         # ноты синта в запросе — от начала трека, превью считает кусок с from: сдвинуть на окно
         full = None
         if req.source == "mix" and any(b["type"] == "limiter" for b in chain):
