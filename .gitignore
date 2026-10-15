@@ -11,3 +11,4 @@ __pycache__/
 frontend/src/wailsjs/go/models.ts
 frontend/src/wailsjs/go/main/App.d.ts
 cmd/partscaster-worker/payload/*.tar.gz
+tmp/

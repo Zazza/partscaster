@@ -745,7 +745,9 @@ def friendly_error(e: BaseException) -> str:
     except Exception:  # noqa: BLE001 - без torch/CUDA — сообщение без цифр
         pass
     holders = _gpu_holders()
-    if holders is not None and all(pid == os.getpid() for pid, _ in holders):
+    # «сам воркер» — только когда список держателей непустой и в нём нет чужих: пустой список
+    # (карта свободна по nvidia-smi — так бывает в WSL без работающей модели) не доказывает вину
+    if holders and all(pid == os.getpid() for pid, _ in holders):
         return (f"Не хватило видеопамяти самому воркеру{mem}: модель и бюджет длины трека "
                 "не поместились. Уменьшите длительность в форме нового трека (или поднимите "
                 "YUE2_MAX_TOKENS на карте побольше) и нажмите «повторить».")
