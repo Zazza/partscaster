@@ -96,13 +96,14 @@ def _parse_bands(where: str, bands) -> list[dict]:
     return out
 
 
-def _parse_notes(where: str, notes) -> list[dict]:
-    """Ноты блока synth: [{t (с, < 0 — началась до окна), d > 0, midi [0…127], vel 0…1}], не больше
-    SYNTH_MAX_NOTES."""
+def _parse_notes(where: str, notes, max_notes: int | None = None) -> list[dict]:
+    """Ноты блока synth (и gtrnotes — свой предел числа нот): [{t (с, < 0 — началась до окна), d > 0, midi [0…127],
+    vel 0…1}], не больше SYNTH_MAX_NOTES."""
+    max_notes = max_notes or SYNTH_MAX_NOTES
     if not isinstance(notes, list):
         raise ChainError(f"{where}: notes — список нот {{t, d, midi, vel}}")
-    if len(notes) > SYNTH_MAX_NOTES:
-        raise ChainError(f"{where}: нот не больше {SYNTH_MAX_NOTES} (сейчас {len(notes)})")
+    if len(notes) > max_notes:
+        raise ChainError(f"{where}: нот не больше {max_notes} (сейчас {len(notes)})")
     out = []
     for i, nt in enumerate(notes):
         w = f"{where}, нота {i + 1}"
@@ -142,7 +143,8 @@ def parse_chain(chain) -> list[dict]:
         nums, strs = SPEC[t], STR_SPEC.get(t, {})
         allowed = set(nums) | set(strs) | {"type"} | ({"bands"} if t == "eq" else set()) | \
             ({"notes", "_until", "_ref_rms", "_syn_rms", "_syn_peak"} if t in ("synth", "perc") else set()) | \
-            ({"_t0"} if t in ("perc", "tremolo", "synth") else set())
+            ({"_t0"} if t in ("perc", "tremolo", "synth") else set()) | \
+            ({"notes", "_t0", "_until", "_ref_rms", "_tune", "_beats"} if t == "gtrnotes" else set())
         extra = set(blk) - allowed
         if extra:
             raise ChainError(f"{where}: неизвестный параметр {sorted(extra)[0]}")
@@ -172,6 +174,8 @@ def parse_chain(chain) -> list[dict]:
                 norm["_t0"] = min(max(float(blk["_t0"]), 0.0), 86400.0)
             if t == "perc" and int(norm["voice"]) == 0 and not norm.get("kit"):
                 raise ChainError(f"{where}: голос 0 (сэмплы) — нужен набор kit")
+        if t == "gtrnotes":
+            _parse_gtrnotes(where, blk, norm)
         if t in ("tremolo", "synth") and _num(blk.get("_t0")):   # начало куска в треке (ставит воркер): фазы от трека
             norm["_t0"] = min(max(float(blk["_t0"]), 0.0), 86400.0)
         if t == "sampler" and norm.get("kit_open") and (norm.get("kit_mid") or norm.get("kit_low")):
@@ -1710,11 +1714,246 @@ def _limiter(x, sr, p, _res):
     return y
 
 
+# ---- gtrnotes: гитара по нотам распознавания (guitarnotes.py, кэш трека guitar-notes.json) ----
+GTR_MAX_NOTES = 20000    # нот гитары на весь трек — тысячи (бой восьмыми по 4–6 струн)
+GTR_RING_S = 0.25        # распознанная нота короче — звенит хотя бы столько (распознавание режет хвосты)
+GTR_RELEASE_S = 0.05     # спад в конце ноты
+GTR_CHOKE_S = 0.015      # глушение струны новым ударом
+GTR_VEL_WIN_S = 0.08     # сила удара — громкость входа столько от начала
+GTR_VEL_RANGE_DB = 24.0  # сила 0…1 — ±12 дБ вокруг средней громкости входа
+GTR_ENV_WIN_S = 0.4      # огибающая входа: окно, шаг и сглаживание
+GTR_ENV_HOP_S = 0.1
+GTR_ENV_SMOOTH = 10      # шагов сглаживания (~1 с)
+GTR_ENV_LIMIT_DB = 12.0  # громкость выхода по ходу — не дальше от средней
+GTR_SAMPLE_RMS = 0.1     # сэмпл набора приводится к этому RMS (первые 0,3 с): наборы записаны разной громкостью
+GTR_STRIKE_RMS = 0.2     # опорная громкость удара из нескольких струн — с ней выход ≈ вход по громкости
+GTR_UP_GAIN = 0.8        # удар вверх тише
+GTR_MUTE_S = 0.035       # глушёный удар без набора глушения — обрывок ноты
+GTR_PALM_DECAY_S = 0.08  # глушение ладонью: спад
+GTR_PALM_LP_HZ = 1200.0  # … и темнее
+# имя сэмпла → (MIDI, слой силы 0…3 или None — все слои)
+_GTR_KAR = re.compile(r"^([a-g]b?)(\d)_(p|mp|mf|f|vl(\d))(?:_|$)")        # Karoryfer: «a2_f_rr1», «eb3_vl2_rr3_1»
+_GTR_FSBS = re.compile(r"^([A-G]#?)(\d)_s\d(_soft)?_\d+$")                 # FreePats FSBS: «A#2_s2_soft_01»
+_GTR_PLAIN = re.compile(r"^([A-G]#?)(\d)$")                                 # FreePats нейлон: «A#4»
+_GTR_LAYER = {"p": 0, "mp": 1, "mf": 2, "f": 3}
+
+
+def _parse_gtrnotes(where: str, blk: dict, norm: dict) -> None:
+    """Ноты и служебные поля gtrnotes (ставит воркер; пресет хранит блок без нот)."""
+    if "notes" in blk:
+        norm["notes"] = _parse_notes(where, blk["notes"], GTR_MAX_NOTES)
+    for k, lo, hi in (("_t0", 0.0, 86400.0), ("_until", 0.0, 86400.0), ("_ref_rms", 0.0, 1000.0),
+                      ("_tune", -100.0, 100.0)):
+        if _num(blk.get(k)):
+            norm[k] = min(max(float(blk[k]), lo), hi)
+    if isinstance(blk.get("_beats"), list):
+        norm["_beats"] = [float(b) for b in blk["_beats"] if _num(b)]
+
+
+def gtr_sample_info(name: str) -> tuple[int | None, int | None]:
+    """Высота (MIDI) и слой силы сэмпла по имени файла; слой None — у набора один слой."""
+    m = _GTR_KAR.match(name or "")
+    if m:
+        midi = 12 * (int(m.group(2)) + 1) + SEMITONE[m.group(1)[0]] - (1 if len(m.group(1)) > 1 else 0)
+        lay = _GTR_LAYER.get(m.group(3)) if not m.group(4) else min(3, int(m.group(4)) - 1)
+        return midi, lay
+    for rx in (_GTR_FSBS, _GTR_PLAIN):
+        m = rx.match(name or "")
+        if m:
+            midi = 12 * (int(m.group(2)) + 1) + SEMITONE[m.group(1)[0].lower()] + (1 if "#" in m.group(1) else 0)
+            soft = rx is _GTR_FSBS and bool(m.group(3))
+            return midi, (0 if soft else 2) if rx is _GTR_FSBS else None
+    return sample_midi(name), None
+
+
+def _gtr_kit(res, name: str, sr_out: int) -> dict:
+    """Набор → {midi: {слой: [(сэмпл, частота)]}} (сэмплы приведены к GTR_SAMPLE_RMS); сэмплы без высоты в имени —
+    под ключом None (глушение «чук»)."""
+    raw, ksr = _resource(res, "kit", name)
+    names = res.kit_names(name) if hasattr(res, "kit_names") else [""] * len(raw)
+    out: dict = {}
+    for smp, nm in zip(raw, names, strict=False):
+        x = np.asarray(smp, dtype=np.float64)
+        x = x.mean(axis=1) if x.ndim == 2 else x
+        r = _rms(x[: int(0.3 * ksr)])
+        if r <= EPS:
+            continue
+        midi, lay = gtr_sample_info(nm)
+        for li in ((lay, lay + 1) if lay is not None and _GTR_FSBS.match(nm or "") else
+                   (lay,) if lay is not None else (0, 1, 2, 3)):
+            out.setdefault(midi, {}).setdefault(min(li, 3), []).append((x * (GTR_SAMPLE_RMS / r), int(ksr)))
+    if not out:
+        raise ChainError(f"набор {name!r}: нет сэмплов")
+    return out
+
+
+def _gtr_pick(kit: dict, midi: float, layer: int, seed: int):
+    """Сэмпл ближайшей высоты нужного слоя (нет слоя — ближайший), повтор — по seed (место ноты в треке):
+    превью и полный трек берут тот же сэмпл. → (сэмпл, частота, высота сэмпла | None)."""
+    pitched = [k for k in kit if k is not None]
+    base = min(pitched, key=lambda k: (abs(k - midi), k)) if pitched else None
+    lays = kit[base]
+    li = min(lays, key=lambda k: (abs(k - layer), k))
+    opts = lays[li]
+    x, ksr = opts[seed % len(opts)]
+    return x, ksr, base
+
+
+def _gtr_voice(x: np.ndarray, ksr: int, sr: int, semis: float) -> np.ndarray:
+    """Сэмпл → частота выхода со сдвигом высоты на semis полутонов (пересэмплирование)."""
+    step = (ksr / sr) * 2 ** (semis / 12)
+    idx = np.arange(0, len(x) - 1, step)
+    return np.interp(idx, np.arange(len(x)), x)
+
+
+def _gtr_env(x: np.ndarray, sr: int, ref: float) -> np.ndarray:
+    """Громкость входа (старой гитары) по ходу к ref: окно GTR_ENV_WIN_S, шаг GTR_ENV_HOP_S, сглаживание ~1 с,
+    не дальше ±GTR_ENV_LIMIT_DB → множитель на каждый отсчёт."""
+    n = len(x)
+    win, hop = max(1, int(GTR_ENV_WIN_S * sr)), max(1, int(GTR_ENV_HOP_S * sr))
+    starts = np.arange(0, max(1, n - win + 1), hop)
+    r = np.array([np.sqrt(np.mean(x[i:i + win] ** 2)) for i in starts]) if n >= win else np.array([_rms(x)])
+    if len(starts) == 0 or n < win:
+        starts = np.array([0])
+    db = 20 * np.log10(np.maximum(r, EPS) / max(ref, EPS))
+    k = min(GTR_ENV_SMOOTH, len(db))
+    if k > 1:
+        pad = np.pad(db, (k // 2, k - 1 - k // 2), mode="edge")
+        db = np.convolve(pad, np.ones(k) / k, mode="valid")
+    db = np.clip(db, -GTR_ENV_LIMIT_DB, GTR_ENV_LIMIT_DB)
+    centers = starts + win // 2
+    return 10 ** (np.interp(np.arange(n), centers, db) / 20)
+
+
+def _gtr_palm(y: np.ndarray, sr: int) -> np.ndarray:
+    """Глушение ладонью: быстрый спад и срез верха."""
+    from scipy.signal import butter, lfilter
+    y = y * np.exp(-np.arange(len(y)) / (GTR_PALM_DECAY_S * sr))
+    b, a = butter(2, GTR_PALM_LP_HZ / (sr / 2))
+    return lfilter(b, a, y)
+
+
+def _gtrnotes(x, sr, p, res):
+    """Гитара по нотам: ноты (распознанные у трека — ставит воркер) играются сэмплами другой гитары. Вход — старая
+    гитара: в выход не идёт, задаёт громкость (сила удара — к _ref_rms, громкость по ходу — огибающая). strum=1 — бой:
+    удар вниз (на долю) — струны снизу вверх с разбегом spread_ms (тише — шире), вверх — сверху вниз и тише; глушёный
+    удар — «чук» набора mute_kit (нет — обрывки нот); одиночная короткая низкая — глушение ладонью; новый удар глушит
+    звенящие струны прежнего. strum=0 — ноты как распознаны."""
+    import guitarnotes
+    notes = p.get("notes") or []
+    if not notes and "_t0" in p:   # окно воркера, куда нот не попало (гитара вступает позже) — тишина, не ошибка
+        return np.zeros_like(x)
+    if not notes:
+        raise ChainError("gtrnotes: нет нот гитары — распознайте ноты трека (guitar_notes) и примените снова")
+    n, ch = x.shape
+    mono = x.mean(axis=1)
+    ref = float(p.get("_ref_rms") or 0.0) or max(_rms(mono), EPS)
+    t0_abs = float(p.get("_t0", 0.0))
+    until = float(p.get("_until", n / sr + 3600))
+    tune = float(p.get("_tune", 0.0))
+    kit = _gtr_kit(res, p["kit"], sr)
+    mute = _gtr_kit(res, p["mute_kit"], sr) if p.get("mute_kit") else None
+    vw = max(1, int(GTR_VEL_WIN_S * sr))
+
+    def vel(t):
+        i = int(t * sr)
+        r = _rms(mono[max(0, i):max(0, i) + vw]) if i < n else 0.0
+        return float(np.clip(0.5 + 20 * np.log10(max(r, EPS) / ref) / GTR_VEL_RANGE_DB, 0.0, 1.0))
+
+    y = np.zeros(n)
+    ringing: list = []   # [начало, конец звучания (индексы), голос, громкость, высота]
+
+    def flush(item, stop=None):
+        start, end, v, g, _m = item
+        if stop is not None and stop < end:
+            end = max(start, stop)
+            fade = min(int(GTR_CHOKE_S * sr), end - start)
+        else:
+            fade = min(int(GTR_RELEASE_S * sr), end - start)
+        a, b = max(0, start), min(n, end)
+        if b <= a:
+            return
+        seg = v[a - start:b - start].copy()
+        if fade > 0 and end <= n:
+            k = min(fade, len(seg))
+            seg[-k:] *= np.linspace(1, 0, k)
+        y[a:b] += g * seg
+
+    def play(t, m, length_s, layer, gain, mode=None):
+        seed = int(round((t0_abs + t) * 1000)) * 131 + int(m)
+        if mode == "mute":
+            smp, ksr, base = _gtr_pick(mute, m, layer, seed)
+            v = _gtr_voice(smp, ksr, sr, 0.0 if base is None else (m - base) + tune / 100)
+        else:
+            smp, ksr, base = _gtr_pick(kit, m, layer, seed)
+            v = _gtr_voice(smp, ksr, sr, (m - base) + tune / 100 if base is not None else tune / 100)
+            if mode == "frag":
+                k = min(len(v), int(GTR_MUTE_S * sr))
+                v = v[:k] * np.linspace(1, 0, k) if k else v[:0]
+            elif mode == "palm":
+                v = _gtr_palm(v, sr)
+        start = int(round(t * sr))
+        length = len(v) if mode in ("mute", "frag") else min(len(v), int((max(length_s, GTR_RING_S)
+                                                                           + GTR_RELEASE_S) * sr))
+        return [start, start + length, v[:length], gain, m]
+
+    strum = int(p.get("strum", 1)) == 1
+    rows = [[nt["t"], nt["t"] + nt["d"], nt["midi"][0], nt.get("vel", 0.8)] for nt in notes if nt["t"] < until]
+    if strum:
+        groups = guitarnotes.strikes(rows, p.get("_beats") or [])
+    else:   # ноты как распознаны: каждая — сама по себе
+        groups = [{"t": r[0], "notes": [r], "dir": "single", "muted": False, "palm": False} for r in rows]
+    for st in groups:
+        t = float(st["t"])
+        v = vel(t)
+        layer = min(3, int(v * 4))
+        many = len(st["notes"]) > 1
+        if strum and many:   # новый удар по струнам — звенящие ноты прежнего глохнут
+            stop = int(round(t * sr))
+            for item in ringing:
+                flush(item, stop)
+            ringing = []
+        elif strum:          # одиночная нота глушит ту же высоту
+            keep = []
+            for item in ringing:
+                if item[4] == st["notes"][0][2]:
+                    flush(item, int(round(t * sr)))
+                else:
+                    keep.append(item)
+            ringing = keep
+        ns = st["notes"]
+        if not strum:
+            for s0, e0, m, _v in ns:
+                ringing.append(play(s0, m, e0 - s0, layer, 1.0))
+            continue
+        if st["muted"]:
+            for k, (_s0, _e0, m, _v) in enumerate(ns):
+                ringing.append(play(t + k * 0.002, m, 0.0, layer, 1.0, "mute" if mute else "frag"))
+            continue
+        if st["palm"]:
+            s0, e0, m, _v = ns[0]
+            ringing.append(play(s0, m, e0 - s0, layer, 1.0, "palm"))
+            continue
+        if st["dir"] == "single":
+            s0, e0, m, _v = ns[0]
+            ringing.append(play(s0, m, e0 - s0, layer, 1.0))
+            continue
+        spread = float(p.get("spread_ms", 8.0)) / 1000 * (0.5 + (1.0 - v))
+        order = ns if st["dir"] == "down" else list(reversed(ns))
+        gain = 1.0 if st["dir"] == "down" else GTR_UP_GAIN
+        for k, (s0, e0, m, _v) in enumerate(order):
+            ringing.append(play(t + k * spread, m, e0 - s0, layer, gain))
+    for item in ringing:
+        flush(item)
+    y *= (ref / GTR_STRIKE_RMS) * _gtr_env(mono, sr, ref) * _db(p.get("output_db", 0.0))
+    return np.repeat(y[:, None], ch, axis=1)
+
+
 BLOCKS = {"gate": _gate, "eq": _eq, "comp": _comp, "drive": _drive, "amp": _amp,
           "cab": _cab, "reverb": _reverb, "delay": _delay, "gain": _gain, "sampler": _sampler,
           "bass": _bass, "synth": _synth, "chorus": _chorus, "phaser": _phaser, "flanger": _flanger,
           "tape": _tape, "spring": _spring, "tremolo": _tremolo, "perc": _perc, "glue": _glue, "limiter": _limiter,
-          "air": _air}
+          "air": _air, "gtrnotes": _gtrnotes}
 
 
 def process(audio, sr: int, chain, resources=None) -> np.ndarray:

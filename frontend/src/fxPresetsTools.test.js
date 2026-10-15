@@ -25,7 +25,9 @@ function needsFiles(p) {
 }
 
 // оркестровая замена мелодии (orch-lead) — не «готовая гитара»
-const guitars = grouped.filter((p) => (p.stems || []).includes('guitar') && !has(p, 'amp') && p.group !== 'orch-lead')
+// гитара «по нотам» (группа guitar-notes) играет сэмплами набора — ей файлы нужны по определению, здесь не она
+const guitars = grouped.filter((p) => (p.stems || []).includes('guitar') && !has(p, 'amp') && p.group !== 'orch-lead' &&
+  p.group !== 'guitar-notes')
 // басы — группа bass-tone (синт-басы набором — в группе bass-kit)
 const basses = grouped.filter((p) => p.group === 'bass-tone' && JSON.stringify(p.stems) === JSON.stringify(['bass']))
 

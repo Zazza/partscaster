@@ -342,6 +342,30 @@ func RegisterStudioTools(s *Server) {
 	})
 
 	s.Register(Tool{
+		Name: "guitar_notes",
+		Description: "Распознать ноты гитары трека (для звуков «Ноты переиграны другой гитарой» — блок движка gtrnotes): " +
+			"YourMT3+ и basic-pitch вместе, дорожка guitar (сделает стемы, если их нет). Результат хранится у трека и " +
+			"переиспользуется; применение такого звука к дорожке распознаёт само, если ещё не было. ~1 мин на видеокарте " +
+			"(в общей очереди с генерацией). force=true — распознать заново. Ответ {notes, engines, cached}.",
+		InputSchema: props(map[string]any{
+			"job_id": prop("ID джобы", "integer"),
+			"force":  prop("распознать заново, даже если ноты уже есть", "boolean"),
+		}, "job_id"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			id := argInt(args, "job_id")
+			if id <= 0 {
+				return "", fmt.Errorf("нужен job_id — ID джобы")
+			}
+			defer s.fxCache().Invalidate(id) // ноты другие — превью «по нотам» устарело
+			out, err := s.client.GuitarNotes(context.Background(), id, argBool(args, "force"))
+			if err != nil {
+				return "", err
+			}
+			return toJSON(out), nil
+		},
+	})
+
+	s.Register(Tool{
 		Name:        "dsp_variant_delete",
 		Description: "Удалить вариант эффекта/вклейки (файл + метрики). Деструктивное: требует confirm=true.",
 		InputSchema: props(map[string]any{

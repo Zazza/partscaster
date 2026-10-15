@@ -73,6 +73,20 @@ func (c *Client) MakeStemsWith(ctx context.Context, id int64, model string) (map
 	return out, nil
 }
 
+// GuitarNotes — распознать ноты гитары трека (блок движка gtrnotes «Гитара по нотам»): YourMT3+ и basic-pitch,
+// результат хранится у трека; force — распознать заново. Ответ {notes, engines, cached}.
+func (c *Client) GuitarNotes(ctx context.Context, id int64, force bool) (map[string]any, error) {
+	path := fmt.Sprintf("/jobs/%d/guitar_notes", id)
+	if force {
+		path += "?force=1"
+	}
+	var out map[string]any
+	if err := c.post(ctx, path, gpuTimeout, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DspVariantDelete — удалить вариант эффекта/вклейки (файл + метрики).
 func (c *Client) DspVariantDelete(ctx context.Context, id int64, fname string) (bool, error) {
 	var out struct {

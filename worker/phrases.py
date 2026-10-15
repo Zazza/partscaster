@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import json
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -21,7 +23,7 @@ DIR = Path(__file__).with_name("phrases")
 DRUM_KIT = "linn"   # сэмплы настоящих барабанов 80-х — ближе к живым, чем 808/909
 DRUM_PARTS = ("kick", "snare", "hh", "toms", "ride", "crash")
 PERC_PART = "perc"   # тишина под блок perc: перкуссия по сетке ложится поверх бита
-NOTE_BLOCKS = ("synth", "perc")   # блоки, которые сами играют ноты (notes от начала круга)
+NOTE_BLOCKS = ("synth", "perc", "gtrnotes")   # блоки, которые сами играют ноты (notes от начала круга)
 FADE_S = 0.004      # края записи: без щелчка на стыке круга
 DRY_RMS = 0.1       # −20 dBFS: гитарные записи выровнены к нему же
 DRY_PEAK = 0.7      # запас для цепочек с усилением (перегруз, компрессор с подъёмом)
@@ -270,6 +272,32 @@ def render_dry(phrase_id: str, tempo: float = 1.0, sr: int = SR, res=None) -> tu
     return parts, n / sr
 
 
+def notes_file(phrase_id: str) -> Path:
+    """Ноты гитарной фразы (распознаны тем же ансамблем, что ноты трека): phrases/<id>.notes.json."""
+    return DIR / f"{phrase_id}.notes.json"
+
+
+def gtrnotes_chain(chain, phrase_id: str, tempo: float = 1.0) -> list:
+    """Блоки gtrnotes на гитарной фразе — ноты, доли и строй фразы (с её темпом: время / tempo); присланные ноты и
+    служебные поля не берутся. Нет файла нот (не гитарная фраза) — блок без нот: движок скажет «нет нот»."""
+    chain = list(chain or [])
+    if not any(isinstance(b, dict) and b.get("type") == "gtrnotes" for b in chain):
+        return chain
+    f = notes_file(phrase_id)
+    data = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    k = 1.0 / float(tempo)
+    notes = [{"t": float(s) * k, "d": max(0.01, (float(e) - float(s)) * k), "midi": [int(m)], "vel": float(v)}
+             for s, e, m, v in data.get("notes") or []]
+    beats = [float(b) * k for b in data.get("beats") or []]
+    out = []
+    for b in chain:
+        if isinstance(b, dict) and b.get("type") == "gtrnotes":
+            b = {kk: vv for kk, vv in b.items() if not kk.startswith("_") and kk != "notes"}
+            b.update(notes=notes, _beats=beats, _tune=float(data.get("tune_cents") or 0.0))
+        out.append(b)
+    return out
+
+
 def a_rms(x: np.ndarray, sr: int) -> float:
     import fx_engine
     y = fx_engine.a_weight(np.asarray(x, dtype=np.float64), sr)
@@ -283,6 +311,8 @@ def _twice(chain, cycle_s: float) -> list:
         if b.get("type") in NOTE_BLOCKS and isinstance(b.get("notes"), list):
             b = dict(b, notes=list(b["notes"]) + [dict(nt, t=float(nt["t"]) + cycle_s) for nt in b["notes"]
                                                    if isinstance(nt, dict) and "t" in nt])
+            if isinstance(b.get("_beats"), list):   # gtrnotes: доли — тоже во втором круге (иначе там всё «вниз»)
+                b["_beats"] = list(b["_beats"]) + [float(x) + cycle_s for x in b["_beats"]]
         out.append(b)
     return out
 

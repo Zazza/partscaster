@@ -45,6 +45,7 @@ SYNTH_TYPES = ("synth", "chorus", "phaser", "flanger", "tape", "spring", "perc")
 MASTER_TYPES = ("glue", "limiter")
 GUITAR_TYPES = ("tremolo",)
 AIR_TYPES = ("air",)  # воздух выше 16 кГц — слой «живой звук» пресетов
+NOTE_GUITAR_TYPES = ("gtrnotes",)  # гитара по нотам распознавания (internal-guitar-notes)
 PREVIEW_RE = re.compile(r"^preview-fx-[0-9a-f]{8}\.flac$")
 TAIL = 3.0
 MAX_PREVIEWS = 8
@@ -1269,8 +1270,9 @@ class TestBlocksCopies(unittest.TestCase):
         # прежние типы — в прежнем порядке первыми; за ними блоки синтов (их порядок
         # не задан)
         self.assertEqual(tuple(b)[:len(TYPES)], TYPES, "типы блоков и их порядок показа")
-        self.assertEqual(set(tuple(b)[len(TYPES):]), set(SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES + AIR_TYPES),
-                         "блоки синтов, мастера, гитар и воздух")
+        later = SYNTH_TYPES + MASTER_TYPES + GUITAR_TYPES + AIR_TYPES + NOTE_GUITAR_TYPES
+        self.assertEqual(set(tuple(b)[len(TYPES):]), set(later),
+                         "блоки синтов, мастера, гитар, воздух и гитара по нотам")
 
     def test_copies_identical(self):
         src = BLOCKS_JSON.read_bytes()
@@ -1327,7 +1329,8 @@ BASE_PARAM_SPEC = {
 
 def _need(t):
     """Обязательные строковые поля блока для проверки parse_chain."""
-    return {"amp": {"model": "fake"}, "sampler": {"kit": "fake/kick"}, "bass": {"kit": "fake/bass"}}.get(t, {})
+    return {"amp": {"model": "fake"}, "sampler": {"kit": "fake/kick"}, "bass": {"kit": "fake/bass"},
+            "gtrnotes": {"kit": "fake/guitar"}}.get(t, {})
 
 
 @unittest.skipUnless(_HAS_NP, "нужны numpy/scipy (окружение воркера)")

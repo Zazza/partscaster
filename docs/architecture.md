@@ -49,7 +49,7 @@
 | `stems.py` | разделение на дорожки: demucs htdemucs (по умолчанию, грузится на вызов) или по выбору BS-Roformer-SW подпроцессом в отдельном окружении (`sep_run.py`); при сбое RoFormer — demucs |
 | `sep_run.py` | RoFormer-SW + DrumSep (барабаны по частям); запускается `~/sep-venv`-интерпретатором (`PARTSCASTER_SEP_PY`) |
 | `presets.py` | пресеты звука: проверка рецепта (правки дорожек + финал), встроенные пресеты, переходы статуса пресета у трека (`/sound-presets`, `/jobs/{id}/sound-presets/{pid}/state`) |
-| `genres.py` | жанровые пресеты звука (34 течения × 3): собирает встроенные из готовых цепочек студии по id — `fx_presets.json`, копия `frontend/src/fxPresets.js` (make mcp-data, деплоится вместе с воркером) |
+| `genres.py` | жанровые пресеты звука (34 течения по 3–4 варианта; 4 варианта — с гитарой «по нотам», цепочки guitar-notes-*): собирает встроенные из готовых цепочек студии по id — `fx_presets.json`, копия `frontend/src/fxPresets.js` (make mcp-data, деплоится вместе с воркером) |
 | `drumsynth.py` | драм-машины и синт-басы, которые воркер синтезирует сам (`fx_kit_install tr808 …`) |
 | `fx_engine.py` | звуковой движок: цепочка блоков gate/eq/comp/drive/amp/cab/reverb/delay/…/air на numpy/scipy, без сдвига во времени (`POST /jobs/{id}/fx`) |
 | `fx_nam.py` | усилитель NAM (neural-amp-modeler 0.12.2 из `PARTSCASTER_NAM_DEPS`): загрузка захвата `.nam`, замер задержки щелчком |

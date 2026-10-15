@@ -79,6 +79,8 @@ BEFORE = {
     "indiepop-dream": (-7, -9), "funk-funk": (-6, -10), "funk-disco": (-6, -10), "funk-boogie": (-6, -10),
     "soul-organ": (-7, -10), "soul-rhodes": (-7, -11), "soul-strings": (-7, -11), "lounge-rhodes": (-8, -11),
     "lounge-piano": (-8, -12), "lounge-bossa": (-8, -10),
+    # варианты с гитарой «по нотам» (internal-guitar-notes): цели из таблицы GENRES, как у прочих
+    "indie-acoustic": (-7, -8), "garage-notesfuzz": (-7, -6), "indiepop-cleangtr": (-7, -9), "lounge-nylon": (-8, -9),
 }
 
 

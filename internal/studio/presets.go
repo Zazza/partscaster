@@ -369,8 +369,8 @@ func ensurePresetStems(ctx context.Context, svc yue.Service, id int64, specs []y
 	return nil
 }
 
-// ensurePresetKits — наборы сэмплов цепочек движка (kit/kit_open/kit_mid/kit_low у sampler, kit у bass и perc:
-// «<набор>/<часть>»), которых нет на воркере, — установить по разу на набор
+// ensurePresetKits — наборы сэмплов цепочек движка (kit/kit_open/kit_mid/kit_low у sampler, kit у bass и perc,
+// kit/mute_kit у gtrnotes: «<набор>/<часть>»), которых нет на воркере, — установить по разу на набор
 func ensurePresetKits(ctx context.Context, svc yue.Service, specs []yue.PresetSpec, parts []SectionSpec) error {
 	var need []string
 	chains := make([][]map[string]any, 0, len(specs)+len(parts))
@@ -382,7 +382,7 @@ func ensurePresetKits(ctx context.Context, svc yue.Service, specs []yue.PresetSp
 	}
 	for _, chain := range chains {
 		for _, b := range chain {
-			for _, k := range []string{"kit", "kit_open", "kit_mid", "kit_low"} {
+			for _, k := range []string{"kit", "kit_open", "kit_mid", "kit_low", "mute_kit"} {
 				if v, _ := b[k].(string); v != "" && !slices.Contains(need, v) {
 					need = append(need, v)
 				}

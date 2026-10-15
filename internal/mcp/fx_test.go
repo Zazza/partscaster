@@ -240,7 +240,8 @@ var fxBlockTypes = []string{"gate", "eq", "comp", "drive", "amp", "cab", "reverb
 	"synth", "chorus", "phaser", "flanger", "tape", "spring", // синтезатор и эффекты к нему
 	"perc",            // перкуссия по сетке
 	"glue", "limiter", // мастер
-	"tremolo"} // готовые гитары (сёрф, тремоло-пульс)
+	"tremolo",  // готовые гитары (сёрф, тремоло-пульс)
+	"gtrnotes"} // гитара по нотам распознавания (internal-guitar-notes)
 
 func TestFxApplyPassesPreview(t *testing.T) {
 	t.Parallel()

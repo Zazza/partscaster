@@ -174,6 +174,10 @@ export function YueGetServerURL() {
   return window['go']['main']['App']['YueGetServerURL']();
 }
 
+export function YueGuitarNotes(arg1, arg2) {
+  return window['go']['main']['App']['YueGuitarNotes'](arg1, arg2);
+}
+
 export function YueImportRecipe(arg1, arg2) {
   return window['go']['main']['App']['YueImportRecipe'](arg1, arg2);
 }

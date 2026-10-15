@@ -7,7 +7,7 @@ import {
   YueTranscribeFile, YueTranscribeJob, YueImportTrack, YueEnsureMp3, YueJobScore, YueJobAbcText, YueJobPreview, YueSubmitOverdub,
   YueJobPeaks, YueJobSpectrumPNG,
   YueRecognizeLyricsFile, YueAdaptLyrics, YueJobLyrics,
-  YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YuePlayLoop, YueFxKitProgress, YueInstallEngineModel, YueEngineModelProgress,
+  YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YueGuitarNotes, YuePlayLoop, YueFxKitProgress, YueInstallEngineModel, YueEngineModelProgress,
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueCorpusCreate, YueCorpusAddTracks, YueCorpusBuild, YueCorpusList, YueCorpusGet, YueCorpusTracks,
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
@@ -74,6 +74,8 @@ export const api = {
   // фразы «Инструментов»: каталог, круг через цепочку, круг по кругу в плеере с места phase
   fxPhrases: () => YueFxPhrases(),
   fxPhrase: (req) => YueFxPhrase(req),
+  // ноты гитары трека (распознавание, кэш у трека; force — заново) → { notes, engines, cached }
+  guitarNotes: (id, force) => YueGuitarNotes(id, !!force),
   playLoop: (file, phase) => YuePlayLoop(file, phase),
   // прогресс установки набора сэмплов на воркере ({} — ничего не ставится)
   fxKitProgress: () => YueFxKitProgress(),

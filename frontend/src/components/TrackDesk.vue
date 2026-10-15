@@ -20,6 +20,7 @@ import { DRUM_KITS, DRUM_TREATMENTS } from '../drumKits.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { insertTitle, insertWindow } from '../insertLabels.js'
 import { deskRows, previewWindow, applyWindow, presetsFor, rhythmSection, stemLevels, stemAudibility } from '../trackDesk.js'
+import { notesHint } from '../guitarNotesHint.js'
 import { stemPlace } from '../mixDesk.js'
 
 const props = defineProps({
@@ -71,6 +72,10 @@ const listenWin = computed(() => (editing.value && editing.value.to > editing.va
   : previewWindow(props.sel, props.cursor, props.job.duration_sec)))
 
 onMounted(loadAssets)
+// гитара по нотам: какими моделями воркер распознаёт ноты (или что распознавание не установлено)
+const workerCfg = ref(null)
+onMounted(async () => { try { workerCfg.value = await api.workerConfig() } catch { workerCfg.value = null } })
+const gnotesHint = computed(() => (picked.value ? notesHint(picked.value.chain, workerCfg.value, t) : ''))
 async function loadAssets() {
   try { assets.value = (await api.fxAssets()) || { amps: [], irs: [], kits: [] } } catch { /* старый воркер — ошибка покажется при «стало» */ }
 }
@@ -311,6 +316,7 @@ async function upload(kind) {
                 @click="fine = !fine">{{ fine ? t('desk.fine.hide') : t('desk.fine') }}</button>
       </div>
       <p v-if="picked" class="muted voice-hint">{{ tr(picked.note) }}</p>
+      <p v-if="gnotesHint" class="muted voice-hint">{{ gnotesHint }}</p>
       <ChainEditor v-if="fine" v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
       <p v-if="missing.length" class="err">{{ t('instr.needAmp') }}</p>
       <div class="dsp-row">

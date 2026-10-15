@@ -122,6 +122,7 @@
 | `YUE2_MAX_TOKENS` | `16000` | бюджет семантических токенов на песню ≈ макс. длина (дефолт протокола 9000 ≈ 4.5–6 мин; 16000 ≈ до ~10 мин; пик VRAM растёт с длиной) |
 | `YUE2_CFG_SCALE` | `1.5` | следование стилю (classifier-free guidance): выше — точнее, но суше |
 | `PARTSCASTER_SEEDVC_DIR` | `~/partscaster/seedvc` | каталог Seed-VC («голос альбома», необязательно) — см. ниже |
+| `PARTSCASTER_NOTES_DIR` | `~/partscaster/notes` | каталог распознавания нот гитары (YourMT3+ и basic-pitch, необязательно) — см. ниже |
 | `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | интерпретатор окружения разделения (RoFormer) — см. ниже |
 | `PARTSCASTER_SEP_MODELS` | `~/sep-models` | каталог весов RoFormer/DrumSep (~1,1 ГБ, качаются при первом разделении) |
 | `PARTSCASTER_STEMS_MODEL` | — | `demucs` — откат: разделять demucs, даже если RoFormer выбран в настройках и установлен |
@@ -167,6 +168,31 @@
   длительности голоса.
 - Лицензия Seed-VC — GPL-3.0: ставится пользователем явно и работает отдельной
   программой, код Partscaster под неё не попадает.
+
+## Распознавание нот гитары (необязательно)
+
+Звуки «Ноты переиграны другой гитарой» (блок движка `gtrnotes`) играют ноты гитары трека, распознанные
+двумя моделями: [YourMT3+](https://github.com/mimbres/YourMT3) (GPL-3.0) и
+[basic-pitch](https://github.com/spotify/basic-pitch) (Apache-2.0). Обе — отдельная установка в своём каталоге
+и venv; воркер вызывает их отдельной программой (`notes_run.py`). Без установки звуки «по нотам» отвечают 503
+с подсказкой, остальное работает как раньше; ноты, уже распознанные у трека, играются и без установки.
+
+```bash
+~/partscaster/current/notes_install.sh                      # в ~/partscaster/notes
+~/partscaster/current/notes_install.sh /data/notes          # или в свой каталог
+~/partscaster/current/notes_install.sh --basic-pitch-only   # без YourMT3+ (ноты беднее, на перегрузе хуже)
+```
+
+- Нужно: `git`, [`uv`](https://docs.astral.sh/uv/), **~8 ГБ** на время установки, ~5 ГБ после (venv с PyTorch ~4,
+  веса YourMT3+ 0,6 — с закреплённой ревизии Hugging Face).
+- Каталог не по умолчанию — `PARTSCASTER_NOTES_DIR=<каталог>` в `~/partscaster/worker.env` и перезапуск
+  воркера. Проверка: MCP `doctor` или `GET /config` (`notes_available`, `notes_engines`).
+- PyTorch — с индекса CUDA 12.8; другая CUDA — `PARTSCASTER_TORCH_INDEX=<индекс>`.
+- Видеокарта: распознавание идёт в общей очереди с генерацией (~1 мин на трек); не хватило видеопамяти (рядом
+  Stable Diffusion, Ollama) — ошибка «освободите видеопамять», как у генерации. Без CUDA YourMT3+ считает на
+  процессоре — десятки минут на трек.
+- Наборы гитар (Emilyguitar, Shinyguitar, FSBS, нейлон — CC0, ~0,7 ГБ) качаются как остальные наборы движка:
+  по требованию или `kits_install.py`.
 
 ## Звуковой движок и усилители NAM
 

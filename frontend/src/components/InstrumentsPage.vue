@@ -21,6 +21,7 @@ import { fxPresets } from '../fxPresets.js'
 import ChainEditor from './ChainEditor.vue'
 import { toWorkerChain, fromWorkerChain, missingRequired, fillAmp } from '../fxChain.js'
 import { instrumentTree, familyOptions, subOptions, itemOptions, pathOf } from '../presetGroups.js'
+import { notesHint } from '../guitarNotesHint.js'
 import { familyOf, phraseStems, pagePresets, phaseAfter, phraseFamily, phraseChain } from '../phraseLoop.js'
 
 const { t, locale } = useI18n()
@@ -98,9 +99,14 @@ async function loadAssets() {
   try { assets.value = (await api.fxAssets()) || { amps: [], irs: [] } } catch { assets.value = { amps: [], irs: [] } }
 }
 
+// гитара по нотам: какими моделями воркер распознаёт ноты (или что не установлено)
+const workerCfg = ref(null)
+const gnotesHint = computed(() => (preset.value ? notesHint(preset.value.chain, workerCfg.value, t) : ''))
+
 async function loadConfig() {
   try {
     const c = await api.workerConfig()
+    workerCfg.value = c
     phrasesKnown.value = !!(c && c.fx_phrases)
     engineOn.value = !!(c && c.fx_engine)
   } catch { phrasesKnown.value = false }
@@ -343,6 +349,7 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
                   :aria-pressed="o.value === phraseId" @click="phraseId = o.value">{{ o.label }}</button>
         </div>
         <p v-if="preset" class="muted voice-hint">{{ tr(preset.note) }}</p>
+        <p v-if="gnotesHint" class="muted voice-hint">{{ gnotesHint }}</p>
         <div class="corpus-actions">
           <template v-if="!nameMode">
             <button class="ghost small-btn" :title="t('instr.my.saveAs.tip')" @click="askName('new')">{{ t('instr.my.saveAs') }}</button>

@@ -34,7 +34,9 @@ WORKER = Path(__file__).resolve().parent
 ROOT = WORKER.parent
 
 FAMILIES = ("Рок", "Тяжёлое", "Электроника", "Поп и другое")
-KNOWN_KITS = {"osdk", "tr808", "tr909", "linn", "cr78", "simmons", "growlybass", "synthbass", "salamander"}
+KNOWN_KITS = {"osdk", "tr808", "tr909", "linn", "cr78", "simmons", "growlybass", "synthbass", "salamander",
+              # гитары «по нотам» (internal-guitar-notes): ставятся по требованию, как остальные наборы
+              "emilyguitar", "shinyguitar", "fsbsguitar", "nylonguitar"}
 DRUM_STEMS = {"drums", "kick", "snare", "toms", "hh", "ride", "crash"}
 LEGACY = {"transmission", "sex-on-fire", "live-rhythm"}
 SEP = " · "

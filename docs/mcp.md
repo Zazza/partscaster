@@ -93,7 +93,7 @@ env = { "PARTSCASTER_URL" = "http://gpu-host:8091" }
 (`ducking`, `key=drums`) — только со `stem`: ключ — стем трека; на весь трек — ошибка. Реверб и
 дилей со `stem` в окне `from`–`to` продолжают звучать хвостом после `to`.
 
-**Студия трека**: `make_stems` (demucs) · `make_minus` · `overdub` (стиль + лирика) · `import_track` (сразу с `title`/`folder`) · `transcribe_job` (партитура для трека без неё — импорт без транскрипции или с упавшей) · `voice_convert` (ЭКСПЕРИМЕНТ «голос альбома»: голос трека тембром образца, Seed-VC на воркере; голос дрожит — docs/deployment.md) ·
+**Студия трека**: `make_stems` (demucs) · `make_minus` · `overdub` (стиль + лирика) · `import_track` (сразу с `title`/`folder`) · `transcribe_job` (партитура для трека без неё — импорт без транскрипции или с упавшей) · `guitar_notes` (ноты гитары трека для звуков «Ноты переиграны другой гитарой» — блок движка gtrnotes; один раз на трек, `force` — заново) · `voice_convert` (ЭКСПЕРИМЕНТ «голос альбома»: голос трека тембром образца, Seed-VC на воркере; голос дрожит — docs/deployment.md) ·
 `dsp_chains` / `dsp_presets` (наборы педалей: `steps` для превью/применения) / `dsp_apply` (`steps` —
 цепочка по порядку; без `stem` — вариант `dsp-pedals.flac`) / `dsp_preview` (кусок `from`–`to`, на дорожку `stem`, цепочка по порядку
 `steps: [{chain, params, off}]`, `solo` — только обработанная дорожка без микса; результат — вариант `dsp-preview-*.flac` с метриками) / `dsp_variants`

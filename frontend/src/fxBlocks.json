@@ -1494,5 +1494,68 @@
     "integer": true
    }
   ]
+ },
+ "gtrnotes": {
+  "label": {
+   "ru": "Гитара по нотам",
+   "en": "Guitar by notes"
+  },
+  "params": [
+   {
+    "id": "strum",
+    "default": 1,
+    "min": 0,
+    "max": 1,
+    "step": 1,
+    "integer": true,
+    "label": {
+     "ru": "бой: удары вниз/вверх, глушение (0 — ноты как распознаны)",
+     "en": "strumming: down/up strokes, muting (0 — notes as recognized)"
+    }
+   },
+   {
+    "id": "spread_ms",
+    "default": 8,
+    "min": 2,
+    "max": 25,
+    "step": 1,
+    "label": {
+     "ru": "разбег по струнам в ударе, мс (тихий удар — шире)",
+     "en": "strum spread across strings, ms (softer strike — wider)"
+    }
+   },
+   {
+    "id": "output_db",
+    "default": 0,
+    "min": -24,
+    "max": 12,
+    "step": 0.5,
+    "label": {
+     "ru": "громкость, дБ",
+     "en": "output, dB"
+    }
+   }
+  ],
+  "strings": [
+   {
+    "id": "kit",
+    "asset": "kit",
+    "required": true,
+    "label": {
+     "ru": "гитара (набор сэмплов)",
+     "en": "guitar (sample kit)"
+    }
+   },
+   {
+    "id": "mute_kit",
+    "asset": "kit",
+    "required": false,
+    "default": "",
+    "label": {
+     "ru": "глушёные удары (набор; пусто — обрывки нот)",
+     "en": "muted strums (kit; empty — note fragments)"
+    }
+   }
+  ]
  }
 }

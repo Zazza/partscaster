@@ -143,11 +143,11 @@ describe('mergeInstruments — общий список', () => {
     expect(m.accent).toBe(0.5)
   })
 
-  test('groupPresets: свой «guitar-drive» — последним в группе «Гитара · Перегруз»', () => {
+  test('groupPresets: свой «guitar-drive» — последним в группе «Гитара · Перегруз — звук, игра та же»', () => {
     const b = [...builtin(), { ...builtin()[1], id: 'g-drive-2' }]
     const groups = groupPresets(mergeInstruments(b, [mineDrive()], 'ru'), 'ru')
     const drive = groups.find((g) => g.group === 'guitar-drive')
-    expect(drive.label).toBe('Гитара · Перегруз')
+    expect(drive.label).toBe('Гитара · Перегруз — звук, игра та же')
     expect(drive.items.map((p) => p.id)).toEqual(['g-drive', 'g-drive-2', 'my-7'])
     // своя группа не появилась отдельно — порядок групп как у готовых
     expect(groups.map((g) => g.group)).toEqual(['guitar-clean', 'guitar-drive', 'synth-pad'])

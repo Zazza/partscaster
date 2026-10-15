@@ -65,6 +65,7 @@ POST /jobs/{id}/overdub {style, lyrics, seed?, gain, abc?} → джоба-пар
                        lyrics — текст голоса, без него модель поёт вокализ)
 POST /jobs/{id}/stems  demucs → stem-{drums,bass,other,vocals}.flac
 GET  /jobs/{id}/stems  список стемов
+POST /jobs/{id}/guitar_notes?force=  ноты гитары трека (YourMT3+ ∪ basic-pitch) → guitar-notes.json; {notes, engines, cached}
 
 POST /corpus           {name} — профиль из корпуса
 POST /corpus/{id}/track  трек (байты): DSP + транскрипция + Whisper

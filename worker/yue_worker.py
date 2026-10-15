@@ -44,6 +44,7 @@ from dsp import analyze_file, beat_grid, vocal_activity
 from sheetsage import transcribe as ss_transcribe
 from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_DEMUCS, MODEL_ROFORMER, roformer_available,
                    roformer_enabled, separate as demucs_separate)
+import notes as notesmod
 import voice as voicevc
 
 log = logging.getLogger("partscaster-worker")
@@ -1086,6 +1087,9 @@ def get_config():
         "whisper_available": WHISPER_PY.is_file(),
         "seedvc_dir": str(voicevc.SEEDVC_DIR),
         "seedvc_available": voicevc.available(),
+        # распознавание нот гитары (блок gtrnotes «Гитара по нотам»): окружение worker/notes_install.sh
+        "notes_available": notesmod.available(),
+        "notes_engines": notesmod.engines(),
         "auto_stems_instrumental": auto_stems_instrumental(),
         # выбор пользователя и чем дорожки будут делаться на деле (RoFormer — если выбран и установлен)
         "stems_pref": stems_pref(),
@@ -2617,6 +2621,158 @@ def job_stems(job_id: int, model: str | None = None):
     return result
 
 
+NOTES_NOT_INSTALLED = "распознавание нот не установлено: worker/notes_install.sh"
+# распознавание трека — одно за раз: параллельный запрос ждёт и берёт готовый кэш
+_notes_locks: dict[int, threading.Lock] = {}
+_notes_locks_guard = threading.Lock()
+
+
+def _stem_print(path: Path) -> dict:
+    """Отпечаток дорожки гитары: дорожку пересобрали («разделить подробнее») — ноты распознаются заново."""
+    st = path.stat()
+    return {"mtime_ns": st.st_mtime_ns, "size": st.st_size}
+
+
+def _notes_cache_fresh(cache: Path, gpath: Path) -> dict | None:
+    """Кэш нот трека, если он про текущую дорожку гитары; битый или устаревший — None. Кэш без отпечатка (старый
+    формат) свеж, пока дорожка не новее его файла."""
+    try:
+        data = json.loads(cache.read_text())
+    except (OSError, ValueError):
+        return None
+    if not gpath.is_file():
+        return data
+    stem = data.get("stem")
+    if isinstance(stem, dict):
+        return data if stem == _stem_print(gpath) else None
+    return data if cache.stat().st_mtime_ns >= gpath.stat().st_mtime_ns else None
+
+
+def _guitar_notes(job_id: int, force: bool = False) -> tuple[dict, bool]:
+    """Ноты гитары трека (кэш jobs/<id>/guitar-notes.json; нет или force — распознать под очередью видеокарты):
+    ансамбль YourMT3+ ∪ basic-pitch (notes.ensemble), сила — громкость дорожки гитары, доли — по барабанам (или
+    миксу), строй — основной тон баса и голоса. → (кэш, был ли готов). Ошибки — HTTPException с понятным текстом."""
+    row = _job_row(job_id)
+    if row is None or not row["audio_file"]:
+        raise HTTPException(404, "job or audio not found")
+    jdir = JOBS_DIR / str(job_id)
+    cache = jdir / notesmod.CACHE_NAME
+    gpath = jdir / "stem-guitar.flac"
+    if cache.is_file() and not force:
+        data = _notes_cache_fresh(cache, gpath)
+        if data is not None:
+            return data, True
+    if not gpath.is_file():
+        try:
+            _ensure_stems(job_id)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
+    if not gpath.is_file():
+        raise HTTPException(422, "у трека нет дорожки гитары (guitar) — нечего распознавать")
+    if not notesmod.available():
+        raise HTTPException(503, NOTES_NOT_INSTALLED)
+    with _notes_locks_guard:
+        lock = _notes_locks.setdefault(job_id, threading.Lock())
+    with lock:   # весь расчёт и запись кэша — одним запросом на трек; соседний ждёт и берёт готовое
+        if cache.is_file() and not force:
+            data = _notes_cache_fresh(cache, gpath)
+            if data is not None:
+                return data, True
+        return _guitar_notes_compute(row, jdir, cache, gpath), False
+
+
+def _guitar_notes_compute(row, jdir: Path, cache: Path, gpath: Path) -> dict:
+    """Распознать ноты дорожки гитары (под очередью видеокарты) и записать кэш трека (под блокировкой трека)."""
+    import soundfile as sf
+    import uuid
+    stem_print = _stem_print(gpath)
+    try:
+        with gpu_queue("notes"), tempfile.TemporaryDirectory(prefix="notes-") as tmp:
+            raw = notesmod.run(gpath, Path(tmp) / "raw.json")
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        if _is_cuda_oom(e):
+            raise HTTPException(503, f"распознавание нот: {friendly_error(e)}") from e
+        log.exception("guitar notes failed")
+        raise HTTPException(500, f"распознавание нот не удалось: {e}") from e
+    guitar, sr = sf.read(str(gpath), always_2d=True, dtype="float32")
+    notes = notesmod.velocities(notesmod.ensemble(raw), guitar, sr)
+
+    def _stem(name):
+        p = jdir / name
+        if not p.is_file():
+            return None
+        x, xsr = sf.read(str(p), always_2d=True, dtype="float32")
+        return x if xsr == sr else None
+
+    drums = _stem("stem-drums.flac")
+    if drums is None:
+        drums = _stem(row["audio_file"])
+    tune_src = [(x, lo, hi) for x, lo, hi in ((_stem("stem-bass.flac"), 35, 300), (_stem("stem-vocals.flac"), 80, 700))
+                if x is not None]
+    out = {"version": notesmod.CACHE_VERSION, "engines": list(raw.get("engines") or notesmod.engines()),
+           "stem": stem_print,
+           "notes": [[round(s0, 4), round(e0, 4), int(m), round(v, 3)] for s0, e0, m, v in notes],
+           "beats": notesmod.beats(drums, sr) if drums is not None else [],
+           "tune_cents": notesmod.tuning(tune_src, sr)}
+    tmp_cache = cache.with_name(f"{cache.name}.{uuid.uuid4().hex[:8]}.part")
+    tmp_cache.write_text(json.dumps(out))
+    tmp_cache.replace(cache)
+    return out
+
+
+@app.post("/jobs/{job_id}/guitar_notes")
+def job_guitar_notes(job_id: int, force: bool = False):
+    """Распознать ноты гитары трека для блока gtrnotes («Ноты переиграны другой гитарой»): результат хранится у трека
+    и переиспользуется всеми звуками; ?force=1 — заново. → {notes, engines, cached}."""
+    out, cached = _guitar_notes(job_id, force)
+    return {"notes": len(out.get("notes") or []), "engines": out.get("engines") or [], "cached": cached}
+
+
+GTR_LEAD_S = 8.0   # gtrnotes: нота, начатая раньше окна, ещё звучит (сэмпл гитары — до нескольких секунд)
+
+
+def gtrnotes_fill(chain: list, job_id: int) -> list:
+    """Блоки gtrnotes цепочки (присланной для трека): ноты, доли и строй — из кэша трека (секунды трека; нет кэша —
+    распознать). Присланные ноты и служебные поля не берутся: их ставит только воркер."""
+    if not any(b.get("type") == "gtrnotes" for b in chain):
+        return chain
+    data, _ = _guitar_notes(job_id)
+    notes = [{"t": float(s0), "d": max(0.01, float(e0) - float(s0)), "midi": [int(m)], "vel": float(v)}
+             for s0, e0, m, v in data.get("notes") or []]
+    if not notes:
+        raise HTTPException(422, "у трека не распознано ни одной ноты гитары — нечего играть другой гитарой")
+    out = []
+    for b in chain:
+        if b.get("type") == "gtrnotes":
+            b = {k: v for k, v in b.items() if not k.startswith("_") and k != "notes"}
+            b.update(notes=notes, _beats=[float(x) for x in data.get("beats") or []],
+                     _tune=float(data.get("tune_cents") or 0.0))
+        out.append(b)
+    return out
+
+
+def gtrnotes_window(b: dict, frm: float, win: float, track=None) -> dict:
+    """Ноты и доли gtrnotes (секунды трека) → для окна [frm, frm + win): сдвиг на frm; отзвучавшие задолго до окна
+    (GTR_LEAD_S) и начатые после — отброшены; _t0 — начало окна в треке (сэмплы выбираются по месту ноты в треке —
+    превью звучит как тот же кусок трека); _ref_rms — средняя громкость входа (старой гитары) по ВСЕМУ треку."""
+    import numpy as np
+    import fx_engine
+    ring = fx_engine.GTR_RING_S + fx_engine.GTR_RELEASE_S   # короткая нота звенит хотя бы столько
+    notes = [dict(n, t=n["t"] - frm) for n in b.get("notes") or []
+             if -GTR_LEAD_S < n["t"] - frm < win and n["t"] - frm + max(n["d"], ring) > 0]
+    beats = [x - frm for x in b.get("_beats") or [] if -2.0 < x - frm < win + 2.0]
+    blk = dict(b, notes=notes, _beats=beats, _t0=frm, _until=win)
+    if track is not None:
+        x = np.asarray(track, dtype=np.float64)
+        x = x.mean(axis=1) if x.ndim == 2 else x
+        frames = [np.sqrt(np.mean(x[i:i + 4096] ** 2)) for i in range(0, max(1, len(x) - 4096), 4096)]
+        loud = [f for f in frames if f > 1e-6]
+        blk["_ref_rms"] = float(np.median(loud)) if loud else 0.0
+    return blk
+
+
 @app.post("/jobs/{job_id}/mp3")
 def job_mp3(job_id: int):
     """Ленивая конвертация в mp3 320 (для импортированных треков)."""
@@ -3279,8 +3435,12 @@ def _fx_render(job_id: int, req: FxIn) -> dict:
         if part.shape[1] != track.shape[1]:
             part = np.repeat(part.mean(axis=1, keepdims=True), track.shape[1], axis=1)
 
+    # гитара по нотам: ноты, доли и строй — из распознавания трека (нет — распознать сейчас, под очередью видеокарты)
+    chain = gtrnotes_fill(chain, job_id)
     if req.preview:
         used = [src] if req.source == "mix" else [src, jdir / f"stem-{req.source}.flac"]
+        if any(b["type"] == "gtrnotes" for b in chain):
+            used.append(jdir / notesmod.CACHE_NAME)   # ноты распознали заново — превью новое
         # ноты синта в запросе — от начала трека, превью считает кусок с from: сдвинуть на окно
         full = None
         if req.source == "mix" and any(b["type"] == "limiter" for b in chain):
@@ -3444,6 +3604,9 @@ def synth_window(chain: list, frm: float, win: float, track=None, sr: int = 0) -
         if b["type"] == "perc":
             out.append(perc_window(b, frm, win, track, sr))
             continue
+        if b["type"] == "gtrnotes":
+            out.append(gtrnotes_window(b, frm, win, track))
+            continue
         if b["type"] == "tremolo":
             # фаза качания — от времени в треке: кусок окна начинается с frm (служебное поле — только от воркера)
             out.append(dict({k: v for k, v in b.items() if not k.startswith("_")}, _t0=frm))
@@ -3560,8 +3723,8 @@ def _fx_stamp(paths: list[Path], chain: list) -> list:
     Пересобрали дорожки или перезалили захват под тем же именем — превью новое, не из кэша."""
     files = list(paths)
     for blk in chain:
-        for key in ("kit", "kit_open", "kit_mid", "kit_low"):
-            if blk.get("type") in ("sampler", "bass", "perc", "synth") and blk.get(key):
+        for key in ("kit", "kit_open", "kit_mid", "kit_low", "mute_kit"):
+            if blk.get("type") in ("sampler", "bass", "perc", "synth", "gtrnotes") and blk.get(key):
                 try:
                     files += _kit_files(_kit_path(blk[key]))
                 except KeyError:
@@ -3886,6 +4049,33 @@ FX_KITS = {
     # драм-машины и синт-басы — воркер синтезирует сам (drumsynth.py): без сети и чужих лицензий
     **{k: {"synth": "drums"} for k in ("tr808", "tr909", "linn", "cr78", "simmons")},
     "synthbass": {"synth": "bass"},
+    # гитары для блока gtrnotes («Ноты переиграны другой гитарой»), CC0; ноты — по именам файлов (gtr_sample_info)
+    "emilyguitar": {  # Karoryfer Emilyguitar: Epiphone, звукосниматели напрямую (DI), 4 слоя силы × 3 повтора
+        "repo": "sfzinstruments/karoryfer.emilyguitar",
+        "ref": "b4920dc662fd9cad6dcaccdeecffdd91c8725d8c",
+        "parts": {"notes": ("notes", r"[a-g]b?\d_(?:p|mp|mf|f)_rr\d\.wav"),
+                  "mute": ("noises", r"muted\d_rr\d\.wav")},   # глушёные удары («чук»)
+        "max_s": 3.0,   # нота дольше не звенит (бой — доли секунды): память — 216 сэмплов
+    },
+    "shinyguitar": {  # Karoryfer Shinyguitar: полуакустика-архтоп, канал микрофона (ближе всего к акустике)
+        "repo": "sfzinstruments/karoryfer.shinyguitar",
+        "ref": "57243cca85277dbcc120ce17c6178032f93c80f3",
+        "parts": {"acoustic": ("Samples/acoustic", r"[a-g]b?\d_vl\d_rr\d_1\.wav"),
+                  "mute": ("Samples/acoustic", r"mute_strings\d_rr\d_1\.wav")},
+        "max_s": 3.0,
+    },
+    "fsbsguitar": {  # FreePats Electric Guitar FSBS: Fender, бриджевый звукосниматель напрямую (DI), 2 слоя силы
+        "repo": "freepats/electric-guitar-FSBS-direct",
+        "ref": "4c1d54601836c3e1a262b0bb0f3dea0c0a881ad3",
+        "parts": {"guitar": ("samples/bridge", r"[A-G]#?\d_s\d(?:_soft)?_\d+\.wav")},
+        "max_s": 3.0,
+    },
+    "nylonguitar": {  # FreePats Spanish Classical Guitar: нейлон, один слой
+        "repo": "freepats/spanish-classical-guitar",
+        "ref": "6f4eb1b092acc88f5448cea1a0001bd07b971af8",
+        "parts": {"guitar": ("samples", r"[A-G]#?\d\.flac")},
+        "max_s": 3.0,
+    },
 }
 FX_KIT_SR = 48000   # частота синтезированных наборов
 FX_KIT_PART_RE = re.compile(r"^[a-z0-9-]{1,40}$")
@@ -3993,9 +4183,11 @@ def fx_phrase(req: PhraseIn):
     src = phrases.DIR / f"{req.phrase}.flac"
     # бас фразы — набором бас-гитары (если есть): его файлы тоже в ключе
     src_chain = [{"type": "bass", "kit": phrases.BASS_KIT}] if phrases.PHRASES[req.phrase]["family"] == "bass" else []
+    chain = phrases.gtrnotes_chain(chain, req.phrase, req.tempo)   # гитара по нотам — по нотам самой фразы
+    srcs = [p for p in (src, phrases.notes_file(req.phrase)) if p.is_file()]
     key = json.dumps({"phrase": req.phrase, "tempo": round(req.tempo, 4), "chain": chain,
                       "stems": sorted(req.stems), "bypass": req.bypass, "engine": fx_engine.ENGINE_VERSION,
-                      "files": _fx_stamp([src] if src.is_file() else [], chain + src_chain)}, sort_keys=True)
+                      "files": _fx_stamp(srcs, chain + src_chain)}, sort_keys=True)
     fname = f"phrase-{hashlib.sha1(key.encode()).hexdigest()[:12]}.wav"
     d = _phrase_dir()
     target = d / fname
