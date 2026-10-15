@@ -122,6 +122,16 @@
     "id": "art-rock-chords",
     "name": "Арт-рок: необычные аккорды",
     "style": "English, art rock, unusual guitar harmony with sus2 and add9 colors, clean delayed arpeggios, paranoid melancholy, quiet-loud dynamics, occasional 5/4 passage, anxious high male vocals, 110 BPM"
+   },
+   {
+    "id": "emo-midwest",
+    "name": "Эмо: тихо-громко с надрывом",
+    "style": "English, midwest emo, quiet-loud dynamics, clean arpeggiated guitar turning into distorted crashing chords, energetic heartfelt drums, strained desperate young male vocals, cathartic confessional ache, 150 BPM"
+   },
+   {
+    "id": "screamo",
+    "name": "Скримо: крик и разрушение",
+    "style": "English, screamo, chaotic frantic hardcore, tremolo picking bursts, blast-ish drumming with sudden breakdowns, screamed desperate male vocals breaking into sobs, volatile cathartic chaos, 170 BPM"
    }
   ]
  },
@@ -264,6 +274,11 @@
     "id": "prog-metal",
     "name": "Прог-метал: рваный счёт",
     "style": "English, progressive metal, heavy down-tuned riffs in shifting time signatures, syncopated precise drumming, clean melodic male vocals with harsh accents, dense modern production, cerebral and heavy, 140 BPM"
+   },
+   {
+    "id": "folk-metal",
+    "name": "Фолк-метал: жалейка и риффы",
+    "style": "English, folk metal, heavy down-tuned guitar riffs with tin whistle and accordion folk melodies, tribal double-kick drums, rough heroic male vocals, pagan celebration mood, 150 BPM"
    }
   ]
  },
@@ -301,6 +316,22 @@
     "id": "sludge-metal",
     "name": "Сладж: злой и вязкий",
     "style": "English, sludge metal, slow mean down-tuned guitar riffs, bashed heavy drums, shouted hardcore-style male vocals, dusty raw production, hostile and thick, 90 BPM"
+   }
+  ]
+ },
+ {
+  "id": "synthpop",
+  "name": "Синти-поп",
+  "items": [
+   {
+    "id": "synthpop-classic",
+    "name": "Строгий: машина и пэд",
+    "style": "English, synthpop, minimal drum machine, warm synth bass, quiet chorus guitar, analog synth pad, detached baritone male vocals, cold romantic restraint, 118 BPM"
+   },
+   {
+    "id": "synthpop-gloss",
+    "name": "Глянец: электропиано и хлопки",
+    "style": "English, synthpop, glossy 1985 production, gated snare reverb, bright synth bass, electric piano chords, handclaps, smooth confident male vocals, stylish optimism, 120 BPM"
    }
   ]
  },
@@ -359,6 +390,11 @@
     "id": "dark-electro",
     "name": "Тёмное электро",
     "style": "Instrumental, no vocals, dark electro, distorted beat, gritty bass growls, ominous bell tones, gothic night factory mood, 125 BPM"
+   },
+   {
+    "id": "industrial-rock",
+    "name": "Индастриал-рок: гитары и машина",
+    "style": "English, industrial rock, distorted guitar riffs over rigid drum machine, metallic percussion hits, snarled commanding male vocals, cold mechanical menace, 125 BPM"
    }
   ]
  },
@@ -523,6 +559,11 @@
     "id": "afrobeat",
     "name": "Афробит: полиритмия и медь",
     "style": "English, afrobeat, polyrhythmic drum groove, shekere, hypnotic bass ostinato, interlocking clean guitar riffs, Farfisa organ, big horn section riffs, chanted call-and-response, male lead, defiant joyful trance, live band, long jam, 1973 Lagos, 112 BPM"
+   },
+   {
+    "id": "disco-70s",
+    "name": "Диско 70-х: живое",
+    "style": "English, live 1970s disco, four-on-the-floor live drums, fingerstyle walking bass, wah guitar licks, orchestral string stabs, joyful nightclub energy, 118 BPM"
    }
   ]
  },
@@ -560,6 +601,11 @@
     "id": "swing-bigband",
     "name": "Свинг: биг-бэнд",
     "style": "English, big band swing, punchy brass sections, walking bass, ride cymbal swing, joyful shout vocals with band answers, dancehall 1940s celebration, 140 BPM"
+   },
+   {
+    "id": "lounge-jazz",
+    "name": "Лаундж: рояль и райд",
+    "style": "English, lounge jazz, soft brushed drums with ride cymbal lead, upright walking bass, relaxed grand piano, late-night club haze, 95 BPM"
    }
   ]
  },
@@ -581,6 +627,11 @@
     "id": "rus-hiphop",
     "name": "Русский: лирика",
     "style": "Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM"
+   },
+   {
+    "id": "lofi-hiphop",
+    "name": "Лоуфай: Rhodes и кассета",
+    "style": "English, lofi hip-hop, dusty slow boom bap beat, muted Rhodes piano chords, warm vinyl crackle and tape hiss, lazy laid-back instrumental mood, no vocals, 80 BPM"
    }
   ]
  },
@@ -617,6 +668,11 @@
     "id": "folk-rock",
     "name": "Фолк-рок",
     "style": "English, folk rock, strummed acoustic guitars with electric leads, steady drums, storytelling male vocals, anthemic choruses, 125 BPM"
+   },
+   {
+    "id": "dark-folk",
+    "name": "Дарк-фолк: неофолк-марш",
+    "style": "English, dark folk, neofolk, solemn martial snare rolls, fingerpicked acoustic guitar arpeggios, deep baritone male vocals, bleak noble sorrow, 100 BPM"
    }
   ]
  },

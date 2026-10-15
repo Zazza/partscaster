@@ -134,6 +134,16 @@ export const groups = [
         style: 'English, art rock, unusual guitar harmony with sus2 and add9 colors, clean delayed arpeggios, paranoid melancholy, quiet-loud dynamics, occasional 5/4 passage, anxious high male vocals, 110 BPM',
         slots: { language: 'English', genre: 'art rock, alternative', rhythm: 'shifting, breathing, dynamic', guitars: 'clean sus/add9 chords, delay arpeggios', keys: '', vocals: 'anxious high male, falsetto leaps', mood: 'paranoid melancholy, alienation', production: 'wide modern alt-rock' }, bpm: 110,
       },
+      {
+        id: 'emo-midwest', name: 'Эмо: тихо-громко с надрывом', nameEn: 'Emo: quiet-loud and strained',
+        style: 'English, midwest emo, quiet-loud dynamics, clean arpeggiated guitar turning into distorted crashing chords, energetic heartfelt drums, strained desperate young male vocals, cathartic confessional ache, 150 BPM',
+        slots: { language: 'English', genre: 'emo, midwest emo', rhythm: 'energetic, dynamic stops', guitars: 'clean arpeggios exploding into distortion', keys: '', vocals: 'strained desperate young male', mood: 'cathartic confessional ache', production: 'raw live basement' }, bpm: 150,
+      },
+      {
+        id: 'screamo', name: 'Скримо: крик и разрушение', nameEn: 'Screamo: scream and wreck',
+        style: 'English, screamo, chaotic frantic hardcore, tremolo picking bursts, blast-ish drumming with sudden breakdowns, screamed desperate male vocals breaking into sobs, volatile cathartic chaos, 170 BPM',
+        slots: { language: 'English', genre: 'screamo, chaotic hardcore', rhythm: 'frantic with sudden breakdowns', guitars: 'tremolo bursts, chaotic chords', keys: '', vocals: 'screamed desperate, breaking', mood: 'volatile cathartic chaos', production: 'raw harsh live' }, bpm: 170,
+      },
     ],
   },
   {
@@ -269,6 +279,11 @@ export const groups = [
         style: 'English, progressive metal, heavy down-tuned riffs in shifting time signatures, syncopated precise drumming, clean melodic male vocals with harsh accents, dense modern production, cerebral and heavy, 140 BPM',
         slots: { language: 'English', genre: 'progressive metal', rhythm: 'syncopated shifting meters', guitars: 'heavy down-tuned technical riffs', keys: 'atmospheric synth layers', vocals: 'clean melodic with harsh accents', mood: 'cerebral intensity', production: 'dense modern precise' }, bpm: 140,
       },
+      {
+        id: 'folk-metal', name: 'Фолк-метал: жалейка и риффы', nameEn: 'Folk metal: whistle and riffs',
+        style: 'English, folk metal, heavy down-tuned guitar riffs with tin whistle and accordion folk melodies, tribal double-kick drums, rough heroic male vocals, pagan celebration mood, 150 BPM',
+        slots: { language: 'English', genre: 'folk metal', rhythm: 'tribal double-kick stomp', guitars: 'heavy down-tuned folk riffs', keys: 'tin whistle, accordion', vocals: 'rough heroic male gang', mood: 'pagan celebration', production: 'heavy warm live' }, bpm: 150,
+      },
     ],
   },
   {
@@ -303,6 +318,21 @@ export const groups = [
         id: 'sludge-metal', name: 'Сладж: злой и вязкий', nameEn: 'Sludge: mean and thick',
         style: 'English, sludge metal, slow mean down-tuned guitar riffs, bashed heavy drums, shouted hardcore-style male vocals, dusty raw production, hostile and thick, 90 BPM',
         slots: { language: 'English', genre: 'sludge metal', rhythm: 'slow heavy plod', guitars: 'down-tuned mean riffs', keys: '', vocals: 'shouted hardcore male', mood: 'hostile, oppressive', production: 'dusty raw heavy' }, bpm: 90,
+      },
+    ],
+  },
+  {
+    id: 'synthpop', name: 'Синти-поп', nameEn: 'Synthpop',
+    items: [
+      {
+        id: 'synthpop-classic', name: 'Строгий: машина и пэд', nameEn: 'Strict: machine and pad',
+        style: 'English, synthpop, minimal drum machine, warm synth bass, quiet chorus guitar, analog synth pad, detached baritone male vocals, cold romantic restraint, 118 BPM',
+        slots: { language: 'English', genre: 'synthpop', rhythm: 'minimal drum machine pulse', guitars: 'quiet chorus accents', keys: 'warm synth bass, analog pad', vocals: 'detached baritone male', mood: 'cold romantic restraint', production: 'clean analog 1982' }, bpm: 118,
+      },
+      {
+        id: 'synthpop-gloss', name: 'Глянец: электропиано и хлопки', nameEn: 'Glossy: electric piano and claps',
+        style: 'English, synthpop, glossy 1985 production, gated snare reverb, bright synth bass, electric piano chords, handclaps, smooth confident male vocals, stylish optimism, 120 BPM',
+        slots: { language: 'English', genre: 'synthpop, new wave', rhythm: 'gated snare, handclaps', guitars: '', keys: 'bright synth bass, electric piano chords', vocals: 'smooth confident male', mood: 'stylish optimism', production: 'glossy gated 1985' }, bpm: 120,
       },
     ],
   },
@@ -358,6 +388,11 @@ export const groups = [
         id: 'dark-electro', name: 'Тёмное электро', nameEn: 'Dark electro',
         style: 'Instrumental, no vocals, dark electro, distorted beat, gritty bass growls, ominous bell tones, gothic night factory mood, 125 BPM',
         slots: instr({ genre: 'dark electro', rhythm: 'distorted steady beat', keys: 'gritty bass growls, bells', mood: 'gothic ominous', production: 'gritty dark' }), bpm: 125, lyrics: '[Instrumental]',
+      },
+      {
+        id: 'industrial-rock', name: 'Индастриал-рок: гитары и машина', nameEn: 'Industrial rock: guitars and machine',
+        style: 'English, industrial rock, distorted guitar riffs over rigid drum machine, metallic percussion hits, snarled commanding male vocals, cold mechanical menace, 125 BPM',
+        slots: { language: 'English', genre: 'industrial rock', rhythm: 'rigid drum machine stomp', guitars: 'distorted riffs, metallic scrapes', keys: 'industrial noise textures', vocals: 'snarled commanding male', mood: 'cold mechanical menace', production: 'steel cold, compressed' }, bpm: 125,
       },
     ],
   },
@@ -506,6 +541,11 @@ export const groups = [
         style: 'English, afrobeat, polyrhythmic drum groove, shekere, hypnotic bass ostinato, interlocking clean guitar riffs, Farfisa organ, big horn section riffs, chanted call-and-response, male lead, defiant joyful trance, live band, long jam, 1973 Lagos, 112 BPM',
         slots: { language: 'English', genre: 'afrobeat', rhythm: 'polyrhythmic drum groove, shekere, hypnotic bass ostinato', guitars: 'interlocking clean guitar riffs', keys: 'Farfisa organ, big horn section riffs', vocals: 'chanted call-and-response, male lead', mood: 'defiant joyful trance', production: 'live band, long jam, 1973 Lagos' }, bpm: 112,
       },
+      {
+        id: 'disco-70s', name: 'Диско 70-х: живое', nameEn: '70s disco: live',
+        style: 'English, live 1970s disco, four-on-the-floor live drums, fingerstyle walking bass, wah guitar licks, orchestral string stabs, joyful nightclub energy, 118 BPM',
+        slots: { language: 'English', genre: 'disco', rhythm: 'four-on-the-floor live drums', guitars: 'wah guitar licks', keys: 'orchestral string stabs, electric piano', vocals: 'soulful male and female unison', mood: 'joyful nightclub energy', production: 'warm analog 1977' }, bpm: 118,
+      },
     ],
   },
   {
@@ -541,6 +581,11 @@ export const groups = [
         style: 'English, big band swing, punchy brass sections, walking bass, ride cymbal swing, joyful shout vocals with band answers, dancehall 1940s celebration, 140 BPM',
         slots: { language: 'English', genre: 'big band swing', rhythm: 'fast swing, ride cymbal', guitars: 'rhythm guitar chunk', keys: 'brass sections, piano', vocals: 'joyful male shout with band answers', mood: '1940s celebration', production: 'vintage ballroom' }, bpm: 140,
       },
+      {
+        id: 'lounge-jazz', name: 'Лаундж: рояль и райд', nameEn: 'Lounge: piano and ride',
+        style: 'English, lounge jazz, soft brushed drums with ride cymbal lead, upright walking bass, relaxed grand piano, late-night club haze, 95 BPM',
+        slots: { language: 'English', genre: 'lounge jazz', rhythm: 'soft brushes, ride lead', guitars: '', keys: 'relaxed grand piano', vocals: 'instrumental, no vocals', mood: 'late-night club haze', production: 'warm close club' }, bpm: 95,
+      },
     ],
   },
   {
@@ -560,6 +605,11 @@ export const groups = [
         id: 'rus-hiphop', name: 'Русский: лирика', nameEn: 'Russian: lyrical',
         style: 'Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM',
         slots: { language: 'Russian', genre: 'melodic hip-hop', rhythm: 'crisp mid-tempo beat', guitars: '', keys: 'melancholic piano loop', vocals: 'sincere rap + sung hook', mood: 'rainy city melancholy', production: 'clean modern' }, bpm: 90,
+      },
+      {
+        id: 'lofi-hiphop', name: 'Лоуфай: Rhodes и кассета', nameEn: 'Lo-fi: Rhodes and tape',
+        style: 'English, lofi hip-hop, dusty slow boom bap beat, muted Rhodes piano chords, warm vinyl crackle and tape hiss, lazy laid-back instrumental mood, no vocals, 80 BPM',
+        slots: { language: 'English', genre: 'lofi hip-hop', rhythm: 'dusty slow boom bap', guitars: '', keys: 'muted Rhodes chords, vinyl crackle', vocals: 'instrumental, no vocals', mood: 'lazy rainy calm', production: 'lofi tape and vinyl' }, bpm: 80,
       },
     ],
   },
@@ -595,6 +645,11 @@ export const groups = [
         id: 'folk-rock', name: 'Фолк-рок', nameEn: 'Folk rock',
         style: 'English, folk rock, strummed acoustic guitars with electric leads, steady drums, storytelling male vocals, anthemic choruses, 125 BPM',
         slots: { language: 'English', genre: 'folk rock', rhythm: 'steady driving', guitars: 'strummed acoustic + electric leads', keys: 'mandolin', vocals: 'storytelling male', mood: 'anthemic, road-trip', production: 'warm full band' }, bpm: 125,
+      },
+      {
+        id: 'dark-folk', name: 'Дарк-фолк: неофолк-марш', nameEn: 'Dark folk: neofolk march',
+        style: 'English, dark folk, neofolk, solemn martial snare rolls, fingerpicked acoustic guitar arpeggios, deep baritone male vocals, bleak noble sorrow, 100 BPM',
+        slots: { language: 'English', genre: 'neofolk, dark folk', rhythm: 'martial snare rolls, slow march', guitars: 'fingerpicked acoustic arpeggios', keys: '', vocals: 'deep solemn baritone', mood: 'bleak noble sorrow', production: 'dry chamber, close' }, bpm: 100,
       },
     ],
   },
