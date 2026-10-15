@@ -601,16 +601,6 @@ export const groups = [
         style: 'English, funk-rap, live funk breakbeat, slap bass, horn stabs, old-school party rap with crowd responses, 105 BPM',
         slots: { language: 'English', genre: 'funk rap, old school', rhythm: 'live funk breakbeat', guitars: 'wah chops', keys: 'horn stabs, clavinet', vocals: 'old-school rap, crowd responses', mood: 'block party', production: 'live band' }, bpm: 105,
       },
-      {
-        id: 'rus-hiphop', name: 'Русский: лирика', nameEn: 'Russian: lyrical',
-        style: 'Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM',
-        slots: { language: 'Russian', genre: 'melodic hip-hop', rhythm: 'crisp mid-tempo beat', guitars: '', keys: 'melancholic piano loop', vocals: 'sincere rap + sung hook', mood: 'rainy city melancholy', production: 'clean modern' }, bpm: 90,
-      },
-      {
-        id: 'lofi-hiphop', name: 'Лоуфай: Rhodes и кассета', nameEn: 'Lo-fi: Rhodes and tape',
-        style: 'English, lofi hip-hop, dusty slow boom bap beat, muted Rhodes piano chords, warm vinyl crackle and tape hiss, lazy laid-back instrumental mood, no vocals, 80 BPM',
-        slots: { language: 'English', genre: 'lofi hip-hop', rhythm: 'dusty slow boom bap', guitars: '', keys: 'muted Rhodes chords, vinyl crackle', vocals: 'instrumental, no vocals', mood: 'lazy rainy calm', production: 'lofi tape and vinyl' }, bpm: 80,
-      },
     ],
   },
   {

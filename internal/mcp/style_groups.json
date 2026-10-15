@@ -622,16 +622,6 @@
     "id": "ghetto-funk",
     "name": "Фанк-брейк с рэпом",
     "style": "English, funk-rap, live funk breakbeat, slap bass, horn stabs, old-school party rap with crowd responses, 105 BPM"
-   },
-   {
-    "id": "rus-hiphop",
-    "name": "Русский: лирика",
-    "style": "Russian, melodic russian hip-hop, melancholic piano loop, crisp boom-bap-leaning beat, sincere rap verses and sung hook, rainy city mood, 90 BPM"
-   },
-   {
-    "id": "lofi-hiphop",
-    "name": "Лоуфай: Rhodes и кассета",
-    "style": "English, lofi hip-hop, dusty slow boom bap beat, muted Rhodes piano chords, warm vinyl crackle and tape hiss, lazy laid-back instrumental mood, no vocals, 80 BPM"
    }
   ]
  },
