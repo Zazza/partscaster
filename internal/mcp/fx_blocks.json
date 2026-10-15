@@ -1569,5 +1569,13 @@
     }
    }
   ]
+ },
+ "level": {
+  "label": {
+   "ru": "Громкость по линии",
+   "en": "Volume line"
+  },
+  "hidden": true,
+  "params": []
  }
 }

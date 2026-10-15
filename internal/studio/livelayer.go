@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -39,7 +40,31 @@ const (
 	liveCrashVel        = 0.9 // удар на смене части
 	liveChorusVel       = 0.7 // удар на такте припева
 	liveChorus          = "chorus"
+
+	// барабанщик (2026-10-15, After Glow #990 → #1002 «нравится, можно чуть громче»): сбивка перед сменой части —
+	// дробь малого, томы сверху вниз шестнадцатыми с нарастанием; длина — полтакта, в припев — такт, в последний
+	// припев — два такта
+	liveFillRelDb     = -7.0
+	liveFillHumanize  = 6.0
+	liveFillVelFrom   = 0.6
+	liveFillVelTo     = 1.0
+	liveFillSnareTo   = 1.0 / 3 // доля сбивки: до неё — малый
+	liveFillTomHiTo   = 5.0 / 9 // … высокий том
+	liveFillTomMidTo  = 7.0 / 9 // … средний, дальше — низкий
+	liveFillHitDur    = 0.3
+	liveFillPerBar    = 16  // шестнадцатые
+	liveDrumChorusDb  = 4.5 // барабаны вперёд: припев громче, куплет чуть глубже
+	liveDrumPreDb     = 1.0
+	liveDrumVerseDb   = -1.0
+	liveDrumPreChorus = "pre-chorus"
+	liveDrumVerse     = "verse"
 )
+
+// liveFillKits — наборы сбивки по порядку: малый, высокий, средний, низкий том
+var liveFillKits = []string{"osdk/snare", "osdk/tom-small", "osdk/tom-medium", "osdk/tom-large"}
+
+// liveDrumParts — части барабанов, которым «барабаны вперёд» ставит линию громкости
+var liveDrumParts = []string{"kick", "snare", "toms", "hh", "ride", "crash"}
 
 // liveAirStems — дорожка, которой достраивается верх, → дорожки, обработка которых пресетом его исключает
 // (части гитары и клавишных — внутри other)
@@ -111,7 +136,182 @@ func liveLayer(ctx context.Context, svc yue.Service, job *yue.Job, p yue.SoundPr
 	if err != nil {
 		return nil, fmt.Errorf("части песни: %w", err)
 	}
-	return append(out, liveCymbals(grid.Bars, job.DurationSec, hh)...), nil
+	out = append(out, liveCymbals(grid.Bars, job.DurationSec, hh)...)
+	return append(out, liveFills(grid.Bars, job.DurationSec)...), nil
+}
+
+// fillSpan — сбивка перед частью, которая начинается тактом i: [from, to) и число шестнадцатых.
+type fillSpan struct {
+	i        int
+	from, to float64
+	n        int
+}
+
+// liveFillSpans — сбивки перед каждой сменой части песни (кроме начала трека): полтакта, в припев — такт, в
+// последний припев трека — два такта (по длине такта перед частью).
+func liveFillSpans(bars []yue.ChordBar, dur float64) []fillSpan {
+	last := -1
+	for i := 1; i < len(bars); i++ {
+		if bars[i].Section == liveChorus && bars[i-1].Section != liveChorus {
+			last = i
+		}
+	}
+	var out []fillSpan
+	for i := 1; i < len(bars); i++ {
+		if bars[i].Section == "" || bars[i].Section == bars[i-1].Section {
+			continue
+		}
+		if dur > 0 && bars[i].Start >= dur {
+			break
+		}
+		nb := 0.5
+		switch {
+		case i == last:
+			nb = 2
+		case bars[i].Section == liveChorus:
+			nb = 1
+		}
+		bar := bars[i-1].End - bars[i-1].Start
+		if bar <= 0 {
+			continue
+		}
+		n := int(math.Round(nb * liveFillPerBar))
+		from := bars[i].Start - float64(n)*bar/liveFillPerBar
+		if from < 0 {
+			continue
+		}
+		out = append(out, fillSpan{i: i, from: from, to: bars[i].Start, n: n})
+	}
+	return out
+}
+
+// liveFills — сбивки: удары шестнадцатыми по наборам liveFillKits (первая треть — малый, дальше томы сверху вниз),
+// сила нарастает liveFillVelFrom → liveFillVelTo. Партия на набор — блок perc поверх трека, как крэш.
+func liveFills(bars []yue.ChordBar, dur float64) []SectionSpec {
+	hits := make([][]PercHit, len(liveFillKits))
+	for _, f := range liveFillSpans(bars, dur) {
+		q := (f.to - f.from) / float64(f.n)
+		for k := 0; k < f.n; k++ {
+			frac := 0.0
+			if f.n > 1 {
+				frac = float64(k) / float64(f.n-1)
+			}
+			kit := 3
+			switch {
+			case frac < liveFillSnareTo:
+				kit = 0
+			case frac < liveFillTomHiTo:
+				kit = 1
+			case frac < liveFillTomMidTo:
+				kit = 2
+			}
+			vel := liveFillVelFrom + (liveFillVelTo-liveFillVelFrom)*frac
+			hits[kit] = append(hits[kit], PercHit{T: f.from + float64(k)*q, D: liveFillHitDur, Vel: vel})
+		}
+	}
+	var out []SectionSpec
+	for k, kit := range liveFillKits {
+		if len(hits[k]) == 0 {
+			continue
+		}
+		out = append(out, SectionSpec{Stems: []string{"mix"}, Add: true, Engine: []map[string]any{
+			{"type": "perc", "voice": 0, "kit": kit, "rel_db": liveFillRelDb, "humanize_ms": liveFillHumanize,
+				"notes": hits[k]},
+		}})
+	}
+	return out
+}
+
+// liveDrumDb — громкость барабанов в части песни: припев вперёд, пред-припев чуть, куплет чуть глубже.
+func liveDrumDb(section string) float64 {
+	switch section {
+	case liveChorus:
+		return liveDrumChorusDb
+	case liveDrumPreChorus:
+		return liveDrumPreDb
+	case liveDrumVerse:
+		return liveDrumVerseDb
+	}
+	return 0
+}
+
+// liveDrumPoints — линия громкости барабанов по частям песни (точки {t, db} в секундах трека): на каждой части —
+// её дБ, на сбивке перед частью — подъём (или спад) от прежней части к новой.
+func liveDrumPoints(bars []yue.ChordBar, dur float64) []map[string]any {
+	if len(bars) == 0 {
+		return nil
+	}
+	fills := map[int]fillSpan{}
+	for _, f := range liveFillSpans(bars, dur) {
+		fills[f.i] = f
+	}
+	// такт без части (за концом плана) держит часть прежнего: иначе барабаны падали бы скачком там, где кончился план
+	sec := make([]string, len(bars))
+	for i, b := range bars {
+		sec[i] = b.Section
+		if sec[i] == "" && i > 0 {
+			sec[i] = sec[i-1]
+		}
+	}
+	pts := []map[string]any{{"t": max(0, bars[0].Start), "db": liveDrumDb(sec[0])}}
+	for i := 1; i < len(bars); i++ {
+		if sec[i] == sec[i-1] {
+			continue
+		}
+		prev, next := liveDrumDb(sec[i-1]), liveDrumDb(sec[i])
+		if f, ok := fills[i]; ok {
+			// сбивка длиннее прежней части — подъём не раньше её начала: точки линии идут по возрастанию
+			last, _ := pts[len(pts)-1]["t"].(float64)
+			pts = append(pts, map[string]any{"t": max(f.from, last), "db": prev})
+		} else {
+			pts = append(pts, map[string]any{"t": bars[i].Start, "db": prev})
+		}
+		pts = append(pts, map[string]any{"t": bars[i].Start, "db": next})
+	}
+	return pts
+}
+
+// liveDrumSpecs — «барабаны вперёд»: у пресета с живым набором и трека с припевом — копия записей, где частям
+// барабанов в конец цепочки добавлена линия громкости по частям песни (блок движка level), а цель громкости
+// поднята на liveDrumChorusDb (замер «громких мест» приходится на припев: без этого сверка опустила бы барабаны во
+// всём треке). Иначе — записи как есть. Пресет на воркере не меняется.
+func liveDrumSpecs(ctx context.Context, svc yue.Service, job *yue.Job, p yue.SoundPreset) ([]yue.PresetSpec, error) {
+	if off, _ := ctx.Value(liveLayerOffKey{}).(bool); off {
+		return p.Specs, nil
+	}
+	if live, _ := presetLiveKit(p); !live {
+		return p.Specs, nil
+	}
+	grid, err := svc.ChordGrid(ctx, job.ID)
+	var se *yue.StatusError
+	if errors.As(err, &se) && se.Code == http.StatusNotFound {
+		return p.Specs, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("части песни: %w", err)
+	}
+	if !slices.ContainsFunc(grid.Bars, func(b yue.ChordBar) bool { return b.Section == liveChorus }) {
+		return p.Specs, nil
+	}
+	pts := liveDrumPoints(grid.Bars, job.DurationSec)
+	out := make([]yue.PresetSpec, len(p.Specs))
+	for i, s := range p.Specs {
+		out[i] = s
+		drums := len(s.Stems) > 0 && !slices.ContainsFunc(s.Stems, func(n string) bool {
+			return !slices.Contains(liveDrumParts, n)
+		})
+		if !drums || len(s.Engine) == 0 {
+			continue
+		}
+		eng := make([]map[string]any, 0, len(s.Engine)+1)
+		eng = append(eng, s.Engine...)
+		out[i].Engine = append(eng, map[string]any{"type": "level", "points": pts})
+		if s.LevelDb != nil {
+			v := *s.LevelDb + liveDrumChorusDb
+			out[i].LevelDb = &v
+		}
+	}
+	return out, nil
 }
 
 // liveCymbals — крэш на первую долю каждой смены части песни (кроме начала трека) и каждого такта припева,

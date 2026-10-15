@@ -143,7 +143,8 @@ def parse_chain(chain) -> list[dict]:
         nums, strs = SPEC[t], STR_SPEC.get(t, {})
         allowed = set(nums) | set(strs) | {"type"} | ({"bands"} if t == "eq" else set()) | \
             ({"notes", "_until", "_ref_rms", "_syn_rms", "_syn_peak"} if t in ("synth", "perc") else set()) | \
-            ({"_t0"} if t in ("perc", "tremolo", "synth") else set()) | \
+            ({"_t0"} if t in ("perc", "tremolo", "synth", "level") else set()) | \
+            ({"points"} if t == "level" else set()) | \
             ({"notes", "_t0", "_until", "_ref_rms", "_tune", "_beats"} if t == "gtrnotes" else set())
         extra = set(blk) - allowed
         if extra:
@@ -176,7 +177,9 @@ def parse_chain(chain) -> list[dict]:
                 raise ChainError(f"{where}: голос 0 (сэмплы) — нужен набор kit")
         if t == "gtrnotes":
             _parse_gtrnotes(where, blk, norm)
-        if t in ("tremolo", "synth") and _num(blk.get("_t0")):   # начало куска в треке (ставит воркер): фазы от трека
+        if t == "level":
+            norm["points"] = _parse_points(where, blk.get("points"))
+        if t in ("tremolo", "synth", "level") and _num(blk.get("_t0")):   # начало куска в треке (ставит воркер)
             norm["_t0"] = min(max(float(blk["_t0"]), 0.0), 86400.0)
         if t == "sampler" and norm.get("kit_open") and (norm.get("kit_mid") or norm.get("kit_low")):
             raise ChainError(f"{where}: kit_open (открытые удары) нельзя вместе с kit_mid/kit_low (тамы по высоте)")
@@ -1400,6 +1403,42 @@ def _spring(x, sr, p, _res=None):
 TREMOLO_SQUARE_K = 12.0   # tremolo shape 1: tanh(k·sin) — «почти квадрат» с мягкими краями без щелчков
 
 
+LEVEL_MAX_POINTS = 200          # точек линии громкости не больше
+LEVEL_DB = (-30.0, 12.0)        # дБ точки линии
+
+
+def _parse_points(where: str, pts) -> list:
+    """Точки линии громкости [{t, db}]: секунды трека по возрастанию, дБ в LEVEL_DB → [[t, db]…]."""
+    if not isinstance(pts, list) or not pts:
+        raise ChainError(f"{where}: нужны точки points [{{t, db}}]")
+    if len(pts) > LEVEL_MAX_POINTS:
+        raise ChainError(f"{where}: точек не больше {LEVEL_MAX_POINTS}")
+    out, prev = [], -1.0
+    for k, pt in enumerate(pts):
+        if isinstance(pt, (list, tuple)) and len(pt) == 2:   # уже разобранная цепочка (process разбирает снова)
+            pt = {"t": pt[0], "db": pt[1]}
+        if not isinstance(pt, dict) or not _num(pt.get("t")) or not _num(pt.get("db")):
+            raise ChainError(f"{where}: точка {k + 1} — {{t, db}} числами")
+        t, db = float(pt["t"]), float(pt["db"])
+        if t < 0 or t < prev:
+            raise ChainError(f"{where}: точка {k + 1}: время t ≥ 0 и по возрастанию")
+        if not LEVEL_DB[0] <= db <= LEVEL_DB[1]:
+            raise ChainError(f"{where}: точка {k + 1}: db от {LEVEL_DB[0]:g} до {LEVEL_DB[1]:g}")
+        out.append([t, db])
+        prev = t
+    return out
+
+
+def _level(x, sr, p, _res=None):
+    """Громкость по линии: точки {t, db} в секундах ТРЕКА (_t0 — начало куска, ставит воркер), между точками —
+    линейно в дБ, до первой и после последней — их дБ. Умножение — звук не сдвигается."""
+    n = x.shape[0]
+    pts = p["points"]
+    t = float(p.get("_t0", 0.0)) + np.arange(n) / sr
+    db = np.interp(t, [q[0] for q in pts], [q[1] for q in pts])
+    return x * (10.0 ** (db / 20.0))[:, None]
+
+
 def _tremolo(x, sr, p, _res=None):
     """Тремоло: громкость качается по LFO, g = 1 − depth·m(t), m ∈ [0, 1]; shape 0 — m = (1 + sin)/2, к 1 —
     «вкл/выкл» (tanh от синуса); stereo — правый канал к противофазе 1 − m (звук ходит лево-право). Умножение —
@@ -1962,7 +2001,7 @@ BLOCKS = {"gate": _gate, "eq": _eq, "comp": _comp, "drive": _drive, "amp": _amp,
           "cab": _cab, "reverb": _reverb, "delay": _delay, "gain": _gain, "sampler": _sampler,
           "bass": _bass, "synth": _synth, "chorus": _chorus, "phaser": _phaser, "flanger": _flanger,
           "tape": _tape, "spring": _spring, "tremolo": _tremolo, "perc": _perc, "glue": _glue, "limiter": _limiter,
-          "air": _air, "gtrnotes": _gtrnotes}
+          "air": _air, "gtrnotes": _gtrnotes, "level": _level}
 
 
 def process(audio, sr: int, chain, resources=None) -> np.ndarray:

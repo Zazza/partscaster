@@ -100,6 +100,10 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 		return nil, err
 	}
 	parts = append(parts, live...)
+	// барабанщик слоя: части барабанов — линия громкости по частям песни (копия записей, пресет не меняется)
+	if p.Specs, err = liveDrumSpecs(ctx, svc, job, p); err != nil {
+		return nil, err
+	}
 	if err := ensurePresetKits(ctx, svc, p.Specs, parts); err != nil {
 		return nil, err
 	}

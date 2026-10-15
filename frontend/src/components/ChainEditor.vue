@@ -18,7 +18,9 @@ const emit = defineEmits(['upload', 'install-kit'])
 const { t, locale } = useI18n()
 
 const tr = (lbl) => (lbl && (lbl[locale.value] || lbl.ru)) || ''
-const blockOptions = computed(() => Object.keys(BLOCKS).map((k) => ({ value: k, label: tr(BLOCKS[k].label) })))
+// служебные блоки (hidden — например «громкость по линии»: точки ставит слой «живой звук») в меню не попадают
+const blockOptions = computed(() => Object.keys(BLOCKS).filter((k) => !BLOCKS[k].hidden)
+  .map((k) => ({ value: k, label: tr(BLOCKS[k].label) })))
 const newType = ref('reverb')
 
 function assetOptions(kind, def) {

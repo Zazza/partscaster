@@ -544,7 +544,7 @@ func TestLiveLayer_LiveKit_AirAndCymbals(t *testing.T) {
 	if len(rideSpecs(want)) == 0 || len(crashSpecs(want)) == 0 {
 		t.Fatal("сетка теста должна давать и крэш, и ride")
 	}
-	if cym := nonAir(specs); !reflect.DeepEqual(cym, want) {
+	if cym := nonAir(withoutFills(specs)); !reflect.DeepEqual(cym, want) {
 		t.Errorf("тарелки: получено %+v, ожидалось liveCymbals(сетка, 15, true) %+v", cym, want)
 	}
 }
@@ -556,7 +556,7 @@ func TestLiveLayer_LiveKickNoHH_CrashNoRide(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cym := nonAir(specs)
+	cym := nonAir(withoutFills(specs))
 	if len(crashSpecs(cym)) != 1 {
 		t.Errorf("живая бочка без hh — крэш есть, получено %+v", cym)
 	}
