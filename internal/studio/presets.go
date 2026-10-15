@@ -25,7 +25,13 @@ import (
 type PresetResult struct {
 	ChildID int64
 	File    string
+	// Warnings — что пресет сделал не так, как записано (у трека нет плана — гитарист пропущен)
+	Warnings []string
 }
+
+// guitaristNoPlanMark — пометка в названии версии и предупреждение: у трека нет плана, гитарист «по аккордам плана»
+// (блок gtrnotes) пропущен, гитара YuE2 идёт через остальную обработку записи.
+const guitaristNoPlanMark = "гитара YuE2 — у трека нет плана"
 
 // ApplySoundPreset — пресет на трек: дорожки (нет — разделение), наборы сэмплов, пересборка
 // с правками «весь трек», финал на РЕЗУЛЬТАТЕ пересборки, версия-трек. Ошибка любого шага —
@@ -45,6 +51,17 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	job, err := findJob(ctx, svc, jobID)
 	if err != nil {
 		return nil, err
+	}
+	var warnings []string
+	if hasGuitarist(p.Specs) {
+		noPlan, err := trackWithoutPlan(ctx, svc, jobID)
+		if err != nil {
+			return nil, err
+		}
+		if noPlan {
+			p.Specs = dropGuitarist(p.Specs)
+			warnings = append(warnings, guitaristNoPlanMark)
+		}
 	}
 	// части барабанов пересборка обрабатывает только движком: эффект/педали на них молча пропали бы
 	for _, sp := range p.Specs {
@@ -82,7 +99,11 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, err
 	}
-	child, err := svc.VariantToTrack(ctx, jobID, file, title+" · "+p.Name, 0)
+	name := title + " · " + p.Name
+	if len(warnings) > 0 {
+		name += " (" + strings.Join(warnings, "; ") + ")"
+	}
+	child, err := svc.VariantToTrack(ctx, jobID, file, name, 0)
 	if err != nil {
 		return nil, fmt.Errorf("версия трека: %w", err)
 	}
@@ -103,7 +124,7 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 			log.Printf("пресет «%s»: исправляющий проход: %v — остаётся прежний", p.Name, err)
 			break
 		}
-		nextChild, err := svc.VariantToTrack(ctx, jobID, next, title+" · "+p.Name, 0)
+		nextChild, err := svc.VariantToTrack(ctx, jobID, next, name, 0)
 		if err != nil {
 			log.Printf("пресет «%s»: версия исправляющего прохода: %v — остаётся прежняя", p.Name, err)
 			break
@@ -113,7 +134,54 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 		}
 		child, file = nextChild, next
 	}
-	return &PresetResult{ChildID: child, File: file}, nil
+	return &PresetResult{ChildID: child, File: file, Warnings: warnings}, nil
+}
+
+// hasGuitarist — есть ли в записях пресета гитарист «по аккордам плана» (блок движка gtrnotes).
+func hasGuitarist(specs []yue.PresetSpec) bool {
+	for _, sp := range specs {
+		for _, b := range sp.Engine {
+			if b["type"] == "gtrnotes" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// trackWithoutPlan — у трека нет плана (сетка аккордов отвечает 404): гитаристу не по чему играть.
+func trackWithoutPlan(ctx context.Context, svc yue.Service, jobID int64) (bool, error) {
+	_, err := svc.ChordGrid(ctx, jobID)
+	var se *yue.StatusError
+	if errors.As(err, &se) && se.Code == http.StatusNotFound {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("план трека: %w", err)
+	}
+	return false, nil
+}
+
+// dropGuitarist — записи без блока gtrnotes (копия; пресет на воркере не меняется): гитара YuE2 идёт через
+// остальную обработку записи; запись, где кроме гитариста ничего не было, остаётся только громкостью (или уходит).
+func dropGuitarist(specs []yue.PresetSpec) []yue.PresetSpec {
+	out := make([]yue.PresetSpec, 0, len(specs))
+	for _, sp := range specs {
+		if len(sp.Engine) > 0 {
+			eng := make([]map[string]any, 0, len(sp.Engine))
+			for _, b := range sp.Engine {
+				if b["type"] != "gtrnotes" {
+					eng = append(eng, b)
+				}
+			}
+			if len(eng) == 0 && sp.LevelDb == nil && sp.Place == nil {
+				continue
+			}
+			sp.Engine = eng
+		}
+		out = append(out, sp)
+	}
+	return out
 }
 
 // presetVerifyTolDb — промах цели больше этого — исправляющий проход; пределы поправок и число проходов

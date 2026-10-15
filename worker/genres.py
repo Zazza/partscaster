@@ -1709,6 +1709,69 @@ HH_LEVELS = {"default": -23.0, "Электроника": -25.0}
 GTR_SHIFT = {"Рок": -2.5, "Тяжёлое": -4.5, "Поп и другое": -1.0, "Электроника": 0.0}
 
 
+# гитарист «по аккордам плана» (блок gtrnotes) вместо гитары YuE2: удары — как у её дорожки, аккорды — из плана,
+# дальше — обработка варианта. Гитара и манера — по обработке варианта (style: 0 авто, 1 бой, 2 перебор, 3 бас +
+# аккорд, 4 квинты). Проверено на слух (2026-10-15): пост-панк перебором #990, панк квинтами через фузз #993,
+# симфо-метал чистыми квинтами «как в КИНО» #997
+_FSBS = {"kit": "fsbsguitar/guitar"}
+_EMILY = {"kit": "emilyguitar/notes", "mute_kit": "emilyguitar/mute"}
+_FUZZ = [{"type": "eq", "highpass_hz": 100}, {"type": "drive", "gain_db": 34, "mix": 1}]
+GUITARIST = {   # id цепочки гитары варианта → (гитара, манера, префикс перед обработкой варианта)
+    "guitar-postpunk": (_FSBS, 2, []),
+    "guitar-jangle": (_FSBS, 1, []),
+    "guitar-tremolo": (_EMILY, 2, []),
+    "guitar-ambient": (_EMILY, 2, []),
+    "guitar-shoegaze": (_FSBS, 1, []),
+    "guitar-clean": (_EMILY, 3, []),
+    "guitar-surf": (_FSBS, 2, []),
+    "guitar-altrock": (_FSBS, 0, []),
+    "guitar-lofi": (_FSBS, 4, _FUZZ),   # кассетная обработка мягкая — фузз до неё (панк #993)
+    "guitar-fuzz": (_FSBS, 4, []),
+    "guitar-industrial": (_FSBS, 4, []),
+    "guitar-symphonic": (_FSBS, 4, []),
+}
+# манера, проверенная на слух у конкретного варианта, — поверх правила по обработке
+GUITARIST_STYLE = {("postpunk", "angular"): 2}   # перебор #990
+# «как в КИНО»: чистые квинты с эхом и залом вместо хай-гейна (симфо-метал #997)
+CINEMA_GENRES = {"symphonic"}
+CINEMA_VARIANTS = {("doom", "funeral")}
+CINEMA_CHAIN = [
+    {"type": "eq", "highpass_hz": 80, "bands": [{"freq_hz": 3000, "gain_db": 2, "q": 1}]},
+    {"type": "comp", "threshold_db": -24, "ratio": 3, "makeup_db": 3},
+    {"type": "delay", "time_ms": 420, "feedback": 0.25, "wet": 0.12, "lowpass_hz": 4000},
+    {"type": "reverb", "decay_s": 2.6, "predelay_ms": 30, "wet": 0.2, "lowpass_hz": 7000},
+]
+# электроника — гитара фоном, живой гитарист не нужен; кроме вариантов, где гитары главные
+GUITARIST_SKIP_FAMILIES = {"Электроника"}
+GUITARIST_KEEP = {("chiptune", "guitars")}
+GUITARIST_SHIFT = -3.0   # гитарист тише цели гитары YuE2: чистые сэмплы с атакой слышнее при той же громкости (#979)
+TAPE_SOFT = {"wow": 0.15, "flutter": 0.1}   # лента на чистых сэмплах сильнее «трясёт и плывёт» (#986)
+GUITARIST_NOTE = " Гитара — гитарист по аккордам плана в ритме гитары трека (нужен план — транскрипция)."
+
+
+def _soft_tape(chain: list) -> list:
+    for b in chain:
+        if b.get("type") == "tape":
+            for k, v in TAPE_SOFT.items():
+                b[k] = min(float(b.get(k, v)), v)
+    return chain
+
+
+def _guitar(fx: dict, family: str, gslug: str, vslug: str, gtr: str) -> tuple[list, bool]:
+    """Цепочка гитары варианта → (цепочка, играет ли гитарист)."""
+    chain = copy.deepcopy(fx[gtr]["chain"])
+    if chain and chain[0].get("type") == "gtrnotes":   # вариант уже с гитаристом (guitar-notes-*)
+        return _soft_tape(chain), True
+    if gtr not in GUITARIST or (family in GUITARIST_SKIP_FAMILIES and (gslug, vslug) not in GUITARIST_KEEP):
+        return chain, False
+    kit, style, prefix = GUITARIST[gtr]
+    style = GUITARIST_STYLE.get((gslug, vslug), style)
+    head = [dict(type="gtrnotes", style=style, **kit)]
+    if gslug in CINEMA_GENRES or (gslug, vslug) in CINEMA_VARIANTS:
+        return [dict(type="gtrnotes", style=4, **_EMILY)] + copy.deepcopy(CINEMA_CHAIN), True
+    return _soft_tape(head + copy.deepcopy(prefix) + chain), True
+
+
 def _drums(fx: dict, kit: str, treat: str, levels: tuple, hh: float) -> list:
     """Части барабанов набором: готовая цепочка части (drums-<часть>-kit — живой osdk, drums-<часть>-<машина>)
     + обработка ритм-секции; у бочки, малого и хэта — цель громкости."""
@@ -1751,13 +1814,14 @@ def build() -> list:
                 kick, snare = kick - 2, snare - 2
             specs = _drums(fx, kit, treat, (kick, snare), HH_LEVELS.get(family, HH_LEVELS["default"]))
             specs.append({"stems": ["bass"], "engine": copy.deepcopy(fx[bass]["chain"]), "level_db": float(bass_lv)})
-            specs.append({"stems": ["guitar"], "engine": copy.deepcopy(fx[gtr]["chain"]),
-                          "level_db": float(gtr_lv) + GTR_SHIFT.get(family, 0.0)})
+            gchain, guitarist = _guitar(fx, family, gslug, vslug, gtr)
+            gtr_db = float(gtr_lv) + GTR_SHIFT.get(family, 0.0) + (GUITARIST_SHIFT if guitarist else 0.0)
+            specs.append({"stems": ["guitar"], "engine": gchain, "level_db": gtr_db})
             out.append(
                 {
                     "slug": f"{gslug}-{vslug}",
                     "name": f"{genre} · {vname}",
-                    "note": note,
+                    "note": note + (GUITARIST_NOTE if guitarist else ""),
                     "family": family,
                     "reference_job_id": None,
                     "specs": specs,

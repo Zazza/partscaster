@@ -110,12 +110,16 @@ class TestGenreVariants(unittest.TestCase):
                 self.assertIsNotNone(specs[0].get("level_db"), "у гитары нет цели громкости")
 
     def test_other_variants_untouched(self):
-        # прежние варианты тех же течений гитару по нотам не переигрывают
+        # internal-guitarist-presets: гитарист теперь во всех вариантах, кроме «Электроники» (там — только
+        # «8-бит и гитары»); прочие записи (барабаны, бас) гитару по нотам по-прежнему не переигрывают
         for p in genres.build():
             if p["name"] in GENRE_VARIANTS:
                 continue
+            electronic_yue = p["family"] == "Электроника" and p["slug"] != "chiptune-guitars"
             for s in p["specs"]:
-                with self.subTest(preset=p["slug"]):
+                if "guitar" in s.get("stems", []) and not electronic_yue:
+                    continue
+                with self.subTest(preset=p["slug"], stems=s.get("stems")):
                     self.assertFalse(any(b.get("type") == "gtrnotes" for b in s.get("engine") or []))
 
 

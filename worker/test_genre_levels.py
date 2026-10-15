@@ -12,6 +12,9 @@
 Толкования:
 - «Различия вариантов внутри семьи сохраняются» проверяется по снимку целей баса и гитары до сдвига семьи
   (BEFORE — значения genres.build() на коммите fdc7a59): гитара = было + сдвиг семьи, бас = было.
+- internal-guitarist-presets (условие 3): там, где играет гитарист «по аккордам плана» (все семьи, кроме
+  «Электроники», и «8-бит и гитары»; включая guitar-notes-*), цель гитары ещё на 3 дБ ниже: было + сдвиг − 3.
+  Медианы гитары семей поэтому −13,5 / −13,5 / −14 / −13 (электроника — без изменений).
 - Мягкий вариант — вариант, у которого в таблице GENRES мастер «soft» (последний элемент кортежа варианта).
 - Хэт: цель −23/−25 одинакова и для soft (сдвиг на 2 дБ — только бочка и малый).
 - «Центр спектра» — средняя частота, взвешенная по мощности спектра всего сигнала; «ниже 500 Гц» — доля
@@ -45,7 +48,13 @@ DRUMS = {  # семья → (бочка, малый)
 }
 HH = {"Рок": -23.0, "Поп и другое": -23.0, "Тяжёлое": -23.0, "Электроника": -25.0}
 GTR_SHIFT = {"Рок": -2.5, "Тяжёлое": -4.5, "Поп и другое": -1.0, "Электроника": 0.0}
-GTR_MEDIAN = {"Рок": -10.5, "Тяжёлое": -10.5, "Поп и другое": -11.0, "Электроника": -13.0}
+GTR_MEDIAN = {"Рок": -13.5, "Тяжёлое": -13.5, "Поп и другое": -14.0, "Электроника": -13.0}
+GUITARIST_DB = -3.0  # гитарист тише цели гитары YuE2 варианта (internal-guitarist-presets, условие 3)
+
+
+def _with_guitarist(p):
+    """Вариант с гитаристом: всё, кроме «Электроники», и «Чиптюн и 8-бит · 8-бит и гитары»."""
+    return p["family"] != "Электроника" or p["slug"] == "chiptune-guitars"
 BASS_MEDIAN = {"Рок": -7.0, "Тяжёлое": -7.0, "Поп и другое": -7.0, "Электроника": -6.0}
 MACHINES = ("tr808", "tr909", "linn", "cr78", "simmons")
 
@@ -145,7 +154,16 @@ class TestGenreLevels(unittest.TestCase):
         for p in self.built:
             with self.subTest(slug=p["slug"], family=p["family"]):
                 was = BEFORE[p["slug"]][1]
-                self.assertAlmostEqual(_level(p, "guitar"), was + GTR_SHIFT[p["family"]], places=6)
+                want = was + GTR_SHIFT[p["family"]] + (GUITARIST_DB if _with_guitarist(p) else 0.0)
+                self.assertAlmostEqual(_level(p, "guitar"), want, places=6)
+
+    def test_guitarist_quieter_incl_notes(self):
+        # условие 3 и для вариантов, где гитарист уже стоял (guitar-notes-*), и для «8-бит и гитары»
+        for slug in ("indie-acoustic", "garage-notesfuzz", "indiepop-cleangtr", "lounge-nylon", "chiptune-guitars"):
+            p = next(x for x in self.built if x["slug"] == slug)
+            with self.subTest(slug=slug):
+                self.assertAlmostEqual(_level(p, "guitar"),
+                                       BEFORE[slug][1] + GTR_SHIFT[p["family"]] - 3.0, places=6)
 
     def test_guitar_median_by_family(self):
         for fam, want in GTR_MEDIAN.items():

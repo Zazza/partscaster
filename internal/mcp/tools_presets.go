@@ -195,7 +195,9 @@ func registerPresetTools(s *Server) {
 		Name: "sound_preset_apply",
 		Description: "Применить пресет звука к готовому треку сейчас (синхронно, минуты): нет дорожек — разделит " +
 			"(части барабанов — RoFormer), недостающие наборы сэмплов поставит, пересоберёт дорожки, финал — на " +
-			"результате, новая версия-трек «<трек> · <пресет>». Ответ — id версии.",
+			"результате, новая версия-трек «<трек> · <пресет>». Ответ {version_id, file, warnings?}: у трека нет " +
+			"плана — гитарист «по аккордам плана» (gtrnotes) пропускается, гитара YuE2 идёт через остальную " +
+			"обработку, в warnings и в названии версии — пометка.",
 		InputSchema: props(map[string]any{
 			"job_id":    prop("ID трека", "integer"),
 			"preset_id": prop("id пресета (sound_presets)", "integer"),
@@ -218,7 +220,11 @@ func registerPresetTools(s *Server) {
 					if err != nil {
 						return "", err
 					}
-					return toJSON(map[string]any{"version_id": res.ChildID, "file": res.File}), nil
+					out := map[string]any{"version_id": res.ChildID, "file": res.File}
+					if len(res.Warnings) > 0 {
+						out["warnings"] = res.Warnings
+					}
+					return toJSON(out), nil
 				}
 			}
 			return "", fmt.Errorf("нет пресета %d (см. sound_presets)", pid)
