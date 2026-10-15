@@ -244,6 +244,31 @@ export const groups = [
         style: 'English, thrash metal, aggressive downpicked riffs, fast double-kick drums, barked rhythmic vocals, breakneck tempo, 185 BPM',
         slots: { language: 'English', genre: 'thrash metal', rhythm: 'breakneck double-kick', guitars: 'aggressive downpicked riffs', keys: '', vocals: 'barked rhythmic', mood: 'aggression, urgency', production: 'sharp loud' }, bpm: 185,
       },
+      {
+        id: 'black-metal', name: 'Блэк-метал: сырой классический', nameEn: 'Black metal: raw classic',
+        style: 'English, raw classic black metal, fast tremolo-picked guitar wall, relentless blast beats, lo-fi cold grim production, raspy shrieked male vocals, cold dark atmosphere, 180 BPM',
+        slots: { language: 'English', genre: 'black metal', rhythm: 'relentless blast beats', guitars: 'fast tremolo-picked wall', keys: '', vocals: 'raspy shrieked male', mood: 'cold grim darkness', production: 'lo-fi raw cold' }, bpm: 180,
+      },
+      {
+        id: 'death-metal', name: 'Дэт-метал: старая школа', nameEn: 'Death metal: old school',
+        style: 'English, old school death metal, down-tuned grinding guitar riffs, fast double-kick with blast sections, guttural growled male vocals, raw dark production, brutal and tight, 160 BPM',
+        slots: { language: 'English', genre: 'death metal', rhythm: 'fast double-kick with blasts', guitars: 'down-tuned grinding riffs', keys: '', vocals: 'guttural death growls', mood: 'brutal, claustrophobic', production: 'raw dark heavy' }, bpm: 160,
+      },
+      {
+        id: 'melodic-death', name: 'Мелодичный дэт: гётеборгский', nameEn: 'Melodic death: Gothenburg',
+        style: 'English, melodic death metal, Gothenburg style twin guitar harmonies over aggressive riffs, tight double-kick drums, harsh growled male vocals, dark driving melancholic energy, 150 BPM',
+        slots: { language: 'English', genre: 'melodic death metal', rhythm: 'tight driving double-kick', guitars: 'twin harmonies over aggressive riffs', keys: '', vocals: 'harsh growled male', mood: 'dark driving melancholy', production: 'dense tight modern' }, bpm: 150,
+      },
+      {
+        id: 'power-metal', name: 'Пауэр-метал: эпика и скорость', nameEn: 'Power metal: epic and fast',
+        style: 'English, power metal, fast galloping twin guitar harmonies, big drums with constant double-kick, soaring clear male vocals, epic triumphant fantasy mood, bright polished production, 165 BPM',
+        slots: { language: 'English', genre: 'power metal', rhythm: 'galloping double-kick', guitars: 'fast twin harmonic leads', keys: 'symphonic synth pads', vocals: 'soaring clear male', mood: 'epic triumphant', production: 'bright polished big' }, bpm: 165,
+      },
+      {
+        id: 'prog-metal', name: 'Прог-метал: рваный счёт', nameEn: 'Prog metal: shifting meters',
+        style: 'English, progressive metal, heavy down-tuned riffs in shifting time signatures, syncopated precise drumming, clean melodic male vocals with harsh accents, dense modern production, cerebral and heavy, 140 BPM',
+        slots: { language: 'English', genre: 'progressive metal', rhythm: 'syncopated shifting meters', guitars: 'heavy down-tuned technical riffs', keys: 'atmospheric synth layers', vocals: 'clean melodic with harsh accents', mood: 'cerebral intensity', production: 'dense modern precise' }, bpm: 140,
+      },
     ],
   },
   {
@@ -258,6 +283,11 @@ export const groups = [
         id: 'stoner', name: 'Стоунер: фузз и пустыня', nameEn: 'Stoner: fuzz and desert',
         style: 'English, stoner rock, desert rock, groovy mid-tempo, heavy swing, thick fuzz riffs, tube amp, laid-back hazy male, sun-baked hypnotic, warm vintage, live jam, 100 BPM',
         slots: { language: 'English', genre: 'stoner rock, desert rock', rhythm: 'groovy mid-tempo, heavy swing', guitars: 'thick fuzz riffs, tube amp', keys: '', vocals: 'laid-back hazy male', mood: 'sun-baked hypnotic', production: 'warm vintage, live jam' }, bpm: 100,
+      },
+      {
+        id: 'sludge-metal', name: 'Сладж: злой и вязкий', nameEn: 'Sludge: mean and thick',
+        style: 'English, sludge metal, slow mean down-tuned guitar riffs, bashed heavy drums, shouted hardcore-style male vocals, dusty raw production, hostile and thick, 90 BPM',
+        slots: { language: 'English', genre: 'sludge metal', rhythm: 'slow heavy plod', guitars: 'down-tuned mean riffs', keys: '', vocals: 'shouted hardcore male', mood: 'hostile, oppressive', production: 'dusty raw heavy' }, bpm: 90,
       },
     ],
   },

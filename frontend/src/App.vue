@@ -899,7 +899,7 @@ function onWindowClick(e) {
       </div>
       <div class="page-modal-body">
         <div class="lib-row" :title="t('form.lib.tip')">
-          <VSelect v-model="libGroup" :options="libGroupOptions" :placeholder="t('form.lib.group')" @update:model-value="onLibGroupChange()" />
+          <VSelect v-model="libGroup" :options="libGroupOptions" :placeholder="t('form.lib.group')" searchable @update:model-value="onLibGroupChange()" />
           <VSelect v-model="libStyle" :options="libStyleOptions" :disabled="!libGroup" :placeholder="t('form.lib.style')" @update:model-value="onLibStyleChange()" />
           <button v-if="currentItem" class="ghost small-btn" :title="t('form.lib.exact.tip')" @click="onLibExact">{{ t('form.lib.exact') }}</button>
           <button class="ghost small-btn" :title="t('my.save.tip')" @click="openStyleSave">{{ t('my.save') }}</button>

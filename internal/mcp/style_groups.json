@@ -239,6 +239,31 @@
     "id": "thrash",
     "name": "Трэш: быстро и рублено",
     "style": "English, thrash metal, aggressive downpicked riffs, fast double-kick drums, barked rhythmic vocals, breakneck tempo, 185 BPM"
+   },
+   {
+    "id": "black-metal",
+    "name": "Блэк-метал: сырой классический",
+    "style": "English, raw classic black metal, fast tremolo-picked guitar wall, relentless blast beats, lo-fi cold grim production, raspy shrieked male vocals, cold dark atmosphere, 180 BPM"
+   },
+   {
+    "id": "death-metal",
+    "name": "Дэт-метал: старая школа",
+    "style": "English, old school death metal, down-tuned grinding guitar riffs, fast double-kick with blast sections, guttural growled male vocals, raw dark production, brutal and tight, 160 BPM"
+   },
+   {
+    "id": "melodic-death",
+    "name": "Мелодичный дэт: гётеборгский",
+    "style": "English, melodic death metal, Gothenburg style twin guitar harmonies over aggressive riffs, tight double-kick drums, harsh growled male vocals, dark driving melancholic energy, 150 BPM"
+   },
+   {
+    "id": "power-metal",
+    "name": "Пауэр-метал: эпика и скорость",
+    "style": "English, power metal, fast galloping twin guitar harmonies, big drums with constant double-kick, soaring clear male vocals, epic triumphant fantasy mood, bright polished production, 165 BPM"
+   },
+   {
+    "id": "prog-metal",
+    "name": "Прог-метал: рваный счёт",
+    "style": "English, progressive metal, heavy down-tuned riffs in shifting time signatures, syncopated precise drumming, clean melodic male vocals with harsh accents, dense modern production, cerebral and heavy, 140 BPM"
    }
   ]
  },
@@ -255,6 +280,11 @@
     "id": "stoner",
     "name": "Стоунер: фузз и пустыня",
     "style": "English, stoner rock, desert rock, groovy mid-tempo, heavy swing, thick fuzz riffs, tube amp, laid-back hazy male, sun-baked hypnotic, warm vintage, live jam, 100 BPM"
+   },
+   {
+    "id": "sludge-metal",
+    "name": "Сладж: злой и вязкий",
+    "style": "English, sludge metal, slow mean down-tuned guitar riffs, bashed heavy drums, shouted hardcore-style male vocals, dusty raw production, hostile and thick, 90 BPM"
    }
   ]
  },
