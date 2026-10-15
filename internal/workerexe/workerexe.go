@@ -190,8 +190,8 @@ func writeFile(dst string, r io.Reader, mode os.FileMode) error {
 func WorkerEnv(home, goos string) map[string]string {
 	env := map[string]string{
 		"PARTSCASTER_DATA_DIR": filepath.Join(home, "data"),
-		"HF_HOME":      filepath.Join(home, "hf-cache"),
-		"PYTHONUTF8":   "1",
+		"HF_HOME":              filepath.Join(home, "hf-cache"),
+		"PYTHONUTF8":           "1",
 	}
 	if goos == "windows" {
 		// PyTorch под Windows собран без flash-attention, а режим CUDA-графов YuE2 вызывает её напрямую
@@ -212,7 +212,9 @@ func ServeArgs(lan bool) []string {
 	return []string{"-c", code}
 }
 
-func homeFile(configDir string) string { return filepath.Join(configDir, "partscaster-worker", "home.txt") }
+func homeFile(configDir string) string {
+	return filepath.Join(configDir, "partscaster-worker", "home.txt")
+}
 
 func ResolveHome(configDir, def string) (string, bool) {
 	b, err := os.ReadFile(homeFile(configDir))

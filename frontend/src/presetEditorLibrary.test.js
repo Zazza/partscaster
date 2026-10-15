@@ -7,7 +7,7 @@ import { templateAst, findElements, dir, mountSetup } from './testkit/sfc.js'
 import { presetMasterChain } from './presetEdit.js'
 
 vi.hoisted(() => { globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } })
-const m = vi.hoisted(() => ({ api: {}, demo: {}, confirm: [], before: [] }))
+const m = vi.hoisted(() => ({ api: {}, demo: {}, confirm: [], before: [], queueWatch: null }))
 vi.mock('./api.js', () => ({ api: m.api }))
 vi.mock('./composables/usePresetDemo.js', () => ({ usePresetDemo: () => m.demo }))
 vi.mock('./composables/useConfirm.js', () => ({ useConfirm: () => ({ askConfirm: (...a) => m.confirm.push(a) }) }))
@@ -15,6 +15,8 @@ vi.mock('./composables/useWindowPlay.js', () => ({ useWindowPlay: () => ({ play:
 vi.mock('./composables/usePlayer.js', () => ({
   usePlayer: () => ({ toggleArtifact: async (_k, _l, fn) => fn(), playBtn: () => '▶' }),
 }))
+// слежение за очередью обработки: тест сам решает, когда и что прилетит записи
+vi.mock('./composables/useProcQueue.js', () => ({ watchQueueItem: (id, cb) => m.queueWatch(id, cb) }))
 const { default: PresetEditor } = await import('./components/PresetEditor.vue')
 const { default: PresetLibrary } = await import('./components/PresetLibrary.vue')
 
@@ -38,7 +40,10 @@ beforeEach(() => {
     applySoundPresetWith: vi.fn(async () => 500),
     applyFx: vi.fn(async () => ({ file: 'p.flac', duration_sec: 15 })),
     playFile: vi.fn(async () => {}),
+    playAudio: vi.fn(async () => {}),
   })
+  // по умолчанию запись очереди мгновенно завершена версией #502
+  m.queueWatch = (id, cb) => { cb({ id, state: 'done', result_job_id: 502 }); return () => {} }
   m.demo = {
     demos: ref({ 'Рок': { status: 'ready', jobId: 77, file: 'a.flac', durationSec: 60 },
       'Электроника': { status: 'ready', jobId: 88, file: 'b.flac', durationSec: 60 } }),
@@ -143,6 +148,34 @@ describe('применение к демо', () => {
     await run
     expect(m.demo.waitReady.mock.calls[0][0]).toBe('Рок')
     expect(m.api.applySoundPresetWith.mock.calls[0][0]).toBe(77)
+  })
+
+  test('применение в очереди: редактор жив (Save доступен), по итогу версия демо играет сама', async () => {
+    const { b } = await editor()
+    b.model.value.name = 'Мой'
+    let notify = null
+    m.queueWatch = (id, cb) => { notify = cb; return () => {} }
+    m.api.jobs = vi.fn(async () => [{ id: 502, title: 'v', audio_file: 'v.flac', duration_sec: 60 }])
+    const run = b.applyToRef()
+    await flush()
+    expect(b.applyLive.value).toBe(true)
+    expect(b.action.value).toBe('')          // долгое применение не блокирует Save
+    expect(b.canSave.value).toBe(true)
+    notify({ id: 9, state: 'done', result_job_id: 502 })
+    await run
+    expect(m.api.playAudio).toHaveBeenCalledWith(502)
+  })
+
+  test('окно закрыли, пока применялось в очереди, — версия не играет', async () => {
+    const { b, unmount } = await editor()
+    let notify = null
+    m.queueWatch = (id, cb) => { notify = cb; return () => {} }
+    const run = b.applyToRef()
+    await flush()
+    unmount()
+    notify({ id: 9, state: 'done', result_job_id: 502 })
+    await run
+    expect(m.api.playAudio).not.toHaveBeenCalled()
   })
 })
 
@@ -275,6 +308,52 @@ describe('PresetLibrary', () => {
     expect(!!evalIn(dir(btn.node, 'bind', 'disabled'), b, { p: { id: 9 } })).toBe(false)
     d.resolve(600)
     await Promise.all(runs)
+    expect(b.demoBusy.value.size).toBe(0)
+  })
+
+  test('«▶ на демо»: очередь закончилась — версия демо играет сразу, без поиска в списке', async () => {
+    const { b } = await lib()
+    m.api.jobs = vi.fn(async () => [{ id: 502, title: 'Демо · Рок · А', audio_file: 'v.flac', duration_sec: 60 }])
+    await b.playOnDemo({ id: 1, name: 'А', family: 'Рок' })
+    expect(m.api.playAudio).toHaveBeenCalledWith(502)
+  })
+
+  test('«▶ на демо»: ход применения виден — «в очереди», «применяю», итог', async () => {
+    const { b } = await lib()
+    let notify = null
+    m.queueWatch = (id, cb) => { notify = cb; return () => {} }
+    const run = b.playOnDemo({ id: 1, name: 'А', family: 'Рок' })
+    await flush()
+    notify({ id: 9, state: 'waiting' })
+    await flush()
+    expect(b.msg.value).toMatch(/в очереди/)
+    notify({ id: 9, state: 'running' })
+    await flush()
+    expect(b.msg.value).toMatch(/Применяю/)
+    notify({ id: 9, state: 'done', result_job_id: 502 })
+    await run
+    expect(b.err.value).toBe('')
+  })
+
+  test('«▶ на демо»: первый раз демо генерируется — сообщение про это до применения', async () => {
+    const { b } = await lib()
+    const d = deferred()
+    m.demo.demos = ref({ 'Рок': { status: 'cooking', jobId: 77 } })
+    m.demo.waitReady = vi.fn(() => d.promise.then(() => 'ready'))
+    m.api.jobs = vi.fn(async () => [{ id: 502, title: 'v', audio_file: 'v.flac', duration_sec: 60 }])
+    const run = b.playOnDemo({ id: 1, name: 'А', family: 'Рок' })
+    await flush()
+    expect(b.msg.value).toMatch(/готовлю демо/)
+    d.resolve()
+    await run
+  })
+
+  test('«▶ на демо»: запись очереди упала — ошибка на экране, ничего не играет', async () => {
+    const { b } = await lib()
+    m.queueWatch = (id, cb) => { cb({ id, state: 'error', err: 'воркер недоступен' }); return () => {} }
+    await b.playOnDemo({ id: 1, name: 'А', family: 'Рок' })
+    expect(b.err.value).toMatch(/воркер недоступен/)
+    expect(m.api.playAudio).not.toHaveBeenCalled()
     expect(b.demoBusy.value.size).toBe(0)
   })
 })

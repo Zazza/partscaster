@@ -33,9 +33,9 @@ func TestOrderSerial(t *testing.T) {
 	defer cancel()
 	var order []int64
 	done := make(chan struct{})
-	q.Enqueue("preset", "a", 1, func(context.Context) error { order = append(order, 1); return nil })
-	q.Enqueue("preset", "b", 2, func(context.Context) error { order = append(order, 2); return nil })
-	q.Enqueue("preset", "c", 3, func(context.Context) error { order = append(order, 3); close(done); return nil })
+	q.Enqueue("preset", "a", 1, func(context.Context) (int64, error) { order = append(order, 1); return 0, nil })
+	q.Enqueue("preset", "b", 2, func(context.Context) (int64, error) { order = append(order, 2); return 0, nil })
+	q.Enqueue("preset", "c", 3, func(context.Context) (int64, error) { order = append(order, 3); close(done); return 0, nil })
 	<-done
 	if len(order) != 3 || order[0] != 1 || order[1] != 2 || order[2] != 3 {
 		t.Fatalf("порядок %v, want [1 2 3]", order)
@@ -47,9 +47,9 @@ func TestMoveReordersWaiting(t *testing.T) {
 	defer cancel()
 	block := make(chan struct{})
 	release := make(chan struct{})
-	q.Enqueue("preset", "blocker", 1, func(context.Context) error { <-block; <-release; return nil })
-	q.Enqueue("preset", "b", 2, func(context.Context) error { <-release; return nil })
-	c := q.Enqueue("preset", "c", 3, func(context.Context) error { <-release; return nil })
+	q.Enqueue("preset", "blocker", 1, func(context.Context) (int64, error) { <-block; <-release; return 0, nil })
+	q.Enqueue("preset", "b", 2, func(context.Context) (int64, error) { <-release; return 0, nil })
+	c := q.Enqueue("preset", "c", 3, func(context.Context) (int64, error) { <-release; return 0, nil })
 	q.Move(c.ID, -1) // c выше b
 	waitFor(t, func() bool {
 		s := q.Snapshot()
@@ -63,8 +63,8 @@ func TestCancelWaiting(t *testing.T) {
 	q, cancel := runQueue()
 	defer cancel()
 	release := make(chan struct{})
-	q.Enqueue("preset", "a", 1, func(context.Context) error { <-release; return nil })
-	it := q.Enqueue("preset", "b", 2, func(context.Context) error { return nil })
+	q.Enqueue("preset", "a", 1, func(context.Context) (int64, error) { <-release; return 0, nil })
+	it := q.Enqueue("preset", "b", 2, func(context.Context) (int64, error) { return 0, nil })
 	q.Cancel(it.ID)
 	s := q.Snapshot()
 	if len(s.Items) != 2 { // идущая a + отменённая b
@@ -81,11 +81,11 @@ func TestPauseHoldsNext(t *testing.T) {
 	defer cancel()
 	release := make(chan struct{})
 	first := make(chan struct{})
-	q.Enqueue("preset", "a", 1, func(context.Context) error { close(first); <-release; return nil })
+	q.Enqueue("preset", "a", 1, func(context.Context) (int64, error) { close(first); <-release; return 0, nil })
 	<-first
 	q.SetPaused(true)
 	started := make(chan struct{})
-	q.Enqueue("preset", "b", 2, func(context.Context) error { close(started); return nil })
+	q.Enqueue("preset", "b", 2, func(context.Context) (int64, error) { close(started); return 0, nil })
 	select {
 	case <-started:
 		t.Fatal("под паузой началась вторая запись")
@@ -107,8 +107,8 @@ func TestErrorRecorded(t *testing.T) {
 	q, cancel := runQueue()
 	defer cancel()
 	done := make(chan struct{})
-	q.Enqueue("preset", "bad", 1, func(context.Context) error { return errors.New("воркер недоступен") })
-	q.Enqueue("preset", "ok", 2, func(context.Context) error { close(done); return nil })
+	q.Enqueue("preset", "bad", 1, func(context.Context) (int64, error) { return 0, errors.New("воркер недоступен") })
+	q.Enqueue("preset", "ok", 2, func(context.Context) (int64, error) { close(done); return 0, nil })
 	<-done
 	var bad, ok Item
 	for _, it := range q.Snapshot().Items {
@@ -124,5 +124,27 @@ func TestErrorRecorded(t *testing.T) {
 	}
 	if ok.State != "done" {
 		t.Fatalf("успешная запись: %+v", ok)
+	}
+}
+
+// Успешная операция прикладывает итог (для пресета — id версии-трека) к записи
+// очереди: интерфейс по нему находит и показывает готовую версию.
+func TestResultRecorded(t *testing.T) {
+	q, cancel := runQueue()
+	defer cancel()
+	done := make(chan Item, 1)
+	q.Enqueue("preset", "ок", 7, func(context.Context) (int64, error) { return 42, nil })
+	waitFor(t, func() bool {
+		for _, it := range q.Snapshot().Items {
+			if it.Title == "ок" && it.State == "done" {
+				done <- it
+				return true
+			}
+		}
+		return false
+	})
+	it := <-done
+	if it.ResultJobID != 42 {
+		t.Fatalf("итог записи: %+v, want result_job_id 42", it)
 	}
 }
