@@ -38,6 +38,7 @@ const (
 type Client struct {
 	mu      sync.RWMutex
 	baseURL string
+	source  string // X-Partscaster-Source: app | mcp
 	hc      *http.Client
 }
 
@@ -107,6 +108,7 @@ func (c *Client) callWith(hc *http.Client, ctx context.Context, method, path str
 	if err != nil {
 		return err
 	}
+	c.queueHeaders(ctx, httpReq)
 	if req != nil {
 		if req.json != nil {
 			httpReq.Header.Set("Content-Type", "application/json")
@@ -155,6 +157,7 @@ func (c *Client) getBytes(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.queueHeaders(ctx, req)
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err

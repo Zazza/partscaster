@@ -1,16 +1,18 @@
 <script setup>
 // Левый блок: логотип с названием, статистика воркера (видеопамять, очереди)
-// и очередь генераций; внизу прижато меню разделов, ещё ниже — тема и язык.
+// и общая очередь воркера (генерации и долгие операции приложения и ИИ);
+// внизу прижато меню разделов, ещё ниже — тема и язык.
 // Сворачивается в узкую полосу с иконками (очередь — счётчиком на «треках»).
 import { computed, ref } from 'vue'
 import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { queueRows } from '../queueView.js'
 
 const props = defineProps({
   logo: { type: String, default: '' },
   stats: { type: Object, default: null },
-  jobs: { type: Array, default: () => [] },
-  queue: { type: Object, default: () => ({ paused: false, items: [] }) }, // очередь обработки (Go)
+  queue: { type: Object, default: () => ({ paused: false, items: [] }) }, // общая очередь воркера
   health: { type: Object, default: null },     // {up, title}
   workerUrl: { type: String, default: '' },    // адрес воркера из настроек
   section: { type: String, default: '' },      // '' — список треков (главная)
@@ -18,8 +20,9 @@ const props = defineProps({
   theme: { type: String, default: 'dark' },    // 'dark' | 'light'
   locale: { type: String, default: 'ru' },     // 'ru' | 'en'
 })
-const emit = defineEmits(['nav', 'import-recipes', 'about', 'theme', 'locale'])
+const emit = defineEmits(['nav', 'import-recipes', 'about', 'theme', 'locale', 'open-job'])
 const { t } = useI18n()
+const { askConfirm } = useConfirm()
 
 const collapsed = ref((() => { try { return localStorage.getItem('partscaster_sidebar') === '1' } catch { return false } })())
 function toggleCollapse() {
@@ -32,19 +35,39 @@ const workerHost = computed(() => {
   try { return new URL(props.workerUrl).host } catch { return props.workerUrl }
 })
 
-// очередь генераций: идущие и ждущие джобы воркера
-const activeJobs = computed(() => (props.jobs || []).filter((j) => j.status === 'queued' || j.status === 'running'))
-const queueN = computed(() => activeJobs.value.length)
-const runningPct = computed(() => {
-  const r = props.stats && props.stats.running
-  return r && r.progress_pct != null ? r.progress_pct : null
-})
-// очередь обработки (Go): применение пресетов и другие долгие прогоны
-const procItems = computed(() => (props.queue && props.queue.items) || [])
-const procPaused = computed(() => !!(props.queue && props.queue.paused))
-const procActiveN = computed(() => procItems.value.filter((it) => it.state === 'waiting' || it.state === 'running').length)
-function togglePause() { api.queueSetPaused(!procPaused.value) }
-const stateDot = (it) => ({ waiting: 'queued', running: 'running', done: 'done', error: 'err', canceled: 'off' }[it.state] || 'off')
+// общая очередь воркера: генерации и долгие операции (пресеты, пересборка, стемы,
+// эффекты…) от приложения и от ИИ — одним списком: идущая, ждущие, последние итоги
+const rows = computed(() => queueRows(props.queue, props.stats))
+const liveRows = computed(() => rows.value.filter((r) => r.canCancel))
+const queueN = computed(() => liveRows.value.length)
+const SHOW_DONE = 5 // завершённых под живыми — последние несколько
+const shownRows = computed(() => liveRows.value.concat(rows.value.filter((r) => !r.canCancel).slice(0, SHOW_DONE)))
+const paused = computed(() => !!(props.queue && props.queue.paused))
+function togglePause() { api.queueSetPaused(!paused.value) }
+const stateDot = (r) => ({ waiting: 'queued', running: 'running', done: 'done', error: 'err' }[r.state] || 'off')
+const KINDS = ['generate', 'preset', 'rebuild', 'stems', 'fx', 'transcribe', 'whisper', 'voice', 'plan', 'preview', 'render']
+// подпись записи: генерация — трек; операция — что делается, над каким треком и чем (пресет)
+function rowLabel(r) {
+  if (r.kind === 'generate') return '#' + r.jobId + ' ' + (r.title || '')
+  const kind = KINDS.includes(r.kind) ? t('pq.kind.' + r.kind) : r.kind
+  const extra = r.title && r.title !== r.kind && !r.title.startsWith(r.kind + ' ') ? ' · ' + r.title : ''
+  return kind + (r.jobId ? ' #' + r.jobId : '') + extra
+}
+function resultText(r) {
+  const res = r.result
+  if (res.type === 'version') return res.jobId ? t('pq.result.version', { id: res.jobId }) : t('pq.result.done')
+  return res.type ? t('pq.result.' + res.type) : ''
+}
+function rowTip(r) {
+  if (r.result.type === 'error') return rowLabel(r) + ': ' + r.result.text
+  if (r.result.type === 'interrupted') return t('pq.result.interrupted.tip')
+  return rowLabel(r)
+}
+function cancelRow(r) {
+  askConfirm(t('pq.cancel.title', { title: rowLabel(r) }), t(r.state === 'running' ? 'pq.cancel.running' : 'pq.cancel.waiting'),
+    () => api.queueCancel(r.id))
+}
+function openResult(r) { if (r.result.type === 'version' && r.result.jobId) emit('open-job', r.result.jobId) }
 
 const NAV = [
   { id: 'new', icon: 'plus' },
@@ -104,38 +127,29 @@ function onNav(id) { emit('nav', id) }
       </button>
     </nav>
 
-    <!-- очередь генераций: что сейчас и что дальше -->
+    <!-- общая очередь воркера: что идёт, что дальше и чем кончилось; ✕ у всего незавершённого,
+         ▲▼ у ждущих — кнопки видны всегда; пауза — для всех клиентов воркера -->
     <div class="sb-queue" v-if="!collapsed">
-      <div class="sb-q-head">{{ t('nav.queue') }} <span class="muted">{{ queueN }}</span></div>
-      <div v-if="queueN" class="sb-q-list">
-        <div v-for="j in activeJobs.slice(0, 8)" :key="j.id" class="sb-q-item" :title="'#' + j.id + ' ' + j.title">
-          <span class="sb-q-dot" :class="j.status"></span>
-          <span class="sb-q-title">#{{ j.id }} {{ j.title }}</span>
-          <span v-if="j.status === 'running' && stats && stats.running && stats.running.job_id === j.id && runningPct != null"
-                class="sb-q-pct">{{ runningPct }}%</span>
-        </div>
-        <div v-if="queueN > 8" class="muted sb-q-more">+{{ queueN - 8 }}</div>
-      </div>
-      <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
-
-      <!-- обработка: применение пресетов и другие долгие прогоны приложения;
-           порядок меняется, ждущие отменяются, очередь ставится на паузу -->
       <div class="sb-q-head sb-q-proc-head">
-        <span>{{ t('pq.processing') }} <span class="muted">{{ procActiveN }}</span></span>
-        <button class="icon-btn sb-q-pause" :class="{ on: procPaused }"
-                :title="procPaused ? t('pq.resume') : t('pq.pause')" @click="togglePause"><AppIcon :name="procPaused ? 'play' : 'pause'" /></button>
+        <span>{{ t('nav.queue') }} <span class="muted">{{ queueN }}</span></span>
+        <button class="icon-btn sb-q-pause" :class="{ on: paused }"
+                :title="paused ? t('pq.resume') : t('pq.pause')" @click="togglePause"><AppIcon :name="paused ? 'play' : 'pause'" /></button>
       </div>
-      <div v-if="procItems.length" class="sb-q-list">
-        <div v-for="(it, k) in procItems.slice(0, 8)" :key="it.id" class="sb-q-item"
-             :title="it.err ? it.err : it.title + (it.job_id ? ' · #' + it.job_id : '')">
-          <span class="sb-q-dot" :class="stateDot(it)"></span>
-          <span class="sb-q-title">{{ it.title }}</span>
-          <span v-if="it.state === 'waiting'" class="sb-q-ctl">
-            <button v-if="k > 1" class="sb-mini" :title="t('pq.move.up')" @click.stop="api.queueMove(it.id, -1)">▲</button>
-            <button class="sb-mini" :title="t('pq.cancel')" @click.stop="api.queueCancel(it.id)">✕</button>
+      <div v-if="shownRows.length" class="sb-q-list">
+        <div v-for="r in shownRows" :key="r.id" class="sb-q-item" :class="{ fin: !r.canCancel }" :title="rowTip(r)">
+          <span class="sb-q-dot" :class="stateDot(r)"></span>
+          <span v-if="r.ai" class="sb-q-ai" :title="t('pq.ai.tip')">{{ t('pq.ai') }}</span>
+          <span class="sb-q-title">{{ rowLabel(r) }}</span>
+          <span v-if="r.pct != null" class="sb-q-pct">{{ r.pct }}%</span>
+          <span v-if="r.canCancel" class="sb-q-ctl">
+            <button class="sb-mini" :class="{ hid: !r.canUp }" :disabled="!r.canUp" :title="t('pq.move.up')" @click.stop="api.queueMove(r.id, -1)">▲</button>
+            <button class="sb-mini" :class="{ hid: !r.canDown }" :disabled="!r.canDown" :title="t('pq.move.down')" @click.stop="api.queueMove(r.id, 1)">▼</button>
+            <button class="sb-mini" :title="t('pq.cancel')" @click.stop="cancelRow(r)">✕</button>
           </span>
+          <button v-else-if="r.result.type === 'version' && r.result.jobId" class="sb-mini sb-q-res"
+                  :title="t('pq.result.version.tip', { id: r.result.jobId })" @click.stop="openResult(r)">{{ resultText(r) }}</button>
+          <span v-else class="sb-q-res" :class="r.result.type">{{ resultText(r) }}</span>
         </div>
-        <div v-if="procItems.length > 8" class="muted sb-q-more">+{{ procItems.length - 8 }}</div>
       </div>
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
     </div>
@@ -187,11 +201,18 @@ function onNav(id) { emit('nav', id) }
 .sb-q-proc-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .sb-q-pause { padding: 0 4px; font-size: 10px; }
 .sb-q-pause.on { color: var(--accent, #7aa2f7); }
-.sb-q-ctl { flex: none; display: none; gap: 2px; }
-.sb-q-item:hover .sb-q-ctl { display: inline-flex; }
+/* кнопки записи видны всегда; ▲▼ только там, куда можно двинуть (место держится — строки ровные) */
+.sb-q-ctl { flex: none; display: inline-flex; gap: 2px; }
 .sb-mini { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 9px;
   padding: 0 2px; line-height: 1; }
-.sb-mini:hover { color: var(--text); }
+.sb-mini:hover:not(:disabled) { color: var(--text); }
+.sb-mini.hid { visibility: hidden; }
+.sb-q-item.fin { opacity: .75; }
+.sb-q-ai { flex: none; font-size: 9px; padding: 0 3px; border-radius: 3px; color: var(--accent, #7aa2f7);
+  border: 1px solid currentColor; line-height: 1.3; }
+.sb-q-res { flex: none; font-size: 10px; color: var(--muted); }
+.sb-q-res.error { color: var(--err, #e06c75); }
+button.sb-q-res { color: var(--ok, #7ec16c); font-size: 10px; }
 @keyframes sbpulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
 .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }

@@ -350,7 +350,7 @@ describe('PresetLibrary', () => {
 
   test('«▶ на демо»: запись очереди упала — ошибка на экране, ничего не играет', async () => {
     const { b } = await lib()
-    m.queueWatch = (id, cb) => { cb({ id, state: 'error', err: 'воркер недоступен' }); return () => {} }
+    m.queueWatch = (id, cb) => { cb({ id, state: 'error', error: 'воркер недоступен' }); return () => {} }
     await b.playOnDemo({ id: 1, name: 'А', family: 'Рок' })
     expect(b.err.value).toMatch(/воркер недоступен/)
     expect(m.api.playAudio).not.toHaveBeenCalled()

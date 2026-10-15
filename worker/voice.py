@@ -165,12 +165,20 @@ def resample(x: np.ndarray, sr_from: int, sr_to: int) -> np.ndarray:
     return resample_poly(x, int(sr_to) // g, int(sr_from) // g, axis=0).astype(np.float32)
 
 
+def _run(cmd, timeout=None, **kw):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **kw)
+
+
+# запуск Seed-VC; воркер ставит сюда QUEUE.run_proc — отмена из очереди убивает процесс
+run_proc = _run
+
+
 def convert(source_wav: Path, ref_wav: Path, out_wav: Path, steps: int, timeout: int = 3600) -> dict:
     """Вызов seedvc_run.py интерпретатором Seed-VC → {out, seconds}."""
-    r = subprocess.run(
+    r = run_proc(
         [str(SEEDVC_PY), str(RUNNER), "--dir", str(SEEDVC_DIR), "--source", str(source_wav),
          "--target", str(ref_wav), "--out", str(out_wav), "--steps", str(steps)],
-        capture_output=True, text=True, timeout=timeout)
+        timeout=timeout)
     if r.returncode != 0:
         tail = (r.stderr or r.stdout).strip().splitlines()[-5:]
         raise RuntimeError("seed-vc: " + " | ".join(tail))

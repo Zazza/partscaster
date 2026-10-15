@@ -1,11 +1,11 @@
-// Слежение за очередью обработки (Go): запись применения пресета — от постановки
+// Слежение за записью общей очереди воркера (применение пресета) — от постановки
 // до итога. Колбэку приходит запись при каждой смене состояния (waiting →
-// running → done/error/canceled; у done — result_job_id версии-трека), компонент
+// running → done/error/canceled/interrupted; у done — result_job_id версии-трека), компонент
 // сам решает, что показывать. Пока есть интересующиеся, опрашиваем список очереди.
 import { api } from '../api.js'
+import { FINAL_STATES } from '../queueView.js'
 
 const POLL_MS = 2000
-const FINAL = ['done', 'error', 'canceled']
 
 const watchers = new Map()   // id записи → Map<колбэк, последнее состояние>
 let timer = null
@@ -15,9 +15,20 @@ async function poll() {
   if (polling) return
   polling = true
   try {
+    // пропавшими считаем только тех, за кем следили ДО запроса: запись, поставленная во время опроса,
+    // в его ответ попасть не могла
+    const before = new Set(watchers.keys())
     let items = null
     try { items = ((await api.queueList()) || {}).items || null } catch { /* связь моргнула — на следующем тике */ }
     if (items) {
+      // запись пропала из очереди (перезапуск воркера: операции клиентов живут в его памяти) — итог «прервано»,
+      // иначе окно вечно ждало бы
+      const seen = new Set(items.map((it) => it.id))
+      for (const [id, cbs] of watchers) {
+        if (seen.has(id) || !before.has(id)) continue
+        for (const cb of cbs.keys()) cb({ id, state: 'interrupted', error: '', result_job_id: 0 })
+        watchers.delete(id)
+      }
       for (const it of items) {
         const cbs = watchers.get(it.id)
         if (!cbs || !cbs.size) continue
@@ -26,7 +37,7 @@ async function poll() {
           cbs.set(cb, it.state)
           cb(it)
         }
-        if (FINAL.includes(it.state)) watchers.delete(it.id) // итог доставлен
+        if (FINAL_STATES.includes(it.state)) watchers.delete(it.id) // итог доставлен
       }
     }
   } finally {
@@ -36,7 +47,7 @@ async function poll() {
 }
 
 /** Следить за записью очереди: колбэк получает запись при каждой смене состояния,
- *  последняя — done | error | canceled (у done — result_job_id версии-трека).
+ *  последняя — done | error | canceled | interrupted (у done — result_job_id версии-трека).
  *  Возвращает функцию прекращения слежения (компонент закрылся). */
 export function watchQueueItem(id, cb) {
   if (!id) return () => {}

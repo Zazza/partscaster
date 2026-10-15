@@ -14,7 +14,6 @@ import (
 	"partscaster/internal/config"
 	"partscaster/internal/dsp"
 	"partscaster/internal/studio"
-	"partscaster/internal/wq"
 	"partscaster/internal/yue"
 )
 
@@ -39,7 +38,6 @@ type App struct {
 	ctx    context.Context
 	yue    yue.Service
 	player Player
-	queue  *wq.Queue
 
 	// fx — кэш трека/стемов на ПК для быстрого превью эффектов (app_preview.go)
 	fxOnce sync.Once
@@ -51,12 +49,12 @@ type App struct {
 
 func NewApp(client *yue.Client, player Player) *App {
 	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха
-	return &App{yue: yue.Journaled(client), player: player, queue: wq.New()}
+	client.SetSource("app") // в общей очереди воркера — «из приложения», не «ИИ»
+	return &App{yue: yue.Journaled(client), player: player}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	go a.queue.Run(ctx)
 	go a.presetLoop(ctx)
 	go a.recipeLoop(ctx)
 }
@@ -94,7 +92,7 @@ func (a *App) YueSoundPresetDelete(id int64) error {
 	return a.yue.SoundPresetDelete(a.ctx, id)
 }
 
-// YueApplySoundPreset — пресет к треку через очередь обработки: интерфейс не
+// YueApplySoundPreset — пресет к треку через общую очередь воркера: интерфейс не
 // блокируется (можно поставить несколько и сравнить версии), ход и порядок —
 // в очереди левого блока; версия трека появится в списке по готовности.
 // Возвращает id записи очереди.
@@ -105,45 +103,83 @@ func (a *App) YueApplySoundPreset(jobID, presetID int64) (int64, error) {
 	}
 	for _, p := range list {
 		if p.ID == presetID {
-			return a.enqueuePreset(jobID, p), nil
+			return a.enqueuePreset(jobID, p)
 		}
 	}
 	return 0, fmt.Errorf("нет пресета %d", presetID)
 }
 
 // YueApplySoundPresetWith — копия пресета (громкость записей поправлена в студии)
-// в очередь обработки; пресет на воркере не меняется.
+// в очередь; пресет на воркере не меняется.
 func (a *App) YueApplySoundPresetWith(jobID int64, p yue.SoundPreset) (int64, error) {
-	return a.enqueuePreset(jobID, p), nil
+	return a.enqueuePreset(jobID, p)
 }
 
-func (a *App) enqueuePreset(jobID int64, p yue.SoundPreset) int64 {
-	it := a.queue.Enqueue("preset", p.Name, jobID, func(ctx context.Context) (int64, error) {
+// enqueuePreset — операция «пресет» в общей очереди воркера: id сразу, работа — когда дойдёт очередь.
+// Итог записи — id версии-трека (интерфейс покажет и сыграет её).
+func (a *App) enqueuePreset(jobID int64, p yue.SoundPreset) (int64, error) {
+	op, err := studio.StartOp(a.ctx, a.yue, "preset", p.Name, jobID, func(ctx context.Context) (int64, error) {
 		res, err := studio.ApplySoundPreset(ctx, a.yue, jobID, p)
 		if err != nil {
 			return 0, err
 		}
-		return res.ChildID, nil // итог записи очереди: интерфейс покажет и сыграет версию
+		return res.ChildID, nil
 	})
-	return it.ID
+	if err != nil {
+		return 0, err
+	}
+	return op.ID, nil
 }
 
-// YueQueueList — очередь обработки: идущая, ждущие и последние завершённые.
-func (a *App) YueQueueList() wq.Snapshot { return a.queue.Snapshot() }
+// queue — очередь воркера (клиент приложения её всегда имеет; фейк в тестах — нет).
+func (a *App) queue() (yue.Queuer, error) {
+	q, ok := a.yue.(yue.Queuer)
+	if !ok {
+		return nil, yue.ErrNoQueue
+	}
+	return q, nil
+}
 
-// YueQueueMove — ждущую запись подвинуть (dir < 0 — ближе к исполнению).
-func (a *App) YueQueueMove(id int64, dir int) { a.queue.Move(id, dir) }
+// YueQueueList — общая очередь воркера: идущая, ждущие по месту, последние завершённые.
+func (a *App) YueQueueList() (*yue.QueueSnapshot, error) {
+	q, err := a.queue()
+	if err != nil {
+		return nil, err
+	}
+	return q.QueueList(a.ctx)
+}
 
-// YueQueueCancel — ждущую запись убрать из очереди (идущую не прервать).
-func (a *App) YueQueueCancel(id int64) { a.queue.Cancel(id) }
+// YueQueueMove — ждущую запись подвинуть (dir −1 — раньше, 1 — позже).
+func (a *App) YueQueueMove(id int64, dir int) error {
+	q, err := a.queue()
+	if err != nil {
+		return err
+	}
+	return q.QueueMove(a.ctx, id, dir)
+}
+
+// YueQueueCancel — отменить запись: ждущую — снять, идущую — остановить.
+func (a *App) YueQueueCancel(id int64) error {
+	q, err := a.queue()
+	if err != nil {
+		return err
+	}
+	return q.QueueCancel(a.ctx, id)
+}
 
 // YueSetWindowTitle — заголовок нативного окна (document.title его не меняет).
 func (a *App) YueSetWindowTitle(title string) {
 	runtime.WindowSetTitle(a.ctx, title)
 }
 
-// YueQueueSetPaused — пауза очереди обработки: новое не начинается, идущая доигрывает.
-func (a *App) YueQueueSetPaused(v bool) { a.queue.SetPaused(v) }
+// YueQueueSetPaused — пауза общей очереди: новое не начинается, идущая доделывается.
+func (a *App) YueQueueSetPaused(v bool) error {
+	q, err := a.queue()
+	if err != nil {
+		return err
+	}
+	return q.QueuePause(a.ctx, v)
+}
 
 // YueSoundPresetRetry — повторить пресет у трека (ошибка или застрял «применяется»): снова в ожидание.
 func (a *App) YueSoundPresetRetry(jobID, presetID int64) error {

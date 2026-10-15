@@ -14,6 +14,14 @@ from pathlib import Path
 
 log = logging.getLogger("partscaster-worker.stems")
 
+
+def _run(cmd, timeout=None, **kw):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **kw)
+
+
+# запуск внешнего процесса; воркер ставит сюда QUEUE.run_proc — отмена из очереди убивает процесс
+run_proc = _run
+
 # основные дорожки (htdemucs): в сумме дают трек — по ним минус и замены
 MAIN_STEMS = ("drums", "bass", "other", "vocals")
 # подробные дорожки (htdemucs_6s): гитара и клавиши — уточнение внутри
@@ -135,7 +143,7 @@ def _separate_roformer(audio_path: Path, out_dir: Path, sr: int, n: int, mix) ->
     try:
         cmd = [str(_sep_python()), str(Path(__file__).parent / "sep_run.py"),
                str(audio_path), str(tmp), str(_sep_models())]
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=SEP_TIMEOUT)
+        p = run_proc(cmd, timeout=SEP_TIMEOUT)
         if p.returncode != 0:
             raise RuntimeError(f"sep_run exit {p.returncode}: {p.stderr.strip()[-500:]}")
         res = json.loads(p.stdout.strip().splitlines()[-1])

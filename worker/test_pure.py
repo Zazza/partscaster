@@ -351,6 +351,11 @@ class _WorkerDbCase(unittest.TestCase):
             p = mock.patch.object(self.w, name, val)
             p.start()
             self.addCleanup(p.stop)
+        # своя общая очередь: записи генераций прошлого теста не держат слот
+        import opqueue
+        p = mock.patch.object(self.w, "QUEUE", opqueue.OpQueue(on_pos=self.w._save_gen_pos))
+        p.start()
+        self.addCleanup(p.stop)
 
     @contextlib.contextmanager
     def _conn(self):

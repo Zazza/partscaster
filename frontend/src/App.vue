@@ -318,7 +318,7 @@ const jobs = ref([])
 const health = ref(null)
 const compat = useWorkerCompat()   // плашка «воркер/приложение разных версий»
 const stats = ref(null)
-const procQueue = ref({ paused: false, items: [] })   // очередь обработки (Go)
+const procQueue = ref({ paused: false, items: [] })   // общая очередь воркера
 let timer = null
 
 const qf = ref(defaultJobFilter())
@@ -476,7 +476,8 @@ const qDraftOptions = computed(() => [
 
 async function refresh() {
   try {
-    const [j, h, q] = await Promise.all([api.jobs(), api.status(), api.queueList()])
+    // очередь — не повод считать воркер недоступным (старый воркер без /queue отвечает 404)
+    const [j, h, q] = await Promise.all([api.jobs(), api.status(), api.queueList().catch(() => null)])
     jobs.value = j || []
     procQueue.value = q || { paused: false, items: [] }
     // у трека пресет, которого нет в названиях (создан из MCP / в другой вкладке) — перечитать
@@ -656,6 +657,16 @@ function navGo(page) {
     refresh()
   }
   section.value = page === 'tracks' ? '' : page
+}
+
+// итог записи очереди («готово → #N») — открыть эту версию в студии
+async function openFromQueue(id) {
+  await refresh()
+  const j = (jobs.value || []).find((x) => x.id === id)
+  if (!j) return
+  navOpen.value = false
+  section.value = ''
+  studioJob.value = j
 }
 
 async function onImported(r) {
@@ -880,9 +891,9 @@ function onWindowClick(e) {
     <button class="ghost icon" :title="t('common.close')" @click="compat.dismiss"><AppIcon name="x" /></button>
   </div>
   <div class="app-shell">
-  <SideBar :logo="logoUrl" :stats="stats" :jobs="jobs" :health="{ up: !!health, title: healthTitle }"
+  <SideBar :logo="logoUrl" :stats="stats" :health="{ up: !!health, title: healthTitle }"
            :section="section" :studio-job="studioJob" :queue="procQueue" :worker-url="serverURL" :theme="theme" :locale="locale"
-           @nav="navGo" @import-recipes="recipeImport = true" @about="welcome = 'about'"
+           @nav="navGo" @open-job="openFromQueue" @import-recipes="recipeImport = true" @about="welcome = 'about'"
            @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
   <div class="app-col">
 

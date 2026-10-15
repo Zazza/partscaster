@@ -204,6 +204,7 @@ func (c *Client) fetchAudioResp(ctx context.Context, id int64, file, rangeHeader
 	if err != nil {
 		return nil, err
 	}
+	c.queueHeaders(ctx, req)
 	if rangeHeader != "" {
 		req.Header.Set("Range", rangeHeader)
 	}

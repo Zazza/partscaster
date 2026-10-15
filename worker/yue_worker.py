@@ -27,6 +27,7 @@ import engine_cpp
 import llm
 import media
 import instruments as fx_instruments
+import opqueue
 import presets as sound_presets
 import proclock
 import recipe
@@ -34,7 +35,7 @@ import waveform
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
@@ -44,6 +45,7 @@ from dsp import analyze_file, beat_grid, vocal_activity
 from sheetsage import transcribe as ss_transcribe
 from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_DEMUCS, MODEL_ROFORMER, roformer_available,
                    roformer_enabled, separate as demucs_separate)
+import stems as stems_lib
 import voice as voicevc
 
 log = logging.getLogger("partscaster-worker")
@@ -79,35 +81,102 @@ app = FastAPI(title="partscaster-worker")
 
 _pipe = None
 _pipe_lock = threading.Lock()   # одна операция с моделью одновременно
-_gpu_lock = threading.RLock()   # очередь к GPU: рендер/транскрипция/стемы/whisper не работают параллельно
-_gpu_waiters = 0                # сколько потоков стоит в очереди к GPU (для /stats)
-_gpu_waiters_lock = threading.Lock()
 _load_lock = threading.Lock()
 _load_error: str | None = None
 
 
+def _save_gen_pos(op) -> None:
+    """Место генерации в очереди — в БД: переживает перезапуск воркера."""
+    if op.kind != "generate" or not op.job_id:
+        return
+    with db_lock, db() as conn:
+        conn.execute("UPDATE jobs SET queue_pos=? WHERE id=?", (op.pos, op.job_id))
+
+
+# общая очередь долгих операций (opqueue): генерации, стемы, эффекты с усилителем,
+# распознавание, цепочки приложения и ИИ — по одной, по месту в очереди
+QUEUE = opqueue.OpQueue(on_pos=_save_gen_pos, first_id=int(time.time() * 1000))
+stems_lib.run_proc = QUEUE.run_proc               # RoFormer
+voicevc.run_proc = QUEUE.run_proc                 # Seed-VC
+_req_source = opqueue.contextvars.ContextVar("req_source", default="other")  # X-Partscaster-Source запроса
+# состояние запроса: None — вне HTTP (поток очереди); {"queue_error": (код, текст)} — отмена/пропажа операции
+_req_state = opqueue.contextvars.ContextVar("req_state", default=None)
+_slot_depth = opqueue.contextvars.ContextVar("slot_depth", default=0)
+
+
+def _split_section(section: str) -> tuple[str, str, int]:
+    """«stems 42» → (вид, название, трек); «transcribe a.mp3» → трека нет."""
+    kind, _, rest = section.partition(" ")
+    job_id = int(rest) if rest.isdigit() else 0
+    return kind, (section if not job_id else kind), job_id
+
+
 @contextmanager
 def gpu_queue(section: str = "gpu"):
-    """Очередь к единственному GPU: всё тяжёлое (YuE2, demucs, SheetSage,
-    whisper-сабпроцесс) проходит через один лок, иначе параллельные CUDA-контексты
-    ломают друг другу graph capture (cudaErrorStreamCaptureInvalidated).
-    Порядок захвата везде _pipe_lock → _gpu_lock, обратного нет — дедлока не будет."""
-    global _gpu_waiters
+    """Тяжёлая секция (YuE2, demucs, SheetSage, whisper, Seed-VC, NAM): видеокарта
+    одна — секция ждёт своей очереди в QUEUE (параллельные CUDA-контексты ломают
+    друг другу graph capture). Внутри своей операции — без очереди (вложенные
+    секции, шаги цепочки клиента с X-Partscaster-Op).
+    Порядок захвата: сначала слот очереди, потом _pipe_lock — обратного нет.
+    Отмена внутри запроса — 409 «отменено» на выходе из внешней секции."""
+    kind, title, job_id = _split_section(section)
+    depth = _slot_depth.get()
+    token = _slot_depth.set(depth + 1)
     t0 = time.monotonic()
-    with _gpu_waiters_lock:
-        _gpu_waiters += 1
     try:
-        _gpu_lock.acquire()
+        with QUEUE.slot(kind, title, job_id, source=_req_source.get()):
+            wait = time.monotonic() - t0
+            if wait > 1.0:
+                log.info("queue: %s ждал(а) %.1f с", section, wait)
+            yield
+    except (opqueue.OpCanceled, opqueue.OpGone) as e:
+        st = _req_state.get()
+        if depth == 0 and st is not None:
+            # эндпоинты часто заворачивают сбой в 500 «… failed» — итог запроса поправит middleware
+            st["queue_error"] = (409, opqueue.CANCELED_TEXT if isinstance(e, opqueue.OpCanceled) else str(e))
+            raise HTTPException(*st["queue_error"]) from e
+        raise
     finally:
-        with _gpu_waiters_lock:
-            _gpu_waiters -= 1
+        _slot_depth.reset(token)
+
+
+def _canceled_here(e: BaseException) -> bool:
+    """Шаг запроса отменили из очереди, а результат запроса уже записан (импорт, трек корпуса): отмена
+    становится пометкой в ответе, не 409 — иначе клиент повторит запрос и получит дубль."""
+    st = _req_state.get()
+    if st is None or "queue_error" not in st or not isinstance(e, HTTPException) \
+            or e.status_code != st["queue_error"][0]:
+        return False
+    st.pop("queue_error")
+    return True
+
+
+@app.middleware("http")
+async def _queue_context(request: Request, call_next):
+    """Заголовки очереди → контекст запроса: источник (app | mcp) и операция
+    клиента, внутри которой идёт запрос (шаг цепочки не встаёт в очередь повторно)."""
+    src = (request.headers.get("x-partscaster-source") or "").strip().lower()
+    t1 = _req_source.set(src if src in ("app", "mcp") else "other")
+    st: dict = {}
+    t2 = _req_state.set(st)
+    raw = (request.headers.get("x-partscaster-op") or "").strip()
+    op_id = 0
+    if raw:
+        # метка — только операции клиента (цепочки): чужая генерация/секция по подставленному id
+        # прошла бы в тяжёлую секцию мимо очереди; неизвестная или не клиента — секция ответит 409
+        info = QUEUE.info(int(raw)) if raw.isdigit() else None
+        op_id = info["id"] if info and info["client"] else -1
+    t3 = opqueue.current_op.set(op_id)
     try:
-        wait = time.monotonic() - t0
-        if wait > 1.0:
-            log.info("gpu queue: %s ждал(а) лок %.1f с", section, wait)
-        yield
+        resp = await call_next(request)
     finally:
-        _gpu_lock.release()
+        opqueue.current_op.reset(t3)
+        _req_state.reset(t2)
+        _req_source.reset(t1)
+    if "queue_error" in st and resp.status_code != st["queue_error"][0]:
+        code, text = st["queue_error"]
+        return JSONResponse({"detail": text}, status_code=code)
+    return resp
 
 db_lock = threading.Lock()
 
@@ -213,6 +282,11 @@ def _migrate():
         # движок, которым сделан трек ('' — старые, PyTorch): сид повторяет исполнение только на том же движке
         if "engine" not in cols:
             conn.execute("ALTER TABLE jobs ADD COLUMN engine TEXT DEFAULT ''")
+        # общая очередь: место ждущей генерации (0 — старая строка, идёт по id) и кто поставил (app | mcp)
+        if "queue_pos" not in cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN queue_pos INTEGER DEFAULT 0")
+        if "source" not in cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT ''")
         conn.execute("""
         CREATE TABLE IF NOT EXISTS sound_presets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -640,13 +714,19 @@ def friendly_error(e: BaseException) -> str:
 
 
 def _run_job(job_id: int):
+    if not opqueue.current_op.get():
+        op = QUEUE.find_job(job_id)
+        if op is not None:
+            # прямой вызов (не из queue_loop: отладка, тесты) — в своей записи очереди, по её очереди
+            QUEUE.acquire(op.id)
+            _run_in_op(op.id, job_id)
+            return
     with db_lock, db() as conn:
         row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
     job_dir = JOBS_DIR / str(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
-    cancel_ev = threading.Event()
     with _state_lock:
-        _cancel_flags[job_id] = cancel_ev
+        cancel_ev = _cancel_flags.setdefault(job_id, threading.Event())
     on_token, counters = _on_token_cb(job_id)
     budget = 450 if row["draft"] else MAX_SEM_TOKENS   # ~18 с превью
     if not row["draft"] and row["max_tokens"]:
@@ -659,7 +739,7 @@ def _run_job(job_id: int):
         return
     watch_stop = _progress_watcher(job_id, counters, time.time(), budget)
     try:  # noqa: SIM105 - очистка состояния после любого исхода
-        with _pipe_lock, gpu_queue(f"render {job_id}"):
+        with gpu_queue(f"render {job_id}"), _pipe_lock:
             # движок — тот, что в настройках к началу генерации; трек помнит, каким сделан
             cpp = pipe = None
             if engine_pref() == "cpp":
@@ -876,27 +956,120 @@ def voice_job(job_id: int, req: VoiceIn):
         jdir.mkdir(parents=True, exist_ok=True)
         (jdir / "voice.json").write_text(json.dumps(
             {"ref_job_id": req.ref_job_id, "ref_from": req.ref_from, "ref_dur": req.ref_dur, "steps": req.steps}))
+        new_title = req.title or f"{src['title']} · голос #{req.ref_job_id}"
+    _queue_job(new_id, new_title)
     return {"id": new_id}
+
+
+def _queue_job(job_id: int, title: str) -> None:
+    """Новая (или повторённая) генерация — в конец общей очереди; место и источник — в строку джобы.
+    Вызывать после записи строки (вне db_lock: колбэк места пишет в БД)."""
+    op = QUEUE.add("generate", title, job_id, source=_req_source.get())
+    with db_lock, db() as conn:
+        conn.execute("UPDATE jobs SET queue_pos=?, source=? WHERE id=?",
+                     (op.pos, op.source if op.source != "other" else "", job_id))
+
+
+def _flag_render_cancel(job_id: int) -> None:
+    with _state_lock:
+        _cancel_flags.setdefault(job_id, threading.Event()).set()
+
+
+def _cancel_generation_db(job_id: int) -> bool:
+    """Ждущая генерация снята из очереди — и в БД (иначе трек висел бы «в очереди»). True — строка была queued."""
+    with db_lock, db() as conn:
+        cur = conn.execute("UPDATE jobs SET status='canceled', finished_at=? WHERE id=? AND status='queued'",
+                           (time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
+    return cur.rowcount > 0
+
+
+def _cancel_op(op_id: int) -> dict:
+    """Отмена записи очереди; у генерации — ещё строка в БД (ждущая) или флаг рендера (идущая)."""
+    op = QUEUE.info(op_id) or {}
+    kind, job_id = op.get("kind", ""), op.get("job_id", 0)
+    res = QUEUE.cancel(op_id)  # KeyError — неизвестная
+    if kind == "generate" and res["canceled"]:
+        if res["running"] and not _cancel_generation_db(job_id):
+            _flag_render_cancel(job_id)
+        elif res["running"]:
+            # слот выдан, рендер не начат (строка ещё queued) — снята, как ждущая
+            QUEUE.release(op_id, "canceled", error=opqueue.CANCELED_TEXT)
+            res = {"canceled": True, "running": False}
+        else:
+            _cancel_generation_db(job_id)
+    return res
+
+
+def _gen_result(job_id: int) -> tuple[str, int, str]:
+    """Итог генерации для записи очереди — по строке джобы."""
+    row = _job_row(job_id)
+    st = row["status"] if row is not None else "error"
+    if st == "done":
+        return "done", job_id, ""
+    if st == "canceled":
+        return "canceled", 0, opqueue.CANCELED_TEXT
+    return "error", 0, (row["error"] if row is not None else "") or "генерация не завершилась"
 
 
 def queue_loop():
     while True:
-        with db_lock, db() as conn:
-            row = conn.execute(
-                "SELECT id FROM jobs WHERE status='queued' ORDER BY id LIMIT 1").fetchone()
-        if row is None:
-            time.sleep(2)
+        QUEUE.sweep()  # клиенты, переставшие отмечаться, — «прервано»
+        op = QUEUE.next_generation(1.0)
+        if op is None:
+            time.sleep(1)  # слот не у генерации или очередь пуста
             continue
+        job_id = op.job_id
         with db_lock, db() as conn:
             cur = conn.execute(
-                "UPDATE jobs SET status='running' WHERE id=? AND status='queued'", (row["id"],))
+                "UPDATE jobs SET status='running' WHERE id=? AND status='queued'", (job_id,))
             claimed = cur.rowcount > 0
-        if claimed:
-            try:
-                _run_job(row["id"])
-            except Exception as e:  # noqa: BLE001 - сбой одной джобы (в т. ч. загрузки модели) не должен останавливать очередь
-                log.exception("job %s failed outside its handler", row["id"])
-                _mark_failed(row["id"], e)
+        if not claimed:  # удалена или отменена мимо очереди
+            QUEUE.release(op.id, "canceled", error="генерация снята")
+            continue
+        _run_in_op(op.id, job_id)
+
+
+def _run_in_op(op_id: int, job_id: int) -> None:
+    """Генерация внутри своей записи очереди (слот уже выдан): итог записи — по строке джобы."""
+    with _state_lock:
+        # флаг от отмены, пришедшей уже после конца прошлого прогона этого трека, — не про этот
+        _cancel_flags.pop(job_id, None)
+    QUEUE.on_cancel(op_id, lambda: _flag_render_cancel(job_id))
+    try:
+        with QUEUE.use_op(op_id):
+            _run_job(job_id)
+    except opqueue.OpCanceled:
+        # отмена на входе/выходе секции рендера (рендер сам пишет canceled, если успел начаться)
+        log.info("job %s canceled from queue", job_id)
+        with db_lock, db() as conn:
+            conn.execute("UPDATE jobs SET status='canceled', finished_at=? WHERE id=? AND status='running'",
+                         (time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
+    except Exception as e:  # noqa: BLE001 - сбой одной джобы (в т. ч. загрузки модели) не должен останавливать очередь
+        log.exception("job %s failed outside its handler", job_id)
+        row = _job_row(job_id)
+        if row is not None and row["status"] == "running":
+            _mark_failed(job_id, e)
+    finally:
+        try:
+            result = _gen_result(job_id)
+        except Exception as e:  # noqa: BLE001 - сбой БД не должен держать слот вечно
+            log.exception("job %s: итог генерации не прочитан", job_id)
+            result = ("error", 0, str(e)[:500])
+        QUEUE.release(op_id, *result)
+        with _state_lock:
+            _cancel_flags.pop(job_id, None)
+
+
+def _load_queued() -> None:
+    """Ждущие генерации из БД — в очередь по месту (старые без места — по id)."""
+    with db_lock, db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, queue_pos, source FROM jobs WHERE status='queued' "
+            "ORDER BY CASE WHEN queue_pos > 0 THEN queue_pos ELSE id END, id").fetchall()
+    for r in rows:
+        if QUEUE.find_job(r["id"]) is None:
+            QUEUE.add("generate", r["title"] or "", r["id"], source=r["source"] or "other",
+                      pos=r["queue_pos"] if r["queue_pos"] else r["id"])
 
 
 @app.on_event("startup")
@@ -907,6 +1080,7 @@ def _startup():
             "UPDATE jobs SET status='error', error='воркер перезапущен во время генерации', finished_at=? "
             "WHERE status='running'",
             (time.strftime("%Y-%m-%dT%H:%M:%S"),))
+    _load_queued()
     threading.Thread(target=queue_loop, daemon=True).start()
 
 
@@ -1263,6 +1437,86 @@ def get_version():
     }
 
 
+class QueueOpIn(BaseModel):
+    kind: str = Field(min_length=1, max_length=40)
+    title: str = Field(default="", max_length=300)
+    job_id: int = 0
+
+
+class QueueFinishIn(BaseModel):
+    state: str = Field(pattern="^(done|error|canceled)$")
+    result_job_id: int = 0
+    error: str = Field(default="", max_length=2000)
+
+
+class QueueMoveIn(BaseModel):
+    dir: int
+
+
+class QueuePauseIn(BaseModel):
+    paused: bool
+
+
+@app.get("/queue")
+def queue_list():
+    """Общая очередь: идущая, ждущие по месту, последние завершённые; пауза."""
+    return QUEUE.snapshot()
+
+
+@app.post("/queue/ops")
+def queue_add(req: QueueOpIn):
+    """Операция клиента (цепочка приложения или ИИ): ждёт своей очереди, пока
+    клиент отмечается (beat); шаги цепочки идут с X-Partscaster-Op."""
+    return QUEUE.add(req.kind, req.title, req.job_id, source=_req_source.get(), client=True).as_dict()
+
+
+@app.post("/queue/ops/{op_id}/beat")
+def queue_beat(op_id: int):
+    try:
+        return QUEUE.beat(op_id)
+    except KeyError:
+        raise HTTPException(404, f"операции {op_id} нет") from None
+
+
+@app.post("/queue/ops/{op_id}/finish")
+def queue_finish(op_id: int, req: QueueFinishIn):
+    try:
+        return QUEUE.finish(op_id, req.state, req.result_job_id, req.error)
+    except KeyError:
+        raise HTTPException(404, f"операции {op_id} нет") from None
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/queue/ops/{op_id}/move")
+def queue_move(op_id: int, req: QueueMoveIn):
+    if req.dir not in (-1, 1):
+        raise HTTPException(422, "dir: -1 | 1")
+    try:
+        return {"moved": QUEUE.move(op_id, req.dir)}
+    except KeyError:
+        raise HTTPException(404, f"операции {op_id} нет") from None
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.post("/queue/ops/{op_id}/cancel")
+def queue_cancel(op_id: int):
+    """Ждущая — снята сразу; идущая — метка отмены, её процессы останавливаются,
+    шаг без точки прерывания доделывается, итог «отменено»."""
+    try:
+        return _cancel_op(op_id)
+    except KeyError:
+        raise HTTPException(404, f"операции {op_id} нет") from None
+
+
+@app.post("/queue/pause")
+def queue_pause(req: QueuePauseIn):
+    """Пауза: новое не начинается, идущая доделывается."""
+    QUEUE.set_paused(req.paused)
+    return {"paused": QUEUE.paused}
+
+
 @app.get("/stats")
 def stats():
     """Сводка для статус-бара приложения: VRAM, очередь джоб, текущая джоба,
@@ -1295,7 +1549,7 @@ def stats():
             "vram_total": vram_total, "vram_used": vram_used,
             "queue": {"queued": counts.get("queued", 0), "running": counts.get("running", 0)},
             "running": running,
-            "gpu_waiting": _gpu_waiters}
+            "gpu_waiting": QUEUE.waiting_count()}
 
 
 @app.post("/translate")
@@ -1358,6 +1612,8 @@ def submit(req: JobIn):
             (JOBS_DIR / str(job_id)).mkdir(parents=True, exist_ok=True)
             (JOBS_DIR / str(job_id) / "request.abc").write_text(req.abc, encoding="utf-8")
             conn.execute("UPDATE jobs SET req_abc='request.abc' WHERE id=?", (job_id,))
+        title = conn.execute("SELECT title FROM jobs WHERE id=?", (job_id,)).fetchone()["title"]
+    _queue_job(job_id, title)
     return {"id": job_id}
 
 
@@ -1412,6 +1668,7 @@ def continue_job(job_id: int, req: ContinueIn):
             (JOBS_DIR / str(new_id)).mkdir(parents=True, exist_ok=True)
             (JOBS_DIR / str(new_id) / "request.abc").write_text(req.abc, encoding="utf-8")
             conn.execute("UPDATE jobs SET req_abc='request.abc' WHERE id=?", (new_id,))
+    _queue_job(new_id, title)
     return {"id": new_id}
 
 
@@ -1653,7 +1910,7 @@ def plan(req: PlanIn):
     # пусто — случайный; сид в ответе:
     # трек по этому плану с тем же сидом споёт так же
     seed = req.seed or random.randrange(1, 2**31)
-    with _pipe_lock, gpu_queue("plan"):
+    with gpu_queue("plan"), _pipe_lock:
         t0 = time.time()
         if engine_pref() == "cpp":
             try:
@@ -1717,6 +1974,10 @@ def get_job(job_id: int):
 def cancel(job_id: int):
     """Отмена: queued — снять из очереди; running — остановить генерацию
     (пайплайн проверяет флаг по колбэку, завершится штатно на ближайшем шаге)."""
+    op = QUEUE.find_job(job_id)
+    if op is not None:
+        res = _cancel_op(op.id)
+        return {"canceled": True, "running": True} if res["running"] else {"canceled": res["canceled"]}
     with db_lock, db() as conn:
         cur = conn.execute(
             "UPDATE jobs SET status='canceled', finished_at=? WHERE id=? AND status='queued'",
@@ -1746,6 +2007,8 @@ def retry_job(job_id: int):
         if row["status"] not in ("error", "canceled"):
             raise HTTPException(409, f"job is {row['status']}: retry only failed or canceled jobs")
         conn.execute("UPDATE jobs SET status='queued', error='', finished_at='' WHERE id=?", (job_id,))
+        title = conn.execute("SELECT title FROM jobs WHERE id=?", (job_id,)).fetchone()["title"]
+    _queue_job(job_id, title)
     log.info("job %s retried", job_id)
     return {"retried": True}
 
@@ -1760,6 +2023,10 @@ def delete_job(job_id: int):
         if row["status"] == "running":
             raise HTTPException(409, "job is running, cancel first")
         conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+    op = QUEUE.find_job(job_id)
+    if op is not None:  # ждущая генерация удалённого трека не висит в очереди
+        QUEUE.cancel(op.id)
+        QUEUE.release(op.id, "canceled", error="трек удалён")
     import shutil
     shutil.rmtree(JOBS_DIR / str(job_id), ignore_errors=True)
     log.info("job %s deleted", job_id)
@@ -1883,7 +2150,6 @@ def _whisper_lyrics(src: Path, language: str | None = None) -> tuple[str, str]:
         return "", f"whisper venv not found: {WHISPER_PY}"
     try:
         # ctranslate2 в whisper-venv не видит libcublas из pip-wheel'ов nvidia
-        import subprocess
         import sys
         env = dict(os.environ)
         lib = Path(sys.prefix) / "lib"
@@ -1898,10 +2164,12 @@ def _whisper_lyrics(src: Path, language: str | None = None) -> tuple[str, str]:
         # whisper-сабпроцесс тоже занимает GPU — через общую очередь, иначе
         # ломает CUDA-контекст идущего рендера
         with gpu_queue("whisper"):
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=env)
+            r = QUEUE.run_proc(cmd, timeout=600, env=env)
         if r.returncode != 0:
             return "", (r.stderr or "whisper failed")[-500:]
         return json.loads(r.stdout).get("text", ""), ""
+    except HTTPException:
+        raise  # отменено из очереди — 409, а не «текст не распознан»
     except Exception as e:  # noqa: BLE001
         return "", str(e)
 
@@ -2372,7 +2640,7 @@ def job_preview(job_id: int, body: dict):
     from_s = min(max(0.0, from_s), max(0.0, total_sec - 1.0))
     to_s = min(max(to_s, from_s + 1.0), total_sec)
     a, b = int(from_s * LATENT_HZ), max(int(to_s * LATENT_HZ), int(from_s * LATENT_HZ) + 1)
-    with _pipe_lock, gpu_queue(f"preview {job_id}"):
+    with gpu_queue(f"preview {job_id}"), _pipe_lock:
         try:
             # латенты у движков общие ([T,64]): декодирует тот, что включён
             audio = _get_cpp().decode(z[a:b, :]) if engine_pref() == "cpp" else _get_pipe().decode(z[a:b, :])
@@ -2530,8 +2798,11 @@ async def tracks_import(request: Request, transcribe: bool = True, title: str = 
             (jdir / "score.abc").write_text(result.get("abc", ""), encoding="utf-8")
             abc_file = "score.abc" if result.get("abc", "").strip() else ""
         except Exception as e:  # noqa: BLE001
-            log.exception("import transcribe failed")
-            transcribe_error = str(e)
+            if _canceled_here(e):
+                transcribe_error = opqueue.CANCELED_TEXT  # трек создан — отменено только распознавание
+            else:
+                log.exception("import transcribe failed")
+                transcribe_error = str(e)
     with db_lock, db() as conn:
         conn.execute(
             "UPDATE jobs SET duration_sec=?, audio_file=?, abc_file=? WHERE id=?",
@@ -2595,6 +2866,7 @@ def submit_overdub(job_id: int, req: OverdubIn):
         (cdir / "request.abc").write_text(abc, encoding="utf-8")
         conn.execute("UPDATE jobs SET req_abc='request.abc', overdub_gain=? WHERE id=?",
                      (req.gain, child_id))
+    _queue_job(child_id, f"overdub of #{job_id}")
     return {"id": child_id}
 
 
@@ -2894,7 +3166,17 @@ async def corpus_add_track(cid: int, request: Request):
         info["stats"] = t["stats"]
     except Exception as e:  # noqa: BLE001
         info["abc_error"] = str(e)
-    lyrics_text, lyrics_err = await run_in_threadpool(_whisper_lyrics, src)
+        if _canceled_here(e):  # трек корпуса уже на диске; отменили — и слова не распознаём
+            info["abc_error"] = info["lyrics_error"] = opqueue.CANCELED_TEXT
+            info["lyrics"] = ""
+            (track_dir / "info.json").write_text(json.dumps(info, ensure_ascii=False))
+            return info
+    try:
+        lyrics_text, lyrics_err = await run_in_threadpool(_whisper_lyrics, src)
+    except HTTPException as e:
+        if not _canceled_here(e):
+            raise
+        lyrics_text, lyrics_err = "", opqueue.CANCELED_TEXT  # трек корпуса и его ноты уже на диске
     info["lyrics"] = lyrics_text
     info["lyrics_error"] = lyrics_err
     (track_dir / "info.json").write_text(json.dumps(info, ensure_ascii=False))

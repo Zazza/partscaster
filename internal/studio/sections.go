@@ -139,8 +139,17 @@ type stemSet map[string]string
 // повторная пересборка поверх прошлого микса наслаивала бы замены и не давала
 // менять громкость.
 // В журнал правок (рецепт) — одна запись rebuild_sections; внутренние вызовы сервиса не журналируются.
+// Пересборка — одна операция общей очереди воркера (вид rebuild); внутри пресета — его же операция.
 func RebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs []SectionSpec) (*RebuildResult, error) {
-	res, err := rebuildSections(yue.WithoutJournal(ctx), svc, parentID, specs, "")
+	var res *RebuildResult
+	_, err := RunOp(ctx, svc, "rebuild", rebuildLabel(specs), parentID, func(ctx context.Context) (int64, error) {
+		r, err := rebuildSections(yue.WithoutJournal(ctx), svc, parentID, specs, "")
+		if err != nil {
+			return 0, err
+		}
+		res = r
+		return 0, nil // итог — вариант трека (файл), не новая версия
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -334,7 +334,7 @@ async function applyToRef() {
     })
     applyUnwatch = null
     if (!it) return                      // окно закрыли, пока применялось
-    if (it.state === 'error') throw new Error(it.err || t('preset.apply.err', { name: model.value.name }))
+    if (it.state === 'error' || it.state === 'interrupted') throw new Error(it.error || t('preset.apply.err', { name: model.value.name }))
     if (it.state === 'canceled') { msg.value = t('preset.apply.canceled'); return }
     // версия демо спрятана в папке «Демо» — играем её сразу, искать в списке незачем
     if (!ownJobId.value) {

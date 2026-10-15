@@ -12,7 +12,6 @@ import (
 
 	"partscaster/internal/config"
 	"partscaster/internal/mcp"
-	"partscaster/internal/yue"
 )
 
 // Вшиваются при сборке (make mcp): отпечаток исходников и каталог репозитория —
@@ -40,7 +39,7 @@ func main() {
 	}
 
 	// журнал правок (рецепт трека): изменяющие вызовы API пишутся после успеха
-	srv := mcp.NewServer(yue.Journaled(yue.New(cfg.YueURL)), dir)
+	srv := mcp.NewServer(mcp.WorkerClient(cfg.YueURL), dir)
 	srv.SetBuildInfo(buildHash, srcDir)
 	srv.SetVersion(version)
 	mcp.RegisterWorkflowTools(srv)

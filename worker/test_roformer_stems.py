@@ -193,7 +193,7 @@ class _SepEnv:
             os.environ["PARTSCASTER_STEMS_MODEL"] = rollback_env
         self.sep = FakeSep(sep_mode)
         self.demucs = FakeDemucs(fail_6s)
-        for p in (mock.patch.object(stems.subprocess, "run", self.sep),
+        for p in (mock.patch.object(stems, "run_proc", self.sep),
                   mock.patch.object(stems, "_run_model", self.demucs)):
             p.start()
             self.addCleanup(p.stop)

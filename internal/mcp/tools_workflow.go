@@ -13,6 +13,7 @@ import (
 )
 
 func RegisterWorkflowTools(s *Server) {
+	registerQueueTools(s)
 	s.Register(Tool{
 		Name:        "status",
 		Description: "Статус воркера Partscaster: доступность, загружена ли модель YuE2 в память.",

@@ -37,8 +37,24 @@ const guitaristNoPlanMark = "гитара YuE2 — у трека нет план
 // с правками «весь трек», финал на РЕЗУЛЬТАТЕ пересборки, версия-трек. Ошибка любого шага —
 // ошибка с причиной; трек и прежние варианты не трогаются.
 // В журнал правок — одна запись sound_preset с пресетом ЦЕЛИКОМ (импорт не зависит от библиотеки пресетов).
+// Весь пресет — одна операция общей очереди воркера (вид preset): ждёт своей очереди, отменяется целиком.
 func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
-	res, err := applySoundPreset(yue.WithoutJournal(ctx), svc, jobID, p)
+	var res *PresetResult
+	_, err := RunOp(ctx, svc, "preset", p.Name, jobID, func(ctx context.Context) (int64, error) {
+		r, err := applySoundPreset(yue.WithoutJournal(ctx), svc, jobID, p)
+		if err != nil {
+			return 0, err
+		}
+		res = r
+		// пресет отменили, а версия уже есть (в том числе отмена принята в последний миг — уже после этого
+		// шага, во внешней операции приложения) — отменённый пресет следа в треке не оставляет
+		OnCanceled(ctx, func(c context.Context) {
+			if _, derr := svc.DeleteJob(c, r.ChildID); derr != nil {
+				log.Printf("пресет «%s» отменён: версия #%d не удалена: %v", p.Name, r.ChildID, derr)
+			}
+		})
+		return r.ChildID, nil
+	})
 	if err != nil {
 		return nil, err
 	}

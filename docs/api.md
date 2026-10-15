@@ -42,6 +42,22 @@ GET  /jobs[/{id}]      список/статус (req_abc = рендер по с
 POST /jobs/{id}/cancel отмена: queued — из очереди; running — остановка генерации
                        (пайплайн завершится на ближайшем шаге). В running-джобах
                        /jobs отдаёт живой прогресс: stage, tokens, tok_per_s, elapsed_s
+
+Общая очередь долгих операций: генерации и всё, что занимает видеокарту (рендер, /plan, /preview, стемы,
+голос, whisper, SheetSage, fx с усилителем), — по одной, по месту в очереди. Запись (op): {id, kind, title,
+job_id, source app|mcp|other, state waiting|running|done|error|canceled|interrupted, pos, result_job_id, error,
+cancel_requested, client, created_at, started_at, finished_at}. Заголовки запроса: X-Partscaster-Source
+(app | mcp — кто поставил), X-Partscaster-Op (id идущей операции клиента: шаг цепочки не встаёт в очередь
+повторно). Отменённая тяжёлая секция → 409 «отменено человеком».
+GET  /queue            {paused, items}: идущая, ждущие по месту, последние завершённые (до 20)
+POST /queue/ops        {kind, title, job_id} → op — операция клиента (цепочка приложения/MCP: пресет,
+                       пересборка); живёт на отметках: без /beat дольше 180 с — interrupted
+POST /queue/ops/{id}/beat    → op (state, cancel_requested); 404 — неизвестна
+POST /queue/ops/{id}/finish  {state: done|error|canceled, result_job_id, error} → op; 409 — не клиента/завершена
+POST /queue/ops/{id}/move    {dir: -1|1} → {moved}; край — moved=false; 409 — не ждёт; 404
+POST /queue/ops/{id}/cancel  → {canceled, running}: ждущая снимается; идущей — метка отмены, её процессы
+                       (RoFormer, Seed-VC, whisper) убиваются, шаг внутри воркера доделывается; 404
+POST /queue/pause      {paused} → {paused}: новое не начинается, идущая доделывается (в памяти воркера)
 GET  /audio/{id}/{f}   audio.flac/.mp3/.wav, score.abc, request.abc, dsp/overdub/preview/stem-*.flac
 GET  /listen/{id}      страница прослушивания (?f= — вариант)
 

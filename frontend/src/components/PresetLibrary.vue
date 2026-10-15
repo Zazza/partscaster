@@ -96,7 +96,7 @@ async function playOnDemo(p) {
     })
     demoUnwatch = null
     if (disposed) return                        // страницу закрыли — молча
-    if (it.state === 'error') throw new Error(it.err || t('preset.apply.err', { name: p.name }))
+    if (it.state === 'error' || it.state === 'interrupted') throw new Error(it.error || t('preset.apply.err', { name: p.name }))
     if (it.state === 'canceled') { msg.value = t('preset.apply.canceled'); return }
     // версия демо спрятана в папке «Демо» — играем её сразу, искать в списке незачем
     const v = ((await api.jobs()) || []).find((j) => j.id === it.result_job_id)

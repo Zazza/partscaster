@@ -71,6 +71,14 @@ env = { "PARTSCASTER_URL" = "http://gpu-host:8091" }
 возвращает путь) · `transcribe` (трек → ABC) · `job_score` · `job_preview` (фрагмент) ·
 `recognize_lyrics` (трек → текст) · `job_lyrics` (текст из аудио джобы) · `lyrics_adapt` (перевод под пение, слоги сохраняются).
 
+**Общая очередь воркера** (то же, что человек видит в левом блоке приложения): `queue_list` (идущая, ждущие,
+последние итоги; source `mcp` — операции ИИ) · `queue_move` (`id`, `dir` −1 раньше / 1 позже — у ждущих) ·
+`queue_cancel`† (ждущую — снять, идущую — остановить) · `queue_pause` (`paused`). Долгие инструменты
+(`sound_preset_apply`, `rebuild_sections`, `revoice_apply`, `dsp_apply` с секциями, `make_stems`, `make_minus`,
+`guitar_part`, `fx_apply`/`fx_phrase` с усилителем, `transcribe*`, `import_track` с распознаванием,
+`recognize_lyrics`, `job_lyrics`, `corpus_add_tracks`, `plan`, `job_preview`, генерации) встают в эту очередь
+с пометкой «ИИ» и ждут своей очереди; отменённая человеком операция возвращает ошибку «отменено человеком».
+
 **Рецепт трека** (перенос песни на другую установку без аудио): `recipe_export` (песня трека →
 файл `*.yue-track.json` в каталог загрузок или `path`; warnings — что не вошло) · `recipe_import` (без `confirm` —
 превью: название, шаги, модель, предупреждения; `confirm=true` — начать; `mode` seed | plan) · `recipe_imports` (ход).
