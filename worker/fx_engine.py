@@ -1714,9 +1714,9 @@ def _limiter(x, sr, p, _res):
     return y
 
 
-# ---- gtrnotes: гитара по нотам распознавания (guitarnotes.py, кэш трека guitar-notes.json) ----
+# ---- gtrnotes: гитара по нотам — партия «по аккордам плана» (guitarpart.py) или ноты фразы (guitarnotes.py) ----
 GTR_MAX_NOTES = 20000    # нот гитары на весь трек — тысячи (бой восьмыми по 4–6 струн)
-GTR_RING_S = 0.25        # распознанная нота короче — звенит хотя бы столько (распознавание режет хвосты)
+GTR_RING_S = 0.25        # нота короче — звенит хотя бы столько (у нот фраз распознавание резало хвосты)
 GTR_RELEASE_S = 0.05     # спад в конце ноты
 GTR_CHOKE_S = 0.015      # глушение струны новым ударом
 GTR_VEL_WIN_S = 0.08     # сила удара — громкость входа столько от начала
@@ -1849,7 +1849,7 @@ def _gtrnotes(x, sr, p, res):
     if not notes and "_t0" in p:   # окно воркера, куда нот не попало (гитара вступает позже) — тишина, не ошибка
         return np.zeros_like(x)
     if not notes:
-        raise ChainError("gtrnotes: нет нот гитары — распознайте ноты трека (guitar_notes) и примените снова")
+        raise ChainError("gtrnotes: нет нот гитары — у трека нужен план (транскрипция) и дорожка гитары")
     n, ch = x.shape
     mono = x.mean(axis=1)
     ref = float(p.get("_ref_rms") or 0.0) or max(_rms(mono), EPS)

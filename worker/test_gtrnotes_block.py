@@ -1,9 +1,10 @@
-"""Тесты блока движка gtrnotes («Гитара по нотам») — по контракту карточки
-internal-guitar-notes, не по реализации.
+"""Тесты блока движка gtrnotes («Гитара по нотам») — по контракту карточек internal-guitar-notes и
+internal-guitar-plan-chords (условия 2, 4, 5: параметр style, один «чук», громкость удара), не по реализации.
 
 Контракт блока:
 - {"type": "gtrnotes", kit (строка, обязательна), mute_kit (строка, по умолчанию ""),
-  strum (0/1, целое, по умолчанию 1), spread_ms (2…25, по умолчанию 8), output_db (−24…12, 0)};
+  strum (0/1, целое, по умолчанию 1), spread_ms (2…25, по умолчанию 8), output_db (−24…12, 0),
+  style (манера гитариста 0…4, целое, по умолчанию 0 — ноты по ней ставит воркер, движок style не читает)};
   служебные поля (ставит воркер): notes [{t, d, midi: [m], vel}] от начала окна, _t0, _until,
   _ref_rms, _tune (центы), _beats (от начала окна);
 - нет нот → ChainError «нет нот гитары…»;
@@ -15,6 +16,9 @@ internal-guitar-notes, не по реализации.
   вниз и на 0,8 громкости; muted — «чук» сэмплами mute_kit (нет — обрывки нот 35 мс); palm — нота
   укорочена (спад ~80 мс) и темнее; strum=0 — ноты как распознаны;
 - output_db — общий уровень выхода;
+- internal-guitar-plan-chords: глушёный удар с набором mute_kit — один «чук» на удар (не по «чуку» на струну);
+  громкость сэмпла набора — по самому громкому окну 50 мс (короткий «чук» не раздувается); громкость удара
+  из n струн × √(4/n) — одна струна ≈ аккорд из четырёх;
 - parse_chain принимает gtrnotes без нот (пресет хранит цепочку без нот — ноты кладёт воркер) и
   со служебными полями; notes у прочих блоков (кроме synth/perc/gtrnotes) — по-прежнему ошибка;
 - описание блока — в worker/fx_blocks.json (поля выше).
@@ -27,7 +31,9 @@ internal-guitar-notes, не по реализации.
 Предположения теста:
 - направление удара считается по _beats так же, как strikes() в guitarnotes (доли от начала окна);
 - сэмплы набора глушения называются в том же формате, что ноты, и тоже выбираются по высоте;
-- «темнее» у palm — меньше доля энергии выше 1,5 кГц у сэмпла с обертонами до 4,4 кГц.
+- «темнее» у palm — меньше доля энергии выше 1,5 кГц у сэмпла с обертонами до 4,4 кГц;
+- «одна струна ≈ аккорд» меряется по самому громкому окну 50 мс (RMS), а не по пику отсчёта: у синусов
+  набора пик аккорда зависит от случайного сложения фаз (±3 дБ при верной √(4/n)), RMS — нет.
 
 Запуск: cd worker && python3 -m unittest test_gtrnotes_block -v
 """
@@ -94,6 +100,13 @@ NYLON = [("E2", 40), ("A#2", 46), ("C#3", 49), ("E3", 52), ("G3", 55), ("A#3", 5
 MUTE_HZ = 1500.0   # «чук» набора глушения — короткий тон вне диапазона нот теста
 
 
+def _pad(x, sec):
+    """Сэмпл, дополненный тишиной до sec секунд."""
+    out = np.zeros(int(sec * KIT_SR), dtype=np.float32)
+    out[:len(x)] = x
+    return out
+
+
 class GtrRes:
     """Хранилище наборов по контракту: kit(name) → (список сэмплов, sr), kit_names(name) → имена
     без расширения в том же порядке; нет набора — KeyError. Пишет, какие наборы просили."""
@@ -106,6 +119,11 @@ class GtrRes:
             "nylon/guitar": [(n, _sample(_hz(m))) for n, m in NYLON],
             "kar/harm": [(n, _sample(_hz(m), harmonics=40)) for n, m in KAR],
             "kar/mute": [(n, _sample(MUTE_HZ, burst=0.04)) for n, m in KAR],
+            # глушение как в настоящих наборах (emilyguitar/mute: «muted1_rr1»…) — имена без высоты;
+            # «чук» 40 мс, дальше в файле тишина (у записанного «чука» хвост файла тихий)
+            "kar/chuck": [(f"muted1_rr{i}", _pad(_sample(MUTE_HZ, burst=0.04), 1.0)) for i in range(1, 5)],
+            # тот же «чук» длинным сэмплом той же амплитуды: опора для «короткий не раздувается»
+            "kar/chucklong": [(f"muted1_rr{i}", _sample(MUTE_HZ)) for i in range(1, 5)],
         }
         self.calls = []
 
@@ -199,6 +217,8 @@ class TestNoNotes(unittest.TestCase):
         with self.assertRaises(fx.ChainError) as cm:
             _run(_blk([]))
         self.assertIn("нот", str(cm.exception))
+        # распознавание удалено (условие 9): ошибка не отсылает к инструменту guitar_notes
+        self.assertNotIn("guitar_notes", str(cm.exception))
 
     def test_missing_notes_chain_error(self):
         fx = _fx()
@@ -418,6 +438,14 @@ class TestParseChain(unittest.TestCase):
         self.assertEqual(b["strum"], 1)
         self.assertEqual(b["spread_ms"], 8)
         self.assertEqual(b["output_db"], 0)
+        self.assertEqual(b["style"], 0)
+
+    def test_style_accepted(self):
+        fx = _fx()
+        for style in range(5):
+            with self.subTest(style=style):
+                b = fx.parse_chain([{"type": "gtrnotes", "kit": "k/p", "style": style}])[0]
+                self.assertEqual(b["style"], style)
 
     def test_without_notes_accepted(self):
         # пресет хранит цепочку без нот (ноты кладёт воркер перед окном)
@@ -441,7 +469,8 @@ class TestParseChain(unittest.TestCase):
         fx = _fx()
         fx.parse_chain([{"type": "gtrnotes", "kit": "k/p", "strum": 0, "spread_ms": 2, "output_db": 12}])
         for bad in ({"strum": 2}, {"strum": 0.5}, {"strum": -1}, {"spread_ms": 1}, {"spread_ms": 26},
-                    {"output_db": -25}, {"output_db": 13}, {"kit": 5}, {"mute_kit": 5}, {"unknown": 1}):
+                    {"output_db": -25}, {"output_db": 13}, {"kit": 5}, {"mute_kit": 5}, {"unknown": 1},
+                    {"style": 5}, {"style": -1}, {"style": 0.5}):
             with self.subTest(bad=bad):
                 with self.assertRaises(fx.ChainError):
                     fx.parse_chain([{"type": "gtrnotes", "kit": "k/p", **bad}])
@@ -468,6 +497,98 @@ class TestParseChain(unittest.TestCase):
         self.assertIn("gtrnotes", _fx().SPEC)
 
 
+def _win_rms_max(y, t0, t1, win=0.05):
+    """Самое громкое окно win (RMS) на [t0, t1): громкость удара без случайности сложения фаз."""
+    x = _mono(y)[int(t0 * SR):int(t1 * SR)]
+    k = int(win * SR)
+    if len(x) < k:
+        return 0.0
+    c = np.concatenate([[0.0], np.cumsum(x ** 2)])
+    return float(np.sqrt(np.max((c[k:] - c[:-k]) / k)))
+
+
+@unittest.skipUnless(_HAS_DEPS, _SKIP)
+class TestStyleNotReadByEngine(unittest.TestCase):
+    """style — манера гитариста: ноты по ней ставит воркер, звук блока при тех же нотах от style не зависит."""
+
+    def test_same_notes_same_sound(self):
+        notes = [_note(1.0, 0.4, 45), _note(1.002, 0.4, 52), _note(1.5, 0.4, 57)]
+        base = np.asarray(_run(_blk(notes, _beats=BEATS)))
+        for style in (1, 2, 3, 4):
+            with self.subTest(style=style):
+                y = np.asarray(_run(_blk(notes, _beats=BEATS, style=style)))
+                self.assertEqual(y.shape, base.shape)
+                self.assertLess(float(np.abs(y - base).max()), 1e-6)
+
+
+@unittest.skipUnless(_HAS_DEPS, _SKIP)
+class TestOneChuck(unittest.TestCase):
+    """Условие 4: глушёный удар — один «чук» набора, а не «чук» на каждую струну; громкость «чука» — по самому
+    громкому окну 50 мс (короткий «чук» в длинном файле не раздувается)."""
+
+    T4, T2 = 1.0, 1.6
+
+    @staticmethod
+    def _muted(t, strings):
+        return [_note(t + 0.002 * i, 0.06, m) for i, m in enumerate(strings)]
+
+    def _render(self, mute_kit, notes):
+        return _run(_blk(notes, _beats=BEATS, strum=1, mute_kit=mute_kit))
+
+    def test_four_strings_one_chuck(self):
+        # в одном проходе: глушёный удар из 4 струн и из 2. «Чук» на струну дал бы 4 «чука» против 2 (+6 дБ);
+        # один «чук» на удар — 4 струны не громче 2 (множитель удара √(4/n) их только сближает или тишит)
+        notes = self._muted(self.T4, (52, 57, 62, 67)) + self._muted(self.T2, (52, 57))
+        y = self._render("kar/chuck", notes)
+        r4 = _win_rms_max(y, self.T4 - 0.01, self.T4 + 0.2)
+        r2 = _win_rms_max(y, self.T2 - 0.01, self.T2 + 0.2)
+        self.assertGreater(r2, 1e-5, "глушёный удар не прозвучал")
+        self.assertLess(20 * np.log10(r4 / r2), 2.0, f"4 струны {r4:.4f}, 2 струны {r2:.4f}: «чук» на каждую струну?")
+
+    def test_chuck_from_mute_kit(self):
+        res = GtrRes()
+        y = _run(_blk(self._muted(self.T4, (52, 57, 62, 67)), _beats=BEATS, strum=1, mute_kit="kar/chuck"), res=res)
+        self.assertIn("kar/chuck", res.calls, "набор глушения не запрошен")
+        chuck = _band_energy(y, self.T4 - 0.01, self.T4 + 0.15, 1000, 2500)
+        tones = _band_energy(y, self.T4 - 0.01, self.T4 + 0.15, 100, 500)
+        self.assertGreater(chuck, tones, "вместо «чука» набора — ноты")
+
+    def test_short_chuck_not_inflated(self):
+        # «чук» 40 мс в файле 1 с и длинный сэмпл той же амплитуды: пик короткого не выше длинного на > 6 дБ
+        notes = self._muted(self.T4, (52, 57, 62, 67))
+        short = self._render("kar/chuck", notes)
+        long_ = self._render("kar/chucklong", notes)
+        ps = float(np.abs(_mono(short)[int((self.T4 - 0.01) * SR):int((self.T4 + 0.3) * SR)]).max())
+        pl = float(np.abs(_mono(long_)[int((self.T4 - 0.01) * SR):int((self.T4 + 0.3) * SR)]).max())
+        self.assertGreater(pl, 1e-5, "опора: длинный «чук» прозвучал")
+        self.assertLess(20 * np.log10(ps / pl), 6.0, f"короткий «чук» громче длинного: {ps:.4f} против {pl:.4f}")
+
+
+@unittest.skipUnless(_HAS_DEPS, _SKIP)
+class TestStrikeLevelByStrings(unittest.TestCase):
+    """Условие 5: громкость удара не зависит от числа струн сильнее √(4/n) — одна струна ≈ аккорд из 4."""
+
+    T = 1.0
+
+    def _level(self, midis):
+        notes = [_note(self.T + 0.002 * i, 0.6, m) for i, m in enumerate(midis)]
+        y = _run(_blk(notes, _beats=BEATS, strum=1))
+        return _win_rms_max(y, self.T - 0.01, self.T + 0.45)
+
+    def test_single_note_vs_four_note_chord(self):
+        one = self._level([57])
+        four = self._level([45, 52, 57, 64])
+        self.assertGreater(one, 1e-5)
+        diff = 20 * np.log10(four / one)
+        self.assertLess(abs(diff), 3.0, f"аккорд из 4 громче одной струны на {diff:.1f} дБ")
+
+    def test_six_strings_not_much_louder(self):
+        # шесть струн: √(4/6) — громче четырёх не более чем на ~1,8 дБ (с запасом — 3 дБ)
+        four = self._level([45, 52, 57, 64])
+        six = self._level([40, 45, 52, 57, 60, 64])
+        self.assertLess(20 * np.log10(six / four), 3.0)
+
+
 class TestBlocksJson(unittest.TestCase):
     """Описание блока для фронта и MCP — в worker/fx_blocks.json."""
 
@@ -491,12 +612,14 @@ class TestBlocksJson(unittest.TestCase):
 
     def test_params(self):
         p = {x["id"]: x for x in self.b.get("params", [])}
-        self.assertEqual(set(p), {"strum", "spread_ms", "output_db"})
-        want = {"strum": (0, 1, 1), "spread_ms": (2, 25, 8), "output_db": (-24, 12, 0)}
+        self.assertEqual(set(p), {"strum", "spread_ms", "output_db", "style"})
+        want = {"strum": (0, 1, 1), "spread_ms": (2, 25, 8), "output_db": (-24, 12, 0), "style": (0, 4, 0)}
         for k, (lo, hi, d) in want.items():
             with self.subTest(param=k):
                 self.assertEqual((p[k]["min"], p[k]["max"], p[k]["default"]), (lo, hi, d))
         self.assertTrue(p["strum"].get("integer"))
+        self.assertTrue(p["style"].get("integer"))
+        self.assertEqual(p["style"].get("step"), 1)
 
 
 if __name__ == "__main__":

@@ -545,11 +545,10 @@ func (a *App) YueMakeStems(id int64) (map[string]any, error) {
 	return a.yue.MakeStems(a.ctx, id)
 }
 
-// YueGuitarNotes — распознать ноты гитары трека для звуков «Ноты переиграны другой гитарой» (кэш у трека; force —
-// заново); ноты другие — кэш превью трека устарел.
-func (a *App) YueGuitarNotes(id int64, force bool) (map[string]any, error) {
-	defer a.fxCache().Invalidate(id)
-	return a.yue.GuitarNotes(a.ctx, id, force)
+// YueGuitarPart — что сыграет гитарист «по аккордам плана» в манере style (0 авто, 1 бой, 2 перебор, 3 бас + аккорд,
+// 4 квинты): такты и удары с нотами.
+func (a *App) YueGuitarPart(id int64, style int) (map[string]any, error) {
+	return a.yue.GuitarPart(a.ctx, id, style)
 }
 
 // YueApplyFx — звуковой движок воркера: цепочка блоков на трек/дорожку → вариант dsp-fx-*.flac.

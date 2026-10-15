@@ -2,7 +2,7 @@
 # Архив воркера: OUTDIR/worker-<VERSION>.tar.gz с одним каталогом worker-<VERSION>/.
 # usage: tools/worker-tar.sh OUTDIR [VERSION]   (по умолчанию — git describe)
 # Состав — правилом, а не списком файлов: весь код воркера без тестов, данные (*.json),
-# requirements, скрипты установки (воркер, Seed-VC, распознавание нот), фразы, юнит systemd и (если собрана) программа yue2.cpp. Путь архива — последней строкой.
+# requirements, скрипты установки (воркер, Seed-VC), фразы, юнит systemd и (если собрана) программа yue2.cpp. Путь архива — последней строкой.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,7 +17,7 @@ mkdir -p "$D/units" "$D/phrases"
 for f in worker/*.py; do
   [[ "$(basename "$f")" == test_* ]] || cp "$f" "$D/"
 done
-cp worker/*.json worker/requirements*.txt worker/seedvc_install.sh worker/notes_install.sh worker/install.sh "$D/"
+cp worker/*.json worker/requirements*.txt worker/seedvc_install.sh worker/install.sh "$D/"
 cp worker/phrases/* "$D/phrases/"
 cp deploy/units/partscaster-worker.service "$D/units/"
 # готовая сборка yue2.cpp (tools/yue2cpp-build.sh / yue2cpp-build.ps1) — второй движок генерации, ЭКСПЕРИМЕНТ;
@@ -33,7 +33,7 @@ if [[ -f "$CPP_DIR/$CPP_BIN" ]]; then
   mkdir -p "$D/yue2cpp"
   cp -P "$CPP_DIR"/* "$D/yue2cpp/"
 fi
-chmod +x "$D/install.sh" "$D/seedvc_install.sh" "$D/notes_install.sh"
+chmod +x "$D/install.sh" "$D/seedvc_install.sh"
 printf '%s\n' "$VERSION" > "$D/VERSION"
 
 mkdir -p "$OUT"

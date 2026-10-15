@@ -2693,8 +2693,8 @@ def _guitar_part(job_id: int) -> dict:
         drums = stem("stem-drums.flac")
         if drums is None:
             drums = stem(row["audio_file"])
-        tune_src = [(x, lo, hi) for x, lo, hi in ((stem("stem-bass.flac"), 35, 300), (stem("stem-vocals.flac"), 80, 700))
-                    if x is not None]
+        tune_src = [(x, lo, hi) for x, lo, hi in ((stem("stem-bass.flac"), 35, 300),
+                                                  (stem("stem-vocals.flac"), 80, 700)) if x is not None]
         data = {"version": GUITAR_PART_VERSION, "stem": stem_p, "plan": plan_p,
                 "onsets": guitarpart.onsets(guitar, sr),
                 "bars": chord_grid_bars(job_id)["bars"],
@@ -4044,7 +4044,7 @@ FX_KITS = {
     # драм-машины и синт-басы — воркер синтезирует сам (drumsynth.py): без сети и чужих лицензий
     **{k: {"synth": "drums"} for k in ("tr808", "tr909", "linn", "cr78", "simmons")},
     "synthbass": {"synth": "bass"},
-    # гитары для блока gtrnotes («Ноты переиграны другой гитарой»), CC0; ноты — по именам файлов (gtr_sample_info)
+    # гитары для блока gtrnotes («Гитарист вписывается по аккордам»), CC0; ноты — по именам файлов (gtr_sample_info)
     "emilyguitar": {  # Karoryfer Emilyguitar: Epiphone, звукосниматели напрямую (DI), 4 слоя силы × 3 повтора
         "repo": "sfzinstruments/karoryfer.emilyguitar",
         "ref": "b4920dc662fd9cad6dcaccdeecffdd91c8725d8c",

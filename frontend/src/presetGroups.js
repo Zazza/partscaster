@@ -21,7 +21,7 @@ export const PRESET_GROUPS = {
   'guitar-space': { family: 'guitar', ru: 'Пространство и эффекты — звук, игра та же', en: 'Space and effects — tone, same playing' },
   'guitar-amp': { family: 'guitar', ru: 'Через усилитель (нужен захват NAM) — звук, игра та же', en: 'Through an amp (needs a NAM capture) — tone, same playing' },
   // ноты гитары YuE2 распознаются и играются сэмплами другой гитары (блок gtrnotes)
-  'guitar-notes': { family: 'guitar', ru: 'Ноты переиграны другой гитарой', en: 'Notes replayed by another guitar' },
+  'guitar-notes': { family: 'guitar', ru: 'Гитарист вписывается по аккордам', en: 'Guitarist fits in by chords' },
   'bass-tone': { family: 'bass', ru: 'Другой звук тех же нот', en: 'Different tone, same notes' },
   'bass-genre': { family: 'bass', ru: 'Звук под жанр', en: 'Tone by genre' },
   'bass-kit': { family: 'bass', ru: 'Ноты заменяются сэмплами', en: 'Notes replaced with samples' },

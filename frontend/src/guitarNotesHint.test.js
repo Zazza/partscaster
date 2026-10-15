@@ -1,13 +1,9 @@
-// Задача internal-guitar-notes: подсказка, чем распознаются ноты гитары (фронт).
-// Спецификация (карточка, условие 5, решение человека): для звуков «Ноты переиграны другой гитарой»
-// приложение показывает, какими моделями распознаются ноты, или что распознавание не установлено.
-// Контракт: notesHint(chain, cfg, t) → t(ключ) или '':
-// - в цепочке нет блока type 'gtrnotes' → '' (подсказка не нужна), где бы он ни стоял — ищется по всей цепочке;
-// - cfg — ответ воркера /config, может быть null/undefined (старый воркер или нет связи);
-// - 'gnotes.missing' — cfg нет или notes_available не true;
-// - 'gnotes.both' — в notes_engines есть и 'yourmt3', и 'basic-pitch';
-// - 'gnotes.bp' — только 'basic-pitch';
-// - ключи есть в i18n/ru.js и i18n/en.js, тексты непустые; ru для missing называет notes_install.sh.
+// Задача internal-guitar-plan-chords: подсказка у звуков «Гитарист вписывается по аккордам» (фронт).
+// Спецификация (карточка, условие 9 и «Устройство (контракт)»: фронт):
+// - notesHint(chain, t) → t('gnotes.plan'), если в цепочке есть блок type 'gtrnotes' (где бы он ни стоял), иначе '';
+// - подсказка «ноты распознаются моделями / распознавание не установлено» удалена: ключей gnotes.missing,
+//   gnotes.both, gnotes.bp в словарях нет, /config воркера (notes_*) подсказке не нужен;
+// - ключ gnotes.plan есть в i18n/ru.js и i18n/en.js, тексты непустые.
 import { describe, it, expect } from 'vitest'
 import { notesHint } from './guitarNotesHint.js'
 import RU from './i18n/ru.js'
@@ -15,69 +11,56 @@ import EN from './i18n/en.js'
 
 // перевод-метка: по результату видно, какой ключ запрошен
 const t = (key) => `T[${key}]`
-const GTR = { type: 'gtrnotes', kit: 'nylonguitar/guitar' }
+const GTR = { type: 'gtrnotes', kit: 'nylonguitar/guitar', style: 2 }
 const DRIVE = { type: 'drive' }
 const EQ = { type: 'eq' }
-const cfgOf = (engines, available = true) => ({ notes_available: available, notes_engines: engines })
 
-describe('notesHint: подсказка не нужна без блока gtrnotes (условие 5)', () => {
+describe('notesHint: без блока gtrnotes подсказки нет', () => {
   it('пустая цепочка → пустая строка', () => {
-    expect(notesHint([], cfgOf(['basic-pitch']), t)).toBe('')
+    expect(notesHint([], t)).toBe('')
   })
 
-  it('цепочка без gtrnotes → пустая строка даже без распознавания', () => {
-    expect(notesHint([DRIVE, EQ], null, t)).toBe('')
-    expect(notesHint([DRIVE, EQ], cfgOf(['yourmt3', 'basic-pitch']), t)).toBe('')
+  it('цепочка без gtrnotes → пустая строка', () => {
+    expect(notesHint([DRIVE, EQ], t)).toBe('')
   })
-})
 
-describe('notesHint: распознавание не установлено (условие 5)', () => {
-  it.each([
-    ['cfg = null (нет связи)', null],
-    ['cfg = undefined (старый воркер)', undefined],
-    ['notes_available = false', cfgOf(['basic-pitch'], false)],
-    ['notes_available отсутствует', { notes_engines: ['basic-pitch'] }],
-    ['notes_available не true, а строка', cfgOf(['basic-pitch'], 'true')],
-  ])('%s → gnotes.missing', (_name, cfg) => {
-    expect(notesHint([GTR], cfg, t)).toBe('T[gnotes.missing]')
+  it('цепочки нет (null/undefined) → пустая строка, без исключения', () => {
+    expect(notesHint(null, t)).toBe('')
+    expect(notesHint(undefined, t)).toBe('')
   })
 })
 
-describe('notesHint: какими моделями распознаются ноты (условие 5)', () => {
-  it('есть yourmt3 и basic-pitch → gnotes.both', () => {
-    expect(notesHint([GTR], cfgOf(['yourmt3', 'basic-pitch']), t)).toBe('T[gnotes.both]')
-  })
-
-  it('порядок движков в ответе не важен → gnotes.both', () => {
-    expect(notesHint([GTR], cfgOf(['basic-pitch', 'yourmt3']), t)).toBe('T[gnotes.both]')
-  })
-
-  it('только basic-pitch → gnotes.bp', () => {
-    expect(notesHint([GTR], cfgOf(['basic-pitch']), t)).toBe('T[gnotes.bp]')
+describe('notesHint: с блоком gtrnotes — подсказка про аккорды плана', () => {
+  it('gtrnotes первым блоком → gnotes.plan', () => {
+    expect(notesHint([GTR], t)).toBe('T[gnotes.plan]')
   })
 
   it('gtrnotes не первым блоком тоже находится', () => {
-    expect(notesHint([DRIVE, EQ, GTR], cfgOf(['basic-pitch']), t)).toBe('T[gnotes.bp]')
-    expect(notesHint([DRIVE, GTR, EQ], null, t)).toBe('T[gnotes.missing]')
+    expect(notesHint([DRIVE, EQ, GTR], t)).toBe('T[gnotes.plan]')
+    expect(notesHint([DRIVE, GTR, EQ], t)).toBe('T[gnotes.plan]')
   })
 
   it('возвращает именно перевод из t, а не ключ', () => {
-    const tr = (key) => (key === 'gnotes.bp' ? 'перевод bp' : '?')
-    expect(notesHint([GTR], cfgOf(['basic-pitch']), tr)).toBe('перевод bp')
+    const tr = (key) => (key === 'gnotes.plan' ? 'перевод plan' : '?')
+    expect(notesHint([GTR], tr)).toBe('перевод plan')
   })
 })
 
-describe('notesHint: тексты подсказки в словарях (условие 5)', () => {
-  const KEYS = ['gnotes.missing', 'gnotes.both', 'gnotes.bp']
-
-  it.each(KEYS)('%s — непустой текст в ru и en', (key) => {
+describe('notesHint: тексты в словарях', () => {
+  it('gnotes.plan — непустой текст в ru и en', () => {
     for (const [lang, dict] of [['ru', RU], ['en', EN]]) {
-      expect(typeof dict[key], `${lang}: нет ключа ${key}`).toBe('string')
-      expect(dict[key].trim(), `${lang}: пустой ${key}`).not.toBe('')
+      expect(typeof dict['gnotes.plan'], `${lang}: нет ключа gnotes.plan`).toBe('string')
+      expect(dict['gnotes.plan'].trim(), `${lang}: пустой gnotes.plan`).not.toBe('')
     }
   })
 
-  it('ru gnotes.missing называет скрипт установки notes_install.sh', () => {
-    expect(RU['gnotes.missing']).toContain('notes_install.sh')
+  it.each(['gnotes.missing', 'gnotes.both', 'gnotes.bp'])('подсказка распознавания %s удалена из ru и en', (key) => {
+    expect(RU[key], `ru: остался ${key}`).toBeUndefined()
+    expect(EN[key], `en: остался ${key}`).toBeUndefined()
+  })
+
+  it('ни один текст ru не отсылает к удалённому notes_install.sh', () => {
+    const left = Object.entries(RU).filter(([, v]) => typeof v === 'string' && v.includes('notes_install.sh'))
+    expect(left.map(([k]) => k)).toEqual([])
   })
 })

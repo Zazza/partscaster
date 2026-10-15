@@ -257,18 +257,18 @@ export const fxPresets = [
     ],
   },
 
-  // гитара по нотам: ноты гитары YuE2 распознаются (один раз на трек) и играются сэмплами другой гитары —
-  // ритм, аккорды и громкость от исполнения YuE2, звук — другого инструмента; затем обычная обработка
+  // гитарист вписывается по аккордам: удары — моменты ударов гитары YuE2, аккорд — из плана трека, манера (style) —
+  // бой / перебор / бас + аккорд / квинты / авто по частям песни; звук — сэмплы другой гитары, затем обычная обработка
   {
     id: 'guitar-notes-nylon',
     stems: ['guitar'], group: 'guitar-notes',
     name: { ru: 'Нейлон (классическая гитара)', en: 'Nylon (classical guitar)' },
     note: {
-      ru: 'Партия гитары переиграна испанской классической гитарой с нейлоновыми струнами. Первое применение к треку — распознавание нот (около минуты на видеокарте). Набор FreePats (CC0).',
-      en: 'The guitar part is replayed by a Spanish classical guitar with nylon strings. The first use on a track transcribes the notes (about a minute on the GPU). FreePats kit (CC0).',
+      ru: 'Испанская классическая гитара с нейлоновыми струнами вписывается перебором: аккорды плана трека в ритме гитары YuE2. Нужен план трека (транскрипция). Набор FreePats (CC0).',
+      en: 'A Spanish nylon-string classical guitar fits in with fingerpicking: the track plan\'s chords in the rhythm of YuE2\'s guitar. Needs the track plan (transcription). FreePats kit (CC0).',
     },
     chain: [
-      { type: 'gtrnotes', kit: 'nylonguitar/guitar' },
+      { type: 'gtrnotes', kit: 'nylonguitar/guitar', style: 2 },
       { type: 'reverb', decay_s: 1.0, predelay_ms: 8, lowpass_hz: 8000, wet: 0.15 },
     ],
   },
@@ -277,11 +277,11 @@ export const fxPresets = [
     stems: ['guitar'], group: 'guitar-notes',
     name: { ru: 'Полуакустика (микрофон)', en: 'Hollow-body (microphone)' },
     note: {
-      ru: 'Партия гитары переиграна полуакустической гитарой, записанной микрофоном, — ближе всего к акустике; глушёные удары — настоящим глушением струн. Первое применение — распознавание нот. Набор Karoryfer Shinyguitar (CC0).',
-      en: 'The guitar part is replayed by a hollow-body guitar recorded with a microphone — the closest to an acoustic; muted strums use real string muting. The first use transcribes the notes. Karoryfer Shinyguitar kit (CC0).',
+      ru: 'Полуакустическая гитара, записанная микрофоном, — ближе всего к акустике. Вписывается по аккордам плана в ритме гитары YuE2: куплет перебором, припев боем, остальное — бас и аккорд. Нужен план трека. Набор Karoryfer Shinyguitar (CC0).',
+      en: 'A hollow-body guitar recorded with a microphone — the closest to an acoustic. Fits in with the plan\'s chords in the rhythm of YuE2\'s guitar: picking in verses, strumming in choruses, bass and chord elsewhere. Needs the track plan. Karoryfer Shinyguitar kit (CC0).',
     },
     chain: [
-      { type: 'gtrnotes', kit: 'shinyguitar/acoustic', mute_kit: 'shinyguitar/mute' },
+      { type: 'gtrnotes', kit: 'shinyguitar/acoustic', mute_kit: 'shinyguitar/mute', style: 0 },
       { type: 'comp', threshold_db: -22, ratio: 2, makeup_db: 2 },
       { type: 'reverb', decay_s: 0.8, predelay_ms: 6, lowpass_hz: 9000, wet: 0.12 },
     ],
@@ -291,11 +291,11 @@ export const fxPresets = [
     stems: ['guitar'], group: 'guitar-notes',
     name: { ru: 'Электро: чистая (Epiphone)', en: 'Electric: clean (Epiphone)' },
     note: {
-      ru: 'Партия гитары переиграна чистой электрогитарой с плоскими струнами, затем компрессор и короткий ревер. Первое применение — распознавание нот. Набор Karoryfer Emilyguitar (CC0).',
-      en: 'The guitar part is replayed by a clean flatwound electric guitar, then a compressor and a short reverb. The first use transcribes the notes. Karoryfer Emilyguitar kit (CC0).',
+      ru: 'Чистая электрогитара с плоскими струнами вписывается «бас + аккорд» по аккордам плана в ритме гитары YuE2, затем компрессор и короткий ревер. Нужен план трека. Набор Karoryfer Emilyguitar (CC0).',
+      en: 'A clean flatwound electric fits in with bass + chord on the plan\'s chords in the rhythm of YuE2\'s guitar, then a compressor and a short reverb. Needs the track plan. Karoryfer Emilyguitar kit (CC0).',
     },
     chain: [
-      { type: 'gtrnotes', kit: 'emilyguitar/notes', mute_kit: 'emilyguitar/mute' },
+      { type: 'gtrnotes', kit: 'emilyguitar/notes', mute_kit: 'emilyguitar/mute', style: 3 },
       { type: 'eq', highpass_hz: 80, bands: [{ freq_hz: 3000, gain_db: 2, q: 1 }] },
       { type: 'comp', threshold_db: -24, ratio: 3, makeup_db: 3 },
       { type: 'reverb', decay_s: 1.2, predelay_ms: 0, lowpass_hz: 4500, wet: 0.25 },
@@ -306,11 +306,11 @@ export const fxPresets = [
     stems: ['guitar'], group: 'guitar-notes',
     name: { ru: 'Электро: чистая (Fender, бриджевый)', en: 'Electric: clean (Fender, bridge)' },
     note: {
-      ru: 'Партия гитары переиграна электрогитарой Fender с бриджевого звукоснимателя — ярче и звонче. Первое применение — распознавание нот. Набор FreePats FSBS (CC0).',
-      en: 'The guitar part is replayed by a Fender electric on the bridge pickup — brighter and twangier. The first use transcribes the notes. FreePats FSBS kit (CC0).',
+      ru: 'Электрогитара Fender с бриджевого звукоснимателя — ярче и звонче — вписывается боем по аккордам плана в ритме гитары YuE2. Нужен план трека. Набор FreePats FSBS (CC0).',
+      en: 'A Fender electric on the bridge pickup — brighter and twangier — fits in strumming the plan\'s chords in the rhythm of YuE2\'s guitar. Needs the track plan. FreePats FSBS kit (CC0).',
     },
     chain: [
-      { type: 'gtrnotes', kit: 'fsbsguitar/guitar' },
+      { type: 'gtrnotes', kit: 'fsbsguitar/guitar', style: 1 },
       { type: 'eq', highpass_hz: 90, bands: [{ freq_hz: 2500, gain_db: 1.5, q: 1 }] },
       { type: 'comp', threshold_db: -24, ratio: 3, makeup_db: 3 },
       { type: 'reverb', decay_s: 1.0, predelay_ms: 0, lowpass_hz: 5000, wet: 0.18 },
@@ -321,11 +321,11 @@ export const fxPresets = [
     stems: ['guitar'], group: 'guitar-notes',
     name: { ru: 'Электро через фузз', en: 'Electric through a fuzz' },
     note: {
-      ru: 'Партия гитары переиграна электрогитарой Fender и пропущена через гаражный фузз — грязно и плотно, а играет по нотам YuE2. Первое применение — распознавание нот. Набор FreePats FSBS (CC0).',
-      en: 'The guitar part is replayed by a Fender electric through a garage fuzz — dirty and thick, playing YuE2\'s notes. The first use transcribes the notes. FreePats FSBS kit (CC0).',
+      ru: 'Электрогитара Fender через гаражный фузз — грязно и плотно — вписывается квинтами по аккордам плана в ритме гитары YuE2. Нужен план трека. Набор FreePats FSBS (CC0).',
+      en: 'A Fender electric through a garage fuzz — dirty and thick — fits in with power chords on the plan\'s chords in the rhythm of YuE2\'s guitar. Needs the track plan. FreePats FSBS kit (CC0).',
     },
     chain: [
-      { type: 'gtrnotes', kit: 'fsbsguitar/guitar' },
+      { type: 'gtrnotes', kit: 'fsbsguitar/guitar', style: 4 },
       { type: 'eq', highpass_hz: 100 },
       { type: 'drive', gain_db: 34, mix: 1 },
       { type: 'eq', lowpass_hz: 6000, bands: [{ freq_hz: 900, gain_db: 4, q: 0.8 }] },

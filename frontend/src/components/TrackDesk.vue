@@ -72,10 +72,8 @@ const listenWin = computed(() => (editing.value && editing.value.to > editing.va
   : previewWindow(props.sel, props.cursor, props.job.duration_sec)))
 
 onMounted(loadAssets)
-// гитара по нотам: какими моделями воркер распознаёт ноты (или что распознавание не установлено)
-const workerCfg = ref(null)
-onMounted(async () => { try { workerCfg.value = await api.workerConfig() } catch { workerCfg.value = null } })
-const gnotesHint = computed(() => (picked.value ? notesHint(picked.value.chain, workerCfg.value, t) : ''))
+// гитарист по аккордам плана: подсказка, что треку нужен план
+const gnotesHint = computed(() => (picked.value ? notesHint(picked.value.chain, t) : ''))
 async function loadAssets() {
   try { assets.value = (await api.fxAssets()) || { amps: [], irs: [], kits: [] } } catch { /* старый воркер — ошибка покажется при «стало» */ }
 }

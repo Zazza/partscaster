@@ -52,6 +52,7 @@
 | `genres.py` | жанровые пресеты звука (34 течения по 3–4 варианта; 4 варианта — с гитарой «по нотам», цепочки guitar-notes-*): собирает встроенные из готовых цепочек студии по id — `fx_presets.json`, копия `frontend/src/fxPresets.js` (make mcp-data, деплоится вместе с воркером) |
 | `drumsynth.py` | драм-машины и синт-басы, которые воркер синтезирует сам (`fx_kit_install tr808 …`) |
 | `fx_engine.py` | звуковой движок: цепочка блоков gate/eq/comp/drive/amp/cab/reverb/delay/…/air на numpy/scipy, без сдвига во времени (`POST /jobs/{id}/fx`) |
+| `guitarpart.py` | партия гитариста «по аккордам плана» для блока gtrnotes: удары дорожки гитары × аккорды сетки `chord_grid`, манера (бой, перебор, бас + аккорд, квинты, авто по частям) (`GET /jobs/{id}/guitar_part`) |
 | `fx_nam.py` | усилитель NAM (neural-amp-modeler 0.12.2 из `PARTSCASTER_NAM_DEPS`): загрузка захвата `.nam`, замер задержки щелчком |
 | `abcparse.py` | парсер score.abc → таймлайн для пиано-ролла |
 | `waveform.py` | волна громкости (пики soundfile+numpy) и спектрограмма (ffmpeg showspectrumpic — опционален) |

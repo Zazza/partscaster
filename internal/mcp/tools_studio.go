@@ -342,22 +342,26 @@ func RegisterStudioTools(s *Server) {
 	})
 
 	s.Register(Tool{
-		Name: "guitar_notes",
-		Description: "Распознать ноты гитары трека (для звуков «Ноты переиграны другой гитарой» — блок движка gtrnotes): " +
-			"YourMT3+ и basic-pitch вместе, дорожка guitar (сделает стемы, если их нет). Результат хранится у трека и " +
-			"переиспользуется; применение такого звука к дорожке распознаёт само, если ещё не было. ~1 мин на видеокарте " +
-			"(в общей очереди с генерацией). force=true — распознать заново. Ответ {notes, engines, cached}.",
+		Name: "guitar_part",
+		Description: "Что сыграет гитарист «по аккордам плана» (звуки группы «Гитарист вписывается по аккордам» — блок " +
+			"движка gtrnotes): удары — моменты ударов дорожки guitar, аккорд — из плана в такте звука. Ответ {style, " +
+			"bars [{start, end, chord, section}], strikes [{t, midi[]}], beats, tune_cents}. style — манера: 0 авто по " +
+			"частям песни (куплет — перебор, припев — бой, прочее — бас + аккорд), 1 бой, 2 перебор, 3 бас + аккорд, " +
+			"4 квинты. Нужен план трека (транскрипция) и дорожка guitar. Для разбора «что звучит на N секунде».",
 		InputSchema: props(map[string]any{
 			"job_id": prop("ID джобы", "integer"),
-			"force":  prop("распознать заново, даже если ноты уже есть", "boolean"),
+			"style":  prop("манера 0–4 (по умолчанию 0 — авто)", "integer"),
 		}, "job_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			id := argInt(args, "job_id")
 			if id <= 0 {
 				return "", fmt.Errorf("нужен job_id — ID джобы")
 			}
-			defer s.fxCache().Invalidate(id) // ноты другие — превью «по нотам» устарело
-			out, err := s.client.GuitarNotes(context.Background(), id, argBool(args, "force"))
+			style := argInt(args, "style")
+			if style < 0 || style > 4 {
+				return "", fmt.Errorf("style — 0…4: авто, бой, перебор, бас + аккорд, квинты")
+			}
+			out, err := s.client.GuitarPart(context.Background(), id, int(style))
 			if err != nil {
 				return "", err
 			}

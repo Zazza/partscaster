@@ -10,7 +10,7 @@ import re
 
 AUTO, STRUM, ARPEGGIO, BASS_CHORD, POWER = 0, 1, 2, 3, 4
 STYLES = (AUTO, STRUM, ARPEGGIO, BASS_CHORD, POWER)
-MIN_NOTE_S = 0.15    # нота партии не короче: короче MUTED_S блок принял бы удар за глушёный
+MIN_NOTE_S = 0.2     # нота партии не короче: с запасом над порогами глушёного удара и глушения ладонью (0,1/0,15)
 RING_MAX_S = 2.0     # нота боя звенит до следующего удара, но не дольше
 VEL = 0.8            # силу удара блок берёт из громкости старой гитары; здесь — заглушка
 ARP_ORDER = (0, 2, 3, 4, 3, 2)   # перебор: бас → вверх → вниз (индексы струн аппликатуры)
@@ -103,7 +103,7 @@ def part(onsets, bars, style: int) -> list:
         else:   # BASS_CHORD
             if min(abs(pos - 0), abs(pos - 2), abs(pos - 4)) <= STRONG_TOL:
                 r = v[0]
-                if round(pos) % 4 == 2:   # вторая половина такта — квинта
+                if abs(pos) > STRONG_TOL:   # доля 3 и удар перед следующим тактом — вторая половина: квинта
                     r = r + 7 if r + 7 <= v[-1] else r - 5
                 out.append([t, hold, r, VEL])
             else:

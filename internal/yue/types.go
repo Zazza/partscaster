@@ -48,8 +48,8 @@ type Service interface {
 	MakeStems(ctx context.Context, id int64) (map[string]any, error)
 	// MakeStemsWith — разделение разово заданной моделью (roformer | htdemucs; "" — по настройке)
 	MakeStemsWith(ctx context.Context, id int64, model string) (map[string]any, error)
-	// GuitarNotes — распознать ноты гитары трека (кэш у трека; force — заново) → {notes, engines, cached}
-	GuitarNotes(ctx context.Context, id int64, force bool) (map[string]any, error)
+	// GuitarPart — партия гитариста «по аккордам плана» в манере style → {style, bars, strikes, beats, tune_cents}
+	GuitarPart(ctx context.Context, id int64, style int) (map[string]any, error)
 	MakeMinus(ctx context.Context, id int64, exclude []string) (map[string]any, error)
 	// звуковой движок воркера: цепочка блоков на трек/дорожку → вариант; захваты NAM и IR
 	ApplyFx(ctx context.Context, id int64, req FxRequest) (*DspVariant, error)

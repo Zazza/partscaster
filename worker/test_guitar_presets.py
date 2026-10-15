@@ -1,11 +1,12 @@
-"""Пресеты и фразы гитары «ноты переиграны другой гитарой» — по контракту карточки
-internal-guitar-notes.
+"""Пресеты и фразы гитары «по нотам» — по контракту карточек internal-guitar-notes и
+internal-guitar-plan-chords (условия 2, 10: манера у пяти пресетов, фразы играют свои готовые ноты).
 
 Контракт:
 - готовые цепочки (worker/fx_presets.json, копия фронтовых fxPresets): guitar-notes-nylon,
   guitar-notes-acoustic, guitar-notes-emily, guitar-notes-fsbs, guitar-notes-fuzz — stems ['guitar'],
   группа guitar-notes, первый блок gtrnotes с набором своей гитары (+ обработка у электро);
-  прежние 16 гитарных цепочек и их id не меняются;
+  прежние 16 гитарных цепочек и их id не меняются; манера (style блока gtrnotes): нейлон 2 (перебор),
+  полуакустика 0 (авто), Emily 3 (бас + аккорд), FSBS 1 (бой), фузз 4 (квинты);
 - пресеты звука (genres.build): «Инди-рок · акустический» (acoustic), «Гаражный рок · фузз по нотам»
   (fuzz), «Инди-поп · чистая гитара» (emily), «Джаз-лаунж · нейлон» (nylon) — у спека гитары цепочка
   guitar-notes-*: первый блок gtrnotes с нужным набором;
@@ -31,6 +32,8 @@ PHRASES_DIR = WORKER / "phrases"
 KIT_OF = {"guitar-notes-nylon": "nylonguitar", "guitar-notes-acoustic": "shinyguitar",
           "guitar-notes-emily": "emilyguitar", "guitar-notes-fsbs": "fsbsguitar",
           "guitar-notes-fuzz": "fsbsguitar"}
+STYLE_OF = {"guitar-notes-nylon": 2, "guitar-notes-acoustic": 0, "guitar-notes-emily": 3,
+            "guitar-notes-fsbs": 1, "guitar-notes-fuzz": 4}
 ELECTRIC = ("guitar-notes-emily", "guitar-notes-fsbs", "guitar-notes-fuzz")
 OLD_GUITAR = ("guitar-amp-clean", "guitar-amp-hot", "guitar-amp-spring", "guitar-clean", "guitar-amp-highgain",
               "guitar-postpunk", "guitar-jangle", "guitar-surf", "guitar-fuzz", "guitar-industrial",
@@ -61,6 +64,20 @@ class TestFxPresetChains(unittest.TestCase):
                 self.assertEqual(first.get("type"), "gtrnotes")
                 self.assertEqual(_kit_name(first), kit)
                 self.assertNotIn("notes", first, "ноты кладёт воркер, в пресете их нет")
+
+    def test_style_per_preset(self):
+        for pid, style in STYLE_OF.items():
+            with self.subTest(preset=pid):
+                first = self.by_id[pid]["chain"][0]
+                self.assertEqual(first.get("type"), "gtrnotes")
+                self.assertEqual(first.get("style"), style)
+
+    def test_styles_valid_for_block(self):
+        # манера пресета проходит разбор цепочки движком (0…4, целое)
+        import fx_engine
+        for pid in STYLE_OF:
+            with self.subTest(preset=pid):
+                fx_engine.parse_chain(self.by_id[pid]["chain"])
 
     def test_electric_have_processing(self):
         for pid in ELECTRIC:
@@ -133,7 +150,7 @@ class TestPhraseApiGtrnotes(fa._FxApiCase):
 
     def setUp(self):
         super().setUp()
-        from test_guitar_notes_api import GtrKitRes
+        from test_guitar_part_api import GtrKitRes
         self.resources = GtrKitRes()
 
     def test_plays_by_phrase_notes(self):

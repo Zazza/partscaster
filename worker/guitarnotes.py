@@ -26,7 +26,7 @@ def _direction(t: float, beats) -> str:
     if 0 <= i < len(bs) - 1:
         base, step = bs[i], bs[i + 1] - bs[i]
     else:
-        steps = sorted(b - a for a, b in zip(bs, bs[1:]))
+        steps = sorted(b - a for a, b in zip(bs, bs[1:], strict=False))
         base, step = (bs[0] if i < 0 else bs[-1]), steps[len(steps) // 2]
     if step <= 0:
         return "down"

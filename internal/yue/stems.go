@@ -3,6 +3,7 @@ package yue
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 )
 
@@ -73,15 +74,13 @@ func (c *Client) MakeStemsWith(ctx context.Context, id int64, model string) (map
 	return out, nil
 }
 
-// GuitarNotes — распознать ноты гитары трека (блок движка gtrnotes «Гитара по нотам»): YourMT3+ и basic-pitch,
-// результат хранится у трека; force — распознать заново. Ответ {notes, engines, cached}.
-func (c *Client) GuitarNotes(ctx context.Context, id int64, force bool) (map[string]any, error) {
-	path := fmt.Sprintf("/jobs/%d/guitar_notes", id)
-	if force {
-		path += "?force=1"
-	}
+// GuitarPart — что сыграет гитарист «по аккордам плана» (блок движка gtrnotes): такты с аккордами и частями песни,
+// удары с нотами в манере style (0 авто, 1 бой, 2 перебор, 3 бас + аккорд, 4 квинты). Первый расчёт трека — секунды
+// без видеокарты (удары, доли, строй), дальше — кэш у трека. Ответ {style, bars, strikes, beats, tune_cents}.
+func (c *Client) GuitarPart(ctx context.Context, id int64, style int) (map[string]any, error) {
 	var out map[string]any
-	if err := c.post(ctx, path, gpuTimeout, &out); err != nil {
+	path := fmt.Sprintf("/jobs/%d/guitar_part?style=%d", id, style)
+	if err := c.call(ctx, http.MethodGet, path, planTimeout, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
