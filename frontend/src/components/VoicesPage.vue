@@ -9,13 +9,11 @@ const { t } = useI18n()
 import { api } from '../api.js'
 import { usePlayer } from '../composables/usePlayer.js'
 import { useConfirm } from '../composables/useConfirm.js'
-import VSelect from '../VSelect.vue'
+import VoiceKnobs from './VoiceKnobs.vue'
 import {
-  PARAMS_VERSION, VOICE_REGISTERS, VOICE_KNOBS, VOICE_PRESETS, VOICE_ARCHETYPES,
-  defaultVoiceParams, normalizeVoiceParams, voiceDescriptor,
-  auditionStyle, auditionJob,
+  PARAMS_VERSION, normalizeVoiceParams, voiceDescriptor, voiceCardParams,
+  auditionStyle, auditionJob, defaultVoiceParams,
 } from '../voiceLab.js'
-import { hasCyrillic } from '../requests.js'
 
 const emit = defineEmits(['close'])
 const { askConfirm } = useConfirm()
@@ -34,7 +32,6 @@ const autoplayedId = ref(0)      // какая проба уже включал�
 
 let pollTimer = null
 const descriptor = computed(() => voiceDescriptor(params.value))
-const registerOptions = computed(() => VOICE_REGISTERS.map(r => ({ value: r, label: t('voicelab.register.' + r) })))
 
 async function loadVoices() {
   try { voices.value = (await api.voices()) || [] } catch {}
@@ -104,14 +101,7 @@ async function save() {
   } catch (e) { err.value = String(e) } finally { busy.value = false }
 }
 
-// пресет задаёт стартовые ручки — дальше пользователь докручивает руками
-function applyPreset(p) {
-  params.value = normalizeVoiceParams(p.params)
-}
-
-function cardParams(v) {
-  try { return normalizeVoiceParams(JSON.parse(v.params || '{}')) } catch { return defaultVoiceParams() }
-}
+const cardParams = voiceCardParams
 const cardDescriptor = (v) => voiceDescriptor(cardParams(v))
 const cardPlay = (v) => toggleArtifact('v' + v.id, v.name, () => api.playAudio(v.job_id))
 
@@ -163,46 +153,13 @@ function cleanProbes() {
       <div class="page-modal-body">
       <p class="muted">{{ t('voicelab.desc') }}</p>
 
-      <div class="voice-presets">
-        <span class="muted">{{ t('voicelab.preset.label') }}</span>
-        <button v-for="p in VOICE_PRESETS" :key="p.id" class="ghost small-btn"
-                :title="voiceDescriptor(p.params)" @click="applyPreset(p)">
-          <AppIcon v-if="p.id === 'reset'" name="x" /> {{ t('voicelab.preset.' + p.id) }}
-        </button>
-      </div>
-      <div class="voice-presets">
-        <span class="muted">{{ t('voicelab.archetype.label') }}</span>
-        <button v-for="a in VOICE_ARCHETYPES" :key="a.id" class="ghost small-btn"
-                :title="voiceDescriptor(a.params)" @click="applyPreset(a)">
-          {{ t('voicelab.archetype.' + a.id) }}
-        </button>
-      </div>
-
-      <div class="dsp-params">
-        <label>
-          <span>{{ t('voicelab.knob.register') }}</span>
-          <VSelect v-model="params.register" :options="registerOptions" />
-          <span></span>
-        </label>
-        <label v-for="k in VOICE_KNOBS" :key="k.key">
-          <span>{{ t('voicelab.knob.' + k.key) }}</span>
-          <input v-model.number="params[k.key]" type="range" min="0" :max="k.max" step="1" />
-          <span class="dsp-pval">{{ t('voicelab.' + k.key + '.' + params[k.key]) }}</span>
-        </label>
-        <label>
-          <span :title="t('voicelab.extra.tip')">{{ t('voicelab.extra') }}</span>
-          <input v-model="params.extra" :placeholder="t('voicelab.extra.ph')" />
-          <span></span>
-        </label>
+      <VoiceKnobs v-model="params">
         <label>
           <span :title="t('voicelab.seed.tip')">{{ t('voicelab.seed') }}</span>
           <input v-model="seedInput" :placeholder="t('voicelab.seed.tip')" inputmode="numeric" />
           <span></span>
         </label>
-      </div>
-      <p class="muted voice-hint">{{ t('voicelab.extra.hint') }}</p>
-      <p class="muted voice-preview" :title="t('voicelab.preview')">{{ descriptor }}</p>
-      <p v-if="hasCyrillic(descriptor)" class="voice-cyr">{{ t('form.style.cyr') }}</p>
+      </VoiceKnobs>
 
       <div class="corpus-actions">
         <button class="primary" :disabled="busy" :title="t('voicelab.audition.tip')" @click="runAudition">

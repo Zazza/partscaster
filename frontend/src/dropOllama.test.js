@@ -16,7 +16,8 @@ const read = (p) => readFileSync(p, 'utf8')
 
 const APP = join(srcDir, 'App.vue')
 const API = join(srcDir, 'api.js')
-const VOICES = join(srcDir, 'components', 'VoicesPage.vue')
+// ручки примерочной (и предупреждение о кириллице) — общий компонент VoiceKnobs: «Голоса» и шаг «Голос» студии
+const VOICES = join(srcDir, 'components', 'VoiceKnobs.vue')
 const REPLAY = join(srcDir, 'components', 'ReplayModal.vue')
 const SETTINGS = join(srcDir, 'components', 'SettingsPage.vue')
 const STUDIO = join(srcDir, 'components', 'StudioPage.vue')

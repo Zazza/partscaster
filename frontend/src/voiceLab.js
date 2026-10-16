@@ -3,6 +3,7 @@
 // маппинг в английские теги; дескриптор пересчитывается из params всегда
 // на клиенте (на воркере хранятся только params и seed).
 import { buildStyleLine } from './styleLogic.js'
+import { planTimeline, sliceAbc, splitBars, expandMultiRests } from './abcEdit.js'
 
 export const PARAMS_VERSION = 1
 
@@ -112,12 +113,13 @@ export const VOICE_PRESETS = [
 export function normalizeVoiceParams(o) {
   const d = defaultVoiceParams()
   const src = (o && typeof o === 'object') ? o : {}
-  const clamp = (v, max) => {
+  // нет ручки или не число — значение по умолчанию (подача по умолчанию не 0)
+  const clamp = (v, max, def) => {
     const n = Number.parseInt(v, 10)
-    return Number.isFinite(n) ? Math.min(Math.max(n, 0), max) : 0
+    return Number.isFinite(n) ? Math.min(Math.max(n, 0), max) : def
   }
   const out = { ...d, register: VOICE_REGISTERS.includes(src.register) ? src.register : d.register }
-  for (const k of VOICE_KNOBS) out[k.key] = clamp(src[k.key], k.max)
+  for (const k of VOICE_KNOBS) out[k.key] = clamp(src[k.key], k.max, d[k.key])
   out.extra = typeof src.extra === 'string' ? src.extra.trim() : ''
   return out
 }
@@ -220,5 +222,116 @@ export function auditionJob(p, seed) {
     cot: AUDITION_BED.cot,
     abc: AUDITION_BED.abc,
     draft: true,
+  }
+}
+
+// Params карточки (JSON-строка с воркера) → ручки; битое/пустое — дефолт.
+export function voiceCardParams(card) {
+  try { return normalizeVoiceParams(JSON.parse((card && card.params) || '{}')) } catch { return defaultVoiceParams() }
+}
+
+// ---- шаг «Голос» студии: тот же трек другим голосом ----
+
+// тег стиля о голосе: слово-признак целиком; регистровое слово перед инструментом
+// («tenor sax», «baritone guitar») — инструмент, не голос
+const VOCAL_WORD_RE = /\b(vocals?|voice|singer|singing|sung|sings|falsetto|crooner|rap|rapper|rapped)\b/i
+const VOCAL_RANGE_RE = /\b(baritone|tenor|soprano|alto)\b(?!\s+(sax|saxophone|horn|guitar|ukulele|clarinet|trombone|recorder)\b)/i
+const BPM_TAG_RE = /^\d+\s*bpm$/i
+const isVocalTag = (tag) => VOCAL_WORD_RE.test(tag) || VOCAL_RANGE_RE.test(tag)
+
+// У трека хранится только готовая строка стиля (слотов нет): теги о голосе убираются,
+// дескриптор встаёт на место первого из них; тегов о голосе нет — перед «N BPM» в конце,
+// нет и его — в конец. Пустой дескриптор — строка как есть.
+export function swapVocals(style, descriptor) {
+  const d = String(descriptor || '').trim()
+  if (!d) return style
+  const tags = String(style || '').split(',').map((x) => x.trim()).filter(Boolean)
+  const at = tags.findIndex(isVocalTag)
+  const out = tags.filter((x) => !isVocalTag(x))
+  if (at >= 0) {
+    // место первого вокального тега среди оставшихся: до него убранных нет
+    out.splice(at, 0, d)
+  } else if (out.length && BPM_TAG_RE.test(out[out.length - 1])) {
+    out.splice(out.length - 1, 0, d)
+  } else {
+    out.push(d)
+  }
+  return out.join(', ')
+}
+
+const LYRIC_TAG_RE = /^\s*\[[^\]]*\]\s*$/
+const TAG_ANY_RE = /\[[^\]]*\]/g
+// буква или цифра любого алфавита: \w в JS без флага u — только латиница (кириллица, CJK — «без слов»)
+const WORD_CHAR_RE = /[\p{L}\p{N}]/u
+
+// В тексте есть что петь: что-то кроме тегов [..] и пробелов (как _has_words воркера).
+export function hasSungWords(lyrics) {
+  return WORD_CHAR_RE.test(String(lyrics || '').replace(TAG_ANY_RE, ' '))
+}
+
+// такт голоса с нотой: аккорды "Dm", украшения !..! и поля [K:..] — не ноты; паузы z/x — не ноты
+const hasNote = (bar) => /[A-Ga-g]/.test(bar.replace(/"[^"]*"/g, '').replace(/![^!]*!/g, '').replace(/\[[^\]]*\]/g, ''))
+
+// номера тактов голоса (сквозные, после разворота мультипауз) с нотами
+function noteBars(abc, voice) {
+  const out = []
+  let n = 0
+  for (const p of splitBars(abc)) {
+    if (p.kind !== 'body' || p.voice !== voice) continue
+    const closed = p.raw.trim().endsWith('|')
+    const m = closed ? p.chunks.length - 1 : p.chunks.length
+    for (let j = 0; j < m; j++, n++) if (hasNote(p.chunks[j])) out.push(n)
+  }
+  return out
+}
+
+// первый блок текста со словами: тег [..] и его строки до следующего тега; без тегов — первый абзац
+function firstSungBlock(lyrics) {
+  const lines = String(lyrics || '').split('\n')
+  if (!lines.some((l) => LYRIC_TAG_RE.test(l))) {
+    const para = String(lyrics || '').split(/\n\s*\n/).find((b) => WORD_CHAR_RE.test(b))
+    return (para || '').trim()
+  }
+  const blocks = []
+  for (const l of lines) {
+    if (LYRIC_TAG_RE.test(l) || !blocks.length) blocks.push([])
+    blocks[blocks.length - 1].push(l)
+  }
+  const b = blocks.find((x) => hasSungWords(x.join('\n')))
+  return b ? b.join('\n').trim() : ''
+}
+
+// Проба голоса: draft рендерит начало плана, а у трека с интро в первых ~18 с не поют —
+// кусок плана с первого такта, где у Vocal есть ноты, не больше maxBars тактов (все голоса,
+// заголовок сохраняется) и первый блок текста со словами. Нот у голоса нет — null.
+export function voiceProbe(abc, lyrics, maxBars = 8) {
+  const text = expandMultiRests(String(abc || ''))
+  const tl = planTimeline(text)
+  const voice = Object.keys(tl).find((v) => /^vocal/i.test(v))
+  if (!voice) return null
+  const first = noteBars(text, voice)[0]
+  if (first === undefined) return null
+  const bars = tl[voice]
+  const last = Math.min(first + Math.max(1, maxBars), bars.length) - 1
+  return {
+    abc: sliceAbc(text, bars[first].start, bars[last].end, 0),
+    lyrics: firstSungBlock(lyrics),
+  }
+}
+
+// Запрос рендера трека другим голосом: стиль трека с заменённым голосом, seed и режим
+// плана трека (как у пересборки: off → melody, abc требует full|melody). Полный — rebuild
+// (своя версия со своим голосом: 'variant' значил бы «голос родителя»), проба — fragment.
+export function voiceTrackJob(job, params, { abc, lyrics, title, draft }) {
+  return {
+    title,
+    style: swapVocals(job.style || '', voiceDescriptor(params)),
+    lyrics,
+    seed: job.seed || 0,   // 0 — воркер возьмёт сид родителя
+    cot: job.cot === 'off' || !job.cot ? 'melody' : job.cot,
+    abc,
+    draft: !!draft,
+    parent_id: job.id,
+    role: draft ? 'fragment' : 'rebuild',
   }
 }

@@ -34,6 +34,7 @@ import StudioPresets from './StudioPresets.vue'
 import StudioSynth from './StudioSynth.vue'
 import StudioPerc from './StudioPerc.vue'
 import StudioMaster from './StudioMaster.vue'
+import StudioVoice from './StudioVoice.vue'
 import PlaceControls from './PlaceControls.vue'
 
 // стиль импортированного трека — должен совпадать с IMPORT_STYLE в worker/yue_worker.py
@@ -412,7 +413,7 @@ const isSecStart = (pos) => pos === 0 || posSection(pos) !== posSection(pos - 1)
 // дорожки demucs по-русски (барабаны, бас, гитары/синты, голос, гитара, клавиши); неизвестная — как есть
 const stemLabel = (n) => { if (!n) return ''; const k = 'studio.dsp.target.' + n; const s = t(k); return s === k ? n : s }
 // шаги студии: ссылки на разделы, активный — по прокрутке
-const STUDIO_STEPS = ['listen', 'edit', 'sound', 'done']
+const STUDIO_STEPS = ['listen', 'edit', 'sound', 'voice', 'done']
 const activeStep = ref('listen')
 const fxBox = ref(null)
 function goStep(st) {
@@ -1870,7 +1871,10 @@ function setWindowTitle() {
             </div>
           </details>
 
-          <h3 id="st-done" class="studio-step">4 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
+          <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
+          <StudioVoice :job="job" :abc-file="abcFile" @built="(id) => inserts.carryTo(job.id, id, job.id)" />
+
+          <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <div ref="masterBox" class="studio-box">
             <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
             <div class="studio-box-body">

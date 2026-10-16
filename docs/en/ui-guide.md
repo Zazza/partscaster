@@ -240,7 +240,7 @@ You can also import a track through MCP (the `import_track` tool).
 ## Studio
 
 The studio opens with the "studio →" button on a track or version and with the "done → #N" result in the queue.
-It is one page, and the sections follow the work: **1 Listen · 2 Edit · 3 Sound · 4 Done**. The step bar sticks
+It is one page, and the sections follow the work: **1 Listen · 2 Edit · 3 Sound · 4 Voice · 5 Done**. The step bar sticks
 to the top and highlights the current section; on its right are "#N track title", the active track badge and the
 sample kit download progress ("downloading kit…"). To leave — any menu item on the left.
 
@@ -407,7 +407,25 @@ easier to change the sound of a single stem in the "Stems" desk. Two collapsed b
   up to three presets on one stretch, switching from the same second. Details —
   [effects.md — pedals](effects.md#pedals-and-pedalboard).
 
-### 4 Done
+### 4 Voice
+
+**Track voice** — the same track in another voice: the plan (score), lyrics and seed stay the track's, only the
+voice description in the style line changes. The music is held by the plan; how close it stays depends on the
+track, so listen to a piece before the full render.
+
+- The voice is a **card from the [voice lab](#voice-lab)** (a list; its description next to it) or **"tune my
+  own"**: the same knobs as in the voice lab (presets, "in the spirit of", register, roughness, creak, delivery,
+  breath, "own words").
+- **"style for the render"** — the track style line with the voice tags (vocals, voice, baritone…) replaced by the
+  chosen voice; with no voice tags the voice is added before the BPM.
+- **"listen to a piece"** — a ~18 s draft from the first sung place (up to 16 bars, with that verse of the lyrics); plays
+  by itself. In "tune my own" mode, after a probe — a name and **"save voice"**: a card with the probe's voice and
+  the track seed.
+- **"resing the whole track"** — a new whole version in the shared generation queue: "<track> · voice <name>",
+  shown in the track list under this track. The track's inserts carry over to it, as with a rebuild.
+- For a track without lyrics or without a score the step explains why the render is unavailable.
+
+### 5 Done
 
 **Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS",
 "Master: loud −11 LUFS", "Master: soft glue"; "loudness" and "to target" (LUFS is the perceived loudness of the
