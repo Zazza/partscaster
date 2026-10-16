@@ -36,7 +36,6 @@ import StudioSynth from './StudioSynth.vue'
 import StudioPerc from './StudioPerc.vue'
 import StudioMaster from './StudioMaster.vue'
 import StudioVoice from './StudioVoice.vue'
-import StudioVoiceFx from './StudioVoiceFx.vue'
 import PlaceControls from './PlaceControls.vue'
 
 // стиль импортированного трека — должен совпадать с IMPORT_STYLE в worker/yue_worker.py
@@ -1239,7 +1238,8 @@ async function submitVoice() {
 const chainNameOf = (id) => (dspChains.value.find((x) => x.id === id) || {}).name
 const DELTAS_KEY = 'yue_done_deltas'
 const showDeltas = ref(readFlag(DELTAS_KEY, false))
-watch(showDeltas, (v) => writeFlag(DELTAS_KEY, v))
+// замеры исходника для дельт — когда их показывают (версии эффектов больше не создаются по кнопке)
+watch(showDeltas, (v) => { writeFlag(DELTAS_KEY, v); if (v) ensureJobMetrics() }, { immediate: true })
 
 // подпись версии для списка файла волны: микс — по реестру вклеек, остальное — resultTitle
 function variantLabel(v) {
@@ -1319,9 +1319,11 @@ const envOn = ref(false)
 const envTarget = ref('')
 const envPts = ref([])
 const envBusy = ref(false)
+// запись линии в черновике: на дорожку — по дорожке, на весь трек — запись mix (одна на трек)
+const envRecord = () => inserts.appliedFor(props.job.id).find((x) => x.envelope
+  && (envTarget.value ? !x.mix && (x.stems || [])[0] === envTarget.value : x.mix))
 function envLoad() {
-  const rec = envTarget.value && inserts.appliedFor(props.job.id)
-    .find((x) => x.envelope && (x.stems || [])[0] === envTarget.value)
+  const rec = envRecord()
   envPts.value = rec ? rec.envelope.map((p) => ({ ...p })) : []
 }
 watch(envTarget, envLoad)
@@ -1332,7 +1334,9 @@ function bumpSel(delta) {
   const r = selRange.value
   if (r) envPts.value = bumpRange(envPts.value, r.from, r.to, delta)
 }
-const envCanApply = computed(() => !envBusy.value && (envTarget.value ? true : !isFlat(envPts.value)))
+// ровная линия на весь трек применима, только чтобы снять уже записанную (иначе применять нечего)
+const envCanApply = computed(() => !envBusy.value
+  && (envTarget.value ? true : !isFlat(envPts.value) || !!envRecord()))
 async function applyEnvelope() {
   envBusy.value = true
   try {
@@ -1344,7 +1348,10 @@ async function applyEnvelope() {
       // пустая линия убрала единственную запись реестра — пересобирать нечего
       if (!v) waveErr.value = t('studio.wave.env.nothing')
     } else {
-      v = await api.volumeEnvelope(props.job.id, '', pts)
+      // весь трек: линия — запись черновика на собранный микс (одна на трек), отдельной версии нет
+      // ровная линия — снять записанную (пустая линия убирает запись)
+      const res = await inserts.setMixEnvelope(props.job.id, isFlat(pts) ? [] : pts)
+      v = res && res.variant
     }
     await reloadVariants()
     if (v) await api.playFile(props.job.id, v.file, props.job.duration_sec)
@@ -1412,17 +1419,18 @@ async function applyDsp() {
       if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
       return
     }
-    await ensureJobMetrics()
-    await api.applyDsp(props.job.id, c.id, dspParams.value || {})
+    // весь трек: запись черновика на собранный микс (до мастера), отдельной версии не делаем —
+    // итог собирает «применить всё» в «Готово»
+    const res = await inserts.addMixFx(props.job.id, { chain: c.id, params: dspParams.value || {} })
     await reloadVariants()
+    if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
   } catch (e) {
     rollErr.value = String(e)
   } finally { dspBusy.value = false }
 }
 
-// Эффекты «одним кликом» (мастеринг, дыхание): цепочка на весь микс с крутилками
-// выбранного уровня, результат сразу отдельным треком-версией (повторный клик —
-// ещё одна версия, лишние удалить)
+// Эффекты «одним кликом» (мастеринг, дыхание): цепочка на весь микс с крутилками выбранного уровня —
+// запись черновика в шаге «Готово» (трек не создаётся: итог собирает «применить всё»)
 const oneClickLevel = ref('medium')
 async function applyOneClick(chainId) {
   const c = dspChains.value.find((x) => x.id === chainId)
@@ -1431,14 +1439,13 @@ async function applyOneClick(chainId) {
   try {
     selChain(chainId)
     dspTarget.value = ''
-    await ensureJobMetrics()
     const params = oneClickParams(chainId, oneClickLevel.value)
-    const v = await api.applyDsp(props.job.id, chainId, params)
+    const label = c.name + ' (' + t('studio.dsp.level.' + oneClickLevel.value) + ')'
+    const res = await inserts.addMixFx(props.job.id, { chain: chainId, params, step: 'done', label })
     await reloadVariants()
-    const name = variantLabel(v) + ' (' + t('studio.dsp.level.' + oneClickLevel.value) + ')'
-    await api.variantToTrack(props.job.id, v.file, (props.job.title || t('common.track')) + ' · ' + name)
+    if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
     rollErr.value = ''
-    trickMsg.value = t('studio.dsp.totrack.done', { name })
+    trickMsg.value = t('studio.dsp.oneclick.added', { name: label })
   } catch (e) {
     rollErr.value = String(e)
   } finally { dspBusy.value = false }
@@ -1903,10 +1910,8 @@ function setWindowTitle() {
           </details>
 
           <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
-          <StudioVoice :job="genJob" :abc-file="abcFile" @built="(id) => inserts.carryTo(job.id, id, job.id)">
-            <StudioVoiceFx :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :sung-at="sungAt"
-                           @applied="reloadVariants" />
-          </StudioVoice>
+          <StudioVoice :job="genJob" :abc-file="abcFile" :chains="dspChains" :sel="selRange" :cursor="waveCursor"
+                       :sung-at="sungAt" @built="(id) => inserts.carryTo(job.id, id, job.id)" @applied="reloadVariants" />
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->

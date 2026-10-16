@@ -45,11 +45,11 @@ box — see [Pedals and pedalboard](#pedals-and-pedalboard).
 In the track studio — the "Sound" step, the **"Quick effects (ffmpeg)"** section, the **"Audio effects"** box (the
 interface in detail — [ui-guide.md](ui-guide.md)).
 
-Whole-track variants are collected in the "Done" step, the "results" box.
+Everything applied accumulates in the track draft — the "Done" step, the "Track changes" box; the final track is "apply all".
 
 1. **Pick a chain** in the "effects chain…" list. Under the list is a short description, below it are knobs with default values.
 2. **Pick the target**: the whole track or one stem — vocals, drums, bass, "guitars/synths".
-   - **Whole track** — processes the whole mix. The result is a variant `dsp-<chain>.flac`.
+   - **Whole track** — processes the whole assembled mix (after the stem edits, before the master, in the order applied).
    - **Stem** — processes only this stem. The difference "processed − original" goes into the track. The other
      stems do not change.
    - **Window** — a selection on the roll or on the wave: the effect on the stem sounds only there. No selection — the
@@ -60,10 +60,10 @@ Whole-track variants are collected in the "Done" step, the "results" box.
    checkbox plays the same processed and original stem without the rest of the mix: in a dense mix (a wall of
    guitars) the effect is masked, solo you hear it. The preview is stored on the PC and does not go into the variant
    list. The first preview of a track downloads the audio and the stems; the next ones take a couple of seconds.
-4. **Apply** — the variant appears in the list with the metric difference from the source (crest factor,
-   dynamics, top end, flatness). "full delta" (полная дельта) shows all metrics.
-5. You like it — **"→ to tracks"** (→ в треки) in the variant row (the variant becomes a separate song version), then
-   the "make main" star at that version in the track list. You do not like it — "✕".
+4. **Apply** — the edit goes into "Track changes" (the "Done" step), "▶ mix" plays the track with all edits. Disable or
+   remove it there or in "Track edits".
+5. All done — **"apply all"** in the "Done" step: one new track "<title> · final". Older variants in the "results"
+   list (with the metric difference and "→ to tracks") stay as they were.
 
 **Common knobs:**
 

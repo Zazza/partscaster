@@ -397,7 +397,7 @@ easier to change the sound of a single stem in the "Stems" desk. Two collapsed b
   are in the ["4 Voice"](#4-voice) step. "effects chain…" → "what to apply to" (whole track, vocals, drums, bass,
   guitars/synths, and with detailed separation — guitar, keys, kick, snare, toms, hi-hat, ride, crash) → knobs →
   "apply". On a stem the effect applies only in the selected spot (no selection — to the whole stem) and
-  accumulates in "Track edits"; on the whole track — a new variant in "Done". "preview spot" — the effect on the
+  accumulates in "Track edits"; on the whole track — also in "Track edits" (applied to the assembled mix before the master). "preview spot" — the effect on the
   selected stretch (no selection — 15 s from the cursor), it is not added to the variants; "▶ after ⇄ / ▶ before ⇄"
   — the same stretch with and without the effect, from the same second; "stem only" — the stem without the rest of
   the mix. "De-whistle" (Убрать свист) has "find whistle" (looks for narrow tones in the selection and fills in the
@@ -420,20 +420,17 @@ track, so listen to a piece before the full render.
   breath, "own words").
 - **"style for the render"** — the track style line with the voice tags (vocals, voice, baritone…) replaced by the
   chosen voice; with no voice tags the voice is added before the BPM.
-- **"listen to a piece"** — a ~18 s draft from the first sung place (up to 16 bars, with that verse of the lyrics); plays
-  by itself. In "tune my own" mode, after a probe — a name and **"save voice"**: a card with the probe's voice and
-  the track seed.
-- **"resing the whole track"** — a new whole version in the shared generation queue: "<track> · voice <name>",
-  shown in the track list under this track. The track's inserts carry over to it, as with a rebuild.
-- For a track without lyrics or without a score the step explains why the render is unavailable.
-
-**"Processing:"** — a row in the same block: effects on the vocal stem as buttons — megaphone, telephone, vocal
-overdrive, slapback, and the general effects that suit a voice ("Soften ringing" (Смягчить звон), three reverbs,
-doubling, transpose, octaver; they are in "Audio effects" too). Pressing an effect highlights it and plays a piece
-with it right away: the selection, or without one, from the first sung place; pressing it again deselects it. One
-listen button — **"▶ with effect ⇄ / ▶ without effect ⇄"** from the same second (after moving the knobs the piece is
-re-rendered), "voice only", the knobs, **"make a version with the effect"** — the effect on the voice in the selected
-piece (the whole track without a selection), collected in "Track edits", the new version in "Done".
+- **"Processing:"** — effects on the vocal stem as buttons: megaphone, telephone, vocal overdrive, slapback and the
+  general effects that suit a voice ("Soften ringing" (Смягчить звон), three reverbs, doubling, transpose, octaver;
+  they are in "Audio effects" too). Pressing one picks it (highlighted, its knobs below); pressing again deselects it.
+- **"listen to a piece"** — one button for everything picked, a piece from the first sung place (or the selection):
+  with a voice picked — a ~18 s draft in that voice (up to 16 bars, with that verse of the lyrics; 1–2 minutes) that
+  plays by itself when ready; with an effect too — the same piece with the effect on the voice, no new render; no
+  voice but an effect — a piece of the track with the effect on the voice; nothing picked — the original. In "tune my
+  own" mode, after a probe — a name and **"save voice"**: a card with the probe's voice and the track seed.
+- **"Apply"** (bottom right): the effect — into "Track changes" (the "Done" step); the voice — a new whole version of
+  the track in the shared generation queue "<track> · voice <name>", the track's edits (with this effect) carry over.
+- For a track without lyrics or without a score the step explains why the voice render is unavailable.
 
 ### 5 Done
 
@@ -472,11 +469,11 @@ What is inside presets and how to edit them — the ["Sound presets"](#sound-pre
 **results** — one-click buttons at the top, all track versions below.
 
 - **"one-click mastering"** — the "Mastering" (Мастеринг) chain (unsquash the "brick", loudness through
-  saturation, top-end grit) on the whole track, saved at once as a separate version "title · Мастеринг (medium)".
+  saturation, top-end grit) on the whole track — into "Track changes" with the level in its label; the final — "apply all".
 - **"one-click breathing"** — unsquash the "brick" of a neural mix: quiet parts a little quieter, loud parts as
   they were.
 - The level **"light / medium / strong"** for both buttons: "light" — less top-end grit (if the voice rings or
-  squeaks), "strong" — louder and denser; the level is written into the version name.
+  squeaks), "strong" — louder and denser.
 - **"album loudness…"** — opens the "Album loudness" (Громкость альбома) effect in "Audio effects": bring the
   album's tracks to one loudness.
 - The version list — all of them, intermediate ones too: newest at the top, a clear name and date, the full

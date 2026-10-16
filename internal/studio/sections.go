@@ -72,6 +72,10 @@ type SectionSpec struct {
 	Place *yue.Place `json:"place,omitempty"`
 	// Master у записи Engine — мастер: цепочка движка на весь собранный микс на воркере (одна на трек)
 	Master bool `json:"master,omitempty"`
+	// Mix — эффект на ВЕСЬ собранный микс (Chain+Params, Steps или Envelope): после правок дорожек и мест,
+	// до мастера, в порядке записей; Stems не учитываются. «Применить» эффекта/педалей/линии на весь трек
+	// и «один клик» студии копятся так в черновике, а не отдельными версиями
+	Mix bool `json:"mix,omitempty"`
 }
 
 // isPlace — запись «место дорожки»
@@ -175,14 +179,21 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 		return nil, errors.New("нет замен для пересборки")
 	}
 	label := rebuildLabel(specs)
-	all := specs // и записи «место»: их дорожки (части барабанов) тоже скачиваются
+	// и записи «место»: их дорожки (части барабанов) тоже скачиваются; эффекты на весь микс (Mix) — нет:
+	// их Stems не учитываются, лишние дорожки (или их отсутствие у трека) не должны мешать пересборке
+	all := make([]SectionSpec, 0, len(specs))
+	for _, s := range specs {
+		if !s.Mix {
+			all = append(all, s)
+		}
+	}
 	dir, err := os.MkdirTemp("", fmt.Sprintf("yue-sections-%d-*", parentID))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	specs, master, places, err := splitMix(specs)
+	specs, master, places, mixFx, err := splitMix(specs)
 	if err != nil {
 		return nil, err
 	}
@@ -321,6 +332,14 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 	if err := dsp.RunInputs(inputs, out, dsp.InsertsGraph(ins)); err != nil {
 		return nil, err
 	}
+	// эффекты на весь микс — по порядку, каждый на выход предыдущего
+	for i, m := range mixFx {
+		next := fmt.Sprintf("%s/mix-%d.flac", dir, i)
+		if err := dsp.Run(out, next, mixGraph(m), nil); err != nil {
+			return nil, fmt.Errorf("эффект на весь трек: %w", err)
+		}
+		out = next
+	}
 	data, err := os.ReadFile(out)
 	if err != nil {
 		return nil, err
@@ -351,41 +370,90 @@ func PremasterFile(mix string) string {
 	return strings.Replace(mix, "overdub-inst-", "overdub-premaster-", 1)
 }
 
-// splitMix — из записей пересборки отделить мастер (одна активная) и места дорожек (по одному на
-// дорожку); остальные записи — как были. Место только у записи-добавления или своей записью.
-func splitMix(specs []SectionSpec) (rest []SectionSpec, master *SectionSpec, places map[string][4]float64, err error) {
+// splitMix — из записей пересборки отделить мастер (одна активная), места дорожек (по одному на
+// дорожку) и эффекты на весь микс (по порядку); остальные записи — как были. Место только у
+// записи-добавления или своей записью. Ошибки — до скачивания чего-либо.
+func splitMix(specs []SectionSpec) (rest []SectionSpec, master *SectionSpec, places map[string][4]float64,
+	mixFx []SectionSpec, err error) {
 	places = map[string][4]float64{}
 	for i, s := range specs {
 		if s.Place != nil {
 			if _, err := dsp.PlaceMatrix(s.Place.Pan, s.Place.Width); err != nil {
-				return nil, nil, nil, fmt.Errorf("место: %w", err)
+				return nil, nil, nil, nil, fmt.Errorf("место: %w", err)
 			}
 		}
 		switch {
+		case s.Mix:
+			if err := checkMix(s); err != nil {
+				return nil, nil, nil, nil, err
+			}
+			mixFx = append(mixFx, s)
 		case s.Master:
 			if len(s.Engine) == 0 {
-				return nil, nil, nil, errors.New("мастер без цепочки движка")
+				return nil, nil, nil, nil, errors.New("мастер без цепочки движка")
 			}
 			if master != nil {
-				return nil, nil, nil, errors.New("у трека две записи мастера — оставьте одну")
+				return nil, nil, nil, nil, errors.New("у трека две записи мастера — оставьте одну")
 			}
 			master = &specs[i]
 		case s.isPlace():
 			if len(s.Stems) != 1 || !slices.Contains(engineStems, s.Stems[0]) {
-				return nil, nil, nil, fmt.Errorf("место — одной дорожке трека (не %v)", s.Stems)
+				return nil, nil, nil, nil, fmt.Errorf("место — одной дорожке трека (не %v)", s.Stems)
 			}
 			name := s.Stems[0]
 			if _, dup := places[name]; dup {
-				return nil, nil, nil, fmt.Errorf("у дорожки %s два места — оставьте одно", name)
+				return nil, nil, nil, nil, fmt.Errorf("у дорожки %s два места — оставьте одно", name)
 			}
 			places[name], _ = dsp.PlaceMatrix(s.Place.Pan, s.Place.Width)
 		case s.Place != nil && !s.Add:
-			return nil, nil, nil, errors.New("место — у партии-добавления или своей записью дорожки, не у замены")
+			return nil, nil, nil, nil, errors.New("место — у партии-добавления или своей записью дорожки, не у замены")
 		default:
 			rest = append(rest, s)
 		}
 	}
-	return rest, master, places, nil
+	return rest, master, places, mixFx, nil
+}
+
+// checkMix — запись «эффект на весь микс»: ровно одно из Chain/Steps/Envelope, без рендера, движка,
+// добавления и мастера; цепочка известна и без дорожки-ключа (у всего микса ключа нет)
+func checkMix(s SectionSpec) error {
+	if s.ChildID > 0 || len(s.Engine) > 0 || s.Add || s.Master {
+		return errors.New("эффект на весь трек — цепочка, педали или линия громкости, без рендера, движка и мастера")
+	}
+	switch {
+	case s.Chain != "":
+		c := dsp.ByID(s.Chain)
+		if c == nil {
+			return fmt.Errorf("неизвестная цепочка %q (см. dsp_chains)", s.Chain)
+		}
+		if c.Key != "" {
+			return fmt.Errorf("эффект %q — только на дорожку (ключ — дорожка %s)", c.Name, c.Key)
+		}
+	case len(s.Steps) > 0:
+		if _, _, err := dsp.StepsGraph(s.Steps); err != nil {
+			return err
+		}
+	case len(s.Envelope) > 0:
+		if _, err := dsp.NormalizeEnvelope(s.Envelope); err != nil {
+			return err
+		}
+	default:
+		return errors.New("эффект на весь трек без цепочки, педалей или линии громкости")
+	}
+	return nil
+}
+
+// mixGraph — граф ffmpeg записи «эффект на весь микс» (проверена checkMix)
+func mixGraph(s SectionSpec) string {
+	switch {
+	case s.Chain != "":
+		return dsp.ByID(s.Chain).FilterGraph(s.Params)
+	case len(s.Steps) > 0:
+		g, _, _ := dsp.StepsGraph(s.Steps)
+		return g
+	}
+	pts, _ := dsp.NormalizeEnvelope(s.Envelope)
+	return dsp.EnvelopeGraph(pts)
 }
 
 // placeParent — дорожка, внутри которой часть: части барабанов — в drums, гитара и клавиши — в other
@@ -476,6 +544,10 @@ func rebuildLabel(specs []SectionSpec) string {
 			stems = append(stems, cmp.Or(stemLabels[n], n))
 		}
 		label := what + " · " + strings.Join(stems, ", ")
+		if s.Mix { // эффект на весь собранный микс: дорожки не учитываются, окна нет
+			parts = append(parts, what+" · весь трек")
+			continue
+		}
 		if s.isPlace() {
 			label = "место: " + strings.Join(stems, ", ") + " " + placeLabel(*s.Place)
 		}

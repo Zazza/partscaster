@@ -294,3 +294,39 @@ describe('mergeDrafts: трек есть только в localTs (ТК9)', () =>
     expect(ids(r.push)).toEqual([7])
   })
 })
+
+describe('mergeDrafts: ключ трека', () => {
+  const remoteOf = (jobId, edits, queue, ts) => ({ job_id: jobId, state: { v: 1, edits, queue, ts } })
+
+  it('нечисловой ключ трека (P) — правки и очередь не теряются', () => {
+    const local = { applied: { P: [fx(-1)] }, pending: [{ childId: 40, parent: 'P' }] }
+    const r = mergeDrafts(local, { P: 500 }, [])
+    expect(r.applied.P).toEqual([fx(-1)])
+    const q = r.pending.filter((s) => String(s.parent) === 'P').map((s) => s.childId)
+    expect(q).toEqual([40])
+  })
+
+  it('нечисловой ключ без ts — тоже не теряется', () => {
+    const local = { applied: { P: [fx(-1)] }, pending: [{ childId: 40, parent: 'P' }] }
+    const r = mergeDrafts(local, {}, [])
+    expect(r.applied.P).toEqual([fx(-1)])
+    expect(r.pending.map((s) => s.childId)).toEqual([40])
+  })
+
+  it('job_id 7 (число) с воркера и локальный ключ "7" — один трек: новее воркер', () => {
+    const local = { applied: { '7': [fx(-1)] }, pending: [{ childId: 40, parent: '7' }] }
+    const r = mergeDrafts(local, { '7': 100 }, [remoteOf(7, [insert(5)], [{ childId: 41 }], 900)])
+    expect(Object.keys(r.applied)).toEqual(['7'])
+    expect(r.applied[7]).toEqual([insert(5)])
+    expect(r.pending.map((s) => s.childId)).toEqual([41])
+    expect(ids(r.push)).toEqual([])
+  })
+
+  it('job_id 7 (число) с воркера и локальный ключ "7" — один трек: новее локальный, один push', () => {
+    const local = { applied: { '7': [fx(-1)] }, pending: [] }
+    const r = mergeDrafts(local, { '7': 900 }, [remoteOf(7, [insert(5)], [], 100)])
+    expect(Object.keys(r.applied)).toEqual(['7'])
+    expect(r.applied[7]).toEqual([fx(-1)])
+    expect(ids(r.push)).toEqual([7])
+  })
+})

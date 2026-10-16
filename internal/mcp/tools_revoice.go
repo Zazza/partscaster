@@ -36,7 +36,7 @@ func registerRevoiceTools(s *Server) {
 		InputSchema: props(map[string]any{
 			"job_id": prop("ID трека (версии), в котором меняются дорожки", "integer"),
 			"specs": map[string]any{"type": "array", "description": "замены: {child_id, from, to (0 — до конца трека), lead?, beat_sec?, " +
-				"stems, db?, fade_in?, fade_out?, keep_high_hz?, revoice?, chain?, params?, steps?, envelope?, engine?, add?, place?, master?} — chain/params: эффект на " +
+				"stems, db?, fade_in?, fade_out?, keep_high_hz?, revoice?, chain?, params?, steps?, envelope?, engine?, add?, place?, master?, mix?} — chain/params: эффект на " +
 				"дорожки stems в окне (голосовые цепочки — с выравниванием громкости по исходной дорожке, db сверху); " +
 				"steps [{chain, params, off}] вместо chain — цепочка эффектов по порядку (педали, dsp_presets). " +
 				"envelope [{t, db}] при child_id 0 — линия громкости дорожек stems по всему треку (как volume_envelope). engine [{type, …}] при child_id 0 — цепочка звукового движка воркера (как fx_apply, блоки — fx_blocks, готовые — fx_presets) на дорожки stems в окне (и на части барабанов kick/snare/toms/hh/ride/crash — только при дорожках RoFormer; замена ударов — блок sampler): считается на воркере, звук не сдвигается, хвост реверба/дилея/сэмплов звучит после to. add true у записи engine — добавить кусок поверх трека, исходную дорожку не вычитать; stems [\"mix\"] (без разделения) — только с add: так ложится синт-партия (блок synth с notes в секундах трека, аккорды — chord_grid). " +
@@ -44,6 +44,8 @@ func registerRevoiceTools(s *Server) {
 				"{child_id 0, stems [одна дорожка], place} — место дорожки (ложится на все её правки, одна на дорожку). " +
 				"master true у записи engine — мастер: цепочка движка (glue, limiter с target_lufs — громкость к цели по истинному пику) " +
 				"на весь собранный микс на воркере, одна на трек; ответ — громкость и пик после мастера. " +
+				"mix true + chain/params, steps или envelope — эффект на ВЕСЬ собранный микс (после правок дорожек, до мастера, " +
+				"по порядку записей; stems не учитываются). " +
 				"stems: drums/bass/other/vocals; при child_id 0 ещё guitar/piano — гитара и клавиши внутри other " +
 				"(заменить куском их нельзя)", "items": map[string]any{"type": "object"}},
 			"as_track":  prop("сделать вариант версией-треком", "boolean"),

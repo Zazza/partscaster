@@ -1,29 +1,47 @@
 <script setup>
-// Шаг «Голос» студии: тот же план, стиль и seed трека, другой голос в строке стиля —
-// полный рендер новой версией или draft-проба куска с голосом. Голос — карточка из
-// примерочной или свои ручки (общий VoiceKnobs). Seed — трека: seed карточки подобран
-// на стенде примерочной и на другом треке даёт другой голос, а заодно и другую музыку.
+// Шаг «Голос» студии: голос (карточка примерочной или свои ручки, общий VoiceKnobs) и обработка голоса
+// (эффект на дорожку «голос», StudioVoiceFx). Одна «прослушать кусок» на всё выбранное (voiceListenPlan):
+// голос — draft-проба куска, эффект — на голосе этого куска, ничего — оригинал с первого спетого места.
+// Одна «Применить»: эффект — в черновик трека, голос — новая версия (тот же план, стиль и seed трека, другой
+// голос в строке стиля). Seed — трека: seed карточки подобран на стенде примерочной и на другом треке даёт
+// другой голос, а заодно и другую музыку.
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { usePlayer } from '../composables/usePlayer.js'
 import { sliceAbc } from '../abcEdit.js'
 import { jobWatchStep } from '../jobWatch.js'
+import { useInserts } from '../composables/useInserts.js'
+import { voicePreviewWindow } from '../dspVoice.js'
+import { stemFxRequest } from '../requests.js'
+import { voiceFxApplied, voiceFxMatch, voiceListenPlan } from '../voiceListen.js'
 import {
   PARAMS_VERSION, defaultVoiceParams, normalizeVoiceParams, voiceDescriptor, voiceCardParams,
   swapVocals, hasSungWords, voiceProbe, voiceTrackJob,
 } from '../voiceLab.js'
 import VSelect from '../VSelect.vue'
 import VoiceKnobs from './VoiceKnobs.vue'
+import StudioVoiceFx from './StudioVoiceFx.vue'
 
 const props = defineProps({
   job: { type: Object, required: true },
   abcFile: { type: String, default: '' },
+  chains: { type: Array, default: () => [] },  // цепочки DSP — эффекты голоса из них
+  sel: { type: Object, default: null },         // выделение на волне/ролле {from, to}
+  cursor: { type: Number, default: 0 },         // курсор воспроизведения, с
+  sungAt: { type: Number, default: null },      // начало первого спетого такта по плану, с
 })
 // built(id) — полная версия готова: студия переносит на неё вклейки, как у пересборки
-const emit = defineEmits(['built'])
+// applied — эффект ушёл в черновик (студия обновляет список версий)
+const emit = defineEmits(['built', 'applied'])
 const { t } = useI18n()
-const { toggleArtifact, playBtn } = usePlayer()
+const { toggleArtifact, playBtn, nowPlayingKey, refreshPlayer } = usePlayer()
+const inserts = useInserts()
+const fxSel = ref(null)             // выбранная обработка голоса {chain, params} или null
+const probeKey = ref('')            // голос, которым спета проба (ключ ручек): тот же — новый рендер не нужен
+const playOnDone = ref(false)       // проба запущена кнопкой «прослушать кусок» — по готовности играет сама
+const STEM = 'vocals'
+const SLOT = 'V'                    // свой слот превью: не путается с «Эффектами» и «Педалями»
 
 const voices = ref([])
 const selId = ref('')
@@ -61,7 +79,20 @@ const blocker = computed(() => {
   return ''
 })
 const canRun = computed(() => !blocker.value && !!curParams.value && !busy.value)
-const canProbe = computed(() => canRun.value && !!probePlan.value)
+const voiceKey = computed(() => (curParams.value ? JSON.stringify(curParams.value) : ''))
+const listenPlan = computed(() => voiceListenPlan({
+  voice: !!curParams.value, fx: !!fxSel.value,
+  probeReady: !!(probeJob.value && probeJob.value.status === 'done'),
+  probePending: active(probeJob),
+  probeVoiceKey: probeKey.value, curVoiceKey: voiceKey.value,
+}))
+// рендер пробы — только если петь есть что и где; эффект на голосе трека и оригинал — всегда
+const canListen = computed(() => !busy.value && (listenPlan.value !== 'render' || (!blocker.value && !!probePlan.value)))
+// тот же эффект (цепочка, ручки, окно) уже в черновике трека — повторное «Применить» его не дублирует; выбор
+// остаётся подсвеченным. Сверка — с самим списком: убрали эффект из «Изменений трека» — снова можно применить
+const fxToApply = computed(() => !!fxSel.value && !voiceFxApplied(inserts.appliedFor(props.job.id), fxSel.value,
+  stemFxRequest(STEM, fxSel.value.chain, fxSel.value.params, props.sel)))
+const canApply = computed(() => !busy.value && (fxToApply.value || canRun.value))
 // план подкачиваем сразу: без нот голоса «прослушать кусок» недоступна до нажатия, а не после.
 // Следим за abcFile (партитуру могут создать в этой же студии) и за текстом/блокировкой: у версии-варианта
 // текст приходит позже — когда студия загрузит список треков и найдёт исходный трек (renderJob)
@@ -91,8 +122,8 @@ async function poll() {
     const p = jobWatchStep(probeJob.value, jobs)
     if (p) {
       probeJob.value = p.next
-      // проба готова — включаем сами: «прослушать» и должно звучать само
-      if (p.done) await toggleArtifact('vp' + p.row.id, p.row.title, () => api.playAudio(p.row.id))
+      // проба готова — включаем сами (с выбранной обработкой): «прослушать» и должно звучать само
+      if (p.done && playOnDone.value) { playOnDone.value = false; await playProbe() }
     }
     const f = jobWatchStep(fullJob.value, jobs)
     if (f) {
@@ -128,11 +159,80 @@ async function submit(draft) {
       probeJob.value = { id, status: 'queued' }
       probeParams.value = used
       probeOwn.value = own.value
+      probeKey.value = JSON.stringify(used)
     } else {
       fullJob.value = { id, status: 'queued' }
     }
     startPoll()
   } catch (e) { err.value = String(e) } finally { busy.value = false }
+}
+
+// эффект на голосе в куске job [from, to] — превью на ПК (было/стало), играет «стало»
+async function playFxOn(jobId, from, to) {
+  await api.fxPreview(jobId, STEM, [{ chain: fxSel.value.chain, params: { ...fxSel.value.params } }], from, to, SLOT)
+  await api.playPreview(jobId, SLOT, 'wet', 0)
+  nowPlayingKey.value = 'voicefx'
+  refreshPlayer()
+}
+// готовая проба: с обработкой — эффект на всём куске пробы, без неё — как есть
+async function playProbe() {
+  const p = probeJob.value
+  if (fxSel.value) await playFxOn(p.id, 0, Number(p.duration_sec) || 18)
+  else await toggleArtifact('vp' + p.id, p.title, () => api.playAudio(p.id))
+}
+
+// одна кнопка «прослушать кусок»: что именно играть — voiceListenPlan
+async function listen() {
+  err.value = ''
+  const plan = listenPlan.value
+  if (plan === 'wait') {
+    playOnDone.value = true   // проба этим голосом уже идёт — сыграет, как будет готова
+    return
+  }
+  if (plan === 'render') {
+    playOnDone.value = true
+    await submit(true)
+    return
+  }
+  busy.value = true
+  try {
+    if (plan === 'probe') await playProbe()
+    else {
+      const w = voicePreviewWindow(props.sel, props.sungAt, props.cursor || null, props.job.duration_sec)
+      if (plan === 'trackFx') await playFxOn(props.job.id, w.from, w.to)
+      else {
+        // ничего не выбрано — оригинал трека с того же места (первый спетый такт или выделение)
+        await toggleArtifact('vo' + props.job.id, props.job.title, async () => {
+          await api.playAudio(props.job.id)
+          if (w.from > 0) await api.seekAudio(w.from)
+        })
+      }
+    }
+  } catch (e) { err.value = String(e) } finally { busy.value = false }
+}
+
+// одна «Применить»: эффект — в черновик трека (шаг «Голос»), голос — новая версия трека этим голосом
+// (рендер; правки трека, включая этот эффект, переносятся на неё — built → carryTo)
+async function apply() {
+  err.value = ''
+  const withVoice = curParams.value && canRun.value
+  busy.value = true
+  try {
+    if (fxToApply.value) {
+      const req = stemFxRequest(STEM, fxSel.value.chain, fxSel.value.params, props.sel)
+      // тот же эффект уже записан, но выключен — включаем его, а не кладём второй
+      const off = voiceFxMatch(inserts.appliedFor(props.job.id), fxSel.value, req)
+      if (off) await inserts.setOff(props.job.id, off.childId, false)
+      else await inserts.addStemFx(props.job.id, { ...req, step: 'voice' })
+      emit('applied')
+    }
+  } catch (e) {
+    // эффект не записан — и голос не рендерим: версия ушла бы без эффекта, который человек выбрал
+    err.value = String(e)
+    return
+  } finally { busy.value = false }
+  // submit сам ведёт busy
+  if (withVoice) await submit(false)
 }
 
 const canSave = computed(() => own.value && probeOwn.value && saveName.value.trim() && probeParams.value
@@ -158,7 +258,6 @@ async function save() {
     <div class="studio-box-body">
       <p v-if="blocker" class="muted">{{ blocker }}</p>
       <p v-else-if="probePlan === null" class="muted">{{ t('studio.voice.noVocalPlan') }}</p>
-      <p v-else-if="!curParams" class="muted">{{ t('studio.voice.pickFirst') }}</p>
       <div class="dsp-row">
         <VSelect v-model="selId" :options="cardOptions" :disabled="own" style="max-width: 260px"
                  :placeholder="voices.length ? t('studio.voice.pick') : t('studio.voice.noCards')" />
@@ -172,12 +271,15 @@ async function save() {
       </template>
       <p v-if="newStyle" class="muted voice-preview" :title="t('studio.voice.style.tip')">{{ t('studio.voice.style') }}: {{ newStyle }}</p>
 
-      <div class="corpus-actions">
-        <button class="ghost" :disabled="!canProbe" :title="t('studio.voice.probe.tip')" @click="submit(true)">
+      <StudioVoiceFx v-model="fxSel" :chains="chains" />
+
+      <div class="dsp-row voice-actions">
+        <button class="ghost" :disabled="!canListen" :title="t('studio.voice.listen.tip')" @click="listen">
           <AppIcon name="play" /> {{ t('studio.voice.probe') }}
         </button>
-        <button class="primary" :disabled="!canRun" :title="t('studio.voice.apply.tip')" @click="submit(false)">
-          <AppIcon name="mic" /> {{ t('studio.voice.apply') }}
+        <span class="spacer"></span>
+        <button class="primary" :disabled="!canApply" :title="t('studio.voice.apply.tip')" @click="apply">
+          {{ t('studio.voice.applyAll') }}
         </button>
       </div>
 
@@ -207,8 +309,6 @@ async function save() {
         <template v-else-if="fullJob.status === 'error'">{{ fullJob.error }}</template>
       </p>
       <p v-if="err" class="error">{{ err }}</p>
-      <!-- обработка голоса (эффекты на дорожку «голос») — строкой в этом же блоке -->
-      <slot />
     </div>
   </div>
 </template>

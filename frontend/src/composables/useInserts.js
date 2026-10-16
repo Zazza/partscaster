@@ -194,6 +194,8 @@ function specOf(it) {
     ...(it.place ? { place: it.place } : {}),
     // мастер: цепочка движка на весь собранный микс на воркере
     ...(it.master ? { master: true } : {}),
+    // эффект на весь собранный микс (до мастера): цепочка, педали или линия громкости
+    ...(it.mix ? { mix: true } : {}),
   }
 }
 async function doRebuild(parentId) {
@@ -347,6 +349,38 @@ async function addStemEnvelope(parentId, { stem, envelope }) {
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'env', from: 0, to: 0, lead: 0, beat: 0, db: 0,
     stems: [stem], fadeIn: 0, fadeOut: 0, keepHighHz: 0, envelope: envelope.map(({ t, db }) => ({ t, db })),
   }] : []
+  applied.value = { ...applied.value, [parentId]: [...rest, ...item] }
+  save()
+  return rebuild(parentId)
+}
+
+// ---- эффекты на весь трек: записи mix ложатся на собранный микс (после правок дорожек, до мастера) ----
+// «применить» эффекта/педалей/линии на весь трек и «один клик» копятся в черновике, а не версиями dsp-*
+const mixItem = (extra) => ({
+  childId: -(Date.now() * 100 + (muteSeq++ % 100)), from: 0, to: 0, lead: 0, beat: 0, db: 0,
+  stems: ['mix'], fadeIn: 0, fadeOut: 0, keepHighHz: 0, mix: true, ...extra,
+})
+async function addMixFx(parentId, { chain, params, step = '', label = '' }) {
+  notApplying(parentId)
+  const item = mixItem({ instId: 'fx-' + chain, chain, params: { ...(params || {}) },
+    ...(step ? { step } : {}), ...(label ? { label } : {}) })
+  applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
+  save()
+  return rebuild(parentId)
+}
+async function addMixPedals(parentId, { steps, label = '' }) {
+  notApplying(parentId)
+  const item = mixItem({ instId: 'pedals', steps: (steps || []).map((s) => ({ ...s })), label })
+  applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
+  save()
+  return rebuild(parentId)
+}
+// линия громкости на весь трек: одна на трек — повторная заменяет, пустая убирает
+async function setMixEnvelope(parentId, envelope) {
+  notApplying(parentId)
+  const rest = appliedFor(parentId).filter((x) => !(x.mix && x.envelope))
+  const item = envelope && envelope.length
+    ? [mixItem({ instId: 'env', envelope: envelope.map(({ t, db }) => ({ t, db })) })] : []
   applied.value = { ...applied.value, [parentId]: [...rest, ...item] }
   save()
   return rebuild(parentId)
@@ -548,5 +582,5 @@ async function tickOnce() {
 setInterval(tick, 3000)
 
 export function useInserts() {
-  return { pending, applied, applyAll, clearDraft, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, applyAll, clearDraft, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }

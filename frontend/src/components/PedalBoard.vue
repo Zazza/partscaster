@@ -177,7 +177,8 @@ async function apply() {
         await inserts.addStemPedals(props.job.id, { stem: st, steps, from: s ? s.from : 0, to: s ? s.to : 0, label })
       })
     } else {
-      await api.applySteps(props.job.id, steps, label)
+      // весь трек: доска — запись черновика на собранный микс (до мастера), отдельной версии нет
+      await inserts.addMixPedals(props.job.id, { steps, label })
     }
     emit('applied')
     msg.value = (msg.value ? msg.value + ' ' : '') + t('pedals.applied')

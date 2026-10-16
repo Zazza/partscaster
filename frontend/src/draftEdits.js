@@ -9,6 +9,7 @@ export const EDIT_STEPS = ['edit', 'sound', 'voice', 'done']
 export function editStep(it) {
   if (it && EDIT_STEPS.includes(it.step)) return it.step
   if (it.master) return 'done'
+  if (it.mix) return 'sound'          // эффект на весь трек — шаг «Звук» (у «одного клика» явный step 'done')
   if (it.childId > 0) return 'edit'   // вклейка рендера («+ инструмент»)
   // «громкость дорожек» (заглушить, тише/громче) — приём шага «Править»
   if (!it.chain && !it.steps && !it.engine && !it.envelope && !it.place) return 'edit'
@@ -43,28 +44,31 @@ export function mergeDrafts(local, localTs, remote) {
   const lApplied = (local && local.applied) || {}
   const lPending = (local && local.pending) || []
   const lTs = localTs || {}
-  const remoteBy = new Map((remote || []).map((d) => [Number(d.job_id), d.state || {}]))
+  // ключи — строкой, как у объекта applied: номер трека с воркера (число) и локальный ключ совпадают
+  const key = (x) => String(x)
+  const remoteBy = new Map((remote || []).map((d) => [key(d.job_id), d]))
   const localIds = new Set([
-    ...Object.keys(lApplied).filter((k) => (lApplied[k] || []).length).map(Number),
-    ...lPending.map((s) => Number(s.parent)),
-    ...Object.keys(lTs).map(Number),
+    ...Object.keys(lApplied).filter((k) => (lApplied[k] || []).length),
+    ...lPending.map((s) => key(s.parent)),
+    ...Object.keys(lTs),
   ])
   const applied = {}
   let pending = []
   const ts = {}
   const push = []
   for (const id of new Set([...localIds, ...remoteBy.keys()])) {
-    const r = remoteBy.get(id)
+    const d = remoteBy.get(id)
+    const r = d && (d.state || {})
     const lt = lTs[id]
     const takeLocal = localIds.has(id) && (!r || (lt != null && lt > (r.ts || 0)))
     if (takeLocal) {
       if ((lApplied[id] || []).length) applied[id] = copy(lApplied[id])
-      pending = pending.concat(lPending.filter((s) => Number(s.parent) === id).map(copy))
+      pending = pending.concat(lPending.filter((s) => key(s.parent) === id).map(copy))
       if (lt != null) ts[id] = lt
-      push.push(id)
+      push.push(Number.isFinite(Number(id)) ? Number(id) : id)
     } else {
       if ((r.edits || []).length) applied[id] = copy(r.edits)
-      pending = pending.concat((r.queue || []).map((s) => ({ ...copy(s), parent: id })))
+      pending = pending.concat((r.queue || []).map((s) => ({ ...copy(s), parent: d.job_id })))
       if (r.ts != null) ts[id] = r.ts
     }
   }

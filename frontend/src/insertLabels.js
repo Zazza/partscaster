@@ -49,7 +49,10 @@ export function insertTitle(it, { chainName, stemName, instName, placeName }) {
   // мастер — на весь микс; место дорожки — «место 30 % вправо · гитары»
   if (it.master && it.engine) return it.label || t('insert.master', { name: it.engine.map((b) => b.type).join(' → ') })
   if (isPlaceRecord(it)) return `${placeName ? placeName(it.place) : t('mix.place') + ' ' + placeLabel(it.place)} · ${stemName(it.stems[0])}`
-  if (it.chain) return `${chainName(it.chain)} · ${(it.stems || []).map(stemName).join(', ')}`
+  // эффект: своя подпись записи («один клик» с уровнем) или название цепочки
+  if (it.chain) return `${it.label || chainName(it.chain)} · ${(it.stems || []).map(stemName).join(', ')}`
+  // линия громкости — на дорожку или на весь трек
+  if (it.envelope) return `${t('insert.envelope')} · ${(it.stems || []).map(stemName).join(', ')}`
   // цепочка звукового движка: подпись записи или типы блоков по порядку
   if (it.engine) {
     const what = it.label || t('engine.label', { name: it.engine.map((b) => b.type).join(' → ') })
