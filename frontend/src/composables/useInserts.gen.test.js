@@ -56,10 +56,10 @@ const setJob = (id, status, extra = {}) => {
   jobsNow.list = jobsNow.list.filter(j => j.id !== id).concat([{ id, status, parent_id: T, role: 'rebuild', title: TITLE, ...extra }])
 }
 
-function mockApi({ drafts = [], draftPut, applyEdits, submit } = {}) {
+function mockApi({ drafts = [], draftPut, applyEdits, submit, rebuildSections } = {}) {
   for (const k of Object.keys(apiMock)) delete apiMock[k]
   apiMock.jobs = vi.fn(async () => JSON.parse(JSON.stringify(jobsNow.list)))
-  apiMock.rebuildSections = vi.fn(async (_p, specs) => report(specs))
+  apiMock.rebuildSections = rebuildSections || vi.fn(async (_p, specs) => report(specs))
   apiMock.rebuildInserts = vi.fn(async (_p, specs) => report(specs))
   apiMock.drafts = typeof drafts === 'function'
     ? vi.fn(drafts)
@@ -570,5 +570,52 @@ describe('ТК9–ТК10: перезапуск, рендер 901 уже гото
     expect(apiMock.applyEdits).toHaveBeenCalledTimes(1)
     expect(Number(apiMock.applyEdits.mock.calls[0][0])).toBe(NEW)
     expect(apiMock.submit).not.toHaveBeenCalled()
+  })
+})
+
+describe('ТК11: «сбросить черновик» снимает застрявший итог новой версии', () => {
+  const PIECE = 3
+  const QSPEC = { childId: PIECE, instId: 'i-3', from: 5, to: 15, lead: 0.1, beat: 0.5, db: -6, srcJob: T }
+  const pendingOf = (ins) => (ins.pending && 'value' in ins.pending ? ins.pending.value : ins.pending) || []
+
+  it('пересборка куска 901 всё время падает → итога нет; clearDraft(901) проходит, ход и черновик 901 сняты, правки снова принимаются', async () => {
+    const rebuildSections = vi.fn(async () => { throw new Error('rebuild sections failed') })
+    const ins = await load({ rebuildSections, drafts: [{ job_id: T, state: { v: 1, edits: [E1], queue: [QSPEC], ts: 1000, gen: GEN } }] })
+    await vi.waitFor(() => expect(genEmpty(ins.genFor(T))).toBe(false), WAIT)
+    setJob(PIECE, 'queued')
+    setJob(NEW, 'queued')
+    await ins.applyAll(T, TITLE, { request: REQUEST })
+    setJob(NEW, 'done')
+    await until(() => expect(chains(ins.appliedFor(NEW))).toEqual(['soften']))
+    await until(() => expect(ins.applyingFor(NEW)).toMatchObject({ finalize: true, title: TITLE }))
+
+    setJob(PIECE, 'done')
+    await until(() => expect(rebuildSections).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(apiMock.applyEdits).not.toHaveBeenCalled()
+
+    await ins.clearDraft(NEW)
+    expect(ins.applyingFor(NEW) ?? null).toBe(null)
+    expect(ins.appliedFor(NEW) || []).toEqual([])
+    expect(pendingOf(ins).filter(s => Number(s.parent) === NEW)).toEqual([])
+    await vi.waitFor(() => expect(deletesFor(NEW).length).toBeGreaterThan(0), WAIT)
+
+    // воркер снова собирает куски (сбой пересборки был условием застревания, а не предметом проверки);
+    // правка трека 901 принимается — блокировки «применить всё» больше нет
+    rebuildSections.mockImplementation(async (_p, specs) => report(specs))
+    const err = await attempt(() => ins.addStemFx(NEW, fx())).then(() => null, (e) => e)
+    expect(String(err && err.message)).not.toMatch(/применить всё/i)
+    expect(ins.appliedFor(NEW).some(x => x.chain === 'soften' && x.from === 176)).toBe(true)
+  })
+
+  it('контроль: пока у трека 7 идёт рендер, clearDraft(7) отклоняется, ход и gen на месте', async () => {
+    const ins = await load({ drafts: [remote(T, [E1], { gen: GEN })] })
+    await vi.waitFor(() => expect(genEmpty(ins.genFor(T))).toBe(false), WAIT)
+    setJob(NEW, 'queued')
+    await ins.applyAll(T, TITLE, { request: REQUEST })
+    await expect(attempt(() => ins.clearDraft(T))).rejects.toThrow()
+    expect(ins.applyingFor(T)).toMatchObject({ job_id: NEW })
+    expect(ins.genFor(T)).toMatchObject({ specs: [S1] })
+    expect(ids(ins.appliedFor(T))).toEqual([-11])
   })
 })

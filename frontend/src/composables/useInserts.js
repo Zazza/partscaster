@@ -617,7 +617,12 @@ function applyAllOwn(parentId, title, genCtx) {
   })
 }
 // «сбросить черновик»: все правки и ожидающие рендеры трека — прочь, черновик на воркере удаляется
+// Новая версия, ждущая итога ({finalize}), — сброс разрешён: если кусок вклейки не собирается никогда, итог не
+// придёт, и без этого трек остался бы заблокирован навсегда. Сброс снимает и отметку. Идущий рендер ({job_id}) и
+// идущий шаг итога (applying) по-прежнему не сбрасываются
 async function clearDraft(parentId) {
+  const a = applyings.value[parentId]
+  if (a && a.finalize && !a.error && !applying.has(Number(parentId))) setApplying(parentId, null)
   notApplying(parentId)
   dropTrack(parentId)
   await pushing
