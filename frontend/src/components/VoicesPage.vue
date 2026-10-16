@@ -211,7 +211,7 @@ function cleanProbes() {
         </button>
         <template v-if="audition">
           <span v-if="['queued', 'running'].includes(audition.status)" class="muted">
-            {{ t('queue.status.' + audition.status) }} · {{ t('voicelab.audition.wait') }}<template v-if="audition.stage"> · {{ audition.stage }}</template><template v-if="audition.elapsed_s"> {{ Math.round(audition.elapsed_s) }} с</template>
+            {{ t('queue.status.' + audition.status) }} · {{ t('voicelab.audition.wait') }}<template v-if="audition.stage"> · {{ audition.stage }}</template><template v-if="audition.elapsed_s"> {{ Math.round(audition.elapsed_s) }} {{ t('common.sec') }}</template>
           </span>
           <template v-if="audition.status === 'done'">
             <button class="ghost small-btn" :title="t('voicelab.audition.replay')"

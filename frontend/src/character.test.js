@@ -70,3 +70,14 @@ describe('characterLabel — подпись карточки трека', () => 
     expect(characterLabel({ temperature: 1, cfg: 3 })).toBe('смелость 1 · точность 3')
   })
 })
+
+describe('characterLabel — на языке интерфейса', () => {
+  it('в английском интерфейсе подпись английская', async () => {
+    const { useI18n } = await import('./i18n/index.js')
+    const { setLocale } = useI18n()
+    setLocale('en')
+    try {
+      expect(characterLabel({ temperature: 1.15, cfg: 2.5 })).toBe('boldness 1.15 · precision 2.5')
+    } finally { setLocale('ru') }
+  })
+})

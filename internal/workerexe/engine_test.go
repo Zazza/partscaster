@@ -11,8 +11,8 @@ import (
 //   - настройки воркера пишутся атомарно, существующие ключи сохраняются (TК9);
 //   - settings.json в папке установки — признак «выбор уже сделан» (ТК10);
 //   - бинарник yue2.cpp ищется в каталоге кода воркера: yue2cpp/yue-server(.exe на Windows) (ТК11);
-//   - модель по умолчанию и экономный режим — по объёму карты: тесной 8 ГБ — q6+экономный,
-//     просторной — q8 без экономного (ТК12);
+//   - модель по умолчанию и экономный режим — по объёму карты, пороги как у install.sh:
+//     ≥ 11776 МиБ — q8 обычный, 7680…11775 — q8 экономный, меньше — q5 экономный (ТК12, internal-fix-found п.2);
 //   - имя модели — из манифеста bf16/q8/q6/q5.
 
 // --- ТК9: WriteSettings ---
@@ -93,29 +93,35 @@ func TestCppBinary(t *testing.T) {
 
 // --- ТК12: дефолты по видеокарте ---
 
+// Пороги — как у install.sh (карточка internal-fix-found, условие 2):
+// ≥ 11776 МиБ — q8 обычный; 7680…11775 — q8 экономный; меньше — q5 экономный.
+var vramCases = []struct {
+	mib  int
+	want string
+	low  bool
+}{
+	{6 * 1024, "q5", true},
+	{7679, "q5", true},
+	{7680, "q8", true},
+	{11775, "q8", true},
+	{11776, "q8", false},
+	{16 * 1024, "q8", false},
+	{24 * 1024, "q8", false},
+}
+
 func TestDefaultCppModelByVRAM(t *testing.T) {
-	for _, tc := range []struct {
-		mib  int
-		want string
-	}{
-		{8 * 1024, "q6"},  // 8 ГБ: q8 ≈ 8 ГБ VRAM впритык — компактнее
-		{9 * 1024, "q6"},  // граница — до 10 ГБ тесно
-		{10 * 1024, "q8"}, // 10 ГБ и больше — q8 «почти без потерь»
-		{16 * 1024, "q8"},
-		{24 * 1024, "q8"},
-	} {
+	for _, tc := range vramCases {
 		if got := DefaultCppModel(tc.mib); got != tc.want {
-			t.Errorf("DefaultCppModel(%d ГБ) = %s, want %s", tc.mib/1024, got, tc.want)
+			t.Errorf("DefaultCppModel(%d МиБ) = %s, want %s", tc.mib, got, tc.want)
 		}
 	}
 }
 
 func TestLowVramDefault(t *testing.T) {
-	if !LowVramDefault(8 * 1024) {
-		t.Error("8 ГБ: экономный режим должен быть включён")
-	}
-	if LowVramDefault(16 * 1024) {
-		t.Error("16 ГБ: экономный режим не нужен")
+	for _, tc := range vramCases {
+		if got := LowVramDefault(tc.mib); got != tc.low {
+			t.Errorf("LowVramDefault(%d МиБ) = %v, want %v", tc.mib, got, tc.low)
+		}
 	}
 }
 

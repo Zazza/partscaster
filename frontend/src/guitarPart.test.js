@@ -129,15 +129,16 @@ describe('fxPresets: пять звуков гитариста по аккорд�
   })
 })
 
-describe('fxBlocks.json: блок gtrnotes («Гитара по нотам»)', () => {
+describe('fxBlocks.json: блок gtrnotes («Гитарист по аккордам»)', () => {
   const b = blocks.gtrnotes
   const str = (id) => (b?.strings || []).find((s) => s.id === id)
   const par = (id) => (b?.params || []).find((p) => p.id === id)
 
-  it('блок описан, подписи ru «Гитара по нотам» и en непустая', () => {
+  it('блок описан, подписи ru «Гитарист по аккордам» и en непустая, про chords', () => {
     expect(b, 'нет блока gtrnotes').toBeTruthy()
-    expect(b.label.ru).toBe('Гитара по нотам')
+    expect(b.label.ru).toBe('Гитарист по аккордам')
     expect(String(b.label.en || '').trim()).not.toBe('')
+    expect(String(b.label.en || '')).toMatch(/chords/i)
   })
 
   it('kit — набор, обязательный; mute_kit — набор, необязательный, по умолчанию ""', () => {

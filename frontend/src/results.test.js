@@ -235,10 +235,11 @@ describe('readFlag / writeFlag — запомненная галочка «по�
   })
 })
 
-// шаблон StudioPage по дереву разбора (vue/compiler-sfc), не регэкспом: дельты — только под флагом-галочкой
+// шаблон StudioPage по дереву разбора (vue/compiler-sfc), не регэкспом: дельты — только под флагом-галочкой;
+// строка дельт («Δ крест … dB …») — ключ i18n studio.delta.line в интерполяции
 describe('StudioPage.vue: «Δ крест» — под галочкой «подробнее»', () => {
   const root = templateAst('components/StudioPage.vue')
-  const deltas = findElements(root, (n) => (n.children || []).some((c) => c.type === 2 && c.content.includes('Δ крест')))
+  const deltas = findElements(root, (n) => (n.children || []).some((c) => c.type === 5 && c.loc.source.includes("t('studio.delta.line'")))
   const boxes = findElements(root, (n) => n.tag === 'input' && attr(n, 'type') === 'checkbox' && dir(n, 'model') !== null)
 
   it('строка дельт есть и каждый её показ зависит от флага, который переключает галочка', () => {

@@ -1497,8 +1497,8 @@
  },
  "gtrnotes": {
   "label": {
-   "ru": "Гитара по нотам",
-   "en": "Guitar by notes"
+   "ru": "Гитарист по аккордам",
+   "en": "Guitarist by chords"
   },
   "params": [
    {
@@ -1564,8 +1564,8 @@
     "required": false,
     "default": "",
     "label": {
-     "ru": "глушёные удары (набор; пусто — обрывки нот)",
-     "en": "muted strums (kit; empty — note fragments)"
+     "ru": "глушёные удары (набор; пусто — короткие обрывки нот основной гитары)",
+     "en": "muted strums (kit; empty — short fragments of the main guitar's notes)"
     }
    }
   ]

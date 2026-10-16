@@ -18,7 +18,7 @@ const { askConfirm } = useConfirm()
 const demo = usePresetDemo()
 const { toggleArtifact } = usePlayer()
 const presets = ref([])
-const tree = computed(() => presetTree(presets.value))   // по семьям: Рок, Тяжёлое, Электроника, Поп и другое, Мои
+const tree = computed(() => presetTree(presets.value, t))   // по семьям: Рок, Тяжёлое, Электроника, Поп и другое, Мои
 const open = ref(null)       // id раскрытого
 const edit = ref(null)       // {id, name, note} правки своего
 const err = ref('')

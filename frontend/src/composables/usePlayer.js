@@ -2,6 +2,9 @@
 // (state в module scope — компоненты зовут usePlayer() где угодно).
 import { ref, watch } from 'vue'
 import { api } from '../api.js'
+import { useI18n } from '../i18n/index.js'
+
+const { t } = useI18n()
 
 const playerState = ref({ playing: false, position_sec: 0, duration_sec: 0, job_id: 0 })
 const nowPlaying = ref('')     // подпись встроенного плеера
@@ -65,7 +68,7 @@ async function toggleArtifact(key, label, play, artifact) {
     // запомнить, что играть по «плей» панели после стопа (файл известен — иначе нечего)
     if (artifact && artifact.file) lastArtifact.value = { key, label, ...artifact }
   } catch (e) {
-    nowPlaying.value = `звук: ${String(e)}`
+    nowPlaying.value = t('player.errorDetail', { err: String(e) })
   } finally {
     playBusy.value = { ...playBusy.value, [key]: false }
     setTimeout(() => refreshCb && refreshCb(), 300)
@@ -95,7 +98,7 @@ function setPlayRange(r) {
 async function playRangeOnce(r) {
   if (playBusy.value[r.key]) return
   playBusy.value = { ...playBusy.value, [r.key]: true }
-  nowPlaying.value = `кусок ${fmtDur(r.from)}–${fmtDur(r.to)}`
+  nowPlaying.value = t('player.range', { from: fmtDur(r.from), to: fmtDur(r.to) })
   try {
     await api.playFile(r.jobId, r.file, r.dur)
     nowPlayingKey.value = r.key
@@ -103,7 +106,7 @@ async function playRangeOnce(r) {
     await api.seekAudio(r.from)
     rangeUntil.value = { key: r.key, to: r.to }
   } catch (e) {
-    nowPlaying.value = `звук: ${String(e)}`
+    nowPlaying.value = t('player.errorDetail', { err: String(e) })
   } finally {
     playBusy.value = { ...playBusy.value, [r.key]: false }
     setTimeout(() => refreshCb && refreshCb(), 300)
@@ -148,7 +151,7 @@ async function togglePlay() {
       await api.playFile(target.jobId, target.file, target.dur)
       nowPlayingKey.value = busyKey
     } catch (e) {
-      nowPlaying.value = `звук: ${String(e)}`
+      nowPlaying.value = t('player.errorDetail', { err: String(e) })
     } finally {
       playBusy.value = { ...playBusy.value, [busyKey]: false }
       setTimeout(() => refreshCb && refreshCb(), 300)

@@ -129,7 +129,7 @@ const stemsOptions = computed(() => [
 const modelOptions = computed(() => {
   const opts = models.value.map((m) => ({ value: m, label: m }))
   if (ollamaModel.value && !models.value.includes(ollamaModel.value)) {
-    opts.unshift({ value: ollamaModel.value, label: ollamaModel.value + ' (не в списке)' })
+    opts.unshift({ value: ollamaModel.value, label: ollamaModel.value + ' ' + t('settings.ollama.notListed') })
   }
   return opts
 })
@@ -139,9 +139,9 @@ onMounted(async () => {
   loadAgents()
   try {
     const h = await api.status()
-    workerProbe.value = h ? 'воркер: доступен' + (h.model_loaded ? ' (модель в памяти)' : '') : 'воркер: недоступен'
+    workerProbe.value = h ? t('settings.probe.workerOk') + (h.model_loaded ? ' ' + t('settings.probe.modelLoaded') : '') : t('settings.probe.workerDown')
   } catch {
-    workerProbe.value = 'воркер: недоступен'
+    workerProbe.value = t('settings.probe.workerDown')
   }
   try {
     const c = await api.workerConfig()
@@ -163,10 +163,10 @@ async function checkOllama() {
   try {
     const m = await api.ollamaModels(ollamaURL.value.trim())
     models.value = m.models || []
-    ollamaProbe.value = `ollama: доступен (${models.value.length} модел.)`
+    ollamaProbe.value = t('settings.probe.ollamaOk', { n: models.value.length })
   } catch (e) {
     models.value = []
-    ollamaProbe.value = 'ollama: недоступен — ' + e
+    ollamaProbe.value = t('settings.probe.ollamaDown', { err: String(e) })
   }
 }
 
@@ -192,7 +192,7 @@ async function save() {
       roformerOk.value = !!c.roformer_available
       info.value = c
     } catch (e) {
-      err.value = 'Ollama-настройки не применены (воркер старой версии или недоступен): ' + e
+      err.value = t('settings.ollama.notApplied', { err: String(e) })
     }
     // движок — отдельным запросом: отказ (модель не скачана) не роняет остальные настройки
     if (engineSupported.value) {
@@ -289,11 +289,11 @@ async function save() {
 
       <h3 class="set-h">{{ t('settings.info') }} <span class="muted">{{ t('settings.info.readonly') }}</span></h3>
       <div v-if="info" class="set-info muted">
-        папка данных: {{ info.data_dir }}<br />
-        whisper: {{ info.whisper_available ? info.whisper_py : 'не найден (тексты треков недоступны)' }}<br />
+        {{ t('settings.info.dataDir') }}: {{ info.data_dir }}<br />
+        whisper: {{ info.whisper_available ? info.whisper_py : t('settings.info.whisperMissing') }}<br />
         <template v-if="info.stems_model">{{ t('settings.stemsModel') }}: {{ info.stems_model === 'bs-roformer-sw' ? 'BS-Roformer-SW' : t('settings.stemsModel.demucs') }}</template>
       </div>
-      <div v-else class="set-info muted">воркер недоступен — Ollama и пути не показать</div>
+      <div v-else class="set-info muted">{{ t('settings.info.workerDown') }}</div>
       <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
 
       <h3 class="set-h">{{ t('settings.agents') }} <span class="muted">{{ t('settings.agents.sub') }}</span></h3>
@@ -316,7 +316,7 @@ async function save() {
       </template>
 
       <div v-if="err" class="error">{{ err }}</div>
-      <div v-if="saved" class="ok">сохранено</div>
+      <div v-if="saved" class="ok">{{ t('settings.saved') }}</div>
       <div class="set-actions">
         <button @click="save"><AppIcon name="save" /> {{ t('common.save') }}</button>
       </div>

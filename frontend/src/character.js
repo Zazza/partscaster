@@ -3,6 +3,10 @@
 // оригинальнее; выше cfg — чётче, «по нотам», чище. Не «лучше», а другой
 // характер — поэтому ручки, а не новый дефолт.
 
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
+
 export const CHARACTER = {
   temperature: { min: 0.7, max: 1.4, step: 0.05, def: 1.0 },
   cfg: { min: 1.0, max: 3.5, step: 0.1, def: 1.5 },
@@ -30,10 +34,10 @@ export function characterPayload(temperature, cfg) {
   return out
 }
 
-// подпись на карточке трека: какой характер выбран (0/нет — пусто)
+// подпись на карточке трека: какой характер выбран (0/нет — пусто), на языке интерфейса
 export function characterLabel(job) {
   const parts = []
-  if (job && Number(job.temperature) > 0) parts.push('смелость ' + Number(job.temperature))
-  if (job && Number(job.cfg) > 0) parts.push('точность ' + Number(job.cfg))
+  if (job && Number(job.temperature) > 0) parts.push(t('character.temperature') + ' ' + Number(job.temperature))
+  if (job && Number(job.cfg) > 0) parts.push(t('character.cfg') + ' ' + Number(job.cfg))
   return parts.join(' · ')
 }

@@ -19,7 +19,7 @@ import { fxPresets } from '../fxPresets.js'
 import { fromWorkerChain, missingRequired, toWorkerChain } from '../fxChain.js'
 import { ensureKits } from '../engineRun.js'
 import { previewWindow } from '../trackDesk.js'
-import { presetOptions, PRESET_FAMILIES } from '../soundPresets.js'
+import { presetOptions, familyLabel, PRESET_FAMILIES } from '../soundPresets.js'
 import {
   DRUM_PARTS, bodyFromModel, editorCatalog, masterPresets, newModel, previewSource,
   rhythmSpecs, specFromItem, specKind, specKindOk, toModel, toggleStem,
@@ -264,7 +264,7 @@ async function installKit(name) {
 // финал: «как у другого пресета» — копирует цепочку и цель громкости, как в студии
 const finalFrom = ref(0)
 const finalOptions = computed(() => [{ value: 0, label: t('preset.final.none') },
-  ...presetOptions(props.presets.filter((p) => (p.final || []).length || p.target_lufs != null))
+  ...presetOptions(props.presets.filter((p) => (p.final || []).length || p.target_lufs != null), t)
     .map((o) => (typeof o.value === 'number' ? { ...o, label: t('preset.final.of', { name: o.label }) } : o))])
 const finalLine = computed(() => (model.value.final || []).filter((x) => !x.off).map((x) => x.chain).join(' → '))
 function pickFinal(id) {
@@ -386,7 +386,7 @@ onBeforeUnmount(() => { closed = true; if (applyUnwatch) applyUnwatch() })
         <span class="muted" :title="t('preset.edit.ref.tip')">{{ t('preset.edit.ref') }}</span>
         <template v-for="fam in PRESET_FAMILIES" :key="fam">
           <button v-if="!ownJobId" class="ghost small-btn" :class="{ on: refFamily === fam }"
-                  :title="t('preset.edit.ref.demo', { family: fam })" @click="refFamily = fam">{{ fam }}</button>
+                  :title="t('preset.edit.ref.demo', { family: familyLabel(fam, t) })" @click="refFamily = fam">{{ familyLabel(fam, t) }}</button>
         </template>
         <VSelect v-model="ownJobId" :options="[{ value: 0, label: '—' }, ...ownOptions]" searchable
                  :title="t('preset.edit.ref.tip')" style="max-width: 260px" />

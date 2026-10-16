@@ -31,9 +31,9 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
 
 - The app is tested on Linux; it builds under Windows (its own player, without PipeWire). **The macOS build has not
   been tested.**
-- The built-in player on Linux and macOS plays through `pw-play` (PipeWire): the Linux webview has no sound. Without PipeWire
-  the player is silent — listen in a browser. macOS usually has no `pw-play` (not verified; how to verify — build and
-  run it on a Mac).
+- The built-in player on Linux plays through `pw-play` (PipeWire): the Linux webview has no sound. Without PipeWire the
+  player is silent — listen in a browser. On macOS the player is the system `afplay`: volume changes take effect from the
+  next start (a seek or the next track), not while playing. Not tested on a Mac.
 
 ## Experimental
 

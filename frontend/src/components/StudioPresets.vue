@@ -14,6 +14,7 @@ import { placeLabel } from '../mixDesk.js'
 const props = defineProps({ job: { type: Object, required: true } })
 const emit = defineEmits(['applied'])
 const { t } = useI18n()
+const placeWords = () => ({ center: t('mix.w.center'), right: t('mix.w.right'), left: t('mix.w.left'), width: t('mix.width') })
 const inserts = useInserts()
 const { markNow } = usePlayer()
 
@@ -29,10 +30,10 @@ const finalFrom = ref(0)        // 0 — без финала, иначе id пр
 const levels = ref({})         // громкость записей выбранного пресета на это применение {индекс: дБ}
 
 // по семьям и течениям: заголовки «— Рок · Пост-панк —» неактивны, поиск по названию
-const options = computed(() => presetOptions(presets.value))
+const options = computed(() => presetOptions(presets.value, t))
 // финал «как у …»: пресетов с финалом/целью — около сотни, по семьям и течениям с поиском
 const finalOptions = computed(() => [{ value: 0, label: t('preset.final.none') },
-  ...presetOptions(presets.value.filter((p) => (p.final || []).length || p.target_lufs != null))
+  ...presetOptions(presets.value.filter((p) => (p.final || []).length || p.target_lufs != null), t)
     .map((o) => (typeof o.value === 'number' ? { ...o, label: t('preset.final.of', { name: o.label }) } : o))])
 const fromEdits = computed(() => presetFromEdits(inserts.appliedFor(props.job.id)))
 const finalSteps = computed(() => (presets.value.find((p) => p.id === finalFrom.value) || {}).final || [])
@@ -42,7 +43,7 @@ const stemName = (s) => t('studio.dsp.target.' + s)
 // подпись записи пресета: дорожки и что с ними (для ползунка громкости)
 const specLabel = (sp) => (sp.stems || []).map(stemName).join(', ') +
   (sp.engine ? ' · ' + sp.engine.map((b) => b.type).join(' → ') : sp.chain ? ' · ' + sp.chain : sp.steps ? ' · ' + t('pedals')
-    : sp.place ? ' · ' + t('mix.place') + ' ' + placeLabel(sp.place) : '')
+    : sp.place ? ' · ' + t('mix.place') + ' ' + placeLabel(sp.place, placeWords()) : '')
 const levelOf = (i) => (i in levels.value ? levels.value[i] : (current.value.specs[i].db || 0))
 function setLevel(i, v) {
   const base = current.value.specs[i].db || 0

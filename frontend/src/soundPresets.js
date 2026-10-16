@@ -75,7 +75,14 @@ export function withLevels(preset, levels) {
 
 // семьи жанровых пресетов звука — в этом порядке; свои (family '') — в конце, «Мои»
 export const PRESET_FAMILIES = ['Рок', 'Тяжёлое', 'Электроника', 'Поп и другое']
-const OWN = 'Мои'
+// семья — данные пресета (по-русски, как на воркере); подпись — из словаря по этому ключу
+const FAMILY_KEYS = { 'Рок': 'rock', 'Тяжёлое': 'heavy', 'Электроника': 'electronic', 'Поп и другое': 'pop' }
+
+/** Подпись семьи на языке интерфейса: известная — из словаря, своя (family '') — «Мои», чужая — как есть. */
+export function familyLabel(family, t = ruT) {
+  if (!family) return t('preset.family.own')
+  return FAMILY_KEYS[family] ? t('preset.family.' + FAMILY_KEYS[family]) : family
+}
 
 /** Течение пресета — часть названия до « · » (нет разделителя — всё название). */
 export function presetGenre(p) {
@@ -86,7 +93,7 @@ export function presetGenre(p) {
 
 /** Пресеты по семьям и течениям: [{family, label, genres: [{genre, items}]}]; семьи — в порядке PRESET_FAMILIES,
  *  неизвестные — следом по первому появлению, свои (family '') — последними; течения и пресеты — по порядку входа. */
-export function presetTree(presets) {
+export function presetTree(presets, t = ruT) {
   const fams = new Map()
   for (const p of presets || []) {
     const f = (p && p.family) || ''
@@ -101,15 +108,15 @@ export function presetTree(presets) {
   const order = [...known, ...other, ...(fams.has('') ? [''] : [])]
   return order.map((f) => ({
     family: f,
-    label: f || OWN,
+    label: familyLabel(f, t),
     genres: [...fams.get(f)].map(([genre, items]) => ({ genre, items })),
   }))
 }
 
 /** Опции выбора (VSelect): перед пресетами каждого течения — неактивный заголовок «— семья · течение —». */
-export function presetOptions(presets) {
+export function presetOptions(presets, t = ruT) {
   const out = []
-  for (const f of presetTree(presets)) {
+  for (const f of presetTree(presets, t)) {
     if (!f.family) out.push({ value: 'head:', label: `— ${f.label} —`, title: f.label, disabled: true })   // свои — один заголовок
     for (const g of f.genres) {
       const head = `— ${f.label} · ${g.genre} —`

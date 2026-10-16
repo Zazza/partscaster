@@ -39,7 +39,7 @@ Partscaster — это три программы: desktop-приложение (
 |---|---|
 | `main.go` | запуск Wails, встраивание собранного фронтенда, прокси `/audio/<id>/<файл>` на воркер |
 | `app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go` | биндинги для Vue (методы `Yue*`): тонкие обёртки над клиентом воркера и конвейерами `internal/studio`; превью эффектов; экспорт/импорт рецепта трека; версия, проверка воркера, раздел «Для AI-агентов». Здесь же — фоновый запуск пресетов звука, выбранных при создании трека (раз в 10 с) |
-| `player.go`, `player_unix.go`, `player_windows.go`, `player_volume_*.go` | встроенный плеер: у webview во Wails нет аудиовыхода. Linux — `pw-play` (PipeWire), пауза — остановкой процесса; Windows — WPF MediaPlayer через PowerShell (пауза не держит позицию). Сборка не под Windows берёт тот же `pw-play` |
+| `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | встроенный плеер: у webview во Wails нет аудиовыхода. Linux — `pw-play` (PipeWire), пауза — остановкой процесса; Windows — WPF MediaPlayer через PowerShell (пауза не держит позицию). macOS — системный `afplay` (громкость — со следующего запуска) |
 | `loopwav.go` | круг фразы страницы «Инструменты», разложенный в длинный WAV для плеера |
 | `internal/config` | адрес воркера и настройки приложения (`settings.json` в каталоге настроек пользователя, `partscaster/`) |
 | `internal/yue` | HTTP-клиент воркера. `client.go` — только транспорт; методы разложены по доменам: `jobs.go`, `stems.go`, `llm.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; интерфейс `Service` — в `types.go` |

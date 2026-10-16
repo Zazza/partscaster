@@ -101,7 +101,8 @@ The worker ships as a versioned archive. Its `install.sh` does both installation
    even earlier — see below);
 2. puts the code into `~/partscaster/releases/<time>-<version>/`;
 3. creates the environment `~/yue/.venv` (`uv venv --python 3.12`) if it does not exist, and installs the packages from
-   `requirements.txt` from the PyTorch cu128 index — only for a new environment or a changed `requirements.txt`
+   `requirements.txt` from the PyTorch cu128 index (including the model package `yue2-infer` — an archive of a pinned
+   YuE commit from GitHub) — only for a new environment or a changed `requirements.txt`
    (fingerprint — `~/partscaster/.requirements.sha256`, without comments and blank lines: editing the text does not
    reinstall packages);
 4. creates `~/partscaster/worker.env` if it does not exist, with one line `HF_HOME=` (default
@@ -339,8 +340,8 @@ while the window is open, the worker works; close it, and the worker stops (no P
   downloads work even where an antivirus or proxy replaces HTTPS certificates.
 - **Engine:** on the first installation the program asks — main engine (PyTorch in
   `YUE2_BACKEND=torch-eager` mode: PyTorch for Windows is built without flash-attention) or yue2.cpp. The yue2.cpp option
-  is there only if the package has `yue2cpp\yue-server.exe`. Model by card memory: less than 10 GB — q6 in
-  low-VRAM mode, otherwise q8. The weights download right away, the choice is written to `data\settings.json` and is not
+  is there only if the package has `yue2cpp\yue-server.exe`. Model by card memory — same as `install.sh`: from 11.5 GB —
+  q8; 7.5–11.5 GB — q8 in low-VRAM mode; less — q5 in low-VRAM mode. The weights download right away, the choice is written to `data\settings.json` and is not
   asked again. Without questions: `--engine cpp --cpp-model q8 [--cpp-low-vram]` or `--engine torch`.
   To change it later — in the app's "Settings".
 - The program does not install optional components (whisper, RoFormer, Seed-VC); it does not install sample kits
@@ -420,5 +421,4 @@ Sound — through WPF MediaPlayer (PowerShell). Worker — `partscaster-worker.e
 the app needs only HTTP access to it.
 
 **macOS:** the package builds (`make dist-mac`, WKWebView), but it was not tested. The app player on macOS is
-the same `pw-play` as on Linux; *not verified: on a Mac without PipeWire, sound in the app most likely
-will not work.* The worker needs NVIDIA, so you cannot install it on a Mac — only use the address of a worker on another machine.
+the system `afplay` (volume applies from the next start), "open folder" uses `open`; not tested on a Mac. The worker needs NVIDIA, so you cannot install it on a Mac — only use the address of a worker on another machine.

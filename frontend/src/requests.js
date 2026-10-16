@@ -6,6 +6,9 @@ import { durTokens } from './slotOptions.js'
 import { characterPayload } from './character.js'
 import { beatSecAt, continuationPlan, planTimeline, trickStyleSuffix } from './abcEdit.js'
 import { revoiceSpecKinds } from './vocalParts.js'
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
 
 const CYR = /[а-яё]/i
 
@@ -90,7 +93,7 @@ export const vocalVoices = (voiceOrder) => (voiceOrder || []).filter((v) => /voc
 // стиль получает подсказку, лирика — [Instrumental]
 export function instrumentalRequest(job, plan, vocals, specs) {
   return {
-    title: (job.title || 'трек') + ' · инструментал',
+    title: (job.title || t('common.track')) + ' · ' + t('requests.instrumental'),
     style: trickStyle(job.style, specs) + ', instrumental, no vocals',
     lyrics: '[Instrumental]',
     seed: job.seed || 0,   // 0 — воркер возьмёт сид родителя
@@ -135,7 +138,7 @@ export function fragmentRequest(job, from, to, baseAbc, specs) {
   if (from < FRAGMENT_MIN_FROM_S) {
     return {
       submit: {
-        title: (job.title || 'трек') + ' · кусок', style: trickStyle(job.style, specs), lyrics: job.lyrics,
+        title: (job.title || t('common.track')) + ' · ' + t('requests.fragment'), style: trickStyle(job.style, specs), lyrics: job.lyrics,
         seed: job.seed || 0, cot: job.cot === 'off' ? 'melody' : job.cot,
         abc: abc || baseAbc, max_tokens: Math.round((to + FRAGMENT_TAIL_S) * SEM_TOK_PER_SEC),
         parent_id: job.id, role: 'fragment',
@@ -163,7 +166,7 @@ export function revoicePlan(srcAbc, baseAbc, specs, sel, takeLabel) {
 // запись для сервиса useRevoice: голос дубля id подставляется в окно выделения версии job
 export function revoiceRecord(job, id, sel, beat, what) {
   return { parent: job.id, child: id, from: sel.from, to: sel.to, beat, voiceSrc: id,
-    title: `${job.title || 'трек'} · голос: ${what} (дубль #${id})` }
+    title: t('requests.revoiceTitle', { title: job.title || t('common.track'), what, id }) }
 }
 
 // эффект на дорожку (запись реестра пересборки): окно — выделение, без выделения — вся дорожка

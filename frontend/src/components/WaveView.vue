@@ -357,7 +357,7 @@ watch(() => [props.peaks, props.marks, props.cursorSec, props.selection, props.m
             @wheel.prevent="onWheel"></canvas>
     <div class="wave-zoom">
       <span v-if="zoomX > 1.01" class="muted">×{{ zoomX.toFixed(zoomX < 10 ? 1 : 0) }}</span>
-      <button v-if="zoomX > 1.01" class="ghost small-btn" title="весь трек в окно" @click="fitWindow">⟲</button>
+      <button v-if="zoomX > 1.01" class="ghost small-btn" :title="t('wave.fit')" @click="fitWindow">⟲</button>
     </div>
   </div>
   <div class="wave-scroll" @pointerdown.prevent="onScrollDown" @pointermove="onScrollMove"

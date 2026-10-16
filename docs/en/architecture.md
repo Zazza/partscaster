@@ -39,7 +39,7 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 |---|---|
 | `main.go` | starts Wails, embeds the built frontend, proxies `/audio/<id>/<file>` to the worker |
 | `app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go` | bindings for Vue (`Yue*` methods): thin wrappers over the worker client and the `internal/studio` pipelines; effect previews; export/import of a track recipe; version, worker check, the "For AI agents" section. Also here: background run of the sound presets chosen when a track was created (every 10 s) |
-| `player.go`, `player_unix.go`, `player_windows.go`, `player_volume_*.go` | built-in player: the webview in Wails has no audio output. Linux — `pw-play` (PipeWire), pause by stopping the process; Windows — WPF MediaPlayer through PowerShell (pause does not keep the position). A non-Windows build uses the same `pw-play` |
+| `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | built-in player: the webview in Wails has no audio output. Linux — `pw-play` (PipeWire), pause by stopping the process; Windows — WPF MediaPlayer through PowerShell (pause does not keep the position). macOS — the system `afplay` (volume applies from the next start) |
 | `loopwav.go` | a phrase loop from the "Instruments" page, laid out into a long WAV for the player |
 | `internal/config` | worker address and app settings (`settings.json` in the user settings directory, `partscaster/`) |
 | `internal/yue` | HTTP client of the worker. `client.go` — transport only; methods are split by domain: `jobs.go`, `stems.go`, `llm.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; the `Service` interface is in `types.go` |

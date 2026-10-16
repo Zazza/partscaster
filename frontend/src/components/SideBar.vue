@@ -20,7 +20,7 @@ const props = defineProps({
   theme: { type: String, default: 'dark' },    // 'dark' | 'light'
   locale: { type: String, default: 'ru' },     // 'ru' | 'en'
 })
-const emit = defineEmits(['nav', 'import-recipes', 'about', 'theme', 'locale', 'open-job'])
+const emit = defineEmits(['nav', 'about', 'theme', 'locale', 'open-job'])
 const { t } = useI18n()
 const { askConfirm } = useConfirm()
 

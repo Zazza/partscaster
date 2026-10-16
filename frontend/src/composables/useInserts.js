@@ -4,10 +4,12 @@
 // кусков никто не микширует. Этот сервис живёт всегда.
 import { ref } from 'vue'
 import { api } from '../api.js'
+import { useI18n } from '../i18n/index.js'
 import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
 
+const { t } = useI18n()
 const KEY = 'yue_insert_queue'
 // применённые вклейки по трекам: {parentId: [{childId, instId, from, to, lead,
 // beat, db, stems, fadeIn, fadeOut, aligned, score}]} — из них трек
@@ -270,7 +272,7 @@ async function remove(parentId, childId) {
 async function replaceEngine(parentId, childId, { chain, label } = {}) {
   const list = appliedFor(parentId)
   const it = list.find((x) => x.childId === childId)
-  if (!it || !it.engine) throw new Error('это не запись звукового движка')
+  if (!it || !it.engine) throw new Error(t('inserts.notEngine'))
   it.engine = (chain || []).map((b) => ({ ...b }))
   if (label) it.label = label
   applied.value = { ...applied.value, [parentId]: [...list] }

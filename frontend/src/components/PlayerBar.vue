@@ -94,6 +94,6 @@ function onSeekHover(e) {
       ? (hoverSec != null ? '→ ' + fmtDur(hoverSec) : fmtDur(playerState.position_sec) + ' / ' + fmtDur(playerState.duration_sec))
       : '-:-- / -:--' }}</span>
     <label class="vol" :title="t('player.volume')"><AppIcon name="volume" /><input type="range" min="0" max="1" step="0.05" v-model.number="volume" @input="onVolume" /></label>
-    <span v-if="playerState.error" class="error" :title="playerState.error">звук: ошибка</span>
+    <span v-if="playerState.error" class="error" :title="playerState.error">{{ t('player.error') }}</span>
   </div>
 </template>

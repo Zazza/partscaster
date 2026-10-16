@@ -3,6 +3,9 @@
 // реестра — из названия рендера («… · drumfill» / «… · сбивка»).
 import { TRICK_INSTRUMENTS } from './abcEdit.js'
 import { isPlaceRecord, placeLabel } from './mixDesk.js'
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
 
 // роли производных треков: результаты слушают, материал — сырьё для вклеек
 export const RESULT_ROLES = ['variant', 'rebuild', 'continue', 'voice']
@@ -44,12 +47,12 @@ export function mixLabel(file, { applied = [], jobs = [], labelOf, fmt }) {
 // заглушки — название приёма
 export function insertTitle(it, { chainName, stemName, instName, placeName }) {
   // мастер — на весь микс; место дорожки — «место 30 % вправо · гитары»
-  if (it.master && it.engine) return it.label || 'Мастер: ' + it.engine.map((b) => b.type).join(' → ')
-  if (isPlaceRecord(it)) return `${placeName ? placeName(it.place) : 'место ' + placeLabel(it.place)} · ${stemName(it.stems[0])}`
+  if (it.master && it.engine) return it.label || t('insert.master', { name: it.engine.map((b) => b.type).join(' → ') })
+  if (isPlaceRecord(it)) return `${placeName ? placeName(it.place) : t('mix.place') + ' ' + placeLabel(it.place)} · ${stemName(it.stems[0])}`
   if (it.chain) return `${chainName(it.chain)} · ${(it.stems || []).map(stemName).join(', ')}`
   // цепочка звукового движка: подпись записи или типы блоков по порядку
   if (it.engine) {
-    const what = it.label || 'Движок: ' + it.engine.map((b) => b.type).join(' → ')
+    const what = it.label || t('engine.label', { name: it.engine.map((b) => b.type).join(' → ') })
     return `${what} · ${(it.stems || []).map(stemName).join(', ')}`
   }
   // доска педалей: подпись набора/доски или названия педалей по порядку

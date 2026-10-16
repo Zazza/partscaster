@@ -52,7 +52,8 @@ jobs:
       - name: Выложить в релиз
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          # архив воркера одинаков на всех ОС — отдельным файлом выкладывается один раз (Linux)
+          # отдельный архив воркера — из Linux-сборки (для GPU-машины на Linux: в нём программа yue2.cpp под Linux);
+          # пакеты Windows и macOS несут свой архив воркера внутри пакета
           files: |
             dist/partscaster-*.tar.gz
             dist/partscaster-*.zip

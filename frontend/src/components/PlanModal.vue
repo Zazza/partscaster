@@ -20,7 +20,7 @@ const abc = defineModel('abc', { type: String, default: '' })
       <div class="modal-head">
         <h2>{{ t('plan.title') }} <span class="muted">{{ t('plan.advanced') }}</span></h2>
         <span v-if="info" class="muted plan-meta">
-          seed {{ info.seed }}<template v-if="info.seconds"> · {{ info.seconds }}s</template><template v-if="info.fromJob"> · из джобы #{{ info.fromJob }}</template><template v-if="info.truncated"> · обрезан лимитом токенов</template>
+          seed {{ info.seed }}<template v-if="info.seconds"> · {{ info.seconds }}s</template><template v-if="info.fromJob"> · {{ t('plan.fromJob', { id: info.fromJob }) }}</template><template v-if="info.truncated"> · {{ t('plan.truncated') }}</template>
         </span>
         <span class="spacer"></span>
         <button class="ghost" @click="emit('close')"><AppIcon name="x" /></button>
@@ -34,9 +34,8 @@ const abc = defineModel('abc', { type: String, default: '' })
       <details class="abc-help">
         <summary>{{ t('plan.help') }}</summary>
         <p class="muted">
-          [Verse] / [Chorus] — секции песни · | — граница такта · C D E F G A B — ноты (после ноты цифра = длительность: C2 вдвое дольше C) ·
-          z — пауза · "Am" — аккорд в кавычках · минуc перед нотой (например _E) — понижение на полтона.<br />
-          Это нотная запись: обычный путь — стили и студия, сюда можно не заходить.
+          {{ t('plan.help.syntax') }}<br />
+          {{ t('plan.help.note') }}
         </p>
       </details>
       <textarea v-model="abc" rows="18" class="abc" spellcheck="false"></textarea>

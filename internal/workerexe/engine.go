@@ -60,17 +60,24 @@ func CppBinary(workerDir, goos string) string {
 	return ""
 }
 
-// DefaultCppModel — модель по объёму карты (как install_worker auto): q8 «почти без потерь» — на
-// просторных картах; тесным (8 ГБ: q8 ≈ 8 ГБ VRAM впритык) — q6.
+// Пороги — как у install.sh (cpp_auto_model): 12 ГБ карта сообщает ~12282 МиБ, 8 ГБ — ~8188.
+const (
+	cppRoomyMiB = 11776 // от 11,5 ГБ: q8 в обычном режиме
+	cppTightMiB = 7680  // от 7,5 ГБ: q8 в экономном; меньше — q5 в экономном
+)
+
+// DefaultCppModel — модель по объёму карты, как install.sh: q8 «почти без потерь» везде, где помещается
+// (q6/q5 экономят файл, а не видеопамять: ~7,7 ГБ против ~8 у q8 на песне 2:47); q5 — только на картах
+// меньше 7,5 ГБ, и то в экономном режиме.
 func DefaultCppModel(vramMiB int) string {
-	if vramMiB < 10*1024 {
-		return "q6"
+	if vramMiB < cppTightMiB {
+		return "q5"
 	}
 	return "q8"
 }
 
-// LowVramDefault — экономный режим (контекст 8192) для тесных карт.
-func LowVramDefault(vramMiB int) bool { return vramMiB < 10*1024 }
+// LowVramDefault — экономный режим (контекст 8192, ~4,5 ГБ видеопамяти) для карт меньше 11,5 ГБ, как install.sh.
+func LowVramDefault(vramMiB int) bool { return vramMiB < cppRoomyMiB }
 
 // DownloadEngineModel — скачать веса модели+VAE (engine_cpp.py download) в консоль out.
 // pythonFromVenv — готовая команда питона из venv (VenvPython); WorkerEnv задаёт PARTSCASTER_DATA_DIR/HF_HOME.

@@ -277,10 +277,10 @@ function openStyleSave() {
 function saveStyleToLibrary() {
   const gid = 'c-from-form'
   if (!customGroups.value.find((g) => g.id === gid)) {
-    customGroups.value = [...customGroups.value, { id: gid, name: 'Из формы', items: [] }]
+    customGroups.value = [...customGroups.value, { id: gid, name: t('style.fromForm'), items: [] }]
   }
   const g = customGroups.value.find((x) => x.id === gid)
-  const name = styleSaveName.value.trim() || 'стиль ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const name = styleSaveName.value.trim() || t('style.autoName') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   const item = {
     id: 'c-' + Date.now().toString(36),
     name,
@@ -555,8 +555,8 @@ async function doRetry(j) {
 const retry = (j) => withEngineCheck(j, () => doRetry(j))
 
 function deleteJob(j) {
-  askConfirm(`Удалить результат #${j.id} «${j.title}»?`,
-    'Удалится запись и все файлы (аудио, партитура, стемы, превью) на сервере. Отменить нельзя.',
+  askConfirm(t('queue.delete.title', { id: j.id, title: j.title }),
+    t('queue.delete.text'),
     async () => {
       try { await api.deleteJob(j.id) } catch (e) { alert(String(e)) }
       refresh()
@@ -851,7 +851,7 @@ onUnmounted(() => { clearInterval(timer); window.removeEventListener('click', on
 function progressTip(j) {
   const parts = [t('queue.progress.' + (j.stage || 'plan'))]
   if (j.tokens) parts.push(j.tokens + ' tok')
-  if (j.tok_per_s) parts.push(j.tok_per_s + ' т/с')
+  if (j.tok_per_s) parts.push(j.tok_per_s + ' ' + t('queue.tokPerSec'))
   if (j.elapsed_sec) parts.push(fmtDur(j.elapsed_sec))
   return parts.join(' · ')
 }
@@ -870,7 +870,7 @@ function onWindowClick(e) {
   <div class="app-shell">
   <SideBar :logo="logoUrl" :stats="stats" :health="{ up: !!health, title: healthTitle }"
            :section="section" :studio-job="studioJob" :queue="procQueue" :worker-url="serverURL" :theme="theme" :locale="locale"
-           @nav="navGo" @open-job="openFromQueue" @import-recipes="recipeImport = true" @about="welcome = 'about'"
+           @nav="navGo" @open-job="openFromQueue" @about="welcome = 'about'"
            @theme="toggleTheme" @locale="setLocale(locale === 'ru' ? 'en' : 'ru')" />
   <div class="app-col">
 
@@ -966,7 +966,7 @@ function onWindowClick(e) {
           <label class="lyrics-label">{{ t('form.lyrics') }}</label>
           <span class="lyrics-tools">
             <button class="toggle" :class="{ on: noLyrics }" :title="t('form.nowords.tip')" @click="noLyrics = !noLyrics">{{ t('form.nowords') }}</button>
-            <select v-if="noLyrics" v-model="durMode" class="dur-select" title="Длина инструментала задаётся числом секций [Instrumental]">
+            <select v-if="noLyrics" v-model="durMode" class="dur-select" :title="t('form.dur.tip')">
               <option v-for="o in durOptions" :key="o.id" :value="o.id">{{ t('dur.' + o.id) }}</option>
             </select>
             <button v-if="!noLyrics" class="ghost small-btn" @click="copOpen = true"><AppIcon name="pencil" /> {{ t('form.copilot') }}</button>
@@ -1142,7 +1142,7 @@ function onWindowClick(e) {
               <span v-if="engineLabel(j)" class="badge exp" :title="t('engine.badge.tip')">{{ engineLabel(j) }}</span>
               <span v-if="j.cot && j.cot !== 'full'" class="muted" :title="t('queue.cot.tip')">{{ t('queue.cot.' + j.cot) }}</span>
               <span v-if="characterLabel(j)" class="muted" :title="t('character.title')">{{ characterLabel(j) }}</span>
-              <span v-if="j.req_abc" class="badge" :title="t('form.abc.tip')">свой ABC</span>
+              <span v-if="j.req_abc" class="badge" :title="t('form.abc.tip')">{{ t('queue.ownAbc') }}</span>
               <span v-if="headOf(j) !== j" class="badge current" :title="headOf(j).title"><AppIcon name="star-fill" /> {{ t('queue.head.badge', { id: headOf(j).id }) }}</span>
               <span v-if="j.status === 'error'" class="status error">{{ statusLabelC.error }}</span>
             </span>
@@ -1216,7 +1216,7 @@ function onWindowClick(e) {
                   <span v-if="v.id !== j.id && v.status !== 'done'" class="status" :class="v.status">{{ statusLabelC[v.status] || v.status }}</span>
                   <span class="spacer"></span>
                   <span v-if="v.duration_sec" class="tl-meta">{{ fmtDur(v.duration_sec) }}</span>
-                  <button v-if="v.status === 'done'" class="ghost small-btn" @click="studioJob = v">студия →</button>
+                  <button v-if="v.status === 'done'" class="ghost small-btn" @click="studioJob = v">{{ t('queue.studio') }}</button>
                   <button v-if="v.id !== j.id && canRetry(v)" class="ghost small-btn" :title="v.error || t('queue.retry.tip')" @click="retry(v)">{{ t('queue.retry') }}</button>
                   <button v-if="v.id !== j.id && v.status !== 'running'" class="ghost icon del" :title="t('queue.delete.tip')" @click="deleteJob(v)"><AppIcon name="x" /></button>
                 </div>
@@ -1251,7 +1251,7 @@ function onWindowClick(e) {
                   <span v-if="k.status !== 'done'" class="status" :class="k.status">{{ statusLabelC[k.status] || k.status }}</span>
                   <span class="spacer"></span>
                   <span v-if="k.duration_sec" class="tl-meta">{{ fmtDur(k.duration_sec) }}</span>
-                  <button v-if="k.status === 'done'" class="ghost small-btn" @click="studioJob = k">студия →</button>
+                  <button v-if="k.status === 'done'" class="ghost small-btn" @click="studioJob = k">{{ t('queue.studio') }}</button>
                   <button v-if="canRetry(k)" class="ghost small-btn" :title="k.error || t('queue.retry.tip')" @click="retry(k)">{{ t('queue.retry') }}</button>
                   <button v-if="k.status !== 'running'" class="ghost icon del" :title="t('queue.delete.tip')" @click="deleteJob(k)"><AppIcon name="x" /></button>
                 </div>

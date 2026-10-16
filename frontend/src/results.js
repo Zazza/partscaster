@@ -1,5 +1,8 @@
 // «Готово» студии: версии трека одним списком — понятное короткое название вместо имени файла, полная подпись — в
 // подсказке, новые сверху. Чистая логика без DOM.
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
 
 const PARTS = (label) => String(label || '').split(' + ').map((s) => s.trim()).filter(Boolean)
 
@@ -10,26 +13,26 @@ export function resultTitle(v, chainName = () => undefined) {
   const detail = label
   let m
   if (/^dsp-preset-\d+-mix\.flac$/.test(file)) {
-    return { title: 'Пресет: микс до мастера', detail, kind: 'premix' }
+    return { title: t('results.presetPremix'), detail, kind: 'premix' }
   }
   if (/^dsp-preset-\d+\.flac$/.test(file)) {
-    return { title: label ? `Пресет: ${label}` : 'Пресет звука', detail, kind: 'preset' }
+    return { title: label ? t('results.preset', { name: label }) : t('results.presetNone'), detail, kind: 'preset' }
   }
   if (/^overdub-inst-/.test(file)) {
     const n = PARTS(label).length
-    return { title: n ? `Микс с правками · ${n} ${plural(n)}` : 'Микс с правками', detail, kind: 'mix' }
+    return { title: n ? t('results.mix') + ' · ' + n + ' ' + plural(n) : t('results.mix'), detail, kind: 'mix' }
   }
   if (/^overdub-\d+\.flac$/.test(file)) {
-    return { title: label || 'Переиграно поверх оригинала', detail, kind: 'layer' }
+    return { title: label || t('results.layer'), detail, kind: 'layer' }
   }
   if (/^overdub-premaster-/.test(file)) {
-    return { title: 'Микс до мастера', detail, kind: 'premix' }
+    return { title: t('results.premix'), detail, kind: 'premix' }
   }
   if (/^dsp-fx-/.test(file)) {
-    return { title: label || 'Движок', detail, kind: 'engine' }
+    return { title: label || t('results.engine'), detail, kind: 'engine' }
   }
   if ((m = /^dsp-preview-(.+)\.flac$/.exec(file))) {
-    return { title: `${chainName(m[1]) || label || m[1]} (превью 15 с)`, detail, kind: 'effect' }
+    return { title: `${chainName(m[1]) || label || m[1]} (${t('results.preview15')})`, detail, kind: 'effect' }
   }
   if ((m = /^dsp-(.+)\.flac$/.exec(file))) {
     return { title: chainName(m[1]) || label || m[1], detail, kind: 'effect' }
@@ -40,9 +43,9 @@ export function resultTitle(v, chainName = () => undefined) {
 function plural(n) {
   const a = n % 10
   const b = n % 100
-  if (a === 1 && b !== 11) return 'правка'
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return 'правки'
-  return 'правок'
+  if (a === 1 && b !== 11) return t('results.edits.one')
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return t('results.edits.few')
+  return t('results.edits.many')
 }
 
 /** Новые сверху: по created_at (ISO) убыв.; без даты — в конце, порядок среди них прежний. */

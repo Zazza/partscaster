@@ -47,6 +47,9 @@ const inserts = useInserts()
 const revoice = useRevoice()
 
 const rollData = ref(null)     // parsed score
+// студия открыта: партитура разобрана — или её нет вовсе (импорт без транскрипции): тогда без ролла и приёмов
+// по тактам, но волна, дорожки, звук и готово работают
+const studioReady = computed(() => !!rollData.value || (!abcFile.value && !rollBusy.value))
 const rollBusy = ref(false)
 const rollErr = ref('')
 const rollSel = ref(null)      // {a: barIdx, b: barIdx}
@@ -460,10 +463,10 @@ const posChord = (pos) => {
 }
 function cellTitle(v, pos) {
   const b = barAt(v, pos)
-  if (!b) return `${voiceLabel(v)}: в этом такте у голоса нет своей партии`
-  const tail = b.start_sec >= props.job.duration_sec ? ' · за пределами звука' : ''
-  const mark = isTrickCell(v, pos) ? ' · приём: ' + trickTitle(v, pos) : ''
-  return `${sectionLabel(b.section, locale.value)} · такт ${pos + 1} · ${b.start_sec.toFixed(1)}–${b.end_sec.toFixed(1)}с${tail}${mark}`
+  if (!b) return t('studio.cell.noPart', { voice: voiceLabel(v) })
+  const tail = b.start_sec >= props.job.duration_sec ? ' · ' + t('studio.cell.beyond') : ''
+  const mark = isTrickCell(v, pos) ? ' · ' + t('studio.cell.trick') + ': ' + trickTitle(v, pos) : ''
+  return `${sectionLabel(b.section, locale.value)} · ${t('studio.cell.bar', { n: pos + 1 })} · ${b.start_sec.toFixed(1)}–${b.end_sec.toFixed(1)}${t('common.sec')}${tail}${mark}`
 }
 
 function barSelStart(idx) {
@@ -494,7 +497,7 @@ async function makePreview() {
   try {
     const p = await api.jobPreview(props.job.id, r.from, r.to)
     await toggleArtifact(`p${props.job.id}:${p.file}`,
-      `превью ${r.from.toFixed(0)}–${r.to.toFixed(0)} с · #${props.job.id}`,
+      t('studio.previewLabel', { from: r.from.toFixed(0), to: r.to.toFixed(0), id: props.job.id }),
       () => api.playFile(props.job.id, p.file, p.duration_sec))
   } catch (e) {
     rollErr.value = String(e)
@@ -589,7 +592,7 @@ const hasSel = computed(() => !!selPos.value)
 const hasVocalSel = computed(() => {
   const p = selPos.value
   if (!p) return false
-  return (rollData.value.voice_order || []).some((v) =>
+  return ((rollData.value && rollData.value.voice_order) || []).some((v) =>
     /vocal/i.test(v) && (voiceBarList.value[v] || []).slice(p.lo, p.hi + 1).some((b) => (b.voices || {})[v]))
 })
 
@@ -664,7 +667,7 @@ async function addSection(instId) {
       instJob.value = null
       return
     }
-    req.title = (props.job.title || 'трек') + ' · ' + t('studio.trick.inst.' + inst.id)
+    req.title = (props.job.title || t('common.track')) + ' · ' + t('studio.trick.inst.' + inst.id)
     const childId = await api.submit(req)
     sentMarks.value = [...sentMarks.value,
       { kind: 'instrument', label: '+ ' + t('studio.trick.inst.' + inst.id), from: r.from, to: r.to }]
@@ -739,7 +742,7 @@ async function rebuild(draft = false) {
     const dur = Number(props.job.duration_sec) || 0
     const abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
     const id = await api.submit({
-      title: (props.job.title || 'трек') + (draft ? ' · ✦' : ' · приёмы'),
+      title: (props.job.title || t('common.track')) + (draft ? ' · ✦' : ' · ' + t('studio.tricksSuffix')),
       style: trickStyle(props.job.style),
       lyrics: props.job.lyrics,
       seed: props.job.seed || 0,   // тот же seed = тот же голос; 0 — воркер возьмёт сид родителя
@@ -799,7 +802,8 @@ function stopFragPoll() {
   if (jobsTimer) { clearInterval(jobsTimer); jobsTimer = null }
 }
 
-function watchJob(refObj, key, label, playFn = null, onDone = null) {
+// labelKey — ключ i18n подписи в плеере («кусок · #id»)
+function watchJob(refObj, key, labelKey, playFn = null, onDone = null) {
   return async () => {
     if (!refObj.value || !refObj.value.id) return
     try {
@@ -812,7 +816,7 @@ function watchJob(refObj, key, label, playFn = null, onDone = null) {
       if (step.done) {
         if (onDone) await onDone(j)
         const play = playFn || (() => api.playAudio(j.id))
-        await toggleArtifact(key + j.id, `${label} · #${j.id}`, play)
+        await toggleArtifact(key + j.id, `${t(labelKey)} · #${j.id}`, play)
       }
       maybeStopPoll()
     } catch (e) {
@@ -830,13 +834,13 @@ function maybeStopPoll() {
 }
 // автоплей готового куска — тоже с FRAGMENT_LEAD_S до правки (watchJob заменяет fragJob строкой из списка джоб:
 // окно берётся из неё — cont_from — или из того, что запомнили при запуске)
-const pollFragment = watchJob(fragJob, 'f', 'кусок', () => playFragment(fragJob.value))
+const pollFragment = watchJob(fragJob, 'f', 'studio.artifact.fragment', () => playFragment(fragJob.value))
 // готовый кусок — с FRAGMENT_LEAD_S до начала правки: слышно, как трек входит в изменённое место
 const FRAGMENT_LEAD_S = 4
 const playFragment = (fj) => playFragmentJob(api, fj, FRAGMENT_LEAD_S)
 // новая версия трека: по готовности переносим все вклейки (с текущей
 // громкостью) вечному сервису useInserts — он микширует, даже если студия закрыта
-const pollBuild = watchJob(buildJob, 'b', 'новая версия', null, async (j) => {
+const pollBuild = watchJob(buildJob, 'b', 'studio.artifact.build', null, async (j) => {
   inserts.carryTo(props.job.id, j.id, props.job.id)
 })
 const instJob = ref(null)
@@ -999,7 +1003,7 @@ async function moreVariant(it) {
     await ensureBaseAbc()
     const req = sectionRequest(props.job, baseAbc.value, inst, it.from, it.to,
       Math.floor(Math.random() * 1e9))
-    req.title = (props.job.title || 'трек') + ' · ' + t('studio.trick.inst.' + inst.id) + ' · вариант'
+    req.title = (props.job.title || t('common.track')) + ' · ' + t('studio.trick.inst.' + inst.id) + ' · ' + t('studio.variantSuffix')
     const childId = await api.submit(req)
     const spec = { instId: it.instId, from: it.from, to: it.to, lead: it.lead, beat: it.beat, db: it.db,
       stems: it.stems, fadeIn: it.fadeIn, fadeOut: it.fadeOut, keepHighHz: it.keepHighHz }
@@ -1104,7 +1108,7 @@ async function playInstrument(j) {
     await inserts.flush()
     const file = inserts.latestFile(props.job.id)
     try {
-      if (!file) throw new Error('нет микса')
+      if (!file) throw new Error('no mix')   // перехватывается ниже: пересборка
       await api.playFile(props.job.id, file, props.job.duration_sec)
     } catch {
       // файла на воркере нет (пересборка не дошла) — пересобрать сейчас
@@ -1117,7 +1121,7 @@ async function playInstrument(j) {
     if (instJob.value && instJob.value.id === j.id) instJob.value = { ...j, mixing: false }
   }
 }
-const pollInst = watchJob(instJob, 'i', 'инструмент', playInstrument)
+const pollInst = watchJob(instJob, 'i', 'studio.artifact.inst', playInstrument)
 
 function startJobPoll() {
   stopFragPoll()
@@ -1166,7 +1170,7 @@ async function makeMinus() {
     const r = await api.makeMinus(props.job.id, exclude)
     if (r && r.file) {
       minusReady.value = true
-      toggleArtifact(`m${props.job.id}:minus`, `минус (−${exclude.join(', ')}) · #${props.job.id}`,
+      toggleArtifact(`m${props.job.id}:minus`, t('studio.minusLabel', { stems: exclude.join(', '), id: props.job.id }),
         () => api.playFile(props.job.id, r.file, props.job.duration_sec))
     }
   } catch (e) {
@@ -1404,7 +1408,7 @@ async function applyOneClick(chainId) {
     const v = await api.applyDsp(props.job.id, chainId, params)
     await reloadVariants()
     const name = variantLabel(v) + ' (' + t('studio.dsp.level.' + oneClickLevel.value) + ')'
-    await api.variantToTrack(props.job.id, v.file, (props.job.title || 'трек') + ' · ' + name)
+    await api.variantToTrack(props.job.id, v.file, (props.job.title || t('common.track')) + ' · ' + name)
     rollErr.value = ''
     trickMsg.value = t('studio.dsp.totrack.done', { name })
   } catch (e) {
@@ -1446,7 +1450,7 @@ async function variantToTrack(v) {
   dspBusy.value = true
   try {
     await api.variantToTrack(props.job.id, v.file,
-      (props.job.title || 'трек') + ' · ' + variantLabel(v))
+      (props.job.title || t('common.track')) + ' · ' + variantLabel(v))
     rollErr.value = ''
     trickMsg.value = t('studio.dsp.totrack.done', { name: variantLabel(v) })
   } catch (e) {
@@ -1472,7 +1476,7 @@ function setWindowTitle() {
     <section class="studio-sheet">
       <!-- «назад» — в шапке приложения (не прокручивается); внизу страницы — вторая кнопка -->
       <!-- шаги работы с треком: ссылки на разделы одной страницы (волна нужна всем шагам — не вкладки) -->
-      <nav v-if="rollData" class="studio-steps">
+      <nav v-if="studioReady" class="studio-steps">
         <button v-for="(st, i) in STUDIO_STEPS" :key="st" class="ghost small-btn" :class="{ on: activeStep === st }"
                 @click="goStep(st)">{{ i + 1 }} · {{ t('studio.step.' + st) }}</button>
         <!-- какой трек правим: справа от шагов (полоса прилипает — название всегда на виду) -->
@@ -1494,11 +1498,11 @@ function setWindowTitle() {
             {{ transcribeBusy ? t('studio.noScore.busy') : t('studio.noScore.retry') }}</button>
         </p>
         <p v-if="rollErr" class="error">{{ rollErr }}</p>
-        <template v-if="rollData">
-          <p class="muted roll-meta">
+        <template v-if="studioReady">
+          <p v-if="rollData" class="muted roll-meta">
             {{ rollData.tempo_bpm }} BPM · {{ rollData.key }} · {{ rollData.meter }} ·
-            {{ posCount }} тактов · ~{{ fmtDur(rollData.duration_sec) }}
-            <template v-if="selRange"> · выделено {{ selRange.from.toFixed(0) }}–{{ selRange.to.toFixed(0) }} с</template>
+            {{ t('studio.bars', { n: posCount }) }} · ~{{ fmtDur(rollData.duration_sec) }}
+            <template v-if="selRange"> · {{ t('studio.selected', { from: selRange.from.toFixed(0), to: selRange.to.toFixed(0) }) }}</template>
           </p>
           <h3 id="st-listen" class="studio-step">1 · {{ t('studio.step.listen') }} <span class="muted">{{ t('studio.step.listen.sub') }}</span></h3>
           <div class="studio-box wave-panel" :class="{ 'wave-pinned': wavePin }">
@@ -1551,7 +1555,7 @@ function setWindowTitle() {
             <p v-if="envOn" class="muted wave-hint">{{ t('studio.wave.env.hint') }}</p>
             </div>
           </div>
-          <div class="studio-box">
+          <div v-if="rollData" class="studio-box">
             <div class="studio-box-head">
               <span>{{ t('studio.roll.caption') }}</span>
               <span class="roll-zoom">
@@ -1579,7 +1583,7 @@ function setWindowTitle() {
           </div>
           <h3 id="st-edit" class="studio-step">2 · {{ t('studio.step.edit') }} <span class="muted">{{ t('studio.step.edit.sub') }}</span></h3>
           <!-- правки: секция с шапкой, приёмы — по смысловым группам -->
-          <div class="studio-box">
+          <div v-if="rollData" class="studio-box">
             <div class="studio-box-head"><span>{{ t('studio.trick.caption') }}</span></div>
             <div class="studio-box-body">
           <div class="trick-bar">
@@ -1681,12 +1685,12 @@ function setWindowTitle() {
           <p v-if="fragJob" class="trick-hint" :class="fragJob.status === 'error' ? 'error' : 'muted'">
             <template v-if="fragJob.status === 'starting'"><AppIcon class="pulse" name="music" /> {{ t('studio.trick.fragment.starting') }}</template>
             <template v-else-if="['queued', 'running'].includes(fragJob.status)">
-              <AppIcon class="pulse" name="music" /> {{ t('queue.status.' + fragJob.status) }} · {{ t('studio.trick.fragment.wait') }}<template v-if="fragJob.elapsed_s"> {{ Math.round(fragJob.elapsed_s) }} с</template>
+              <AppIcon class="pulse" name="music" /> {{ t('queue.status.' + fragJob.status) }} · {{ t('studio.trick.fragment.wait') }}<template v-if="fragJob.elapsed_s"> {{ Math.round(fragJob.elapsed_s) }} {{ t('common.sec') }}</template>
             </template>
             <template v-else-if="fragJob.status === 'done'">
               <AppIcon name="music" /> {{ t('studio.trick.fragment.play') }}
               <button class="ghost small-btn" :title="t('studio.trick.fragment.replay')"
-                      @click="toggleArtifact('f' + fragJob.id, 'кусок · #' + fragJob.id, () => playFragment(fragJob))">
+                      @click="toggleArtifact('f' + fragJob.id, t('studio.artifact.fragment') + ' · #' + fragJob.id, () => playFragment(fragJob))">
                 {{ playBtn('f' + fragJob.id) }}
               </button>
             </template>
@@ -1695,12 +1699,12 @@ function setWindowTitle() {
           <p v-if="buildJob" class="trick-hint" :class="buildJob.status === 'error' ? 'error' : 'muted'">
             <template v-if="buildJob.status === 'starting'"><span class="pulse">⟳</span> {{ t('studio.trick.build.starting') }}</template>
             <template v-else-if="['queued', 'running'].includes(buildJob.status)">
-              <span class="pulse">⟳</span> {{ t('studio.trick.build.label') }} #{{ buildJob.id }} · {{ t('queue.status.' + buildJob.status) }} · {{ t('studio.trick.fragment.wait') }}<template v-if="buildJob.elapsed_s"> {{ Math.round(buildJob.elapsed_s) }} с</template><template v-if="buildJob.progress_pct != null"> · {{ buildJob.progress_pct }}%</template>
+              <span class="pulse">⟳</span> {{ t('studio.trick.build.label') }} #{{ buildJob.id }} · {{ t('queue.status.' + buildJob.status) }} · {{ t('studio.trick.fragment.wait') }}<template v-if="buildJob.elapsed_s"> {{ Math.round(buildJob.elapsed_s) }} {{ t('common.sec') }}</template><template v-if="buildJob.progress_pct != null"> · {{ buildJob.progress_pct }}%</template>
             </template>
             <template v-else-if="buildJob.status === 'done'">
               ✓ {{ t('studio.trick.build.label') }} #{{ buildJob.id }} — {{ t('studio.trick.build.play') }}
               <button class="ghost small-btn" :title="t('studio.trick.fragment.replay')"
-                      @click="toggleArtifact('b' + buildJob.id, 'новая версия · #' + buildJob.id, () => api.playAudio(buildJob.id))">
+                      @click="toggleArtifact('b' + buildJob.id, t('studio.artifact.build') + ' · #' + buildJob.id, () => api.playAudio(buildJob.id))">
                 {{ playBtn('b' + buildJob.id) }}
               </button>
             </template>
@@ -1709,13 +1713,13 @@ function setWindowTitle() {
           <p v-if="instJob" class="trick-hint" :class="instJob.status === 'error' ? 'error' : 'muted'">
             <template v-if="instJob.status === 'starting'"><AppIcon class="pulse" name="music" /> {{ t('studio.trick.inst.starting') }}</template>
             <template v-else-if="['queued', 'running'].includes(instJob.status)">
-              <AppIcon class="pulse" name="music" /> {{ t('studio.trick.inst.wait') }}<template v-if="instJob.elapsed_s"> {{ Math.round(instJob.elapsed_s) }} с</template>
+              <AppIcon class="pulse" name="music" /> {{ t('studio.trick.inst.wait') }}<template v-if="instJob.elapsed_s"> {{ Math.round(instJob.elapsed_s) }} {{ t('common.sec') }}</template>
             </template>
             <template v-else-if="instJob.mixing"><AppIcon class="pulse" name="music" /> {{ t('studio.trick.inst.mixing') }}</template>
             <template v-else-if="instJob.status === 'done'">
               ✓ {{ t('studio.trick.inst.play') }}
               <button class="ghost small-btn" :title="t('studio.trick.fragment.replay')"
-                      @click="toggleArtifact('i' + instJob.id, 'инструмент · #' + instJob.id, () => playInstrument(instJob))">
+                      @click="toggleArtifact('i' + instJob.id, t('studio.artifact.inst') + ' · #' + instJob.id, () => playInstrument(instJob))">
                 {{ instJob.mixing ? '…' : playBtn('i' + instJob.id) }}
               </button>
             </template>
@@ -1909,17 +1913,16 @@ function setWindowTitle() {
               <span class="muted">{{ resultDate(v.created_at) }}</span>
               <template v-if="showDeltas">
                 <span v-if="v.metrics" class="muted deltas">
-                  Δ крест {{ vDelta(v, 'crest_db') }} dB · Δ дин {{ vDelta(v, 'dyn_range_db') }} dB ·
-                  Δ верх {{ vDelta(v, 'bands.high') }}% · Δ флэтнес {{ vDelta(v, 'flatness_median', 3) }}
+                  {{ t('studio.delta.line', { crest: vDelta(v, 'crest_db'), dyn: vDelta(v, 'dyn_range_db'), high: vDelta(v, 'bands.high'), flat: vDelta(v, 'flatness_median', 3) }) }}
                 </span>
-                <span v-else class="muted">без метрик</span>
-                <button class="ghost" @click="openVariantMetrics(v)">полная дельта</button>
+                <span v-else class="muted">{{ t('studio.delta.none') }}</span>
+                <button class="ghost" @click="openVariantMetrics(v)">{{ t('studio.delta.full') }}</button>
               </template>
               <span class="spacer"></span>
               <button class="ghost" :title="t('studio.dsp.savefile.tip')"
                       @click="api.saveAudio(job.id, v.file)">⤓</button>
               <button class="primary small" :disabled="dspBusy" :title="t('studio.dsp.totrack.tip')"
-                      @click="variantToTrack(v)">→ в треки</button>
+                      @click="variantToTrack(v)">{{ t('studio.dsp.totrack') }}</button>
               <button class="ghost small-btn" :title="t('studio.dsp.del.tip')" :disabled="dspBusy"
                       @click="delVariant(v)"><AppIcon name="x" /></button>
             </div>

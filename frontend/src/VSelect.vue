@@ -7,15 +7,17 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { matchOptions } from './optionFilter.js'
 import { dropLeft } from './dropPlace.js'
+import { useI18n } from './i18n/index.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   options: { type: Array, default: () => [] },        // [{value, label, disabled, icon?}] — icon: имя из icons.js
-  placeholder: { type: String, default: '— выберите —' },
+  placeholder: { type: String, default: '' },   // пусто — «— выберите —» на языке интерфейса
   disabled: { type: Boolean, default: false },
   // длинные списки (песни): поле поиска сверху, пункты фильтруются по словам
   searchable: { type: Boolean, default: false },
 })
+const { t } = useI18n()
 const emit = defineEmits(['update:modelValue'])
 const open = ref(false)
 const root = ref(null)
@@ -76,7 +78,7 @@ const toggle = async () => {
 const currentOpt = () => props.options.find((x) => String(x.value) === String(props.modelValue))
 const current = () => {
   const o = currentOpt()
-  return o ? o.label : (props.modelValue || props.placeholder)
+  return o ? o.label : (props.modelValue || props.placeholder || t('common.choose'))
 }
 const pick = (o) => {
   if (o.disabled) return

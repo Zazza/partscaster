@@ -278,7 +278,7 @@ func RegisterStudioTools(s *Server) {
 		InputSchema: props(map[string]any{
 			"job_id": prop("ID джобы", "integer"),
 			"file":   prop("аудио-артефакт: audio.flac / dsp-*.flac / overdub-*.flac / stem-*.flac (пусто = основной трек)", "string"),
-			"bins":   prop("число окон огибающей (пусто = каноническое ~10/с)", "integer"),
+			"bins":   prop("число окон огибающей (пусто = каноническое: ~60 в секунду, от 500 до 20000)", "integer"),
 		}, "job_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			out, err := s.client.JobPeaks(context.Background(), argInt(args, "job_id"),

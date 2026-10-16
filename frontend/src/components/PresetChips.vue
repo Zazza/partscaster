@@ -11,7 +11,7 @@ const ids = defineModel({ type: Array, default: () => [] })
 const { t } = useI18n()
 const presets = ref([])
 // пресетов около сотни: выбор из списка с поиском по семьям и течениям, выбранные — чипами (до трёх)
-const options = computed(() => presetOptions(presets.value).map((o) => (typeof o.value === 'number'
+const options = computed(() => presetOptions(presets.value, t).map((o) => (typeof o.value === 'number'
   ? { ...o, disabled: !ids.value.includes(o.value) && ids.value.length >= 3 } : o)))
 const picked = computed(() => ids.value.map((id) => presets.value.find((p) => p.id === id)).filter(Boolean))
 const pick = ref(null)

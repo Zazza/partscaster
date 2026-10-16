@@ -201,10 +201,10 @@ func askEngine(cppAvailable bool, gpu workerexe.GPU) (string, error) {
 		return "", nil
 	}
 	fmt.Printf("\nМодель yue2.cpp ([Enter] — %s, рекомендовано для %s):\n", def, workerexe.FormatGB(gpu.MemoryMiB))
-	fmt.Println("  q8   — почти без потерь, ~8 ГБ видеопамяти")
-	fmt.Println("  q6   — компактнее, ~6 ГБ")
-	fmt.Println("  q5   — самая маленькая, ~5 ГБ")
-	fmt.Println("  bf16 — без сжатия, лучше всего, ~14 ГБ")
+	fmt.Println("  q8   — почти без потерь, ~8 ГБ видеопамяти (в экономном режиме ~4,5)")
+	fmt.Println("  q6   — файл меньше (2,9 ГБ), видеопамяти почти как q8 (~7,7 ГБ)")
+	fmt.Println("  q5   — самый маленький файл (2,6 ГБ), видеопамяти ~7,7 ГБ")
+	fmt.Println("  bf16 — без сжатия, ~10 ГБ видеопамяти, файл 7,2 ГБ")
 	fmt.Print("Выбор: ")
 	m := readLine()
 	switch {

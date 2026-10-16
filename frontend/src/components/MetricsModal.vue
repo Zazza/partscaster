@@ -20,27 +20,28 @@ const cmpMetrics = ref(null)
 const cmpBusy = ref(false)
 const addingRef = ref(false)
 
+// подпись строки — t('metrics.row.' + key); единица 'hz' — t('metrics.unit.hz')
 const rows = [
-  ['tempo_bpm', 'Темп', 'BPM', 1],
+  ['tempo_bpm', 'BPM', 1],
   // громкость по стандарту стримингов (EBU R128): стриминги выравнивают к ~−14 LUFS
-  ['lufs', 'Громкость (LUFS)', 'LUFS', 1],
-  ['lra', 'Диапазон громкости (LRA)', 'LU', 1],
-  ['true_peak_db', 'True peak', 'dBTP', 1],
-  ['crest_db', 'Крест-фактор', 'dB', 1],
-  ['dyn_range_db', 'Дин. диапазон', 'dB', 1],
-  ['rms_p95_db', 'RMS p95', 'dBFS', 1],
-  ['noise_floor_db', 'Шумовое дно', 'dBFS', 1],
-  ['signal_noise_db', 'Сигнал/шум-полотно', 'dB', 1],
-  ['clip_pct', 'Сэмплов у потолка', '%', 2],
-  ['centroid_hz', 'Центроид', 'Гц', 0],
-  ['f95_hz', '95% энергии ниже', 'Гц', 0],
-  ['flatness_loud', 'Флэтнес в громких', '', 3],
-  ['stereo_corr', 'Стерео-корреляция', '', 2],
-  ['bands.bass', 'Бас <150 Гц', '%', 1],
-  ['bands.low_mid', 'Низ-середина 150–500', '%', 1],
-  ['bands.mid', 'Середина 0.5–2к', '%', 1],
-  ['bands.high', 'Верх 2–8к', '%', 1],
-  ['bands.air', 'Воздух 8к+', '%', 1],
+  ['lufs', 'LUFS', 1],
+  ['lra', 'LU', 1],
+  ['true_peak_db', 'dBTP', 1],
+  ['crest_db', 'dB', 1],
+  ['dyn_range_db', 'dB', 1],
+  ['rms_p95_db', 'dBFS', 1],
+  ['noise_floor_db', 'dBFS', 1],
+  ['signal_noise_db', 'dB', 1],
+  ['clip_pct', '%', 2],
+  ['centroid_hz', 'hz', 0],
+  ['f95_hz', 'hz', 0],
+  ['flatness_loud', '', 3],
+  ['stereo_corr', '', 2],
+  ['bands.bass', '%', 1],
+  ['bands.low_mid', '%', 1],
+  ['bands.mid', '%', 1],
+  ['bands.high', '%', 1],
+  ['bands.air', '%', 1],
 ]
 
 const doneJobs = computed(() =>
@@ -54,7 +55,8 @@ function metricVal(m, key) {
 
 function fmtMetric(v, dec, unit) {
   if (v === null || v === undefined) return '—'
-  return Number(v).toFixed(dec) + (unit ? ' ' + unit : '')
+  const u = unit === 'hz' ? t('metrics.unit.hz') : unit
+  return Number(v).toFixed(dec) + (u ? ' ' + u : '')
 }
 
 function deltaStr(key, dec) {
@@ -138,7 +140,7 @@ defineExpose({ openFor })
   <div v-if="open" class="modal-backdrop">
     <div class="modal metrics-modal">
       <div class="modal-head">
-        <h2>Метрики эффектов — {{ title || ('#' + (job && job.id) + ' ' + (job && job.title)) }}</h2>
+        <h2>{{ t('metrics.title') }} — {{ title || ('#' + (job && job.id) + ' ' + (job && job.title)) }}</h2>
         <span class="spacer"></span>
         <button class="ghost" @click="open = false"><AppIcon name="x" /></button>
       </div>
@@ -146,25 +148,25 @@ defineExpose({ openFor })
       <p v-if="err" class="error">{{ err }}</p>
       <template v-if="metrics">
         <div class="cmp-row">
-          <span class="muted">дельта до:</span>
+          <span class="muted">{{ t('metrics.deltaTo') }}</span>
           <VSelect v-model="cmpTarget" style="max-width: 260px"
-                   :options="[{ value: '', label: '— нет —' },
-                              ...refs.map((r) => ({ value: 'ref:' + r.id, label: 'реф: ' + refName(r.id) })),
+                   :options="[{ value: '', label: t('common.none') },
+                              ...refs.map((r) => ({ value: 'ref:' + r.id, label: t('metrics.refPrefix') + ' ' + refName(r.id) })),
                               ...doneJobs.map((jj) => ({ value: 'job:' + jj.id, label: '#' + jj.id + ' ' + jj.title }))]"
                    @update:model-value="onCmpChange()" />
-          <button class="ghost" :disabled="addingRef" @click="addReference"><AppIcon name="plus" /> файл-референс…</button>
+          <button class="ghost" :disabled="addingRef" @click="addReference"><AppIcon name="plus" /> {{ t('metrics.addRef') }}</button>
         </div>
         <p v-if="cmpBusy" class="muted">{{ t('metrics.busy') }}</p>
         <div class="metrics-table">
-          <div class="mrow head"><span>метрика</span><span>трек</span><span>сравнение</span><span>Δ</span></div>
-          <div v-for="[key, label, unit, dec] in rows" :key="key" class="mrow">
-            <span>{{ label }}</span>
+          <div class="mrow head"><span>{{ t('metrics.col.metric') }}</span><span>{{ t('metrics.col.track') }}</span><span>{{ t('metrics.col.cmp') }}</span><span>Δ</span></div>
+          <div v-for="[key, unit, dec] in rows" :key="key" class="mrow">
+            <span>{{ t('metrics.row.' + key) }}</span>
             <span>{{ fmtMetric(metricVal(metrics, key), dec, unit) }}</span>
             <span class="muted">{{ cmpMetrics ? fmtMetric(metricVal(cmpMetrics, key), dec, unit) : '—' }}</span>
             <span class="delta">{{ deltaStr(key, dec) }}</span>
           </div>
           <div class="mrow">
-            <span>Тональность (хрома)</span>
+            <span>{{ t('metrics.row.key') }}</span>
             <span>{{ metrics.key || '—' }}</span>
             <span class="muted">{{ (cmpMetrics && cmpMetrics.key) || '—' }}</span>
             <span></span>

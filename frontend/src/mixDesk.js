@@ -1,6 +1,9 @@
 // Сведение и мастер студии — чистая логика (без DOM): место дорожки в стерео (панорама, ширина),
 // запись мастера в реестре пересборки, подписи. Сам звук считает пересборка: место — матрицей на все
 // правки дорожки (Go), мастер — блоками движка glue/limiter на воркере.
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
 
 export const PAN_MIN = -1
 export const PAN_MAX = 1
@@ -84,7 +87,7 @@ export function masterLine(metrics) {
   const m = metrics || {}
   if (typeof m.lufs !== 'number') return ''
   const f = (v) => v.toFixed(1).replace('.', ',').replace('-', '−')
-  return typeof m.true_peak_db === 'number' ? `${f(m.lufs)} LUFS, пик ${f(m.true_peak_db)} dBTP` : `${f(m.lufs)} LUFS`
+  return typeof m.true_peak_db === 'number' ? `${f(m.lufs)} LUFS, ${t('mix.peak')} ${f(m.true_peak_db)} dBTP` : `${f(m.lufs)} LUFS`
 }
 
 /** Цепочка мастера с целью и потолком: limiter (на своём месте, прочие параметры целы) получает target_lufs

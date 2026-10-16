@@ -241,8 +241,9 @@ sample kit download progress ("downloading kit…"). To leave — any menu item 
 Above the steps is the line "BPM · key · meter · N bars (тактов) · ~duration" and the selected stretch
 ("a–b s selected" (выделено a–b с)).
 
-A track without a score (note transcription) shows only a message and a **"Create score"** button in the studio
-(transcription, up to a few minutes); the steps appear after it. An imported track has no internal model data,
+For a track without a score (note transcription) the studio works without the piano roll and bar tricks: the
+waveform, stems, sound and "Done" work as usual. At the top there is a message and a **"Create score"** button
+(transcription, up to a few minutes); after it the roll and tricks appear. An imported track has no internal model data,
 so "continue from here" and "re-sing from here" are not available for it.
 
 <!-- screenshot: studio — step bar, wave with a selection, plan roll -->

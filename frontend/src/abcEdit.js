@@ -4,6 +4,9 @@
 // секции — % комментарии, голоса — V: <Имя> ..., такты через |, аккорды —
 // "Dm" внутри такта. Чистый текстовый уровень: ритм не пересобирается
 // (кроме провала — полный такт паузы), аккорды — аннотации, замена безопасна.
+import { useI18n } from './i18n/index.js'
+
+const { t } = useI18n()
 
 const VOICE_RE = /^V:\s*(\S+)/
 // поля заголовка (X:, T:, M:, L:, Q:, K:, w:) — не тело; V: разобран отдельно
@@ -371,7 +374,7 @@ export const TRICK_INSTRUMENTS = [
 // seed — для «ещё вариант» (модель играет кусок по-разному от сида к сиду)
 export function sectionRequest(parent, abc, inst, from, to, seed) {
   return {
-    title: (parent.title || 'трек') + ' · ' + inst.id,
+    title: (parent.title || t('common.track')) + ' · ' + inst.id,
     style: sectionStyle(parent.style, inst),
     lyrics: '[Instrumental]',
     seed: seed || parent.seed || 0,   // 0 — воркер возьмёт сид родителя
