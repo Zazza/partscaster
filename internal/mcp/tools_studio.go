@@ -102,7 +102,9 @@ func RegisterStudioTools(s *Server) {
 	s.Register(Tool{
 		Name: "dsp_chains",
 		Description: "Пресеты DSP-цепочек эффектов (ffmpeg на ПК): список, параметры и диапазоны крутилок. " +
-			"Цепочки с voice=true — примочки на голос (мегафон, телефон, перегруз, слэпбэк): применять на дорожку vocals. " +
+			"group — группа (space, pedals, modulation, filter, dynamics, time, lofi, voice — разделы effects.md). " +
+			"Цепочки с voice=true — примочки на голос (мегафон, телефон, перегруз, слэпбэк): применять на дорожку vocals; " +
+			"for_voice=true — общий эффект, уместный и на голосе (реверб, удвоение, де-эссер…). " +
 			"Цепочки с key (ducking, key=drums) — только на дорожку (stem, обычно other или bass): ключ — стем key трека. " +
 			"Реверб и дилей на дорожке в окне from–to звучат хвостом и после to.",
 		InputSchema: props(nil),

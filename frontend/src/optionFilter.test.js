@@ -112,3 +112,48 @@ describe('входные данные не меняются', () => {
     expect(opts).toEqual(snapshot)
   })
 })
+
+// internal-voice-fx ТК5: общий список эффектов с заголовками групп. Заголовок —
+// {header: true, disabled: true}; он относится к пунктам, идущим за ним до
+// следующего заголовка. При поиске заголовок остаётся только у групп с совпадениями.
+describe('заголовки групп', () => {
+  const h = (value, label) => ({ value, label, header: true, disabled: true })
+  const opts = [
+    h('#space', 'Пространство'),
+    o('reverb-room', 'Реверб: комната'),
+    o('reverb-hall', 'Реверб: зал'),
+    o('haas', 'Ширина (Хаас)'),
+    h('#pedals', 'Педали'),
+    o('fuzz', 'Фузз'),
+    o('spring', 'Пружинный ревербератор'),
+    h('#lofi', 'Лоуфай'),
+    o('tape', 'Кассета'),
+  ]
+
+  it('запрос «реверб» — заголовки групп с совпадениями и сами реверберации', () => {
+    expect(values(matchOptions(opts, 'реверб'))).toEqual([
+      '#space', 'reverb-room', 'reverb-hall', '#pedals', 'spring',
+    ])
+  })
+
+  it('заголовков групп без совпадений нет', () => {
+    expect(values(matchOptions(opts, 'кассета'))).toEqual(['#lofi', 'tape'])
+    expect(values(matchOptions(opts, 'зал'))).toEqual(['#space', 'reverb-hall'])
+  })
+
+  it('ничего не нашлось — ни одного заголовка', () => {
+    expect(matchOptions(opts, 'джаз')).toEqual([])
+  })
+
+  it('пустой запрос — все пункты, заголовки на месте', () => {
+    const res = matchOptions(opts, '')
+    expect(values(res)).toEqual(values(opts))
+    expect(res.filter(x => x.header).every(x => x.disabled)).toBe(true)
+  })
+
+  it('заголовок возвращается тем же объектом, что во входе', () => {
+    const res = matchOptions(opts, 'фузз')
+    expect(res[0]).toBe(opts[4])
+    expect(values(res)).toEqual(['#pedals', 'fuzz'])
+  })
+})

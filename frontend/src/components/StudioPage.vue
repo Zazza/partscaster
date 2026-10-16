@@ -16,7 +16,7 @@ import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
 import { isFlat, bumpRange } from '../envelope.js'
 import { ONE_CLICK_LEVELS, oneClickParams } from '../oneClick.js'
-import { chainDefaults, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
+import { chainDefaults, chainGroupOptions, firstSungSec, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
@@ -35,6 +35,7 @@ import StudioSynth from './StudioSynth.vue'
 import StudioPerc from './StudioPerc.vue'
 import StudioMaster from './StudioMaster.vue'
 import StudioVoice from './StudioVoice.vue'
+import StudioVoiceFx from './StudioVoiceFx.vue'
 import PlaceControls from './PlaceControls.vue'
 
 // стиль импортированного трека — должен совпадать с IMPORT_STYLE в worker/yue_worker.py
@@ -48,6 +49,8 @@ const inserts = useInserts()
 const revoice = useRevoice()
 
 const rollData = ref(null)     // parsed score
+// начало первого спетого такта: превью обработки голоса без выделения — оттуда, а не со вступления
+const sungAt = computed(() => firstSungSec(rollData.value && rollData.value.bars))
 // студия открыта: партитура разобрана — или её нет вовсе (импорт без транскрипции): тогда без ролла и приёмов
 // по тактам, но волна, дорожки, звук и готово работают
 const studioReady = computed(() => !!rollData.value || (!abcFile.value && !rollBusy.value))
@@ -233,7 +236,8 @@ onMounted(async () => {
     const st = JSON.parse(localStorage.getItem('yue_studio_state') || '{}')
     const per = st.jobs && st.jobs[props.job.id] || {}
     if (per.stemMute) stemMute.value = per.stemMute
-    if (per.dspSel) dspSel.value = per.dspSel
+    // примочки только на голос в общем списке больше нет (они в шаге «Голос») — такой выбор не восстанавливаем
+    if (per.dspSel && !dspChains.value.some((c) => c.id === per.dspSel && c.voice)) dspSel.value = per.dspSel
     if (per.dspParams) dspParams.value = per.dspParams
     // trickV=2 — времена меток по per-voice таймлайну; всё, что сохранено
     // до него (раздутая вдвое шкала), молча выбрасываем как неверное
@@ -1820,8 +1824,9 @@ function setWindowTitle() {
             <summary class="studio-box-head"><span>{{ t('studio.dsp') }}</span> <span class="muted studio-box-hint">{{ t('studio.dsp.sub') }}</span></summary>
             <div class="studio-box-body">
             <div class="dsp-row">
-              <VSelect :model-value="dspSel" :options="dspChains.map((c) => ({ value: c.id, label: c.name }))"
-                       :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
+              <!-- по группам документации; примочки только на голос — в шаге «Голос» -->
+              <VSelect :model-value="dspSel" :options="chainGroupOptions(dspChains, (g) => t('studio.dsp.group.' + g))"
+                       searchable :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
                        @update:model-value="(v) => selChain(v)" />
               <VSelect :model-value="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px"
                        @update:model-value="selectTarget" />
@@ -1873,6 +1878,8 @@ function setWindowTitle() {
 
           <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
           <StudioVoice :job="job" :abc-file="abcFile" @built="(id) => inserts.carryTo(job.id, id, job.id)" />
+          <StudioVoiceFx :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :sung-at="sungAt"
+                         @applied="reloadVariants" />
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <div ref="masterBox" class="studio-box">

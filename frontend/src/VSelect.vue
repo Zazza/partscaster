@@ -11,7 +11,7 @@ import { useI18n } from './i18n/index.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  options: { type: Array, default: () => [] },        // [{value, label, disabled, icon?}] — icon: имя из icons.js
+  options: { type: Array, default: () => [] },        // [{value, label, disabled, icon?, header?}] — icon: имя из icons.js; header — заголовок группы (не выбирается)
   placeholder: { type: String, default: '' },   // пусто — «— выберите —» на языке интерфейса
   disabled: { type: Boolean, default: false },
   // длинные списки (песни): поле поиска сверху, пункты фильтруются по словам
@@ -133,7 +133,7 @@ onUnmounted(() => {
           <input ref="search" v-model="query" @keydown="onSearchKey" />
         </li>
         <li v-if="searchable && !shown.length" class="off">—</li>
-        <li v-for="o in shown" :key="o.value" :class="{ sel: String(o.value) === String(modelValue), off: o.disabled }" :title="o.title"
+        <li v-for="o in shown" :key="o.value" :class="{ sel: String(o.value) === String(modelValue), off: o.disabled && !o.header, 'vselect-group': o.header }" :title="o.title"
             @mousedown.prevent="pick(o)" @click="pick(o)"><template v-if="o.icon"><AppIcon :name="o.icon" /> </template>{{ o.label }}</li>
       </ul>
     </Teleport>
@@ -161,6 +161,9 @@ onUnmounted(() => {
 .vselect-drop li:hover { background: var(--panel2); }
 .vselect-drop li.sel { color: var(--accent); font-weight: 600; }
 .vselect-drop li.off { opacity: .5; cursor: default; }
+.vselect-drop li.vselect-group { cursor: default; color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; padding-top: 8px; }
+.vselect-drop li.vselect-group:hover { background: none; }
 .vselect-drop li.vselect-search { position: sticky; top: -4px; padding: 4px 6px; background: var(--panel); cursor: default;
   display: flex; align-items: center; gap: 6px; }
 .vselect-search-ico { color: var(--muted); }

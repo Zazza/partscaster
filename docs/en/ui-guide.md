@@ -392,7 +392,9 @@ sound and effects", "▶ after / ▶ part alone / ▶ before", "into track". Sev
 **Quick effects (ffmpeg)** — a different tool: an effect on the whole track or a stretch, preview in place. It is
 easier to change the sound of a single stem in the "Stems" desk. Two collapsed blocks:
 
-- **Audio effects** — 50+ effects. "effects chain…" → "what to apply to" (whole track, vocals, drums, bass,
+- **Audio effects** — effects in groups ("Space", "Pedals", "Modulation", "Filters and tone", "Loudness and
+  dynamics", "Tempo, pitch and glitch", "Tape, dirt and lo-fi"), the list has a search by name; vocal effects
+  are in the ["4 Voice"](#4-voice) step. "effects chain…" → "what to apply to" (whole track, vocals, drums, bass,
   guitars/synths, and with detailed separation — guitar, keys, kick, snare, toms, hi-hat, ride, crash) → knobs →
   "apply". On a stem the effect applies only in the selected spot (no selection — to the whole stem) and
   accumulates in "Track edits"; on the whole track — a new variant in "Done". "preview spot" — the effect on the
@@ -424,6 +426,13 @@ track, so listen to a piece before the full render.
 - **"resing the whole track"** — a new whole version in the shared generation queue: "<track> · voice <name>",
   shown in the track list under this track. The track's inserts carry over to it, as with a rebuild.
 - For a track without lyrics or without a score the step explains why the render is unavailable.
+
+**Voice processing** — effects on the vocal stem as buttons: megaphone, telephone, vocal overdrive, slapback, and
+the general effects that suit a voice ("Soften ringing" (Смягчить звон), three reverbs, doubling, transpose,
+octaver; they are in "Audio effects" too). Pressing an effect plays a piece with it right away: the selection, or
+without one, from the first sung place. Then: "listen again" (with new knobs), "▶ after ⇄ / ▶ before ⇄" from the
+same second, "voice only", the knobs, **"apply"** — the effect on the voice in the selected piece (the whole track
+without a selection), collected in "Track edits", the new version in "Done".
 
 ### 5 Done
 

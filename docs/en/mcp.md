@@ -170,7 +170,7 @@ What each chain does — [effects.md](effects.md).
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `dsp_chains` | — | Effect chains, their knobs and ranges. `voice=true` — voice effects (megaphone, telephone, drive, slapback); chains with `key` (`ducking`, `key=drums`) — only on a stem |
+| `dsp_chains` | — | Effect chains, their knobs and ranges. `group` — group (as the effects.md sections: space, pedals, modulation, filter, dynamics, time, lofi, voice); `voice=true` — voice effects (megaphone, telephone, drive, slapback); `for_voice=true` — a general effect that also suits a voice; chains with `key` (`ducking`, `key=drums`) — only on a stem |
 | `dsp_presets` | — | Ready pedal sets: `steps` for preview and applying |
 | `dsp_apply` | **job_id**, chain, params, steps, stem, from, to, db | Apply a chain (`chain` + `params`) or pedals in order (`steps`). Without `stem` — a variant for the whole track (pedals — `dsp-pedals.flac`); with `stem` — only this stem in the window `from`–`to` through a rebuild, `db` — on top of the leveling. For voice chains the volume is leveled to the source; reverb and delay sound as a tail after `to` |
 | `dsp_preview` | **job_id**, chain, params, steps, stem, solo, from, to | Listen to an effect on a part (default 20–35 s + a tail up to 3 s) → variant `dsp-preview-*.flac`; `solo` — only the processed stem |

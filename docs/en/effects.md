@@ -245,7 +245,8 @@ trick, it goes into a window (a transition, a bridge).
 
 ### Vocal effects
 
-They are marked as vocal: the "vocals" stem is picked automatically. The volume of the processed voice is matched to
+In the studio they live in the "4 Voice" step → "Voice processing" (not in the general effects list), next to
+the general effects that suit a voice (`for_voice`). MCP and the API offer them as before. They are marked as vocal: the "vocals" stem is picked automatically. The volume of the processed voice is matched to
 the original (the overdrive does not break the mix), "dry/processed" (сухой/обработанный) is the effect share.
 
 | Effect | What it does | Main knobs |
