@@ -25,7 +25,6 @@ import PlayerBar from './components/PlayerBar.vue'
 import SideBar from './components/SideBar.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import MyStylesModal from './components/MyStylesModal.vue'
-import CorpusPage from './components/CorpusPage.vue'
 import VoicesPage from './components/VoicesPage.vue'
 import InstrumentsPage from './components/InstrumentsPage.vue'
 import PresetsPage from './components/PresetsPage.vue'
@@ -611,7 +610,6 @@ const sectionFlag = (name) => computed({
   },
 })
 const settingsPage = sectionFlag('settings')
-const corpusPage = sectionFlag('corpus')
 const voicesPage = sectionFlag('voices')
 const instrumentsPage = sectionFlag('instruments')   // «Инструменты»: дорожка через цепочку звукового движка
 const presetsPage = sectionFlag('presets')           // «Пресеты звука»: библиотека пресетов
@@ -669,47 +667,24 @@ async function openFromQueue(id) {
   studioJob.value = j
 }
 
+// «Импорт трека» в списке треков: файл → воркер (транскрипция) → трек открывается в студии
+const importBusy = ref(false)
+async function importTrack() {
+  importBusy.value = true
+  try {
+    const r = await api.importTrack()
+    if (r && r.id) await onImported(r)
+  } catch (e) { alert(String(e)) } finally { importBusy.value = false }
+}
+
 async function onImported(r) {
   await refresh()
   const j = (jobs.value || []).find((x) => x.id === r.id)
   if (j) studioJob.value = j
   if (r.transcribe_error) {
-    planErr.value = 'Трек импортирован, но транскрипция не удалась (не хватило памяти GPU — модель занята). ' +
-      'Стемы, минус и эффекты работают; ролл и овердаб появятся, когда GPU освободится — импортируйте трек заново.'
+    planErr.value = t('track.import.err')
     planOpen.value = true
   }
-}
-
-// стиль из профиля корпуса → своя группа «Из корпусов» (создаётся при первом разе)
-function profileStyleToLibrary({ corpus, profile }) {
-  const gid = 'c-corpus'
-  if (!customGroups.value.find((g) => g.id === gid)) {
-    customGroups.value = [...customGroups.value, { id: gid, name: 'Из корпусов', items: [] }]
-  }
-  const g = customGroups.value.find((x) => x.id === gid)
-  const name = (corpus.name || 'профиль').trim()
-  const dup = g.items.find((i) => i.name === name)
-  const item = { id: dup ? dup.id : 'c-' + Date.now().toString(36), name, style: profile.style || '', bpm: profile.tempo_median || null }
-  g.items = dup ? g.items.map((i) => (i.name === name ? item : i)) : [...g.items, item]
-  saveCustomGroups(customGroups.value)
-  libGroup.value = gid
-  libStyle.value = item.id
-  corpusPage.value = false
-  myStylesOpen.value = true
-}
-
-function applyProfileStyle(style) {
-  styleOverride.value = style
-  openNewTrack()   // применяем — к форме нового трека
-}
-
-// голос из примерочной → форма: дескриптор в слот вокала + seed карточки
-// (точная строка стиля очищается, иначе она перекрыла бы слоты)
-function applyVoice({ vocals, seed }) {
-  slots.value.vocals = vocals
-  styleOverride.value = ''
-  seed.value = seed || null
-  openNewTrack()
 }
 
 // сохранённые голоса прямо в форме: выбор карточки = слот вокала + seed
@@ -725,10 +700,12 @@ const voiceOptions = computed(() => voiceCards.value.map((v) => ({ value: String
 function onVoicePick() {
   const v = voiceCards.value.find((x) => String(x.id) === voicePick.value)
   if (!v) return
-  try {
-    const p = normalizeVoiceParams(JSON.parse(v.params || '{}'))
-    applyVoice({ vocals: voiceDescriptor(p), seed: v.seed })
-  } catch { /* битые params карточки — молча пропускаем */ }
+  let p
+  try { p = normalizeVoiceParams(JSON.parse(v.params || '{}')) } catch { return } // битые params карточки — без голоса
+  // дескриптор — в слот вокала, seed карточки — в форму (точная строка стиля очищается, иначе перекрыла бы слоты)
+  slots.value.vocals = voiceDescriptor(p)
+  styleOverride.value = ''
+  seed.value = v.seed || null
 }
 
 const planOpen = ref(false)
@@ -1074,16 +1051,9 @@ function onWindowClick(e) {
     <SettingsPage v-if="section === 'settings'" v-model:server-url="serverURL"
                   @close="settingsPage = false" @saved="refresh(); loadEngine()" />
     <VoicesPage v-if="section === 'voices'"
-                @close="voicesPage = false; loadVoiceCards()"
-                @apply-voice="applyVoice" />
+                @close="voicesPage = false; loadVoiceCards()" />
     <InstrumentsPage v-if="section === 'instruments'" @close="instrumentsPage = false; refresh()" />
     <PresetsPage v-if="section === 'presets'" @close="presetsPage = false; loadPresetNames()" />
-    <CorpusPage v-if="section === 'corpus'"
-                @close="section = ''"
-                @imported="onImported"
-                @apply-style="applyProfileStyle"
-                @apply-abc="(abc) => setPlanAbc(abc, { seed: null, seconds: null, truncated: false, fromProfile: true })"
-                @style-to-library="profileStyleToLibrary" />
   </div>
   <StudioPage v-else-if="studioJob" :job="studioJob" :auto-translate="autoTranslate"
               @close="studioJob = null; refresh()"
@@ -1102,7 +1072,9 @@ function onWindowClick(e) {
         </template>
       </div>
       <p v-if="!jobs.length" class="muted">{{ t('common.empty') }}
-        <button class="primary" @click="openNewTrack"><AppIcon name="plus" /> {{ t('nav.new') }}</button></p>
+        <button class="primary" @click="openNewTrack"><AppIcon name="plus" /> {{ t('nav.new') }}</button>
+        <button class="ghost" :disabled="importBusy" :title="t('track.import.tip')" @click="importTrack">
+          {{ importBusy ? t('track.import.busy') : t('track.import.btn') }}</button></p>
       <template v-else>
         <div class="queue-tools">
           <VSelect v-model="qf.status" :options="qStatusOptions" />
@@ -1113,6 +1085,8 @@ function onWindowClick(e) {
           <input v-model="qf.q" :placeholder="t('queue.filter.search')" />
           <button class="ghost small-btn" :title="t('recipe.importMenu.tip')" @click="recipeImport = true">
             <AppIcon name="folder" /> {{ t('recipe.importMenu.btn') }}</button>
+          <button class="ghost small-btn" :disabled="importBusy" :title="t('track.import.tip')" @click="importTrack">
+            <AppIcon name="plus" /> {{ importBusy ? t('track.import.busy') : t('track.import.btn') }}</button>
         </div>
         <p class="muted">{{ filteredJobs.length
           ? t('queue.filter.shown', { shown: queuePage.length, total: filteredJobs.length })
@@ -1884,16 +1858,11 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .corpus-new { display: flex; gap: 8px; }
 .corpus-new input { flex: 1; }
 .corpus-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding: 8px 0 4px; margin-top: 8px; font-size: 13px; }
-.corpus-profile { width: 100%; font-size: 12px; }
-.corpus-profile p { margin: 4px 0; }
 .corpus-actions { display: flex; gap: 8px; }
 .voice-hint { font-size: 12px; margin: 6px 0 0; }
 .voice-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; font-size: 12px; }
 .voice-preview { font-size: 12px; margin: 6px 0 0; word-break: break-word; }
 .voice-card-desc { flex: 1 1 240px; min-width: 0; word-break: break-word; font-size: 12px; }
-.corpus-tracks { width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.corpus-track { font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
-.corpus-track .track-lyrics { width: 100%; margin: 0; color: var(--muted); font-style: italic; opacity: .8; }
 
 /* контейнер секций студии.
    min-width: 0 — иначе минимальная ширина ролл-сетки (сотни тактов) растягивает
@@ -1934,7 +1903,6 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 [data-theme="light"] .studio-steps .on { color: var(--accent); border-color: var(--accent); }
 .studio-step { margin: 22px 2px 8px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; scroll-margin-top: 56px; }
 .studio-step .muted { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 400; }
-.corpus-list { max-width: none; }
 /* секции студии (звук/план/правки/вклейки/стемы/овердаб/эффекты) — рамка
    со шапкой с фоном, как заголовок карточки трека */
 .studio-box {

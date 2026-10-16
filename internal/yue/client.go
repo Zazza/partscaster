@@ -18,7 +18,7 @@ import (
 
 const (
 	requestTimeout = 30 * time.Second
-	// Заголовки тяжёлых запросов (corpus/track: DSP+SheetSage2+Whisper,
+	// Заголовки тяжёлых запросов (импорт трека: SheetSage2,
 	// стриминг аудио) могут идти минутами — транспорт ждёт дольше,
 	// короткие GET всё равно ограничены контекстом requestTimeout.
 	headerTimeout = 15 * time.Minute

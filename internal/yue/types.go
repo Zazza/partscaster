@@ -74,12 +74,6 @@ type Service interface {
 	TranscribeJob(ctx context.Context, id int64) (map[string]any, error)
 	EnsureMp3(ctx context.Context, id int64) (map[string]any, error)
 	JobStems(ctx context.Context, id int64) ([]map[string]any, error)
-	CorpusCreate(ctx context.Context, name string) (int64, error)
-	CorpusAddTrack(ctx context.Context, id int64, name string, data []byte) (map[string]any, error)
-	CorpusBuild(ctx context.Context, id int64) (map[string]any, error)
-	CorpusList(ctx context.Context) ([]Corpus, error)
-	CorpusGet(ctx context.Context, id int64) (map[string]any, error)
-	CorpusTracks(ctx context.Context, id int64) ([]map[string]any, error)
 	VoiceCreate(ctx context.Context, name string, jobID int64, params string, seed int64) (int64, error)
 	Voices(ctx context.Context) ([]Voice, error)
 	VoiceDelete(ctx context.Context, id int64) (bool, error)
@@ -387,15 +381,6 @@ type TranscribeResult struct {
 	Seconds  float64        `json:"seconds"`
 	Warnings []string       `json:"warnings"`
 	Stats    map[string]any `json:"stats"`
-}
-
-type Corpus struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	CreatedAt  string `json:"created_at"`
-	Tracks     int    `json:"tracks"`
-	HasProfile bool   `json:"has_profile"`
 }
 
 // Voice — карточка голоса примерочной: ручки (params, JSON-строка) + seed

@@ -56,10 +56,9 @@ DATA_DIR = Path(os.environ.get("PARTSCASTER_DATA_DIR", Path.home() / "partscaste
 JOBS_DIR = DATA_DIR / "jobs"
 REFS_DIR = DATA_DIR / "references"
 TRANSCRIBES_DIR = DATA_DIR / "transcribes"
-CORPUS_DIR = DATA_DIR / "corpus"
 VOICES_DIR = DATA_DIR / "voices"
 DB_PATH = DATA_DIR / "yue.db"
-for d in (JOBS_DIR, REFS_DIR, TRANSCRIBES_DIR, CORPUS_DIR, VOICES_DIR):
+for d in (JOBS_DIR, REFS_DIR, TRANSCRIBES_DIR, VOICES_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 WHISPER_PY = Path(os.environ.get("PARTSCASTER_WHISPER_PY", Path.home() / "whisper-venv" / "bin" / "python"))
@@ -196,6 +195,18 @@ def db() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _drop_corpus_dir():
+    """Каталог профилей исполнителей прежних версий (<данные>/corpus: загруженные треки, profile.json) —
+    удаляется один раз."""
+    d = DATA_DIR / "corpus"
+    if d.is_dir() or d.is_symlink():
+        try:
+            d.unlink() if d.is_symlink() else shutil.rmtree(d)
+            log.info("профили исполнителей удалены: каталог %s", d)
+        except OSError as e:  # нет прав и т. п. — воркер всё равно стартует, каталог просто лежит
+            log.warning("каталог профилей %s не удалён: %s", d, e)
+
+
 def init_db():
     with db_lock, db() as conn:
         conn.executescript("""
@@ -220,6 +231,7 @@ def init_db():
 
 
 def _migrate():
+    _drop_corpus_dir()
     with db_lock, db() as conn:
         cols = [r[1] for r in conn.execute("PRAGMA table_info(jobs)")]
         if "mp3_file" not in cols:
@@ -269,14 +281,10 @@ def _migrate():
             conn.execute("ALTER TABLE jobs ADD COLUMN temperature REAL DEFAULT 0")
         if "cfg" not in cols:
             conn.execute("ALTER TABLE jobs ADD COLUMN cfg REAL DEFAULT 0")
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS corpus (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'open',
-            created_at TEXT NOT NULL
-        );
-        """)
+        # профили исполнителей (корпусы) удалены из продукта: таблица прежних версий уходит один раз
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='corpus'").fetchone():
+            conn.execute("DROP TABLE corpus")
+            log.info("профили исполнителей удалены: таблица corpus")
         # пресеты звука у трека: [{id, status, child_id, error}] — что применить после готовности
         if "sound_presets" not in cols:
             conn.execute("ALTER TABLE jobs ADD COLUMN sound_presets TEXT DEFAULT ''")
@@ -3151,201 +3159,6 @@ def job_stems_list(job_id: int):
                     "created_at": time.strftime("%Y-%m-%dT%H:%M:%S",
                                                 time.localtime(f.stat().st_mtime)),
                     "metrics": json.loads(mp.read_text()) if mp.is_file() else None})
-    return out
-
-
-class CorpusIn(BaseModel):
-    name: str
-
-
-def _corpus_dir(cid: int) -> Path:
-    return CORPUS_DIR / str(cid)
-
-
-@app.post("/corpus")
-def corpus_create(req: CorpusIn):
-    if not req.name.strip():
-        raise HTTPException(422, "name is required")
-    with db_lock, db() as conn:
-        cur = conn.execute("INSERT INTO corpus(name,status,created_at) VALUES(?,?,?)",
-                           (req.name.strip(), "open", time.strftime("%Y-%m-%dT%H:%M:%S")))
-        cid = cur.lastrowid
-    _corpus_dir(cid).mkdir(parents=True, exist_ok=True)
-    return {"id": cid}
-
-
-@app.post("/corpus/{cid}/track")
-async def corpus_add_track(cid: int, request: Request):
-    """Трек корпуса (байты): DSP-паспорт + транскрипция SheetSage2 + текст Whisper.
-    Обрабатывается синхронно — минута-другая на трек."""
-    fname = re.sub(r"[^A-Za-z0-9_.-]", "_", request.headers.get("x-filename", "")) or "track.flac"
-    with db_lock, db() as conn:
-        if conn.execute("SELECT 1 FROM corpus WHERE id=?", (cid,)).fetchone() is None:
-            raise HTTPException(404, "corpus not found")
-    data = await request.body()
-    if not data:
-        raise HTTPException(422, "empty body")
-    tdir = _corpus_dir(cid) / "tracks"
-    tdir.mkdir(parents=True, exist_ok=True)
-    n = len(list(tdir.glob("track-*")))
-    track_dir = tdir / f"track-{n:02d}-{fname}"
-    track_dir.mkdir(parents=True, exist_ok=True)
-    src = track_dir / fname
-    src.write_bytes(data)
-    info: dict = {"filename": fname, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
-    try:
-        info["metrics"] = analyze_file(src)
-    except Exception as e:  # noqa: BLE001
-        info["metrics_error"] = str(e)
-    try:
-        t = await run_in_threadpool(_ss_transcribe_queued, src, track_dir / "ss2")
-        info["abc"] = t["abc"]
-        info["stats"] = t["stats"]
-    except Exception as e:  # noqa: BLE001
-        info["abc_error"] = str(e)
-        if _canceled_here(e):  # трек корпуса уже на диске; отменили — и слова не распознаём
-            info["abc_error"] = info["lyrics_error"] = opqueue.CANCELED_TEXT
-            info["lyrics"] = ""
-            (track_dir / "info.json").write_text(json.dumps(info, ensure_ascii=False))
-            return info
-    try:
-        lyrics_text, lyrics_err = await run_in_threadpool(_whisper_lyrics, src)
-    except HTTPException as e:
-        if not _canceled_here(e):
-            raise
-        lyrics_text, lyrics_err = "", opqueue.CANCELED_TEXT  # трек корпуса и его ноты уже на диске
-    info["lyrics"] = lyrics_text
-    info["lyrics_error"] = lyrics_err
-    (track_dir / "info.json").write_text(json.dumps(info, ensure_ascii=False))
-    return info
-
-
-@app.post("/corpus/{cid}/build")
-def corpus_build(cid: int):
-    """Агрегация треков в профиль: темп/тональности/прогрессии/структура,
-    усреднённый DSP-паспорт, ABC-шаблон, стилевое описание (Ollama)."""
-    cdir = _corpus_dir(cid)
-    tracks = []
-    for ip in sorted((cdir / "tracks").glob("*/info.json")) if (cdir / "tracks").is_dir() else []:
-        try:
-            tracks.append(json.loads(ip.read_text()))
-        except Exception:  # noqa: BLE001
-            continue
-    if not tracks:
-        raise HTTPException(422, "no analyzed tracks: add at least one")
-
-    import numpy as np
-    tempos = [t["metrics"]["tempo_bpm"] for t in tracks if t.get("metrics")]
-    keys: dict[str, float] = {}
-    chords: dict[str, int] = {}
-    progs: dict[str, int] = {}
-    structures: list[str] = []
-    for t in tracks:
-        st = t.get("stats") or {}
-        for k, v in (st.get("keys") or {}).items():
-            keys[k] = keys.get(k, 0.0) + v
-        for c, v in (st.get("top_chords") or {}).items():
-            chords[c] = chords.get(c, 0) + v
-        for p, v in (st.get("top_progressions") or {}).items():
-            progs[p] = progs.get(p, 0) + v
-        structures.append(" → ".join(st.get("structure") or []))
-    passport: dict[str, float] = {}
-    for t in tracks:
-        for k, v in (t.get("metrics") or {}).items():
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                passport.setdefault(k, []).append(float(v))
-    passport = {k: round(float(np.median(v)), 2) for k, v in passport.items() if len(v) >= max(1, len(tracks) // 2)}
-    # ABC-шаблон: транскрипция трека, ближайшего к медианному темпу
-    tpl_i = min(range(len(tracks)),
-                key=lambda i: abs(tracks[i]["metrics"]["tempo_bpm"] - float(np.median(tempos)))
-                ) if tempos else 0
-    profile = {
-        "id": cid,
-        "tracks": len(tracks),
-        "tempo_median": round(float(np.median(tempos)), 1) if tempos else None,
-        "tempo_range": [round(min(tempos), 1), round(max(tempos), 1)] if tempos else None,
-        "keys": dict(sorted(keys.items(), key=lambda kv: -kv[1])[:5]),
-        "top_chords": dict(sorted(chords.items(), key=lambda kv: -kv[1])[:10]),
-        "top_progressions": dict(sorted(progs.items(), key=lambda kv: -kv[1])[:10]),
-        "structures": structures,
-        "dsp_passport": passport,
-        "abc_template": tracks[tpl_i].get("abc", ""),
-        "lyrics_samples": [t.get("lyrics", "")[:600] for t in tracks if t.get("lyrics")],
-    }
-    profile["style"] = _corpus_style(profile)
-    (cdir / "profile.json").write_text(json.dumps(profile, ensure_ascii=False))
-    with db_lock, db() as conn:
-        conn.execute("UPDATE corpus SET status='done' WHERE id=?", (cid,))
-    return profile
-
-
-def _corpus_style(profile: dict) -> str:
-    """Стилевая строка профиля через Ollama-копайтера (qwen2.5)."""
-    facts = json.dumps({k: profile[k] for k in
-                        ("tempo_median", "keys", "top_chords", "top_progressions",
-                         "dsp_passport")}, ensure_ascii=False, default=str)
-    system = ("Ты — звукорежиссёр и продюсер. По статистике корпуса треков одного "
-              "исполнителя составь ОДНУ строку описания стиля для генератора музыки "
-              "(жанр, инструментовка, характер звука, продакшн). В ответе — только "
-              "эта строка, без пояснений, на английском, как тег-строка.")
-    try:
-        return llm.strip_md(llm.ollama_chat(OLLAMA_URL, OLLAMA_MODEL, system,
-                                            f"Статистика корпуса:\n{facts}",
-                                            temperature=0.4))
-    except Exception as e:  # noqa: BLE001
-        log.warning("corpus style via ollama failed: %s", e)
-        return ""
-
-
-@app.get("/corpus")
-def corpus_list():
-    with db_lock, db() as conn:
-        rows = conn.execute("SELECT * FROM corpus ORDER BY id DESC").fetchall()
-    out = []
-    for r in rows:
-        item = {k: r[k] for k in r.keys()}
-        p = _corpus_dir(r["id"]) / "profile.json"
-        item["has_profile"] = p.is_file()
-        tdir = _corpus_dir(r["id"]) / "tracks"
-        item["tracks"] = len(list(tdir.glob("track-*"))) if tdir.is_dir() else 0
-        out.append(item)
-    return out
-
-
-@app.get("/corpus/{cid}")
-def corpus_get(cid: int):
-    p = _corpus_dir(cid) / "profile.json"
-    if not p.is_file():
-        raise HTTPException(404, "profile not built yet")
-    return json.loads(p.read_text())
-
-
-@app.get("/corpus/{cid}/tracks")
-def corpus_tracks(cid: int):
-    """Разбор по трекам корпуса: что увидели в каждом (темп, тональность,
-    аккорды, фрагмент текста, ошибки)."""
-    tdir = _corpus_dir(cid) / "tracks"
-    out = []
-    if not tdir.is_dir():
-        return out
-    for ip in sorted(tdir.glob("track-*/info.json")):
-        try:
-            info = json.loads(ip.read_text())
-        except Exception:  # noqa: BLE001
-            continue
-        m = info.get("metrics") or {}
-        st = info.get("stats") or {}
-        out.append({
-            "filename": info.get("filename"),
-            "created_at": info.get("created_at"),
-            "tempo_bpm": m.get("tempo_bpm"),
-            "key": next(iter(st.get("keys") or {}), None),
-            "top_chords": list(st.get("top_chords") or {})[:6],
-            "structure": st.get("structure") or [],
-            "lyrics_head": (info.get("lyrics") or "")[:200],
-            "abc_error": info.get("abc_error"),
-            "lyrics_error": bool(info.get("lyrics_error")),
-        })
     return out
 
 

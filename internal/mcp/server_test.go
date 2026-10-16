@@ -459,12 +459,42 @@ func TestProtocolHandshakeAndToolsList(t *testing.T) {
 		"analyze_job", "make_stems", "make_minus", "overdub", "import_track", "transcribe_job",
 		"job_peaks", "job_spectrum",
 		"variant_track", "dsp_variant_delete",
-		"corpus_list", "corpus_create", "corpus_add_tracks", "corpus_build", "corpus_get",
 		"voices_list", "voice_create", "voice_delete",
 		"styles", "slot_options", "doctor", "install_worker", "install_app",
 	} {
 		if !have[want] {
 			t.Fatalf("tool %q не зарегистрирован", want)
+		}
+	}
+}
+
+// spec internal-drop-corpus: профили исполнителей удалены со всех слоёв —
+// в tools/list нет ни одного инструмента corpus_*.
+func TestToolsListHasNoCorpusTools(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestServer(t)
+	lines := rpcRoundTrip(t, s, []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+	})
+	if len(lines) != 1 {
+		t.Fatalf("responses: %d", len(lines))
+	}
+	var list struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Result.Tools) == 0 {
+		t.Fatal("tools/list пуст")
+	}
+	for _, tl := range list.Result.Tools {
+		if strings.HasPrefix(tl.Name, "corpus_") {
+			t.Errorf("инструмент профилей %q всё ещё зарегистрирован", tl.Name)
 		}
 	}
 }

@@ -8,7 +8,7 @@ defineProps({
   open: Boolean,
   busy: Boolean,
   err: String,
-  info: Object, // {seed, seconds, truncated, fromJob, fromTrack, fromProfile}
+  info: Object, // {seed, seconds, truncated, fromJob, fromTrack}
 })
 const emit = defineEmits(['close', 'use', 'new-plan', 'from-track'])
 const abc = defineModel('abc', { type: String, default: '' })

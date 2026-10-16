@@ -16,7 +16,7 @@ import {
   auditionStyle, auditionJob, needsTranslate,
 } from '../voiceLab.js'
 
-const emit = defineEmits(['close', 'apply-voice'])
+const emit = defineEmits(['close'])
 const { askConfirm } = useConfirm()
 const { toggleArtifact, playBtn } = usePlayer()
 
@@ -122,10 +122,6 @@ function reaudition(v) {
   params.value = cardParams(v)
   seedInput.value = String(v.seed || '')
   runAudition()
-}
-
-function toForm(v) {
-  emit('apply-voice', { vocals: cardDescriptor(v), seed: v.seed })
 }
 
 function del(v) {
@@ -246,7 +242,6 @@ function cleanProbes() {
         <button v-if="v.job_alive" class="ghost small-btn" @click="cardPlay(v)">{{ playBtn('v' + v.id) }}</button>
         <span v-else class="muted">{{ t('voicelab.card.sourceGone') }}</span>
         <button class="ghost small-btn" @click="reaudition(v)"><AppIcon name="repeat" /> {{ t('voicelab.card.reaudition') }}</button>
-        <button class="primary small" @click="toForm(v)">{{ t('voicelab.card.toForm') }}</button>
         <button class="ghost small-btn" @click="del(v)"><AppIcon name="x" /></button>
       </div>
       <p v-if="!voices.length" class="muted">{{ t('voicelab.empty') }}</p>

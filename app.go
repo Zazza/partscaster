@@ -698,56 +698,6 @@ func (a *App) YueJobStems(id int64) ([]map[string]any, error) {
 	return a.yue.JobStems(a.ctx, id)
 }
 
-func (a *App) YueCorpusCreate(name string) (int64, error) {
-	return a.yue.CorpusCreate(a.ctx, name)
-}
-
-// YueCorpusAddTracks — диалог выбора треков корпуса (по одному обрабатываются
-// на воркере: DSP + SheetSage2 + Whisper). Возвращает число загруженных.
-func (a *App) YueCorpusAddTracks(id int64) (int, error) {
-	srcs, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:   "Треки корпуса (3–10 одного исполнителя/периода)",
-		Filters: audioFileFilter,
-	})
-	if err != nil {
-		return 0, err
-	}
-	loaded := 0
-	var lastErr error
-	for _, src := range srcs {
-		data, err := os.ReadFile(src)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if _, err := a.yue.CorpusAddTrack(a.ctx, id, filepath.Base(src), data); err != nil {
-			lastErr = err
-			continue
-		}
-		loaded++
-	}
-	if loaded == 0 && lastErr != nil {
-		return 0, lastErr
-	}
-	return loaded, nil
-}
-
-func (a *App) YueCorpusBuild(id int64) (map[string]any, error) {
-	return a.yue.CorpusBuild(a.ctx, id)
-}
-
-func (a *App) YueCorpusList() ([]yue.Corpus, error) {
-	return a.yue.CorpusList(a.ctx)
-}
-
-func (a *App) YueCorpusGet(id int64) (map[string]any, error) {
-	return a.yue.CorpusGet(a.ctx, id)
-}
-
-func (a *App) YueCorpusTracks(id int64) ([]map[string]any, error) {
-	return a.yue.CorpusTracks(a.ctx, id)
-}
-
 // YueVoiceCreate — сохранить карточку голоса из джобы-прослушивания примерочной.
 func (a *App) YueVoiceCreate(name string, jobID int64, params string, seed int64) (int64, error) {
 	return a.yue.VoiceCreate(a.ctx, name, jobID, params, seed)

@@ -74,30 +74,6 @@ export function YueCopilot(arg1) {
   return window['go']['main']['App']['YueCopilot'](arg1);
 }
 
-export function YueCorpusAddTracks(arg1) {
-  return window['go']['main']['App']['YueCorpusAddTracks'](arg1);
-}
-
-export function YueCorpusBuild(arg1) {
-  return window['go']['main']['App']['YueCorpusBuild'](arg1);
-}
-
-export function YueCorpusCreate(arg1) {
-  return window['go']['main']['App']['YueCorpusCreate'](arg1);
-}
-
-export function YueCorpusGet(arg1) {
-  return window['go']['main']['App']['YueCorpusGet'](arg1);
-}
-
-export function YueCorpusList() {
-  return window['go']['main']['App']['YueCorpusList']();
-}
-
-export function YueCorpusTracks(arg1) {
-  return window['go']['main']['App']['YueCorpusTracks'](arg1);
-}
-
 export function YueDeleteJob(arg1) {
   return window['go']['main']['App']['YueDeleteJob'](arg1);
 }
