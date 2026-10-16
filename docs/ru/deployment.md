@@ -84,7 +84,7 @@ MCP-инструмент `install_worker` ставит воркер и необ�
 | Воркер: генерация YuE2, партитура SheetSage2, дорожки demucs | обязательно | ~17,5 ГБ (окружение ~7,4 + веса ~10, качаются при первой генерации) | — |
 | Наборы сэмплов (барабаны, басы, оркестр) | ставятся вместе с воркером | ~1,2 ГБ | докачиваются при первом выборе |
 | RoFormer: более чистое разделение дорожек + барабаны по частям | по желанию | ~7,3 ГБ (окружение 6,1 + веса 1,1) | дорожки делает demucs, частей барабанов нет |
-| whisper: распознавание текстов треков | по желанию | ~3,2 ГБ | кнопки распознавания неактивны с подписью «не установлен» |
+| whisper: что поёт готовый трек — проверка для ИИ-агента (MCP `job_lyrics`) | по желанию | ~3,2 ГБ | `job_lyrics` отвечает ошибкой; в «Настройках» — «не найден» |
 | Seed-VC: «голос альбома» (эксперимент) | по желанию | ~10–11 ГБ после установки, ~14 ГБ во время | блок «Голос альбома» с подписью «не установлен» |
 | NAM: усилители в звуковом движке | по желанию | папка пакетов без torch | недоступен только блок `amp` |
 | yue2.cpp: второй движок | по желанию | модель 2,6–7,2 ГБ + VAE 0,5 ГБ | работает основной движок |
@@ -182,8 +182,6 @@ cd ~/partscaster/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --h
 | `YUE2_MAX_TOKENS` | `16000` | бюджет семантических токенов на песню ≈ максимальная длина (16000 — до ~10 мин; пик видеопамяти растёт с длиной) |
 | `YUE2_CFG_SCALE` | `1.5` | следование стилю (classifier-free guidance): выше — точнее, но суше |
 | `YUE2_BACKEND` | `torch` | режим основного движка: `torch`, `torch-eager` (без CUDA-графов; ставит Windows-воркер), `vllm` |
-| `PARTSCASTER_OLLAMA_URL` | `http://127.0.0.1:11434/api/chat` | Ollama для копайтера стихов, перевода стиля, перевода текста под слоги |
-| `PARTSCASTER_OLLAMA_MODEL` | `qwen2.5-chat-ru:latest` | модель Ollama |
 | `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | интерпретатор окружения whisper |
 | `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | интерпретатор окружения RoFormer |
 | `PARTSCASTER_SEP_MODELS` | `~/sep-models` | веса RoFormer и DrumSep (~1,1 ГБ, качаются при первом разделении) |
@@ -203,9 +201,6 @@ cd ~/partscaster/current && ~/yue/.venv/bin/python -m uvicorn yue_worker:app --h
 | `PARTSCASTER_HOME`, `PARTSCASTER_VENV` | `install.sh` | каталог установки и окружение воркера |
 | `PARTSCASTER_DEPLOY_HOST` | `deploy.sh`, `make worker` | `user@gpu-host` для деплоя |
 | `PARTSCASTER_TORCH_INDEX` | `seedvc_install.sh` | индекс PyTorch для Seed-VC (по умолчанию CUDA 12.8) |
-
-Адрес и модель Ollama можно поменять на лету на странице «Настройки» приложения; это действует до
-перезапуска воркера, потом снова берутся значения из `worker.env`.
 
 ## Необязательные компоненты
 
@@ -233,6 +228,9 @@ uv pip install --python ~/sep-venv/bin/python "audio-separator[gpu]" audioread
   Коммерчески чистый режим — `PARTSCASTER_STEMS_MODEL=demucs` (веса demucs — MIT).
 
 ### whisper — тексты треков
+
+Нужен только ИИ-агенту: MCP `job_lyrics` распознаёт, что поёт готовый трек, — так агент проверяет, спелся
+ли заданный текст. В приложении whisper не используется.
 
 ```bash
 uv venv ~/whisper-venv && uv pip install --python ~/whisper-venv/bin/python faster-whisper
@@ -295,12 +293,6 @@ cd ~/partscaster/current && ~/yue/.venv/bin/python kits_install.py vsco-violin o
 `linn`, `cr78`, `simmons`) и `synthbass` воркер синтезирует сам, без сети. Состав наборов и лицензии —
 в [effects.md](effects.md).
 
-### Ollama
-
-Отдельный сервис на `127.0.0.1:11434`. Не обязателен: без него генерация работает, недоступны копайтер,
-автоперевод стиля и перевод текста под слоги. Модель — `PARTSCASTER_OLLAMA_MODEL` или страница «Настройки»
-(список моделей берётся из Ollama).
-
 ## Второй движок генерации — yue2.cpp (эксперимент)
 
 Меньше видеопамяти — для карт на 8–12 ГБ или видеокарты, которую делят с другими программами. Тот же сид
@@ -361,11 +353,9 @@ wsl --install -d Ubuntu
 ```bash
 HF_HOME=/mnt/<диск>/hf-cache                       # веса не перекачивать
 PARTSCASTER_DATA_DIR=/mnt/<диск>/partscaster-data  # общие треки (или оставьте свои)
-PARTSCASTER_OLLAMA_URL=http://<IP Windows>:11434/api/chat   # Ollama под Windows
 ```
 
-IP Windows из WSL — `ip route show default | awk '{print $3}'`; в WSL с mirrored-сетью подойдёт и
-`127.0.0.1`. В WSL без systemd запускайте командой из раздела «Без systemd».
+В WSL без systemd запускайте командой из раздела «Без systemd».
 
 Приложение на Windows подключается к `http://localhost:8091` (или к IP WSL — `wsl hostname -I`).
 Если данные общие, не запускайте воркеры обоих бутов одновременно — база SQLite одна.

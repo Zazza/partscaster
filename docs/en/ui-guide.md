@@ -87,26 +87,29 @@ The row above the form:
   attached plan is shown as the line "plan attached · N lines", "detach" — remove it.
 - **Style slots** — "Song language", "Style", "Rhythm (drums and bass)", "Guitars", "Keys and more", "Voice",
   "Mood", "Sound (recording)" and **BPM**. You type freely; hints appear under the field.
-  On submit, known options are replaced with English wording (the model was trained on English tags).
+  On submit, known options are replaced with English wording (the model was trained on English tags);
+  write your own words in English — Russian ones are not translated.
 - **"saved voice — descriptor + seed"** — a voice from the [voice lab](#voice-lab): it fills the "Voice" slot
   and sets the card's seed.
 - **"Style as a single line"** (collapsed) — the line built from the slots and the rack. If you type your own,
   it wins over the slots ("· overridden manually"); "follow the slots" — return to automatic building.
 - **"Instrument rack (N)"** (collapsed) — instrument groups with checkboxes; a checked one has an effect choice.
   Checked items are added to the style automatically.
-- **Lyrics** — section tags `[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`; lines with `#` are your notes, they
-  are not sung. Above the field:
+- **Lyrics** — your own song lyrics; lines with `#` are your notes, they are not sung. Above the field:
   - "no vocals" — instrumental: no lyrics needed, the voice in the slots changes to "no vocal" (turn it off and
     the style's voice comes back, unless you typed your own). For a "1:1" style, "Instrumental, no vocals" is
     added to the start of the line. A length option for the instrumental appears next to it: "by lyrics",
     "1–2 min", "2–5 min", "5–10 min", "10–30 min (needs more than 16 GB VRAM)"; the length is approximate;
-  - "lyricist…" — the "Lyricist" window: describe what the song is about, "Write" (a local model through Ollama,
-    up to a minute), "Another take", "Insert into the editor". You can edit the "poet instruction" and turn on
-    "imitate the current lyrics manner";
-  - "from track" — recognize the lyrics from a chosen audio file (needs whisper on the worker);
-  - "→ Russian" — translate the lyrics for singing, keeping the syllable count (Ollama).
-- **"style for the model"** — the final line that goes to the model. The checkbox **"translate to English"** —
-  Russian text in the slots is translated through Ollama before sending.
+  - section tag buttons: "Verse", "Pre-chorus", "Chorus", "Bridge", "Intro", "Outro", "Interlude" (the
+    tooltip shows what will be inserted). A click inserts `[Verse]`, `[Pre-Chorus]`, `[Chorus]`, `[Bridge]`,
+    `[Intro]`, `[Outro]` or `[Interlude]` at the cursor on its own line; selected text is replaced. In
+    "no vocals" mode the buttons are hidden;
+  - next to them, a hint: "Tags are optional: without them YuE2 lays out the parts itself — separate stanzas
+    with an empty line." Checked: with and without tags the song came out in the same form (intro, verse,
+    chorus, interlude, verse, chorus, outro); only without tags the choruses were shorter.
+- **"style for the model"** — the final line that goes to the model. If Russian words remain in it, a red line
+  appears under it: "The style has Russian words: YuE2 understands tags in English — write them in English."
+  This does not block submitting: the line is sent as is.
 
 ### Advanced
 
@@ -200,6 +203,8 @@ lyrics in a new style — a quick cover without the studio (a new generation, a 
 
 - "genre" — a list with search ("— as it was —" — do not change), "parts" — part buttons, "in your own words";
 - "vocal" — "track lyrics", "no vocal" or "own lyrics";
+- Russian words in "in your own words" are not translated: the same warning as in the form appears under the
+  field ("The style has Russian words…");
 - "result" — "cover — a new version of the song" (a separate version in the song's group) or "over the original"
   (the new performance is quieter, on top of the source; "layer volume"; the version appears in the studio's
   "Done" step);
@@ -542,8 +547,9 @@ so that voices are compared under equal conditions. A voice you like is saved as
 - **"in the vein of:"** — Letov, Thom Yorke, Jack White, Placebo, Interpol, Zemfira, Mumiy Troll, Cobain, Nick
   Cave, Amy Winehouse, Björk, Lou Reed, Vysotsky, BG: they set the knobs for that manner.
 - **Knobs**: "register" (female, male, high male, low male), "roughness", "creak", "delivery", "breath".
-- **"custom"** — timbre and manner tags, Russian is fine: "whiskey-soaked", "nasal", "slurred",
-  "child-like". The model does not reproduce subtle speech defects (a burr, a lisp).
+- **"custom"** — timbre and manner tags in English: "whiskey-soaked", "nasal", "slurred", "child-like".
+  Russian words are not translated: under the line for the "Voice" slot, the same warning as in the form
+  appears ("The style has Russian words…"). The model does not reproduce subtle speech defects (a burr, a lisp).
 - **seed** — empty: a new one for each audition; a number — lock the voice (the same seed and knobs — the same
   voice).
 - Under the knobs — the line that goes into the "Voice" slot.
@@ -564,8 +570,6 @@ The "settings" menu item. Everything is applied with the "Save" button at the bo
 
 - **"Worker connection"** — "Worker address". "Check" — check the address in the field without saving.
   You can enter just an IP: port 8091 is added. Both the app and the MCP server use this address.
-- **"Ollama"** (lyricist, style translation) — "Server" and "Model"; "Check" and "Refresh" — the list of
-  models.
 - **"Checks"**:
   - "Split instrumental tracks into stems right away" — an instrumental is split into stems after generation
     (~7 s of GPU), and if something sounds in the voice stem, the track gets ⚠ "voice in instrumental";
@@ -577,7 +581,7 @@ The "settings" menu item. Everything is applied with the "Save" button at the bo
   has "model", "Download" (download progress as a line; after it — "Save") and "Economy mode (8 GB)": ~4.5 GB of
   video memory, songs up to ~3.5 min. A different engine with the same seed gives a different song; notes and
   continuations carry over. Tracks from this engine are marked with a badge in the track details.
-- **"Worker (information only)"** — data folder, whisper (lyrics recognition), separation model;
+- **"Worker (information only)"** — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), separation model;
   below — "App version".
 - **"For AI agents (Claude Code, Claude Desktop, Codex)"** — the MCP server partscaster-mcp gives an agent the
   app's tools: generation, studio, effects; it takes the worker address from these settings. The path to

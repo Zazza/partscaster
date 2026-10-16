@@ -14,7 +14,14 @@ Conclusion: **stress and phrases are edited in the plan's melody, not in the lyr
 
 ## What the model understands in the lyrics
 
-- **Section tags** `[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]` — the borders of the song sections.
+- **Section tags** — the borders of the song sections. The buttons above the lyrics field insert them at the
+  cursor on their own line: "Verse" `[Verse]`, "Pre-chorus" `[Pre-Chorus]`, "Chorus" `[Chorus]`, "Bridge"
+  `[Bridge]`, "Intro" `[Intro]`, "Outro" `[Outro]`, "Interlude" `[Interlude]`. In "no vocals" mode the buttons
+  are hidden.
+- **Tags are optional.** Without them YuE2 lays out the parts itself — separate stanzas with an empty line.
+  Checked on one song: with and without tags it came out in the same form (intro, verse, chorus, interlude,
+  verse, chorus, outro), but without tags the choruses were shorter (12 bars instead of 16). If you need exact
+  section lengths, use tags.
 - **Line = phrase.** One line is one short phrase.
 - **Punctuation** — commas and dashes affect the pauses.
 - **Lines with `#`** — your notes; they are cut out on submit:
@@ -80,6 +87,5 @@ Breaking these rules does not always give an error — the model just sings the 
 - If you do not like the vocal delivery, describe the character in the "Voice" slot ("low male, half-spoken", "rough, straining") and
   the era in "Sound (recording)" ("1960s garage", "raw grunge 1991"); you can pick a voice in the voice fitting room.
 - **The melody of an existing song** — "From a track…" in the plan window: SheetSage2 turns the track into a plan, then you edit it.
-- **Lyrics for a cover** — "from track" recognizes the song lyrics (whisper), "→ Russian" translates them for singing, keeping
-  the number of lines and syllables.
+- **Lyrics for a cover** — you paste them yourself: the app does not recognize or translate lyrics.
 - **A plan longer than the sound** happens: such bars are dimmed in the roll.

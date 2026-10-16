@@ -1,4 +1,4 @@
-"""Тесты чистых функций воркера: llm, abcparse, media.encode_mp3.
+"""Тесты чистых функций воркера: abcparse, media.encode_mp3.
 """
 import time
 import contextlib
@@ -7,23 +7,6 @@ from pathlib import Path
 
 import abcparse
 import arc
-import llm
-
-
-class TestAdaptPrompts(unittest.TestCase):
-    """Спецификация llm.adapt_prompts: системный промпт фиксирует язык и
-    требование сохранения просодии, user — исходный текст без изменений."""
-
-    def test_system_mentions_language_and_prosody(self):
-        system, user = llm.adapt_prompts("la la", "Russian")
-        self.assertIn("Russian", system)
-        self.assertIn("syllable", system)
-        self.assertIn("[Verse]", system)  # секционные теги не переводить
-
-    def test_user_is_source_text_trimmed(self):
-        system, user = llm.adapt_prompts("  hello \n world \n", "Russian")
-        self.assertEqual(user, "hello \n world")
-        self.assertNotIn("hello", system)
 
 
 # CI-джоба worker ставит только ruff: аудио-зависимости (numpy/soundfile/
@@ -139,24 +122,6 @@ class TestApplyArc(unittest.TestCase):
         self.assertIn("soaring", s)
         # повторное применение не дублирует
         self.assertEqual(arc.style_with_arc(s, "burst"), s)
-
-
-class TestStripMd(unittest.TestCase):
-    def test_removes_code_fences(self):
-        self.assertEqual(llm.strip_md("```text\nкуплет\n```"), "куплет")
-
-    def test_removes_fences_with_lang(self):
-        self.assertEqual(llm.strip_md("```python\nprint(1)\n```"), "print(1)")
-
-    def test_plain_text_untouched(self):
-        self.assertEqual(llm.strip_md("  обычный текст  "), "обычный текст")
-
-    def test_inner_fences_kept(self):
-        # срезаются только заборы в начале/конце ответа модели
-        self.assertEqual(llm.strip_md("до ``` внутрь ``` после"), "до ``` внутрь ``` после")
-
-    def test_empty(self):
-        self.assertEqual(llm.strip_md(""), "")
 
 
 SAMPLE_ABC = """\

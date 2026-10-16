@@ -15,7 +15,7 @@ what exactly went wrong.
   [README](../../README.md)).
 - Responses are JSON unless stated otherwise. An error is an HTTP code and `{"detail": "reason"}`: 404 — no such
   track or file, 409 — the current state does not allow it (running, already exists, canceled by a person),
-  422 — invalid request, 502 — an external service did not respond (Ollama, GitHub), 503 — a component is not
+  422 — invalid request, 502 — an external service did not respond (GitHub), 503 — a component is not
   installed or is turned off.
 - File upload: raw bytes in the request body, the file name in the `X-Filename` header.
 - In the API a track is called a **job** (`job`). `{id}` in paths is its number. Track files live in the track
@@ -46,10 +46,9 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 |---|---|---|
 | GET | `/health` | `{status, model_loaded, load_error}` — is the worker alive, is the model loaded, the load error |
 | GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: build version (the `VERSION` file of the archive, without it `dev`), API version (clients compare it with their own), code fingerprint, generation model, engine (`torch` or `cpp-q8` etc.), what is installed |
-| GET | `/config` | Current settings: `ollama_url`, `ollama_model`, `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (user choice), `stems_model` (what actually makes the stems), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (the yue2.cpp program runs), `cpp_models` `{name: {file, size, installed}}` |
-| POST | `/config` | Changes the given fields, responds like GET. Fields: `ollama_url` (http/https), `ollama_model` — until restart; `auto_stems_instrumental` — for tracks without vocals, make stems right away and check whether a voice slipped in (yes by default); `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` without the program or without a downloaded model — 422. An engine change applies from the next generation |
+| GET | `/config` | Current settings: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (user choice), `stems_model` (what actually makes the stems), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (the yue2.cpp program runs), `cpp_models` `{name: {file, size, installed}}` |
+| POST | `/config` | Changes the given fields, responds like GET. Fields: `auto_stems_instrumental` — for tracks without vocals, make stems right away and check whether a voice slipped in (yes by default); `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` without the program or without a downloaded model — 422. An engine change applies from the next generation |
 | GET | `/stats` | Summary for the status bar: `{model_loaded, vram_total, vram_used (MB), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}` |
-| GET | `/ollama_models?url=` | Ollama models for the list in settings: `{base_url, models}`; `url` — check an address before saving. Ollama unavailable — 502 |
 | POST | `/engine/models/install?name=` | Download a yue2.cpp model and the VAE (`bf16` / `q8` / `q6` / `q5`), pinned files with a sha256 check; an already downloaded one — no network. Waits for the download to finish → `{name, installed, cpp_models}`. Unknown name — 422, checksum mismatch or network failure — 502 |
 | GET | `/engine/models/progress` | The model download in progress `{name, file, done, total}` or `{}` |
 
@@ -148,17 +147,11 @@ Main: `id`, `title`, `status` (`queued` / `running` / `done` / `error` / `cancel
 | GET | `/jobs/{id}/guitar_part?style=` | What the guitarist will play "from the plan chords" (block `gtrnotes`): `{style, bars, strikes: [{t, midi[]}], beats, tune_cents}`. `style` — 0 auto, 1 strumming, 2 fingerpicking, 3 bass + chord, 4 fifths; other values — 422. Needs the plan and a guitar stem; cache `guitar-part.json` |
 | POST | `/jobs/{id}/transcribe` | Take the score (SheetSage2) from a finished track that has none → `{id, abc_file}`. The score already exists or the track is not ready — 409 |
 
-## Lyrics (whisper and Ollama)
+## Lyrics (whisper)
 
 | Method | Path | What it does |
 |---|---|---|
-| POST | `/lyrics` | A track (bytes + `X-Filename`) → `{text, seconds}` — the recognized lyrics (faster-whisper). Header `X-Language` — the singing language (`en`, `ru`…, `auto`). No speech found — 422 |
-| POST | `/jobs/{id}/lyrics?language=` | Lyrics of a finished track without uploading again. If there is a vocal stem, it is recognized (more precise than the mix). `language` — `en` / `ru` / … / `auto`; without it — by the first tag of the style ("English, …" → `en`) |
-| POST | `/lyrics/adapt` | `{text, to}` (default `Russian`) → `{text, seconds}` — a translation for singing that keeps the number of syllables (Ollama) |
-| POST | `/copilot` | `{theme, lang?, style?, example?, instruction?}` → `{text, seconds}` — a draft of lyrics with sections (Ollama); `instruction` — your own system prompt. Empty theme — 422 |
-| POST | `/translate` | `{text, to}` (default `English`) → `{text, seconds}` — translation of a style string into English tags (Ollama) |
-
-Requests to Ollama respond with 502 on failure.
+| POST | `/jobs/{id}/lyrics?language=` | What a finished track sings (faster-whisper) — a check for an AI agent (MCP `job_lyrics`). If there is a vocal stem, it is recognized (more precise than the mix). `language` — `en` / `ru` / … / `auto`; without it — by the first tag of the style ("English, …" → `en`) |
 
 ## Transcription of another track
 

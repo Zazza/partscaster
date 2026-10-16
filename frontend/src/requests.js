@@ -12,7 +12,7 @@ const { t } = useI18n()
 
 const CYR = /[а-яё]/i
 
-// строка стиля формы до перевода: «стиль одной строкой» перекрывает всё; иначе слоты по порядку
+// строка стиля формы: «стиль одной строкой» перекрывает всё; иначе слоты по порядку
 // (русские значения из списков — словарём по-английски), стойка, BPM
 export function formStyle(override, slots, rack) {
   if (override.trim()) return override.trim()
@@ -23,21 +23,10 @@ export function formStyle(override, slots, rack) {
   return parts.join(', ')
 }
 
-// самописная кириллица уходит в перевод (галочка «рус → eng»); английское — как есть
-export const needsTranslate = (s, enabled) => !!enabled && CYR.test(s)
+// кириллица в строке стиля: YuE2 понимает теги по-английски — форма предупреждает (не переводит)
+export const hasCyrillic = (s) => CYR.test(s || '')
 
-// перевод с откатом: сбой Ollama — стиль как есть, трек всё равно уходит
-export async function translateOr(s, translate) {
-  try {
-    const r = await translate(s)
-    return r.text
-  } catch (e) {
-    console.warn('translate failed, using as-is:', e)
-    return s
-  }
-}
-
-// заявка нового трека без стиля (стиль — formStyle/перевод); extra — {draft: true} у черновика
+// заявка нового трека без стиля (стиль — formStyle); extra — {draft: true} у черновика
 export function newTrackPayload(f, extra = {}) {
   const abc = f.abc.trim()
   return {

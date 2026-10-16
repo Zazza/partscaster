@@ -19,7 +19,7 @@ if transcription worked (otherwise the studio has a "Create score" button). With
 - **NVIDIA graphics card only** (the installer checks `nvidia-smi`). The main engine takes up to ~11.4 GB
   of video memory, yue2.cpp — from ~4.5 GB in economy mode.
 - **Track length is limited** by the model budget (16000 tokens, variable `YUE2_MAX_TOKENS`). When memory runs out, the worker
-  says what is to blame: the track length itself (reduce the duration) or other programs on the graphics card (Ollama,
+  says what is to blame: the track length itself (reduce the duration) or other programs on the graphics card (for example,
   Stable Diffusion — free the memory).
 
 ## Security

@@ -272,14 +272,6 @@ func (a *App) YuePlan(params yue.PlanParams) (*yue.PlanResult, error) {
 	return a.yue.Plan(a.ctx, params)
 }
 
-func (a *App) YueCopilot(params yue.CopilotParams) (*yue.CopilotResult, error) {
-	return a.yue.Copilot(a.ctx, params)
-}
-
-func (a *App) YueTranslate(text string) (*yue.TranslateResult, error) {
-	return a.yue.Translate(a.ctx, text)
-}
-
 func (a *App) YueAnalyzeJob(id int64) (map[string]any, error) {
 	return a.yue.AnalyzeJob(a.ctx, id)
 }
@@ -487,11 +479,6 @@ func (a *App) YueSetWorkerConfig(cfg map[string]any) error {
 	return a.yue.SetWorkerConfig(a.ctx, cfg)
 }
 
-// YueOllamaModels — модели Ollama для выпадающего списка (url — кандидат).
-func (a *App) YueOllamaModels(url string) (map[string]any, error) {
-	return a.yue.OllamaModels(a.ctx, url)
-}
-
 // YueImportTrack — диалог выбора своего трека → импорт как джобы (статус done):
 // в студии работают стемы, минус, эффекты, ролл (по транскрипции), овердаб.
 func (a *App) YueImportTrack() (map[string]any, error) {
@@ -549,27 +536,6 @@ func (a *App) YueJobSpectrumPNG(id int64, file string) ([]byte, error) {
 
 func (a *App) YueJobPreview(id int64, fromSec, toSec float64) (map[string]any, error) {
 	return a.yue.JobPreview(a.ctx, id, fromSec, toSec)
-}
-
-// YueRecognizeLyricsFile — диалог выбора трека → faster-whisper → текст
-// (оригинал для кавера: дальше адаптация-перевод или правка руками).
-func (a *App) YueRecognizeLyricsFile() (*yue.LyricsResult, error) {
-	data, name, err := a.readAudioFile("Трек для распознавания текста")
-	if err != nil || data == nil {
-		return nil, err
-	}
-	return a.yue.RecognizeLyrics(a.ctx, name, data)
-}
-
-// YueJobLyrics — текст из готового аудио джобы (whisper на воркере,
-// без повторной загрузки файла).
-func (a *App) YueJobLyrics(id int64) (*yue.LyricsResult, error) {
-	return a.yue.JobLyrics(a.ctx, id, "") // язык — по стилю трека
-}
-
-// YueAdaptLyrics — адаптация-перевод лирики под пение (сохранение слогов).
-func (a *App) YueAdaptLyrics(text, to string) (*yue.LyricsResult, error) {
-	return a.yue.AdaptLyrics(a.ctx, text, to)
 }
 
 func (a *App) YueSubmitOverdub(id int64, style, lyrics string, gain float64, abc string, seed int64) (int64, error) {

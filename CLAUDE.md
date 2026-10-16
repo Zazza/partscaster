@@ -10,7 +10,7 @@ The rules for this repository are in [AGENTS.md](AGENTS.md) — read it in full 
 - **Releases:** CHANGELOG `Unreleased` → version with date, plus a new first entry in `frontend/src/releaseNotes.js`
   (plain words, ru + en, version = tag) in the same commit. A human tags; CI builds and publishes.
 - **Architecture:** DI via `Player` / `yue.Service`, worker HTTP only through `Client.call*`; screens in
-  `src/components/`, state in `src/composables/`; UI strings via i18n (ru + en); Ollama only via `llm.ollama_chat`.
+  `src/components/`, state in `src/composables/`; UI strings via i18n (ru + en).
 - **Tests follow the spec**, not current behaviour. **No personal data, no secrets.**
 - Conventional Commits; comments in Russian, identifiers in English. Deliberate decisions (no worker auth,
   SIGSTOP pause, external player) are not to be "fixed" without asking.

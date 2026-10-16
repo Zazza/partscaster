@@ -90,7 +90,7 @@ default; installation — `dry_run=false` and `confirm=true`).
 
 ## Tools
 
-77 in total. In the "Parameters" column, required ones are in **bold**.
+75 in total. In the "Parameters" column, required ones are in **bold**.
 
 ### Worker queue
 
@@ -129,9 +129,7 @@ operation, the tool returns the error "canceled by a person" ("отменено 
 |---|---|---|
 | `transcribe` | **path** | An audio file from the PC → ABC score (SheetSage2) for a cover |
 | `transcribe_job` | **job_id** | Take the score from a finished track that has none (an import without transcription, an effect variant). Does not overwrite an existing one |
-| `recognize_lyrics` | **path** | An audio file from the PC → lyrics (faster-whisper) |
-| `job_lyrics` | **job_id**, language | Lyrics of a finished track; if there is a vocal stem, it is recognized. `language` — `en`, `ru`, … or `auto`; empty — by the track style |
-| `lyrics_adapt` | **text**, to | A translation for singing that keeps the lines and syllables (±1), section tags stay; `to` defaults to Russian |
+| `job_lyrics` | **job_id**, language | What a finished track sings (faster-whisper) — a check for the agent: whether the given lyrics were sung; if there is a vocal stem, it is recognized. `language` — `en`, `ru`, … or `auto`; empty — by the track style |
 | `import_track` | **path**, title, folder, transcribe | Your own track from the PC as a library track; `transcribe=true` — take the score right away (slow) |
 
 ### Layer over the model
@@ -247,8 +245,8 @@ edit log after each successful change.
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `config_get` | — | Worker address, Ollama, worker data paths |
-| `config_set` | server_url, ollama_url, ollama_model, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; Ollama — on the fly; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment: less video memory, the same seed gives a different song), `cpp_model`, `cpp_low_vram` — from the next generation |
+| `config_get` | — | Worker address, worker data paths and engines |
+| `config_set` | server_url, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment: less video memory, the same seed gives a different song), `cpp_model`, `cpp_low_vram` — from the next generation |
 | `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set engine=cpp cpp_model=<name>` |
 
 ### Installation and diagnostics

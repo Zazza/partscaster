@@ -17,7 +17,6 @@ import re
 import sqlite3
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.parse
@@ -25,7 +24,6 @@ import urllib.request
 
 import arc
 import engine_cpp
-import llm
 import media
 import instruments as fx_instruments
 import opqueue
@@ -1294,26 +1292,7 @@ class PlanIn(BaseModel):
     cot: str = Field(default="full", pattern="^(full|melody|off)$")
 
 
-class CopilotIn(BaseModel):
-    theme: str
-    style: str = ""
-    example: str = ""
-    lang: str = "Russian"
-    instruction: str = ""  # свой системный промпт (заготовка из жанра/голоса формы)
-
-
-class TranslateIn(BaseModel):
-    text: str
-    to: str = "English"
-
-
-OLLAMA_URL = os.environ.get("PARTSCASTER_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
-OLLAMA_MODEL = os.environ.get("PARTSCASTER_OLLAMA_MODEL", "qwen2.5-chat-ru:latest")
-
-
 class ConfigIn(BaseModel):
-    ollama_url: str | None = None
-    ollama_model: str | None = None
     auto_stems_instrumental: bool | None = None
     stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
@@ -1323,7 +1302,7 @@ class ConfigIn(BaseModel):
     cpp_low_vram: bool | None = None
 
 
-# настройки воркера, переживающие перезапуск (в отличие от Ollama — те из env)
+# настройки воркера, переживающие перезапуск
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
 
@@ -1403,10 +1382,8 @@ def check_vocal_leak(job_id: int) -> None:
 
 @app.get("/config")
 def get_config():
-    """Текущие настройки: Ollama (копайтер/перевод), пути. Меняется через POST."""
+    """Текущие настройки: пути, дорожки, движки. Меняется через POST."""
     return {
-        "ollama_url": OLLAMA_URL,
-        "ollama_model": OLLAMA_MODEL,
         "data_dir": str(DATA_DIR),
         "whisper_py": str(WHISPER_PY),
         "whisper_available": WHISPER_PY.is_file(),
@@ -1430,17 +1407,7 @@ def get_config():
 
 @app.post("/config")
 def set_config(req: ConfigIn):
-    """Смена Ollama URL/модели на лету (настройки из GUI). До перезапуска:
-    env-переменные при старте имеют приоритет, это переопределяет на сессию."""
-    global OLLAMA_URL, OLLAMA_MODEL
-    if req.ollama_url is not None:
-        if not req.ollama_url.startswith(("http://", "https://")):
-            raise HTTPException(422, "ollama_url must be an http(s) URL")
-        OLLAMA_URL = req.ollama_url.rstrip("/")
-    if req.ollama_model is not None:
-        if not req.ollama_model.strip():
-            raise HTTPException(422, "ollama_model must not be empty")
-        OLLAMA_MODEL = req.ollama_model.strip()
+    """Смена настроек на лету (из GUI); сохраняются в settings.json и переживают перезапуск."""
     if req.auto_stems_instrumental is not None:
         st = _load_settings()
         st["auto_stems_instrumental"] = bool(req.auto_stems_instrumental)
@@ -1473,53 +1440,8 @@ def set_config(req: ConfigIn):
         if req.cpp_low_vram is not None:
             st["cpp_low_vram"] = bool(req.cpp_low_vram)
         _save_settings(st)
-    log.info("config updated: ollama=%s model=%s", OLLAMA_URL, OLLAMA_MODEL)
+    log.info("config updated: %s", req.model_dump(exclude_none=True))
     return get_config()
-
-
-@app.get("/ollama_models")
-def ollama_models(url: str | None = None):
-    """Список установленных моделей Ollama (для выпадающего списка в настройках).
-    ?url= — проверить кандидат до сохранения; без параметра — текущий OLLAMA_URL."""
-    chat_url = url or OLLAMA_URL
-    base = chat_url.split("/api/")[0] if "/api/" in chat_url else chat_url.rstrip("/")
-    try:
-        r = urllib.request.urlopen(f"{base}/api/tags", timeout=10)
-        tags = json.load(r).get("models", [])
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"ollama unreachable: {e}") from e
-    return {"base_url": base, "models": sorted(str(m.get("name", "")) for m in tags if m.get("name"))}
-
-
-@app.post("/copilot")
-def copilot(req: CopilotIn):
-    """Копайтер стихов через Ollama. keep_alive=0: модель выгружается из VRAM
-    сразу после ответа — 9 ГБ рядом с YuE (7.7 ГБ) иначе роняют генерацию OOM."""
-    if not req.theme.strip():
-        raise HTTPException(422, "theme is required")
-    system = req.instruction.strip() or (
-        "Ты — поэт-песенник. Пишешь тексты песен с секционной разметкой "
-        "[Verse], [Chorus] (можно [Bridge], [Outro]). В ответе — только текст "
-        "песни: без пояснений, без markdown-разметки, без названия. Строки "
-        "короткие и поёмые, с рифмой. Два-три куплета и припев."
-    )
-    user = f"Тема: {req.theme.strip()}\nЯзык текста: {req.lang}"
-    if req.style.strip():
-        user += f"\nСтиль музыки (для манеры и образов): {req.style.strip()}"
-    if req.example.strip():
-        user += ("\nВот пример текста в похожей манере — подражай манере, "
-                 f"но не повторяй содержание:\n{req.example.strip()}")
-    user += "\nНапиши текст песни."
-    t0 = time.time()
-    try:
-        text = llm.strip_md(llm.ollama_chat(OLLAMA_URL, OLLAMA_MODEL, system, user,
-                                            temperature=0.9, timeout=280))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"ollama failed: {e}") from e
-    if not text:
-        raise HTTPException(502, "ollama returned empty text")
-    log.info("copilot: %d chars in %.1fs", len(text), time.time() - t0)
-    return {"text": text, "seconds": round(time.time() - t0, 1)}
 
 
 @app.get("/health")
@@ -1702,25 +1624,6 @@ def stats():
             "queue": {"queued": counts.get("queued", 0), "running": counts.get("running", 0)},
             "running": running,
             "gpu_waiting": QUEUE.waiting_count()}
-
-
-@app.post("/translate")
-def translate(req: TranslateIn):
-    """Перевод строки стиля (рус → анг) через Ollama — слоты можно писать по-русски.
-    keep_alive=0: модель выгружается из VRAM сразу (см. /copilot)."""
-    if not req.text.strip():
-        raise HTTPException(422, "text is required")
-    system = (f"Translate the user's music style description to {req.to}. "
-              "Keep it a single comma-separated tag line. Output ONLY the translation.")
-    t0 = time.time()
-    try:
-        out = llm.strip_md(llm.ollama_chat(OLLAMA_URL, OLLAMA_MODEL, system,
-                                           req.text.strip(), temperature=0.2))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"ollama failed: {e}") from e
-    if not out:
-        raise HTTPException(502, "ollama returned empty translation")
-    return {"text": out, "seconds": round(time.time() - t0, 1)}
 
 
 @app.post("/jobs")
@@ -2325,55 +2228,6 @@ def _whisper_lyrics(src: Path, language: str | None = None) -> tuple[str, str]:
         raise  # отменено из очереди — 409, а не «текст не распознан»
     except Exception as e:  # noqa: BLE001
         return "", str(e)
-
-
-def _adapt_prompts(text: str, to: str) -> tuple[str, str]:
-    return llm.adapt_prompts(text, to)
-
-
-class LyricsAdaptIn(BaseModel):
-    text: str
-    to: str = "Russian"
-
-
-@app.post("/lyrics")
-async def recognize_lyrics(request: Request):
-    """Трек (тело — байты аудио, X-Filename) → текст (faster-whisper).
-    Для каверов: текст оригинала → адаптация → поле лирики."""
-    fname = re.sub(r"[^A-Za-z0-9_.-]", "_", request.headers.get("x-filename", "")) or "input.flac"
-    language = lyrics_language("", request.headers.get("x-language"))
-    data = await request.body()
-    if not data:
-        raise HTTPException(422, "empty body")
-    with tempfile.TemporaryDirectory() as td:
-        src = Path(td) / fname
-        src.write_bytes(data)
-        t0 = time.time()
-        # whisper занимает GPU — в тредпул: ждёт очередь к GPU, не блокируя event loop
-        text, err = await run_in_threadpool(_whisper_lyrics, src, language)
-    if err:
-        raise HTTPException(500, f"lyrics recognition failed: {err}")
-    if not text.strip():
-        raise HTTPException(422, "no speech recognized")
-    return {"text": text.strip(), "seconds": round(time.time() - t0, 1)}
-
-
-@app.post("/lyrics/adapt")
-def adapt_lyrics(req: LyricsAdaptIn):
-    """Адаптация-перевод лирики под пение (Ollama, сохранение слогов).
-    keep_alive=0: модель выгружается из VRAM сразу (см. /copilot)."""
-    if not req.text.strip():
-        raise HTTPException(422, "text is required")
-    system, user = _adapt_prompts(req.text, req.to)
-    t0 = time.time()
-    try:
-        out = llm.strip_md(llm.ollama_chat(OLLAMA_URL, OLLAMA_MODEL, system, user,
-                                           temperature=0.4, timeout=280))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"ollama failed: {e}") from e
-    if not out.strip():
-        raise HTTPException(502, "ollama returned empty adaptation")
-    return {"text": out.strip(), "seconds": round(time.time() - t0, 1)}
 
 
 def _ss_transcribe_queued(src: Path, dst: Path) -> dict:

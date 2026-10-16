@@ -28,8 +28,6 @@ const (
 	gpuTimeout = 30 * time.Minute
 	// План грузит модель при холодном старте и генерирует ABC на GPU — минуты.
 	planTimeout = 10 * time.Minute
-	// Копайтер: Ollama грузит модель с диска + генерация текста.
-	copilotTimeout = 6 * time.Minute
 	// errBodyLimit — сколько байт тела ошибки включать в сообщение.
 	errBodyLimit = 4 << 10
 )

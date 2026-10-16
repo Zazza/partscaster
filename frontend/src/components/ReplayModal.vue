@@ -8,11 +8,9 @@ import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { odPartyChips, slotOptions } from '../slotOptions.js'
 import { replayRequest } from '../replay.js'
+import { hasCyrillic } from '../requests.js'
 
-const props = defineProps({
-  job: { type: Object, required: true },
-  autoTranslate: { type: Boolean, default: true },   // кириллицу «своими словами» — на английский (как стили)
-})
+const props = defineProps({ job: { type: Object, required: true } })
 const emit = defineEmits(['close', 'submitted'])
 const { t } = useI18n()
 
@@ -38,11 +36,8 @@ function toggleChip(i) {
 
 async function submit() {
   err.value = ''
-  let txt = text.value.trim()
-  if (txt && props.autoTranslate && /[а-яё]/i.test(txt)) {
-    try { txt = (await api.translate(txt)).text || txt } catch { /* без перевода — как ввели */ }
-  }
-  const req = replayRequest({ genre: genre.value, chips: [...chips.value].map((i) => odPartyChips[i].en), text: txt,
+  // свои слова уходят как есть: кириллица не переводится, под полем — предупреждение
+  const req = replayRequest({ genre: genre.value, chips: [...chips.value].map((i) => odPartyChips[i].en), text: text.value.trim(),
     voice: voice.value, ownLyrics: ownLyrics.value, mix: mix.value, gain: gain.value, close: close.value }, props.job)
   if (!req) { err.value = t('replay.empty'); return }
   busy.value = true
@@ -85,6 +80,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span>{{ t('replay.text') }}</span>
           <input v-model="text" :placeholder="t('replay.text.ph')" />
         </label>
+        <p v-if="hasCyrillic(text)" class="replay-cyr">{{ t('form.style.cyr') }}</p>
         <div class="replay-row">
           <span>{{ t('replay.voice') }}</span>
           <span class="replay-radios">
@@ -125,4 +121,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .replay-row { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 10px; margin: 6px 0; }
 .replay-radios { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 .replay-radios label { display: inline-flex; gap: 6px; align-items: center; }
+.replay-cyr { margin: -2px 0 6px 170px; font-size: 12px; color: var(--err); }
 </style>

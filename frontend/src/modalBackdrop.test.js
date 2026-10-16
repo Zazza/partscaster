@@ -130,7 +130,6 @@ test('подложки модалок найдены (обход исходни�
     'components/WelcomeModal.vue',
     'components/PlanModal.vue',
     'components/PresetsPage.vue',
-    'components/CopilotModal.vue',
     'components/MetricsModal.vue',
     'components/InstrumentsPage.vue',
     'components/ConfirmModal.vue',

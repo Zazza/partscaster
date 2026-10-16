@@ -1,5 +1,5 @@
 <script setup>
-// Страница настроек: воркер + Ollama + пути воркера.
+// Страница настроек: воркер, дорожки, движок генерации, пути воркера.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
@@ -21,14 +21,10 @@ const onKey = (e) => { if (e.key === 'Escape') emit('close') }
 onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => { window.removeEventListener('keydown', onKey); clearInterval(modelTimer) })
 
-const ollamaURL = ref('')
-const ollamaModel = ref('')
 const info = ref(null)      // data_dir, whisper_py — только показать
-const models = ref([])      // модели, установленные в Ollama
 const err = ref('')
 const saved = ref(false)
 const workerProbe = ref('') // статус проверки воркера
-const ollamaProbe = ref('') // статус проверки Ollama
 // у треков «без голоса» сразу делать дорожки — метка, если в инструментал пролез голос
 const autoStems = ref(true)
 const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
@@ -126,13 +122,6 @@ const stemsOptions = computed(() => [
   { value: 'htdemucs', label: t('settings.stemsModel.fast') },
   { value: 'roformer', label: t('settings.stemsModel.clean'), disabled: !roformerOk.value },
 ])
-const modelOptions = computed(() => {
-  const opts = models.value.map((m) => ({ value: m, label: m }))
-  if (ollamaModel.value && !models.value.includes(ollamaModel.value)) {
-    opts.unshift({ value: ollamaModel.value, label: ollamaModel.value + ' ' + t('settings.ollama.notListed') })
-  }
-  return opts
-})
 
 onMounted(async () => {
   api.appVersion().then((v) => { appVersion.value = v }).catch(() => {})
@@ -145,30 +134,15 @@ onMounted(async () => {
   }
   try {
     const c = await api.workerConfig()
-    ollamaURL.value = c.ollama_url || ''
-    ollamaModel.value = c.ollama_model || ''
     autoStems.value = c.auto_stems_instrumental !== false
     stemsModel.value = c.stems_pref || 'htdemucs'
     roformerOk.value = !!c.roformer_available
     applyEngine(c)
     info.value = c
-    await checkOllama()
   } catch {
     info.value = null
   }
 })
-
-async function checkOllama() {
-  ollamaProbe.value = ''
-  try {
-    const m = await api.ollamaModels(ollamaURL.value.trim())
-    models.value = m.models || []
-    ollamaProbe.value = t('settings.probe.ollamaOk', { n: models.value.length })
-  } catch (e) {
-    models.value = []
-    ollamaProbe.value = t('settings.probe.ollamaDown', { err: String(e) })
-  }
-}
 
 async function save() {
   err.value = ''
@@ -179,20 +153,16 @@ async function save() {
     localStorage.setItem('yue_server', url)
     try {
       await api.setWorkerConfig({
-        ollama_url: ollamaURL.value.trim(),
-        ollama_model: ollamaModel.value.trim(),
         auto_stems_instrumental: autoStems.value,
         stems_model: stemsModel.value,
       })
       const c = await api.workerConfig()
-      ollamaURL.value = c.ollama_url || ''
-      ollamaModel.value = c.ollama_model || ''
       // сервер мог смениться — доступность RoFormer и выбор берём из его ответа
       stemsModel.value = c.stems_pref || 'htdemucs'
       roformerOk.value = !!c.roformer_available
       info.value = c
     } catch (e) {
-      err.value = t('settings.ollama.notApplied', { err: String(e) })
+      err.value = t('settings.worker.notApplied', { err: String(e) })
     }
     // движок — отдельным запросом: отказ (модель не скачана) не роняет остальные настройки
     if (engineSupported.value) {
@@ -236,19 +206,6 @@ async function save() {
       <div v-if="checkRes" class="set-hint" :class="checkRes.ok ? 'ok' : 'error'">{{ checkRes.text }}</div>
       <div v-else class="set-hint muted">{{ workerProbe }}</div>
       <div class="set-hint muted">{{ t('settings.worker.hint') }}</div>
-
-      <h3 class="set-h">{{ t('settings.ollama') }} <span class="muted">{{ t('settings.ollama.sub') }}</span></h3>
-      <div class="set-row">
-        <span class="set-label">{{ t('settings.server') }}</span>
-        <input v-model="ollamaURL" placeholder="http://127.0.0.1:11434/api/chat" @change="checkOllama" @keyup.enter="save" />
-        <button class="ghost" @click="checkOllama">{{ t('common.check') }}</button>
-      </div>
-      <div class="set-row">
-        <span class="set-label">{{ t('settings.model') }}</span>
-        <VSelect v-model="ollamaModel" :options="modelOptions" :placeholder="t('settings.model.ph')" />
-        <button class="ghost" @click="checkOllama" :title="t('common.refresh')">{{ t('common.refresh') }}</button>
-      </div>
-      <div class="set-hint muted">{{ ollamaProbe }}</div>
 
       <h3 class="set-h">{{ t('settings.checks') }}</h3>
       <label class="set-row set-check">

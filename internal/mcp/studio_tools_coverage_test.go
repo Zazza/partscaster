@@ -17,7 +17,7 @@ import (
 //   - dsp_variant_delete — деструктивный: без confirm=true вариант не удаляется (воркер не
 //     вызывается, ошибка просит подтверждения); с confirm — удаляется ровно указанный файл трека;
 //   - config_set: server_url — адрес воркера (без хвостового «/»), сохраняется в настройки
-//     приложения; ollama_url/ollama_model/stems_model/fx_engine уходят воркеру как заданы
+//     приложения; stems_model/fx_engine уходят воркеру как заданы
 //     (fx_engine=false — тоже значение, не «не задано»); незаданное не трогается;
 //     воркер отказал — ошибка;
 //   - make_stems: job_id и разовая model доходят до воркера; после дорожек кэш превью этого
@@ -135,14 +135,12 @@ func TestConfigSetServerURLAppliedAndSaved(t *testing.T) {
 func TestConfigSetWorkerSettingsPassedAsGiven(t *testing.T) {
 	s, fake := newStudioCovServer(t)
 	out, ok := call(t, s, "config_set", map[string]any{
-		"ollama_url": "http://ollama:11434", "ollama_model": "qwen3:8b",
 		"stems_model": "roformer", "fx_engine": false,
 	})
 	if !ok {
 		t.Fatalf("config_set: %s", out)
 	}
-	want := []map[string]any{{"ollama_url": "http://ollama:11434", "ollama_model": "qwen3:8b",
-		"stems_model": "roformer", "fx_engine": false}}
+	want := []map[string]any{{"stems_model": "roformer", "fx_engine": false}}
 	if !reflect.DeepEqual(fake.workerCfg, want) {
 		t.Fatalf("воркеру ушло %v, want %v", fake.workerCfg, want)
 	}

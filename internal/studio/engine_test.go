@@ -829,7 +829,7 @@ func TestRebuildSectionsEngineWorkerWithoutPreviewFails(t *testing.T) {
 		cfgErr   error
 		wantText bool // текст про обновление воркера (для ответа /config без fx_preview)
 	}{
-		{"нет fx_preview", map[string]any{"ollama_url": "http://llm:11434"}, nil, true},
+		{"нет fx_preview", map[string]any{"stems_model": "roformer"}, nil, true},
 		{"fx_preview false", map[string]any{"fx_preview": false}, nil, true},
 		{"пустой /config", map[string]any{}, nil, true},
 		{"/config недоступен", nil, errors.New("404 not found: /config"), false},

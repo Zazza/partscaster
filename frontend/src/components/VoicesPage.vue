@@ -13,8 +13,9 @@ import VSelect from '../VSelect.vue'
 import {
   PARAMS_VERSION, VOICE_REGISTERS, VOICE_KNOBS, VOICE_PRESETS, VOICE_ARCHETYPES,
   defaultVoiceParams, normalizeVoiceParams, voiceDescriptor,
-  auditionStyle, auditionJob, needsTranslate,
+  auditionStyle, auditionJob,
 } from '../voiceLab.js'
+import { hasCyrillic } from '../requests.js'
 
 const emit = defineEmits(['close'])
 const { askConfirm } = useConfirm()
@@ -78,11 +79,8 @@ async function runAudition() {
     if (!Number.isFinite(seed) || seed <= 0) seed = Math.floor(Math.random() * 2 ** 31)
     usedSeed.value = seed
     seedInput.value = String(seed)
-    let desc = descriptor.value
-    if (needsTranslate(desc)) {
-      try { desc = (await api.translate(desc)).text || desc } catch {}
-    }
-    const id = await api.submit({ ...auditionJob(params.value, seed), style: auditionStyle(desc) })
+    // свои слова уходят как есть: кириллица не переводится, под дескриптором — предупреждение
+    const id = await api.submit({ ...auditionJob(params.value, seed), style: auditionStyle(descriptor.value) })
     auditionId.value = id
     audition.value = null
     stopPoll()
@@ -204,6 +202,7 @@ function cleanProbes() {
       </div>
       <p class="muted voice-hint">{{ t('voicelab.extra.hint') }}</p>
       <p class="muted voice-preview" :title="t('voicelab.preview')">{{ descriptor }}</p>
+      <p v-if="hasCyrillic(descriptor)" class="voice-cyr">{{ t('form.style.cyr') }}</p>
 
       <div class="corpus-actions">
         <button class="primary" :disabled="busy" :title="t('voicelab.audition.tip')" @click="runAudition">

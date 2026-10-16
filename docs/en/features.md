@@ -8,12 +8,14 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
 ## 1. Generate
 
 - **New track form** — hints in slots: genre, rhythm, guitars, keys, voice, mood, sound. On
-  submit they become English tags for the YuE2 model; your own text in the slots is translated by Ollama. The result is shown in the
+  submit they become English tags for the YuE2 model; write your own words in English — Russian ones are not
+  translated, and the form warns about it. The result is shown in the
   "Style as a single line" field — you can rewrite it by hand.
 - **Style library** — 37 groups, 112 ready styles; **instrument rack** — instrument cards;
   the selected ones are added to the style.
-- **Lyrics** with section tags (`[Verse]`, `[Chorus]`…); lines with `#` are your notes and are not sung. The copywriter
-  (Ollama) helps with the verse; the "no vocals" option gives an instrumental. Details — [lyrics-melody.md](lyrics-melody.md).
+- **Your own lyrics**; section tags (`[Verse]`, `[Chorus]`…) are inserted with buttons above the field and are optional:
+  without them YuE2 lays out the parts itself if stanzas are separated by an empty line. Lines with `#` are your notes and
+  are not sung; the "no vocals" option gives an instrumental. Details — [lyrics-melody.md](lyrics-melody.md).
 - **Character** (how bold and how precise the model is) and **dramaturgy** — flat, build-up, wave or burst (the final
   chorus one octave higher).
 - **Plan (ABC)** — the song's note score (melody, chords, sections) that the model writes before the sound: "notes →"
@@ -93,8 +95,8 @@ version. Details — [ui-guide.md](ui-guide.md).
   Tools and setup — [mcp.md](mcp.md).
 - **Voice fitting room** ("voices" menu) — knobs for the voice character, a ~18 s preview, a voice card with a seed;
   a saved voice is chosen in the new track form.
-- **Covers** — "From a track…" in the plan editor: SheetSage2 turns someone else's song or your own into a plan. Lyrics — "from track"
-  (whisper recognition) and "→ Russian" (translation to fit the same syllables, Ollama).
+- **Covers** — "From a track…" in the plan editor: SheetSage2 turns someone else's song or your own into a plan; you paste
+  the lyrics yourself.
 - **Album voice** (experiment) — the track's voice with the timbre of the voice from another song (Seed-VC).
 - **Importing your own track** (flac/mp3/wav/ogg/m4a) — with the "import track" button in the track list; with stems, effects, presets and, if transcription worked,
   a plan.

@@ -37,6 +37,7 @@ the chorus, fix a part of the song.
 - **Voice.** Re-sing the voice from any point, move it an octave up or down, make variations of single
   parts, process it with effects. Try out a voice's character before generating in the voice fitting
   room. Replacing the timbre with the voice of another song is experimental.
+- **Your own lyrics.** You write the lyrics; section tags are buttons above the field and are optional.
 - **Editing the song.** The song's score (notes and chords the model writes before the audio) can be
   edited and a part of the track rebuilt by continuing from the original — no splice seams.
 - **Pedals and effects.** Guitar pedals, amps (NAM), reverb, delay, tape, glitch — 53 effect chains for

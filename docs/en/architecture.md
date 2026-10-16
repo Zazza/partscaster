@@ -21,9 +21,7 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 │ stdio, for AI agents         │                 │  • whisper, Seed-VC — separate      │
 └──────────────────────────────┘                 │    environments (optional)          │
                                                  │  SQLite + track files               │
-                                                 └──────────────┬──────────────────────┘
-                                                                │ HTTP (optional)
-                                                          Ollama :11434
+                                                 └─────────────────────────────────────┘
 ```
 
 - The app and the worker are separate processes: closing the app does not stop generations; the queue and
@@ -42,7 +40,7 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 | `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | built-in player: the webview in Wails has no audio output. Linux — `pw-play` (PipeWire), pause by stopping the process; Windows — WPF MediaPlayer through PowerShell (pause does not keep the position). macOS — the system `afplay` (volume applies from the next start) |
 | `loopwav.go` | a phrase loop from the "Instruments" page, laid out into a long WAV for the player |
 | `internal/config` | worker address and app settings (`settings.json` in the user settings directory, `partscaster/`) |
-| `internal/yue` | HTTP client of the worker. `client.go` — transport only; methods are split by domain: `jobs.go`, `stems.go`, `llm.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; the `Service` interface is in `types.go` |
+| `internal/yue` | HTTP client of the worker. `client.go` — transport only; methods are split by domain: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; the `Service` interface is in `types.go` |
 | `internal/dsp` | ffmpeg effects on a finished file: chains (dynamics, modulation, space, pedals, glitch), inserts and fitting them to the rhythm, stereo position, volume line, level measurement |
 | `internal/studio` | studio and sound preset pipelines on the PC side (below) |
 | `internal/agentsetup` | the "For AI agents" section: ready-made config snippets for Claude Desktop and Codex, connecting to Claude Code with the `claude mcp add` command |
@@ -93,7 +91,7 @@ Codex) the same features as the app. Transport — stdio, protocol — JSON-RPC 
 
 - It calls the worker with the same `internal/yue` client and uses the same `internal/studio` pipelines
   (presets, rebuild, effects) — the result matches the app.
-- The tools (77) are split into files: `tools_workflow.go` (generation and tracks), `tools_studio.go`,
+- The tools (75) are split into files: `tools_workflow.go` (generation and tracks), `tools_studio.go`,
   `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go` (style library),
   `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
 - Library data (`internal/mcp/*.json`) are copies of frontend sources embedded in the binary;
@@ -126,8 +124,7 @@ in `worker/`.
 | `instruments.py`, `phrases.py`, `phrases/` | the "Instruments" page: your own instruments and short phrases for listening |
 | `recipe.py` | track recipe from `jobs` rows and the `job_ops` journal |
 | `voice.py`, `seedvc_run.py` | "album voice": Seed-VC as a separate program from its own environment |
-| `whisper_run.py` | song lyrics recognition; runs with the interpreter of the separate whisper environment |
-| `llm.py` | Ollama call (`keep_alive: 0`) |
+| `whisper_run.py` | what a finished track sings (MCP `job_lyrics`); runs with the interpreter of the separate whisper environment |
 | `dsp.py`, `waveform.py`, `media.py` | track measurement (librosa); loudness waveform and spectrogram; audio conversion |
 
 SQLite tables: `jobs`, `sound_presets`, `job_ops` (edit journal), `recipe_imports`,
@@ -199,8 +196,6 @@ There is one GPU, so one long operation runs (the "slot"); the others wait by th
 - Separation: demucs (~0.7 GB) loads per call and unloads; RoFormer is a separate process, and its memory
   is freed when it exits.
 - Sound engine: a NAM capture (tens of MB) loads per call through the queue; the other blocks run on the CPU.
-- Ollama is called with `keep_alive: 0` and unloads right after the answer. If Ollama keeps a model
-  in VRAM, generation can fail with an out-of-memory error.
 
 ## Track stems (contract)
 

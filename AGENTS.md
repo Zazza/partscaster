@@ -72,7 +72,7 @@ Partscaster has three parts: a desktop app (Go + Wails v2, Vue 3 UI), an MCP ser
 |---|---|
 | `main.go`, `app*.go` | Wails entry point; `App` bindings split by area (`app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go`); `audioProxy` in `main.go` serves job artifacts to the webview |
 | `player*.go`, `signals_*.go`, `open_*.go` | external audio player, pause signals, opening URLs — per-OS via build tags |
-| `internal/yue` | HTTP client of the worker: `Service` interface, transport in `client.go`, methods per domain (`jobs`, `stems`, `llm`, `fx`, `presets`, `queue`, `recipe`, `voices`, `engine`, `instruments`, `journal`, `version`) |
+| `internal/yue` | HTTP client of the worker: `Service` interface, transport in `client.go`, methods per domain (`jobs`, `stems`, `plan`, `fx`, `presets`, `queue`, `recipe`, `voices`, `engine`, `instruments`, `journal`, `version`) |
 | `internal/studio` | studio pipelines on the desktop side (ffmpeg + worker): preview cache, DSP apply, splice, sections, live layer, recipe |
 | `internal/dsp` | ffmpeg filter chains (effects) |
 | `internal/mcp`, `cmd/partscaster-mcp` | MCP server: tools, embedded library data |
@@ -130,14 +130,12 @@ Partscaster has three parts: a desktop app (Go + Wails v2, Vue 3 UI), an MCP ser
 ### Worker (Python, FastAPI)
 
 - Entry point: `yue_worker.py` (API around the resident YuE2 pipeline, port 8091). Pure helpers are separate
-  modules, for example: `opqueue.py` (shared queue of long GPU operations), `llm.py` (Ollama wrapper),
+  modules, for example: `opqueue.py` (shared queue of long GPU operations),
   `media.py` (audio conversion), `stems.py` + `sep_run.py` (stem separation), `engine_cpp.py` (second
   engine, yue2.cpp, experimental), `fx_engine.py` / `fx_nam.py` (sound engine), `presets.py` / `genres.py`
-  (sound presets), `voice.py` + `seedvc_run.py` (voice timbre swap), `whisper_run.py` (lyrics
-  transcription), `sheetsage.py` (melody to ABC), `instruments.py` / `phrases.py` ("Instruments" page),
+  (sound presets), `voice.py` + `seedvc_run.py` (voice timbre swap), `whisper_run.py` (what a
+  finished track sings, for MCP `job_lyrics`), `sheetsage.py` (melody to ABC), `instruments.py` / `phrases.py` ("Instruments" page),
   `recipe.py`, `plancheck.py`, `proclock.py`, `kits_install.py`, `waveform.py`.
-- Ollama only through `llm.ollama_chat` (+ `llm.strip_md`); no duplicate urllib calls. `keep_alive=0` is
-  mandatory: VRAM is shared with YuE2.
 - Conversions through `media.encode_mp3` and soundfile; ffmpeg is not assumed on the GPU machine. The one
   exception is the studio spectrogram: `waveform.render_spectrum_png` uses ffmpeg if it is on PATH;
   otherwise the spectrum endpoint returns 503 and the loudness waveform still works.

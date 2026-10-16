@@ -1,7 +1,7 @@
 <script setup>
 // Partscaster — корневой компонент: форма новой композиции, очередь/результаты,
 // переключение страниц. Экранные компоненты и модалки — в ./components/.
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { api } from './api.js'
 import { rackGroups, rackEffects, rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
@@ -17,7 +17,8 @@ import { useWorkerCompat } from './composables/useWorkerCompat.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
 import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine } from './styleLogic.js'
-import { formStyle, needsTranslate, translateOr, newTrackPayload } from './requests.js'
+import { formStyle, hasCyrillic, newTrackPayload } from './requests.js'
+import { insertSectionTag, SECTION_TAGS } from './lyricsTags.js'
 import { usePlayer, fmtDur } from './composables/usePlayer.js'
 import { useConfirm } from './composables/useConfirm.js'
 import VSelect from './VSelect.vue'
@@ -41,7 +42,6 @@ import { RELEASE_NOTES } from './releaseNotes.js'
 import logoUrl from './assets/logo.png'
 import ConfirmModal from './components/ConfirmModal.vue'
 import MetricsModal from './components/MetricsModal.vue'
-import CopilotModal from './components/CopilotModal.vue'
 import PlanModal from './components/PlanModal.vue'
 
 const serverURL = ref('')
@@ -137,8 +137,6 @@ watch(noLyrics, applyInstrumental)
 // явного параметра нет; диапазон размножает [Instrumental]-секции
 const durMode = ref('auto')
 const title = ref('')
-const autoTranslate = ref(true)   // слоты по-русски → перевод в английскую строку стиля
-const translateBusy = ref(false)
 const submitting = ref(false)
 
 // инструментальная стойка: [{id, effect}] — разворачивается в текст стиля
@@ -176,17 +174,12 @@ const styleLine = computed({
   set: (v) => { styleOverride.value = v },
 })
 
-// финальная строка стиля к отправке: русские значения из списков подставляются
-// словарём, самописная кириллица переводится через Ollama; английское — как есть
-async function finalStyle() {
-  // «без слов» у строки 1:1 — пометка в начале строки (у слотов — голос стиля, см. applyInstrumental)
-  const s = formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value, rackCompile(rackSel.value))
-  if (!needsTranslate(s, autoTranslate.value)) return s
-  translateBusy.value = true
-  try {
-    return await translateOr(s, api.translate)
-  } finally { translateBusy.value = false }
-}
+// финальная строка стиля к отправке: русские значения из списков подставляются словарём,
+// самописная кириллица уходит как есть — под строкой стиля предупреждение (hasCyrillic)
+// «без слов» у строки 1:1 — пометка в начале строки (у слотов — голос стиля, см. applyInstrumental)
+const sentStyle = computed(() =>
+  formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value, rackCompile(rackSel.value)))
+function finalStyle() { return sentStyle.value }
 
 function payload(extra = {}) {
   return newTrackPayload({
@@ -205,7 +198,7 @@ async function submit() {
   submitting.value = true
   submitErr.value = ''
   try {
-    const id = await api.submit({ ...payload(), style: await finalStyle() })
+    const id = await api.submit({ ...payload(), style: finalStyle() })
     if (customAbc.value.trim()) inheritTrickMarks(id)
     newTrackPage.value = false   // к списку: трек уже в очереди
     await refresh()
@@ -220,7 +213,7 @@ async function submitDraft() {
   submitting.value = true
   submitErr.value = ''
   try {
-    const id = await api.submit({ ...payload({ draft: true }), style: await finalStyle() })
+    const id = await api.submit({ ...payload({ draft: true }), style: finalStyle() })
     if (customAbc.value.trim()) inheritTrickMarks(id)
     newTrackPage.value = false   // к списку: трек уже в очереди
     await refresh()
@@ -234,7 +227,7 @@ async function submitFan(n) {
   submitting.value = true
   submitErr.value = ''
   try {
-    await api.submitFan({ ...payload(), style: await finalStyle() }, n)
+    await api.submitFan({ ...payload(), style: finalStyle() }, n)
     newTrackPage.value = false   // к списку: трек уже в очереди
     await refresh()
   } catch (e) {
@@ -625,9 +618,9 @@ function openNewTrack() {
   navGo('new')
 }
 
-// Esc закрывает модалку нового трека — но не из-под открытых поверх плана/копайтера/библиотеки
+// Esc закрывает модалку нового трека — но не из-под открытых поверх плана/библиотеки
 function onNewTrackKey(e) {
-  if (e.key === 'Escape' && newTrackPage.value && !planOpen.value && !copOpen.value && !myStylesOpen.value) newTrackPage.value = false
+  if (e.key === 'Escape' && newTrackPage.value && !planOpen.value  && !myStylesOpen.value) newTrackPage.value = false
 }
 onMounted(() => window.addEventListener('keydown', onNewTrackKey))
 onUnmounted(() => window.removeEventListener('keydown', onNewTrackKey))
@@ -732,7 +725,7 @@ async function makePlan() {
   const usedSeed = seed.value ? Number(seed.value) : Math.floor(Math.random() * 1e9)
   try {
     const r = await api.plan({
-      style: await finalStyle(),
+      style: finalStyle(),
       lyrics: cleanLyrics(lyrics.value),
       seed: usedSeed,
       cot: cot.value === 'off' ? 'full' : cot.value,
@@ -801,35 +794,17 @@ async function transcribeFromTrack() {
   } finally { planBusy.value = false }
 }
 
-const copOpen = ref(false)
-function onCopInsert(text) { lyrics.value = text }
-
-const lyrBusy = ref(false) // 'rec' | 'adapt' | ''
-const lyrErr = ref('')
-async function recognizeLyrics() {
-  lyrErr.value = ''
-  lyrBusy.value = 'rec'
-  try {
-    const r = await api.recognizeLyrics()
-    if (r && r.text) lyrics.value = r.text
-  } catch (e) {
-    lyrErr.value = String(e)
-  } finally {
-    lyrBusy.value = ''
-  }
-}
-async function adaptLyrics() {
-  if (!lyrics.value.trim()) return
-  lyrErr.value = ''
-  lyrBusy.value = 'adapt'
-  try {
-    const r = await api.adaptLyrics(lyrics.value)
-    if (r && r.text) lyrics.value = r.text
-  } catch (e) {
-    lyrErr.value = String(e)
-  } finally {
-    lyrBusy.value = ''
-  }
+// кнопки тегов секций: тег — отдельной строкой в место курсора, поле остаётся в фокусе
+const lyricsEl = ref(null)
+async function addSectionTag(tag) {
+  const el = lyricsEl.value
+  const at = el ? [el.selectionStart, el.selectionEnd] : [lyrics.value.length, lyrics.value.length]
+  const r = insertSectionTag(lyrics.value, at[0], at[1], tag)
+  lyrics.value = r.text
+  await nextTick()
+  if (!el) return
+  el.focus()
+  el.setSelectionRange(r.caret, r.caret)
 }
 
 const metricsModal = ref(null)
@@ -969,26 +944,22 @@ function onWindowClick(e) {
             <select v-if="noLyrics" v-model="durMode" class="dur-select" :title="t('form.dur.tip')">
               <option v-for="o in durOptions" :key="o.id" :value="o.id">{{ t('dur.' + o.id) }}</option>
             </select>
-            <button v-if="!noLyrics" class="ghost small-btn" @click="copOpen = true"><AppIcon name="pencil" /> {{ t('form.copilot') }}</button>
-            <button v-if="!noLyrics" class="ghost small-btn" :disabled="!!lyrBusy"
-                    :title="t('lyrics.rec.tip')" @click="recognizeLyrics">
-              <template v-if="lyrBusy === 'rec'">…</template><template v-else><AppIcon name="music" /> {{ t('lyrics.rec') }}</template></button>
-            <button v-if="!noLyrics" class="ghost small-btn" :disabled="!!lyrBusy || !lyrics.trim()"
-                    :title="t('lyrics.adapt.tip')" @click="adaptLyrics">
-              {{ lyrBusy === 'adapt' ? '…' : t('lyrics.adapt') }}</button>
-            <span v-if="lyrErr" class="error">{{ lyrErr }}</span>
           </span>
         </div>
-        <textarea v-model="lyrics" rows="10" :disabled="noLyrics" :placeholder="noLyrics ? t('form.nowords.ph') : ''"></textarea>
+        <!-- теги секций: вставка в место курсора; без тегов YuE2 расставит части сама -->
+        <div v-if="!noLyrics" class="lyrics-tags">
+          <button v-for="s in SECTION_TAGS" :key="s.id" class="ghost small-btn" :title="s.tag"
+                  @click="addSectionTag(s.tag)">{{ t('lyrics.tag.' + s.id) }}</button>
+          <span class="lyrics-tags-hint muted">{{ t('lyrics.tags.hint') }}</span>
+        </div>
+        <textarea ref="lyricsEl" v-model="lyrics" rows="10" :disabled="noLyrics" :placeholder="noLyrics ? t('form.nowords.ph') : ''"></textarea>
 
-        <!-- итоговая строка стиля, которая уйдёт модели, и её перевод на английский -->
+        <!-- итоговая строка стиля, которая уйдёт модели; кириллица — предупреждение, не перевод -->
         <div class="row style-out">
           <span class="style-out-cap">{{ t('form.styleout') }}:</span>
-          <span class="compiled" :title="compiledStyle">{{ translateBusy ? t('form.translating') : (compiledStyle || t('form.style.empty')) }}</span>
-          <label class="autotr" :title="t('form.autotr.tip')">
-            <input type="checkbox" v-model="autoTranslate" /> {{ t('form.autotr') }}
-          </label>
+          <span class="compiled" :title="compiledStyle">{{ compiledStyle || t('form.style.empty') }}</span>
         </div>
+        <div v-if="hasCyrillic(sentStyle)" class="style-cyr">{{ t('form.style.cyr') }}</div>
 
         <details class="form-advanced">
           <summary>{{ t('form.advanced') }}<span v-if="advancedSummary" class="muted"> · {{ advancedSummary }}</span></summary>
@@ -1055,7 +1026,7 @@ function onWindowClick(e) {
     <InstrumentsPage v-if="section === 'instruments'" @close="instrumentsPage = false; refresh()" />
     <PresetsPage v-if="section === 'presets'" @close="presetsPage = false; loadPresetNames()" />
   </div>
-  <StudioPage v-else-if="studioJob" :job="studioJob" :auto-translate="autoTranslate"
+  <StudioPage v-else-if="studioJob" :job="studioJob"
               @close="studioJob = null; refresh()"
               @open-metrics="openMetrics" />
 
@@ -1283,14 +1254,12 @@ function onWindowClick(e) {
   <!-- библиотека — после формы нового трека: открывается поверх неё, закрылась — форма на месте -->
 
   <RecipeImportModal v-if="recipeImport" @close="recipeImport = false" @started="refresh()" />
-  <ReplayModal v-if="replayJob" :job="replayJob" :auto-translate="autoTranslate" @close="replayJob = null" @submitted="refresh()" />
+  <ReplayModal v-if="replayJob" :job="replayJob" @close="replayJob = null" @submitted="refresh()" />
 
 
   <PlanModal v-model:abc="planAbc" :open="planOpen" :busy="planBusy" :err="planErr"
              :info="planInfo"
              @close="planOpen = false" @use="usePlanAbc" @new-plan="makePlan" @from-track="transcribeFromTrack" />
-  <CopilotModal :open="copOpen" :style="compiledStyle" :example="lyrics" :lang="slots.language" :slots="slots"
-                @close="copOpen = false" @insert="onCopInsert" />
   <MetricsModal ref="metricsModal" :jobs="jobs" />
   <WelcomeModal v-if="welcome" :tab="welcome" @close="closeWelcome" />
   <MyStylesModal v-if="myStylesOpen" @close="myStylesOpen = false"
@@ -1594,6 +1563,8 @@ textarea { width: 100%; resize: vertical; font-family: inherit; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 6px; font-size: 12px; }
 .lyrics-tools { display: flex; gap: 6px; align-items: center; }
 .lyrics-tools .dur-select { max-width: 110px; font-size: 12px; }
+.lyrics-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0 0 4px; }
+.lyrics-tags-hint { font-size: 11px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 button.toggle { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 400; font-size: 12px; padding: 3px 10px; }
 button.toggle.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
@@ -1612,7 +1583,7 @@ button.toggle.on { border-color: var(--accent); color: var(--accent); font-weigh
 .style-out { align-items: center; gap: 8px; flex-wrap: nowrap; }
 .style-out-cap { flex: none; font-size: 12px; color: var(--muted); }
 .compiled { flex: 1; min-width: 0; font-size: 12px; color: var(--text); margin: 0; word-break: break-word; }
-.autotr { flex: none; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.style-cyr { font-size: 12px; color: var(--err); margin: -2px 0 6px; }
 
 .actions { display: flex; gap: 8px; }
 .actions .primary { flex: 0 0 auto; }
@@ -1789,7 +1760,7 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 }
 .ghost.icon { padding: 2px 8px; font-size: 13px; }
 
-/* диалоги (копайтер/план/метрики/подтверждение) — выше страниц-модалок (z-index 60):
+/* диалоги (план/метрики/подтверждение) — выше страниц-модалок (z-index 60):
    страница-модалка сама есть modal-backdrop+page-backdrop, и page-backdrop ниже в файле возвращает ей 60 */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 70; }
 .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; width: min(760px, 92vw); max-height: 90vh; display: flex; flex-direction: column; gap: 10px; }
@@ -1864,6 +1835,7 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .voice-hint { font-size: 12px; margin: 6px 0 0; }
 .voice-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; font-size: 12px; }
 .voice-preview { font-size: 12px; margin: 6px 0 0; word-break: break-word; }
+.voice-cyr { font-size: 12px; margin: 4px 0 0; color: var(--err); }
 .voice-card-desc { flex: 1 1 240px; min-width: 0; word-break: break-word; font-size: 12px; }
 
 /* контейнер секций студии.

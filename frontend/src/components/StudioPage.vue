@@ -38,7 +38,7 @@ import PlaceControls from './PlaceControls.vue'
 
 // стиль импортированного трека — должен совпадать с IMPORT_STYLE в worker/yue_worker.py
 const IMPORT_STYLE = '(импорт внешнего трека)'
-const props = defineProps({ job: { type: Object, required: true }, autoTranslate: Boolean })
+const props = defineProps({ job: { type: Object, required: true } })
 const emit = defineEmits(['close', 'open-metrics'])
 
 const { isPlaying, playBusy, playBtn, toggleArtifact, markNow, playerState, nowPlayingKey, refreshPlayer, setPlayRange, setStudioCtx, rangeUntil } = usePlayer()
@@ -226,7 +226,6 @@ onMounted(async () => {
   reloadVariants()
   api.workerConfig().then((c) => {
     seedvcOk.value = !!c?.seedvc_available
-    whisperOk.value = c?.whisper_available !== false
   }).catch(() => {})
   // восстановить промежуточное состояние студии (переживает перезапуск)
   try {
@@ -1187,8 +1186,6 @@ const importTip = (key) => (isImport.value ? t('studio.import.noTokens') : t(key
 // голос этого трека поётся тембром голоса другой песни; кусок образца воркер
 // подбирает сам. Без Seed-VC на воркере блок виден с подписью «недоступно».
 const seedvcOk = ref(false)
-// whisper (распознавание текста) установлен на воркере; пока не знаем — считаем, что да
-const whisperOk = ref(true)
 const vcRef = ref('')
 const vcBusy = ref(false)
 const vcRefOptions = computed(() => allJobs.value

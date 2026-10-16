@@ -85,7 +85,7 @@ Inside, this is the same `install.sh` from the archive, plus steps for the compo
 | Worker: YuE2 generation, SheetSage2 score, demucs stems | required | ~17.5 GB (environment ~7.4 + weights ~10, downloaded on the first generation) | — |
 | Sample kits (drums, basses, orchestra) | installed together with the worker | ~1.2 GB | downloaded on first selection |
 | RoFormer: cleaner stem separation + drums split into parts | optional | ~7.3 GB (environment 6.1 + weights 1.1) | demucs makes the stems, no drum parts |
-| whisper: lyrics recognition for tracks | optional | ~3.2 GB | recognition buttons are inactive with a "not installed" note |
+| whisper: what a finished track sings — a check for an AI agent (MCP `job_lyrics`) | optional | ~3.2 GB | `job_lyrics` returns an error; "Settings" shows "not found" |
 | Seed-VC: "Album voice" (experiment) | optional | ~10–11 GB after installation, ~14 GB during it | the "Album voice" block with a "not installed" note |
 | NAM: amplifiers in the sound engine | optional | a package folder without torch | only the `amp` block is unavailable |
 | yue2.cpp: second engine | optional | model 2.6–7.2 GB + VAE 0.5 GB | the main engine works |
@@ -183,8 +183,6 @@ Set them in `~/partscaster/worker.env` (example — `worker.env.example` in the 
 | `YUE2_MAX_TOKENS` | `16000` | semantic token budget per song ≈ maximum length (16000 — up to ~10 min; VRAM peak grows with length) |
 | `YUE2_CFG_SCALE` | `1.5` | how closely to follow the style (classifier-free guidance): higher — more exact, but drier |
 | `YUE2_BACKEND` | `torch` | main engine mode: `torch`, `torch-eager` (without CUDA graphs; the Windows worker sets it), `vllm` |
-| `PARTSCASTER_OLLAMA_URL` | `http://127.0.0.1:11434/api/chat` | Ollama for the lyrics copywriter, style translation, translating lyrics to fit the syllables |
-| `PARTSCASTER_OLLAMA_MODEL` | `qwen2.5-chat-ru:latest` | Ollama model |
 | `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | interpreter of the whisper environment |
 | `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | interpreter of the RoFormer environment |
 | `PARTSCASTER_SEP_MODELS` | `~/sep-models` | RoFormer and DrumSep weights (~1.1 GB, downloaded on the first separation) |
@@ -204,9 +202,6 @@ Variables of other programs:
 | `PARTSCASTER_HOME`, `PARTSCASTER_VENV` | `install.sh` | installation directory and worker environment |
 | `PARTSCASTER_DEPLOY_HOST` | `deploy.sh`, `make worker` | `user@gpu-host` for deployment |
 | `PARTSCASTER_TORCH_INDEX` | `seedvc_install.sh` | PyTorch index for Seed-VC (default CUDA 12.8) |
-
-You can change the Ollama address and model on the fly on the app's "Settings" page; this lasts until the
-worker restarts, then the values from `worker.env` are used again.
 
 ## Optional components
 
@@ -234,6 +229,9 @@ uv pip install --python ~/sep-venv/bin/python "audio-separator[gpu]" audioread
   Commercially clean mode — `PARTSCASTER_STEMS_MODEL=demucs` (demucs weights — MIT).
 
 ### whisper — track lyrics
+
+Needed only by an AI agent: MCP `job_lyrics` recognizes what a finished track sings, so the agent can check
+whether the given lyrics were sung. The app does not use whisper.
 
 ```bash
 uv venv ~/whisper-venv && uv pip install --python ~/whisper-venv/bin/python faster-whisper
@@ -296,12 +294,6 @@ directory. Files download through direct links from raw.githubusercontent.com (t
 `linn`, `cr78`, `simmons`) and `synthbass` are synthesized by the worker itself, without network. Kit contents and licenses —
 in [effects.md](effects.md).
 
-### Ollama
-
-A separate service on `127.0.0.1:11434`. Not required: generation works without it; the copywriter,
-style auto-translation and translating lyrics to fit the syllables are unavailable. Model — `PARTSCASTER_OLLAMA_MODEL` or the "Settings" page
-(the model list comes from Ollama).
-
 ## Second generation engine — yue2.cpp (experiment)
 
 Less VRAM — for 8–12 GB cards or a GPU shared with other programs. The same seed
@@ -362,11 +354,9 @@ shared with the Linux boot (in WSL it is visible as `/mnt/<drive letter>`), set 
 ```bash
 HF_HOME=/mnt/<drive>/hf-cache                       # do not download the weights again
 PARTSCASTER_DATA_DIR=/mnt/<drive>/partscaster-data  # shared tracks (or keep your own)
-PARTSCASTER_OLLAMA_URL=http://<Windows IP>:11434/api/chat   # Ollama on Windows
 ```
 
-Windows IP from WSL — `ip route show default | awk '{print $3}'`; in WSL with mirrored networking,
-`127.0.0.1` also works. In WSL without systemd, start it with the command from the "Without systemd" section.
+In WSL without systemd, start it with the command from the "Without systemd" section.
 
 The app on Windows connects to `http://localhost:8091` (or to the WSL IP — `wsl hostname -I`).
 If the data is shared, do not run the workers of both boots at the same time — there is one SQLite database.

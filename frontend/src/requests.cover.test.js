@@ -1,9 +1,9 @@
 // Сборка заявок к воркеру: что воркер должен получить.
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { slotOptions, durOptions, durTokens } from './slotOptions.js'
 import { planTimeline } from './abcEdit.js'
 import {
-  formStyle, needsTranslate, translateOr, newTrackPayload,
+  formStyle, newTrackPayload,
   trickStyle, dropVoices, vocalVoices, instrumentalRequest, continueRequest,
   vocalBars, revoicePlan, revoiceRecord, stemFxRequest,
 } from './requests.js'
@@ -190,37 +190,6 @@ describe('стиль формы (formStyle)', () => {
   it('пустая форма — пустой стиль; темп без значения не пишется', () => {
     expect(formStyle('', {}, '')).toBe('')
     expect(formStyle('', { bpm: null }, '')).toBe('')
-  })
-})
-
-describe('перевод стиля: кириллица → Ollama (needsTranslate, translateOr)', () => {
-  afterEach(() => vi.restoreAllMocks())
-
-  it('кириллица при включённой галочке «рус → eng» — в перевод', () => {
-    expect(needsTranslate('мрачный панк', true)).toBe(true)
-    expect(needsTranslate('punk, Ёлка', true)).toBe(true)
-  })
-
-  it('галочка выключена — не переводится', () => {
-    expect(needsTranslate('мрачный панк', false)).toBe(false)
-  })
-
-  it('английское не переводится', () => {
-    expect(needsTranslate('dark punk, 120 BPM', true)).toBe(false)
-    expect(needsTranslate('', true)).toBe(false)
-  })
-
-  it('перевод удался — уходит перевод', async () => {
-    const translate = vi.fn().mockResolvedValue({ text: 'gloomy punk' })
-    expect(await translateOr('мрачный панк', translate)).toBe('gloomy punk')
-    expect(translate).toHaveBeenCalledWith('мрачный панк')
-  })
-
-  it('сбой перевода — стиль как есть (трек всё равно уходит), сбой не глотается молча', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const translate = vi.fn().mockRejectedValue(new Error('ollama down'))
-    expect(await translateOr('мрачный панк', translate)).toBe('мрачный панк')
-    expect(warn).toHaveBeenCalled()
   })
 })
 

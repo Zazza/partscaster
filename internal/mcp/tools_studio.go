@@ -21,7 +21,7 @@ func RegisterStudioTools(s *Server) {
 	registerRecipeTools(s)
 	s.Register(Tool{
 		Name:        "config_get",
-		Description: "Текущие настройки: адрес воркера, Ollama (url/модель), пути данных воркера.",
+		Description: "Текущие настройки: адрес воркера, пути данных и движки воркера.",
 		InputSchema: props(nil),
 		Handler: func(s *Server, _ map[string]any) (string, error) {
 			out := map[string]any{"server_url": s.client.GetURL()}
@@ -37,14 +37,12 @@ func RegisterStudioTools(s *Server) {
 	s.Register(Tool{
 		Name: "config_set",
 		Description: "Настройки: server_url — адрес воркера (сохраняется и в settings приложения); " +
-			"ollama_url / ollama_model — применяются на лету; stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
+			"stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
 			"engine — движок генерации (torch | cpp — yue2.cpp, ЭКСПЕРИМЕНТ), cpp_model, cpp_low_vram — со следующей генерации.",
 		InputSchema: props(map[string]any{
-			"server_url":   prop("адрес воркера, напр. http://gpu-host:8091", "string"),
-			"stems_model":  prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
-			"ollama_url":   prop("URL Ollama (api/chat)", "string"),
-			"ollama_model": prop("модель Ollama", "string"),
-			"fx_engine":    prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
+			"server_url":  prop("адрес воркера, напр. http://gpu-host:8091", "string"),
+			"stems_model": prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
+			"fx_engine":   prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
 			"engine": prop("движок генерации: torch — основной | cpp — yue2.cpp, ЭКСПЕРИМЕНТ (меньше видеопамяти; "+
 				"тот же сид даёт другую песню, ноты и продолжения переносятся). cpp — только с установленной программой и скачанной моделью", "string"),
 			"cpp_model":    prop("модель yue2.cpp: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install)", "string"),
@@ -56,12 +54,6 @@ func RegisterStudioTools(s *Server) {
 				config.SaveSettings(config.Settings{ServerURL: s.client.GetURL()})
 			}
 			cfg := map[string]any{}
-			if v := argString(args, "ollama_url"); v != "" {
-				cfg["ollama_url"] = v
-			}
-			if v := argString(args, "ollama_model"); v != "" {
-				cfg["ollama_model"] = v
-			}
 			if v := argString(args, "stems_model"); v != "" {
 				cfg["stems_model"] = v
 			}
@@ -567,25 +559,6 @@ func RegisterStudioTools(s *Server) {
 	})
 
 	s.Register(Tool{
-		Name:        "recognize_lyrics",
-		Description: "Распознать текст трека (faster-whisper): оригинал для кавера, дальше lyrics_adapt или правка руками.",
-		InputSchema: props(map[string]any{
-			"path": prop("путь к аудиофайлу (flac/mp3/wav/ogg/m4a)", "string"),
-		}, "path"),
-		Handler: func(s *Server, args map[string]any) (string, error) {
-			data, err := os.ReadFile(argString(args, "path"))
-			if err != nil {
-				return "", err
-			}
-			out, err := s.client.RecognizeLyrics(context.Background(), argString(args, "path"), data)
-			if err != nil {
-				return "", err
-			}
-			return toJSON(out), nil
-		},
-	})
-
-	s.Register(Tool{
 		Name: "job_lyrics",
 		Description: "Распознать текст из готового аудио джобы (faster-whisper): без повторной загрузки файла — для овердаба/кавера этой же джобы. " +
 			"Есть дорожка голоса (make_stems) — распознаётся она, точнее, чем микс с гитарами.",
@@ -595,27 +568,6 @@ func RegisterStudioTools(s *Server) {
 		}, "job_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			out, err := s.client.JobLyrics(context.Background(), argInt(args, "job_id"), argString(args, "language"))
-			if err != nil {
-				return "", err
-			}
-			return toJSON(out), nil
-		},
-	})
-
-	s.Register(Tool{
-		Name: "lyrics_adapt",
-		Description: "Адаптация-перевод лирики под пение: сохранение числа строк и слогов (±1) на строку, " +
-			"секционные теги [Verse]/[Chorus] остаются. Для каверов на другом языке.",
-		InputSchema: props(map[string]any{
-			"text": prop("исходный текст (можно с [Verse]/[Chorus])", "string"),
-			"to":   prop("язык результата (Russian, English, ...; по умолчанию Russian)", "string"),
-		}, "text"),
-		Handler: func(s *Server, args map[string]any) (string, error) {
-			to := argString(args, "to")
-			if to == "" {
-				to = "Russian"
-			}
-			out, err := s.client.AdaptLyrics(context.Background(), argString(args, "text"), to)
 			if err != nil {
 				return "", err
 			}

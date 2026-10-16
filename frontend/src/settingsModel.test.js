@@ -18,8 +18,6 @@ vi.mock('./composables/useWorkerCompat.js', () => ({ useWorkerCompat: () => ({ r
 const { default: SettingsPage } = await import('./components/SettingsPage.vue')
 
 const CONFIG = {
-  ollama_url: 'http://127.0.0.1:11434/api/chat',
-  ollama_model: 'qwen:latest',
   auto_stems_instrumental: true,
   stems_pref: 'htdemucs',
   stems_model: 'htdemucs',
@@ -40,7 +38,6 @@ beforeEach(() => {
     workerConfig: vi.fn(async () => ({ ...CONFIG })),
     setWorkerConfig: vi.fn(async () => {}),
     setServerURL: vi.fn(async () => {}),
-    ollamaModels: vi.fn(async () => ({ models: ['qwen:latest'] })),
   })
 })
 
@@ -82,6 +79,8 @@ test('«Сохранить» с выбранным RoFormer не падает (r
   // что отправили воркеру — с адресом и RoFormer
   const cfg = m.api.setWorkerConfig.mock.calls[0][0]
   expect(cfg.stems_model).toBe('roformer')
+  // internal-drop-ollama: раздела Ollama в настройках нет — воркеру ollama_* не уходят
+  expect(Object.keys(cfg).filter((k) => k.startsWith('ollama'))).toEqual([])
   expect(m.api.setServerURL).toHaveBeenCalledWith('http://localhost:8091')
 })
 

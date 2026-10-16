@@ -14,7 +14,7 @@
   [README](../../README.ru.md)).
 - Ответы — JSON, если не сказано иное. Ошибка — код HTTP и `{"detail": "причина"}`: 404 — нет трека или
   файла, 409 — состояние не позволяет (идёт, уже есть, отменено человеком), 422 — неверный запрос,
-  502 — не ответил внешний сервис (Ollama, GitHub), 503 — компонент не установлен или выключен.
+  502 — не ответил внешний сервис (GitHub), 503 — компонент не установлен или выключен.
 - Загрузка файла — сырые байты в теле запроса, имя — в заголовке `X-Filename`.
 - Трек в API называется **джобой** (`job`), `{id}` в путях — её номер. Файлы трека лежат в его папке на
   воркере и отдаются через `GET /audio/{id}/{файл}`.
@@ -44,10 +44,9 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 |---|---|---|
 | GET | `/health` | `{status, model_loaded, load_error}` — жив ли воркер, загружена ли модель, ошибка загрузки |
 | GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: версия сборки (файл `VERSION` архива, без него `dev`), версия API (клиенты сверяют её со своей), отпечаток кода, модель генерации, движок (`torch` или `cpp-q8` и т. п.), что установлено |
-| GET | `/config` | Текущие настройки: `ollama_url`, `ollama_model`, `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}` |
-| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `ollama_url` (http/https), `ollama_model` — до перезапуска; `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` без программы или без скачанной модели — 422. Смена движка — со следующей генерации |
+| GET | `/config` | Текущие настройки: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}` |
+| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` без программы или без скачанной модели — 422. Смена движка — со следующей генерации |
 | GET | `/stats` | Сводка для строки состояния: `{model_loaded, vram_total, vram_used (МБ), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}` |
-| GET | `/ollama_models?url=` | Модели Ollama для списка в настройках: `{base_url, models}`; `url` — проверить адрес до сохранения. Ollama недоступна — 502 |
 | POST | `/engine/models/install?name=` | Скачать модель yue2.cpp и VAE (`bf16` / `q8` / `q6` / `q5`), закреплённые файлы с проверкой sha256; уже скачанная — без сети. Ждёт конца загрузки → `{name, installed, cpp_models}`. Неизвестное имя — 422, сумма не сошлась или сбой сети — 502 |
 | GET | `/engine/models/progress` | Идущая загрузка модели `{name, file, done, total}` или `{}` |
 
@@ -146,17 +145,11 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 | GET | `/jobs/{id}/guitar_part?style=` | Что сыграет гитарист «по аккордам плана» (блок `gtrnotes`): `{style, bars, strikes: [{t, midi[]}], beats, tune_cents}`. `style` — 0 авто, 1 бой, 2 перебор, 3 бас + аккорд, 4 квинты; иное — 422. Нужны план и дорожка гитары; кэш `guitar-part.json` |
 | POST | `/jobs/{id}/transcribe` | Снять партитуру (SheetSage2) с готового трека без неё → `{id, abc_file}`. Партитура уже есть или трек не готов — 409 |
 
-## Тексты (whisper и Ollama)
+## Тексты (whisper)
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| POST | `/lyrics` | Трек (байты + `X-Filename`) → `{text, seconds}` — распознанный текст (faster-whisper). Заголовок `X-Language` — язык пения (`en`, `ru`…, `auto`). Речь не найдена — 422 |
-| POST | `/jobs/{id}/lyrics?language=` | Текст готового трека без повторной загрузки. Есть дорожка голоса — распознаётся она (точнее микса). `language` — `en` / `ru` / … / `auto`; без него — по первому тегу стиля («English, …» → `en`) |
-| POST | `/lyrics/adapt` | `{text, to}` (по умолчанию `Russian`) → `{text, seconds}` — перевод под пение с сохранением числа слогов (Ollama) |
-| POST | `/copilot` | `{theme, lang?, style?, example?, instruction?}` → `{text, seconds}` — черновик стихов с секциями (Ollama); `instruction` — свой системный промпт. Пустая тема — 422 |
-| POST | `/translate` | `{text, to}` (по умолчанию `English`) → `{text, seconds}` — перевод строки стиля в английские теги (Ollama) |
-
-Запросы к Ollama при сбое отвечают 502.
+| POST | `/jobs/{id}/lyrics?language=` | Что поёт готовый трек (faster-whisper) — проверка для ИИ-агента (MCP `job_lyrics`). Есть дорожка голоса — распознаётся она (точнее микса). `language` — `en` / `ru` / … / `auto`; без него — по первому тегу стиля («English, …» → `en`) |
 
 ## Транскрипция чужого трека
 

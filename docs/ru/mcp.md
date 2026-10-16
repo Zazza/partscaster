@@ -89,7 +89,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 ## Инструменты
 
-Всего 77. В колонке «Параметры» обязательные — **жирным**.
+Всего 75. В колонке «Параметры» обязательные — **жирным**.
 
 ### Очередь воркера
 
@@ -128,9 +128,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 |---|---|---|
 | `transcribe` | **path** | Аудиофайл с ПК → ABC-партитура (SheetSage2) для кавера |
 | `transcribe_job` | **job_id** | Снять партитуру с готового трека без неё (импорт без транскрипции, вариант эффекта). Готовую не перезаписывает |
-| `recognize_lyrics` | **path** | Аудиофайл с ПК → текст (faster-whisper) |
-| `job_lyrics` | **job_id**, language | Текст готового трека; есть дорожка голоса — распознаётся она. `language` — `en`, `ru`, … или `auto`; пусто — по стилю трека |
-| `lyrics_adapt` | **text**, to | Перевод под пение с сохранением строк и слогов (±1), теги секций остаются; `to` по умолчанию Russian |
+| `job_lyrics` | **job_id**, language | Что поёт готовый трек (faster-whisper) — проверка для агента: спелось ли то, что задано; есть дорожка голоса — распознаётся она. `language` — `en`, `ru`, … или `auto`; пусто — по стилю трека |
 | `import_track` | **path**, title, folder, transcribe | Свой трек с ПК как трек библиотеки; `transcribe=true` — сразу снять партитуру (медленно) |
 
 ### Слой над моделью
@@ -245,8 +243,8 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 | Инструмент | Параметры | Что делает |
 |---|---|---|
-| `config_get` | — | Адрес воркера, Ollama, пути данных воркера |
-| `config_set` | server_url, ollama_url, ollama_model, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; Ollama — на лету; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент: меньше видеопамяти, тот же сид даёт другую песню), `cpp_model`, `cpp_low_vram` — со следующей генерации |
+| `config_get` | — | Адрес воркера, пути данных и движки воркера |
+| `config_set` | server_url, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент: меньше видеопамяти, тот же сид даёт другую песню), `cpp_model`, `cpp_low_vram` — со следующей генерации |
 | `engine_model_install` | **name** | Скачать модель yue2.cpp: `bf16` (7,2 ГБ), `q8` (3,8 ГБ), `q6` (2,9 ГБ), `q5` (2,6 ГБ). Ждёт конца загрузки; потом — `config_set engine=cpp cpp_model=<имя>` |
 
 ### Установка и диагностика

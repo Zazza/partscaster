@@ -157,7 +157,7 @@ func TestRebuildSectionsEngineOldWorkerIsError(t *testing.T) {
 	t.Parallel()
 	needFF(t)
 	s, fake := newFxServer(t)
-	fake.cfg = map[string]any{"ollama_url": "http://llm:11434"}
+	fake.cfg = map[string]any{"stems_model": "roformer"}
 	fake.fetch = map[string]string{
 		"audio.flac":      fxLavfi(t, "0.3*sin(2*PI*500*t)", 4),
 		"stem-other.flac": fxLavfi(t, "0.3*sin(2*PI*500*t)", 4),

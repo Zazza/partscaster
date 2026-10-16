@@ -454,7 +454,7 @@ func TestProtocolHandshakeAndToolsList(t *testing.T) {
 	}
 	for _, want := range []string{
 		"status", "jobs", "submit", "plan", "render_abc", "cancel", "delete_job", "artifacts",
-		"transcribe", "job_score", "job_preview",
+		"transcribe", "job_score", "job_preview", "job_lyrics",
 		"config_get", "config_set", "dsp_chains", "dsp_apply", "dsp_preview", "dsp_variants",
 		"analyze_job", "make_stems", "make_minus", "overdub", "import_track", "transcribe_job",
 		"job_peaks", "job_spectrum",
@@ -496,6 +496,60 @@ func TestToolsListHasNoCorpusTools(t *testing.T) {
 		if strings.HasPrefix(tl.Name, "corpus_") {
 			t.Errorf("инструмент профилей %q всё ещё зарегистрирован", tl.Name)
 		}
+	}
+}
+
+// spec internal-drop-ollama, условия 1 и 3: в tools/list нет lyrics_adapt (Ollama) и
+// recognize_lyrics («из трека»), job_lyrics остаётся; в схеме config_set нет полей ollama_*.
+func TestToolsListHasNoOllamaTools(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestServer(t)
+	lines := rpcRoundTrip(t, s, []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+	})
+	if len(lines) != 1 {
+		t.Fatalf("responses: %d", len(lines))
+	}
+	var list struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]json.RawMessage `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Result.Tools) == 0 {
+		t.Fatal("tools/list пуст")
+	}
+	have := map[string]bool{}
+	for _, tl := range list.Result.Tools {
+		have[tl.Name] = true
+		if tl.Name == "config_set" {
+			if len(tl.InputSchema.Properties) == 0 {
+				t.Error("у config_set пустая схема — проверка ollama_* ничего не доказывает")
+			}
+			for prop := range tl.InputSchema.Properties {
+				if strings.HasPrefix(prop, "ollama") {
+					t.Errorf("в схеме config_set осталось поле %q", prop)
+				}
+			}
+		}
+	}
+	for _, gone := range []string{"lyrics_adapt", "recognize_lyrics"} {
+		if have[gone] {
+			t.Errorf("инструмент %q всё ещё зарегистрирован", gone)
+		}
+	}
+	if !have["job_lyrics"] {
+		t.Error("job_lyrics пропал из tools/list — он должен остаться")
+	}
+	if !have["config_set"] {
+		t.Error("config_set не зарегистрирован")
 	}
 }
 

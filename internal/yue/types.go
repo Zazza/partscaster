@@ -24,11 +24,7 @@ type Service interface {
 	Cancel(ctx context.Context, id int64) (bool, error)
 	DeleteJob(ctx context.Context, id int64) (bool, error)
 	Plan(ctx context.Context, p PlanParams) (*PlanResult, error)
-	Copilot(ctx context.Context, p CopilotParams) (*CopilotResult, error)
-	Translate(ctx context.Context, text string) (*TranslateResult, error)
-	RecognizeLyrics(ctx context.Context, name string, data []byte) (*LyricsResult, error)
 	JobLyrics(ctx context.Context, id int64, language string) (*LyricsResult, error)
-	AdaptLyrics(ctx context.Context, text, to string) (*LyricsResult, error)
 	AnalyzeJob(ctx context.Context, id int64) (map[string]any, error)
 	References(ctx context.Context) ([]Reference, error)
 	AddReference(ctx context.Context, name string, data []byte) (*Reference, error)
@@ -108,7 +104,6 @@ type Service interface {
 	GetURL() string
 	WorkerConfig(ctx context.Context) (map[string]any, error)
 	SetWorkerConfig(ctx context.Context, cfg map[string]any) error
-	OllamaModels(ctx context.Context, url string) (map[string]any, error)
 	// пресеты звука: рецепты на воркере, статусы — у трека (SoundPresetState: 409 — уже захвачен)
 	SoundPresets(ctx context.Context) ([]SoundPreset, error)
 	SoundPresetCreate(ctx context.Context, p SoundPreset) (*SoundPreset, error)
@@ -336,25 +331,7 @@ type PlanResult struct {
 	Seed int64 `json:"seed,omitempty"`
 }
 
-type CopilotParams struct {
-	Theme       string `json:"theme"`
-	Style       string `json:"style"`
-	Example     string `json:"example"`
-	Lang        string `json:"lang"`
-	Instruction string `json:"instruction,omitempty"`
-}
-
-type CopilotResult struct {
-	Text    string  `json:"text"`
-	Seconds float64 `json:"seconds"`
-}
-
-type TranslateResult struct {
-	Text    string  `json:"text"`
-	Seconds float64 `json:"seconds"`
-}
-
-// LyricsResult — текст лирики: whisper-распознавание или адаптация-перевод.
+// LyricsResult — текст лирики, распознанный whisper в готовом треке.
 type LyricsResult struct {
 	Text    string  `json:"text"`
 	Seconds float64 `json:"seconds"`

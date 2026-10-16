@@ -21,9 +21,7 @@ Partscaster — это три программы: desktop-приложение (
 │ stdio, для AI-агентов        │                 │  • whisper, Seed-VC — отдельными    │
 └──────────────────────────────┘                 │    окружениями (по желанию)         │
                                                  │  SQLite + файлы треков              │
-                                                 └──────────────┬──────────────────────┘
-                                                                │ HTTP (по желанию)
-                                                          Ollama :11434
+                                                 └─────────────────────────────────────┘
 ```
 
 - Приложение и воркер — отдельные процессы: закрытие приложения не прерывает генерации, очередь и
@@ -42,7 +40,7 @@ Partscaster — это три программы: desktop-приложение (
 | `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | встроенный плеер: у webview во Wails нет аудиовыхода. Linux — `pw-play` (PipeWire), пауза — остановкой процесса; Windows — WPF MediaPlayer через PowerShell (пауза не держит позицию). macOS — системный `afplay` (громкость — со следующего запуска) |
 | `loopwav.go` | круг фразы страницы «Инструменты», разложенный в длинный WAV для плеера |
 | `internal/config` | адрес воркера и настройки приложения (`settings.json` в каталоге настроек пользователя, `partscaster/`) |
-| `internal/yue` | HTTP-клиент воркера. `client.go` — только транспорт; методы разложены по доменам: `jobs.go`, `stems.go`, `llm.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; интерфейс `Service` — в `types.go` |
+| `internal/yue` | HTTP-клиент воркера. `client.go` — только транспорт; методы разложены по доменам: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; интерфейс `Service` — в `types.go` |
 | `internal/dsp` | эффекты ffmpeg на готовом файле: цепочки (динамика, модуляция, пространство, педали, глитч), вклейки и их подгонка по ритму, место в стерео, линия громкости, замер уровня |
 | `internal/studio` | конвейеры студии и пресетов звука на стороне ПК (ниже) |
 | `internal/agentsetup` | раздел «Для AI-агентов»: готовые фрагменты конфига для Claude Desktop и Codex, подключение к Claude Code командой `claude mcp add` |
@@ -93,7 +91,7 @@ Codex) те же возможности, что у приложения. Тра�
 
 - Ходит к воркеру тем же клиентом `internal/yue` и использует те же конвейеры `internal/studio`
   (пресеты, пересборка, эффекты) — результат совпадает с приложением.
-- Инструменты (77) разложены по файлам: `tools_workflow.go` (генерация и треки), `tools_studio.go`,
+- Инструменты (75) разложены по файлам: `tools_workflow.go` (генерация и треки), `tools_studio.go`,
   `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go` (библиотека стилей),
   `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
 - Данные библиотеки (`internal/mcp/*.json`) — копии источников фронтенда, встроенные в бинарник;
@@ -126,8 +124,7 @@ Codex) те же возможности, что у приложения. Тра�
 | `instruments.py`, `phrases.py`, `phrases/` | страница «Инструменты»: свои инструменты и короткие фразы для прослушивания |
 | `recipe.py` | рецепт трека из строк `jobs` и журнала `job_ops` |
 | `voice.py`, `seedvc_run.py` | «голос альбома»: Seed-VC отдельной программой из своего окружения |
-| `whisper_run.py` | распознавание текста песни; запускается интерпретатором отдельного окружения whisper |
-| `llm.py` | вызов Ollama (`keep_alive: 0`) |
+| `whisper_run.py` | что поёт готовый трек (MCP `job_lyrics`); запускается интерпретатором отдельного окружения whisper |
 | `dsp.py`, `waveform.py`, `media.py` | замер трека (librosa); волна громкости и спектрограмма; конвертация аудио |
 
 Таблицы SQLite: `jobs`, `sound_presets`, `job_ops` (журнал правок), `recipe_imports`,
@@ -199,8 +196,6 @@ Codex) те же возможности, что у приложения. Тра�
 - Разделение: demucs (~0,7 ГБ) грузится на вызов и выгружается; RoFormer — отдельный процесс, память
   освобождается с его завершением.
 - Звуковой движок: захват NAM (десятки МБ) грузится на вызов через очередь; остальные блоки — на CPU.
-- Ollama вызывается с `keep_alive: 0` и выгружается сразу после ответа. Если Ollama держит модель
-  в видеопамяти, генерация может упасть с нехваткой памяти.
 
 ## Дорожки трека (контракт)
 

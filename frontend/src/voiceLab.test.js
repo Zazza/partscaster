@@ -3,8 +3,9 @@ import { describe, it, expect } from 'vitest'
 import {
   PARAMS_VERSION, VOICE_KNOBS, AUDITION_BED, VOICE_PRESETS, VOICE_ARCHETYPES,
   defaultVoiceParams, normalizeVoiceParams, voiceDescriptor,
-  auditionStyle, auditionJob, needsTranslate,
+  auditionStyle, auditionJob,
 } from './voiceLab.js'
+import { hasCyrillic } from './requests.js'
 
 describe('voiceDescriptor', () => {
   it('нейтральные ручки дают минимальную непустую строку', () => {
@@ -138,14 +139,6 @@ describe('стенд прослушивания', () => {
   })
 })
 
-describe('needsTranslate', () => {
-  it('кириллица требует перевода, английские теги — нет', () => {
-    expect(needsTranslate('хриплый голос')).toBe(true)
-    expect(needsTranslate('raspy vocals')).toBe(false)
-    expect(needsTranslate('')).toBe(false)
-  })
-})
-
 describe('инварианты данных', () => {
   it('у каждой ручки задан максимум больше нуля', () => {
     for (const k of VOICE_KNOBS) expect(k.max).toBeGreaterThan(0)
@@ -193,9 +186,9 @@ describe('архотипы «в духе»', () => {
     }
   })
 
-  it('дескриптор любого пресета/архотипа — английский (перевод не нужен)', () => {
+  it('дескриптор любого пресета/архотипа — английский (без кириллицы)', () => {
     for (const p of [...VOICE_PRESETS, ...VOICE_ARCHETYPES]) {
-      expect(needsTranslate(voiceDescriptor(p.params)), p.id).toBe(false)
+      expect(hasCyrillic(voiceDescriptor(p.params)), p.id).toBe(false)
     }
   })
 
