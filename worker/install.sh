@@ -306,11 +306,25 @@ trap 'rm -rf "$PARTSCASTER_HOME/releases/.$NAME" "$PARTSCASTER_HOME/releases/$NA
 cp -R "$SRC/." "$PARTSCASTER_HOME/releases/.$NAME"
 mv -T "$PARTSCASTER_HOME/releases/.$NAME" "$PARTSCASTER_HOME/releases/$NAME"
 
+# uv: его установщик кладёт программу в ~/.local/bin (старые — в ~/.cargo/bin), а ssh без входа в
+# оболочку этих каталогов в PATH не добавляет — установка по ssh (deploy.sh, install_worker) падала
+# «uv: команда не найдена»
+need_uv() {
+  command -v uv >/dev/null 2>&1 && return
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  command -v uv >/dev/null 2>&1 && return
+  echo "не найден uv (PATH, ~/.local/bin, ~/.cargo/bin) — поставьте: https://docs.astral.sh/uv/" >&2
+  exit 1
+}
+
 # пакеты: только если venv новый или requirements.txt изменился
 FP="$PARTSCASTER_HOME/.requirements.sha256"
 MARK="$PARTSCASTER_VENV/.yue-installing" # venv создан этим установщиком, пакеты ещё не встали
-want="$(sha256sum "$SRC/requirements.txt" | cut -d' ' -f1)"
+# отпечаток — без комментариев и пустых строк: правка текста в файле не переустанавливает пакеты
+# (комментарий, как у pip, — # в начале строки или после пробела; #egg= в ссылке — не он)
+want="$(sed -E -e 's/(^|[[:space:]]+)#.*//' -e '/^[[:space:]]*$/d' "$SRC/requirements.txt" | sha256sum | cut -d' ' -f1)"
 if [[ ! -x "$PARTSCASTER_VENV/bin/python" ]]; then
+  need_uv
   uv venv "$PARTSCASTER_VENV" --python 3.12
   touch "$MARK"
 elif [[ ! -f "$FP" && ! -f "$MARK" ]]; then
@@ -319,6 +333,7 @@ elif [[ ! -f "$FP" && ! -f "$MARK" ]]; then
 fi
 if [[ -f "$MARK" || "$(cat "$FP" 2>/dev/null)" != "$want" ]]; then
   echo "== пакеты (torch cu128 + API; первый раз — долго) =="
+  need_uv
   uv pip install --python "$PARTSCASTER_VENV/bin/python" -r "$SRC/requirements.txt" \
     --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple
   echo "$want" > "$FP"

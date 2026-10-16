@@ -364,6 +364,9 @@ const (
 	// %[1]d — сколько ГБ нужно; df -BG печатает свободное место в гигабайтах
 	checkDiskCmd = `free=$(df -BG --output=avail ~ | tail -1 | tr -dc 0-9); echo "свободно $free ГБ, нужно ~%[1]d ГБ"; ` +
 		`[ "$free" -ge %[1]d ] || { echo 'мало места: освободите диск или поставьте веса/Seed-VC на другой (hf_home, seedvc_dir)'; exit 1; }`
+	// uv по ssh: установщик uv кладёт его в ~/.local/bin (старые — ~/.cargo/bin), а ssh без входа
+	// в оболочку этих каталогов в PATH не добавляет — «uv: команда не найдена»
+	uvPathCmd = `export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && `
 )
 
 func installSteps(host, archive string, whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir, sepDir string) []step {
@@ -393,10 +396,10 @@ func installSteps(host, archive string, whisper, seedvc, roformer bool, need flo
 			venv, py = shellQuote(sepDir+"/venv"), shellQuote(sepDir+"/venv/bin/python")
 		}
 		steps = append(steps, step{name: "RoFormer (чистое разделение дорожек, отдельное окружение)", cmd: fmt.Sprintf(
-			`uv venv %s --python 3.12 && uv pip install --python %s "audio-separator[gpu]" audioread`, venv, py)})
+			uvPathCmd+`uv venv %s --python 3.12 && uv pip install --python %s "audio-separator[gpu]" audioread`, venv, py)})
 	}
 	if whisper {
-		steps = append(steps, step{name: "whisper (тексты треков)", cmd: "uv venv ~/whisper-venv && " +
+		steps = append(steps, step{name: "whisper (тексты треков)", cmd: uvPathCmd + "uv venv ~/whisper-venv && " +
 			"uv pip install --python ~/whisper-venv/bin/python faster-whisper"})
 	}
 	if roformer && sepDir != "" { // нестандартный каталог — воркер узнаёт его из worker.env

@@ -1704,3 +1704,26 @@ func TestInstallHealthStepWithoutCurlUsesVenvPython(t *testing.T) {
 		t.Fatalf("~/yue/.venv/bin/python not called by health step without curl\n%s\ncmd: %s", out, st.cmd)
 	}
 }
+
+// Шаги компонентов, которые зовут uv, видят каталоги его установщика: по ssh без входа в оболочку
+// ~/.local/bin и ~/.cargo/bin в PATH нет («uv: команда не найдена» при деплое 2026-10-16).
+func TestInstallStepsFindUvOutsidePath(t *testing.T) {
+	t.Parallel()
+	n := 0
+	for _, st := range installSteps("user@gpu-host", "", true, true, true, 20, "~/hf", "~/seedvc", "") {
+		i := strings.Index(st.cmd, "uv venv")
+		if i < 0 {
+			continue
+		}
+		n++
+		head := st.cmd[:i]
+		for _, dir := range []string{"$HOME/.local/bin", "$HOME/.cargo/bin"} {
+			if !strings.Contains(head, dir) {
+				t.Errorf("шаг %q: %s не в PATH до вызова uv:\n%s", st.name, dir, st.cmd)
+			}
+		}
+	}
+	if n < 2 {
+		t.Fatalf("ждали шаги RoFormer и whisper с uv, нашли %d", n)
+	}
+}

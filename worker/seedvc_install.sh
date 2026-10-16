@@ -25,7 +25,9 @@ if (( free < NEED_GB )); then
   exit 1
 fi
 command -v git >/dev/null || { echo "нужен git" >&2; exit 1; }
-command -v uv >/dev/null || { echo "нужен uv: https://docs.astral.sh/uv/" >&2; exit 1; }
+# uv по ssh без входа в оболочку: его каталоги (~/.local/bin, ~/.cargo/bin) не в PATH
+command -v uv >/dev/null || export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+command -v uv >/dev/null || { echo "нужен uv (PATH, ~/.local/bin, ~/.cargo/bin): https://docs.astral.sh/uv/" >&2; exit 1; }
 
 # кэши uv и Hugging Face — внутри каталога (на одном диске с venv: uv ставит
 # жёсткими ссылками, второй копии пакетов нет)

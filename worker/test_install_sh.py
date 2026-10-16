@@ -21,6 +21,11 @@ I7. Без --no-start — daemon-reload, enable, restart, проверка /heal
     с --no-start — restart не вызывается.
 I8. --rollback (из current/install.sh): current → предыдущая версия, перезапуск; нет
     предыдущей → ошибка, current прежний.
+I9. uv: нет в PATH → ищется в $HOME/.local/bin и $HOME/.cargo/bin (ssh без входа в оболочку их в
+    PATH не кладёт). uv нужен только для venv и пакетов: venv есть и пакеты те же → без uv
+    проходит; нужен и не найден → ненулевой код, «uv» в выводе, current не появился/не сменился.
+    Отпечаток requirements.txt — без строк-комментариев (#…) и пустых строк: правка комментария
+    пакеты не переустанавливает, изменение пакета — переустанавливает.
 """
 import os
 import re
@@ -588,6 +593,97 @@ class TestInstallGpuCheck(_InstallCase):
             self.skipTest("в системе есть nvidia-smi — отсутствие не смоделировать")
         (self.stubs / "nvidia-smi").unlink()
         self.assert_untouched(self.install("1.0.0", "--no-start", ok=False))
+
+
+class TestInstallUvLookup(_InstallCase):
+    """I9: поиск uv вне PATH; uv нужен только для venv и пакетов; отпечаток без комментариев."""
+
+    def setUp(self):
+        super().setUp()
+        # заглушка uv не лежит в PATH: базовый PATH — stubs:/usr/bin:/bin, каталогов
+        # пользователя в нём нет (настоящий uv машины в ~/.local/bin не виден — HOME временный)
+        self.uv_stub = self.stubs / "uv"
+        self.uv_text = self.uv_stub.read_text()
+        self.uv_stub.unlink()
+        if shutil.which("uv", path="/usr/bin:/bin"):
+            self.skipTest("в системе есть uv в /usr/bin:/bin — отсутствие не смоделировать")
+
+    def put_uv(self, rel):
+        """Заглушка uv в <HOME>/<rel>."""
+        d = self.home / rel
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / "uv"
+        p.write_text(self.uv_text)
+        p.chmod(0o755)
+        return p
+
+    def drop_uv(self):
+        """uv больше нигде нет."""
+        for d in (self.stubs, self.home / ".local" / "bin", self.home / ".cargo" / "bin"):
+            (d / "uv").unlink(missing_ok=True)
+
+    def base_reqs(self):
+        return (self.template / "requirements.txt").read_text()
+
+    def test_uv_in_local_bin(self):
+        """ТК1: uv только в $HOME/.local/bin — установка проходит, uv pip install вызван."""
+        self.put_uv(".local/bin")
+        self.install("1.0.0", "--no-start")
+        self.assertEqual(len(self.called("uv", "venv")), 1, self.calls())
+        self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
+        self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
+
+    def test_uv_in_cargo_bin(self):
+        """ТК2: uv только в $HOME/.cargo/bin — установка проходит, uv pip install вызван."""
+        self.put_uv(".cargo/bin")
+        self.install("1.0.0", "--no-start")
+        self.assertEqual(len(self.called("uv", "venv")), 1, self.calls())
+        self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
+        self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
+
+    def test_no_uv_new_venv_fails_clearly(self):
+        """ТК3: uv нигде, venv новый — ненулевой код, «uv» в выводе, current не появился."""
+        p = self.install("1.0.0", "--no-start", ok=False)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        # понятная ошибка — с подсказкой, где искать uv, а не «uv: команда не найдена» оболочки
+        self.assertIn(".local/bin", p.stdout + p.stderr)
+        self.assertFalse(self.current().exists() or self.current().is_symlink(),
+                         "current created without uv")
+
+    def test_no_uv_changed_packages_keeps_current(self):
+        """ТК3 (обновление): uv нигде, пакет изменился — ошибка с «uv», current прежний."""
+        self.put_uv(".local/bin")
+        self.install("1.0.0", "--no-start")
+        before = os.readlink(self.current())
+        self.drop_uv()
+        p = self.install("1.0.1", "--no-start", requirements=self.base_reqs() + "einops-extra-test\n",
+                         ok=False)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        # понятная ошибка — с подсказкой, где искать uv, а не «uv: команда не найдена» оболочки
+        self.assertIn(".local/bin", p.stdout + p.stderr)
+        self.assertEqual(os.readlink(self.current()), before)
+        self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
+
+    def test_no_uv_existing_venv_same_packages(self):
+        """ТК4: venv уже есть, пакеты те же, uv нигде — установка проходит."""
+        self.put_uv(".local/bin")
+        self.install("1.0.0", "--no-start")
+        self.assertTrue((self.venv / "bin" / "python").is_file(), "venv not created by first install")
+        self.drop_uv()
+        p = self.install("1.0.1", "--no-start")
+        self.assertEqual(p.returncode, 0, f"{p.stdout}\n{p.stderr}")
+        self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.1")
+
+    def test_comment_and_blank_line_change_skips_pip(self):
+        """ТК5: вторая версия отличается только комментарием и пустой строкой — uv pip не вызван."""
+        self.put_uv(".local/bin")
+        self.install("1.0.0", "--no-start")
+        reqs = "# новый комментарий к пакетам\n\n" + self.base_reqs() + "\n# и в конце\n"
+        self.install("1.0.1", "--no-start", requirements=reqs)
+        self.assertEqual(self.called("uv", "pip"), [], self.calls())
+        # отпечаток по-прежнему следит за пакетами: новый пакет после правки комментария — ставится
+        self.install("1.0.2", "--no-start", requirements=reqs + "einops-extra-test\n")
+        self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
 
 
 if __name__ == "__main__":

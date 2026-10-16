@@ -24,7 +24,9 @@ name is enough — port 8091 is added automatically) and press "Check". On the s
 - **VRAM** (generation peak): main engine ~11 GB (measured ~11.4); second engine yue2.cpp — Q8 ~8 GB,
   low-VRAM mode ~4.5 GB (song up to ~3.5 min). More: [yue2.cpp](#second-generation-engine--yue2cpp-experiment).
 - **Linux worker:** Linux with systemd (tested on Ubuntu), [`uv`](https://docs.astral.sh/uv/) —
-  `install.sh` uses it to create the environment and install packages; it does not install `uv` itself. uv downloads
+  `install.sh` uses it to create the environment and install packages; it does not install `uv` itself. It looks for it
+  in `PATH`, then in `~/.local/bin` and `~/.cargo/bin` (where the uv installer puts it; ssh without a login shell does not
+  add them to `PATH`). uv downloads
   Python 3.12 by itself. Internet access — for packages and weights.
 - **Disk:** worker base ~17.5 GB (environment ~7.4 + weights ~10) + sample kits ~1.2 GB + room for tracks.
   Optional components — in the [table below](#components-and-disk-space).
@@ -100,7 +102,8 @@ The worker ships as a versioned archive. Its `install.sh` does both installation
 2. puts the code into `~/partscaster/releases/<time>-<version>/`;
 3. creates the environment `~/yue/.venv` (`uv venv --python 3.12`) if it does not exist, and installs the packages from
    `requirements.txt` from the PyTorch cu128 index — only for a new environment or a changed `requirements.txt`
-   (fingerprint — `~/partscaster/.requirements.sha256`);
+   (fingerprint — `~/partscaster/.requirements.sha256`, without comments and blank lines: editing the text does not
+   reinstall packages);
 4. creates `~/partscaster/worker.env` if it does not exist, with one line `HF_HOME=` (default
    `~/yue/hf-cache`, `--hf-home DIR` — another directory; the tilde is expanded — systemd does not understand it);
 5. atomically switches the link `~/partscaster/current` to the new version and installs the unit
