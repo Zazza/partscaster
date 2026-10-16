@@ -427,12 +427,13 @@ track, so listen to a piece before the full render.
   shown in the track list under this track. The track's inserts carry over to it, as with a rebuild.
 - For a track without lyrics or without a score the step explains why the render is unavailable.
 
-**Voice processing** — effects on the vocal stem as buttons: megaphone, telephone, vocal overdrive, slapback, and
-the general effects that suit a voice ("Soften ringing" (Смягчить звон), three reverbs, doubling, transpose,
-octaver; they are in "Audio effects" too). Pressing an effect plays a piece with it right away: the selection, or
-without one, from the first sung place. Then: "listen again" (with new knobs), "▶ after ⇄ / ▶ before ⇄" from the
-same second, "voice only", the knobs, **"apply"** — the effect on the voice in the selected piece (the whole track
-without a selection), collected in "Track edits", the new version in "Done".
+**"Processing:"** — a row in the same block: effects on the vocal stem as buttons — megaphone, telephone, vocal
+overdrive, slapback, and the general effects that suit a voice ("Soften ringing" (Смягчить звон), three reverbs,
+doubling, transpose, octaver; they are in "Audio effects" too). Pressing an effect highlights it and plays a piece
+with it right away: the selection, or without one, from the first sung place; pressing it again deselects it. One
+listen button — **"▶ with effect ⇄ / ▶ without effect ⇄"** from the same second (after moving the knobs the piece is
+re-rendered), "voice only", the knobs, **"make a version with the effect"** — the effect on the voice in the selected
+piece (the whole track without a selection), collected in "Track edits", the new version in "Done".
 
 ### 5 Done
 

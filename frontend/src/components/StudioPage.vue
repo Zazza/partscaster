@@ -21,7 +21,7 @@ import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
 import { targetFor, targetChoice } from '../activeTrack.js'
-import { continueRequest, fragmentRequest, fragmentWindow, instrumentalRequest, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
+import { continueRequest, fragmentRequest, fragmentWindow, instrumentalRequest, renderJob, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
 import { resultTitle, resultsOrder, resultDate, playFragment as playFragmentJob } from '../results.js'
 import { jobWatchStep } from '../jobWatch.js'
 import { readFlag, writeFlag } from '../prefs.js'
@@ -69,6 +69,8 @@ const dspParams = ref({})
 const dspBusy = ref(false)
 const dspVariants = ref([])
 const allJobs = ref([])
+// параметры рендера: у версии-варианта (эффект, пресет) нет своих стиля, текста и сида — они у исходного трека
+const genJob = computed(() => renderJob(props.job, allJobs.value))
 const jobMetrics = ref(null)   // метрики исходника (для инлайн-дельт)
 
 const curChain = computed(() => dspChains.value.find((c) => c.id === dspSel.value) || null)
@@ -522,7 +524,7 @@ async function renderInstrumental() {
   buildJob.value = { id: null, status: 'starting' }
   try {
     await ensureBaseAbc()
-    const id = await api.submit(instrumentalRequest(props.job, planDraft.value || baseAbc.value, vocals, pendingSpecs.value))
+    const id = await api.submit(instrumentalRequest(genJob.value, planDraft.value || baseAbc.value, vocals, pendingSpecs.value))
     trickMsg.value = t('studio.trick.done', { id })
     buildJob.value = { id, status: 'queued' }
     startJobPoll()
@@ -665,7 +667,7 @@ async function addSection(instId) {
   instJob.value = { id: null, status: 'starting' }
   try {
     await ensureBaseAbc()
-    const req = sectionRequest(props.job, baseAbc.value, inst, r.from, r.to)
+    const req = sectionRequest(genJob.value, baseAbc.value, inst, r.from, r.to)
     if (!req.abc.includes('|')) {
       rollErr.value = t('studio.trick.fragment.empty')
       instJob.value = null
@@ -747,10 +749,10 @@ async function rebuild(draft = false) {
     const abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
     const id = await api.submit({
       title: (props.job.title || t('common.track')) + (draft ? ' · ✦' : ' · ' + t('studio.tricksSuffix')),
-      style: trickStyle(props.job.style),
-      lyrics: props.job.lyrics,
-      seed: props.job.seed || 0,   // тот же seed = тот же голос; 0 — воркер возьмёт сид родителя
-      cot: props.job.cot === 'off' ? 'melody' : props.job.cot,   // abc требует full|melody
+      style: trickStyle(genJob.value.style),
+      lyrics: genJob.value.lyrics,
+      seed: genJob.value.seed || 0,   // тот же seed = тот же голос; 0 — воркер возьмёт сид родителя
+      cot: genJob.value.cot === 'off' ? 'melody' : genJob.value.cot,   // abc требует full|melody
       abc,
       draft,
       parent_id: props.job.id, role: draft ? 'fragment' : 'rebuild',
@@ -1005,7 +1007,7 @@ async function moreVariant(it) {
   rollErr.value = ''
   try {
     await ensureBaseAbc()
-    const req = sectionRequest(props.job, baseAbc.value, inst, it.from, it.to,
+    const req = sectionRequest(genJob.value, baseAbc.value, inst, it.from, it.to,
       Math.floor(Math.random() * 1e9))
     req.title = (props.job.title || t('common.track')) + ' · ' + t('studio.trick.inst.' + inst.id) + ' · ' + t('studio.variantSuffix')
     const childId = await api.submit(req)
@@ -1151,7 +1153,7 @@ async function renderFragment() {
     // кусок в контексте трека: звук трека до начала куска — как уже сыгранный, дальше модель играет по полному плану
     // с правками (текст и такты на своих местах) только до конца куска
     // приёмы, которые план держит слабо (инструменты, голос ±октава), — припиской к стилю, как у пересборки
-    const req = fragmentRequest(props.job, from, to, baseAbc.value, pendingSpecs.value)
+    const req = fragmentRequest(genJob.value, from, to, baseAbc.value, pendingSpecs.value)
     const f = req.fragment
     const id = req.submit ? await api.submit(req.submit)
       : await api.fragmentJob(f.jobId, f.from, f.to, f.seed, f.abc, f.styleAdd)
@@ -1877,9 +1879,10 @@ function setWindowTitle() {
           </details>
 
           <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
-          <StudioVoice :job="job" :abc-file="abcFile" @built="(id) => inserts.carryTo(job.id, id, job.id)" />
-          <StudioVoiceFx :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :sung-at="sungAt"
-                         @applied="reloadVariants" />
+          <StudioVoice :job="genJob" :abc-file="abcFile" @built="(id) => inserts.carryTo(job.id, id, job.id)">
+            <StudioVoiceFx :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :sung-at="sungAt"
+                           @applied="reloadVariants" />
+          </StudioVoice>
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <div ref="masterBox" class="studio-box">

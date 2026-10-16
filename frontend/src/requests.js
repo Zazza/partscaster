@@ -162,3 +162,21 @@ export function revoiceRecord(job, id, sel, beat, what) {
 export function stemFxRequest(stem, chainId, params, sel) {
   return { stem, chain: chainId, params: { ...(params || {}) }, from: sel ? sel.from : 0, to: sel ? sel.to : 0 }
 }
+
+// Параметры рендера из версии: вариант (эффект, пресет — role 'variant') не хранит своих стиля,
+// текста и сида (стиль «(вариант DSP-эффекта)», lyrics '', seed null) — они у исходного трека,
+// ближайшего предка по parent_id с другой ролью. Остальное (id, название, длительность, план) —
+// версии: новый рендер встаёт под неё. Исходника нет в списке или цикл — версия как есть.
+export function renderJob(job, jobs) {
+  if (!job || job.role !== 'variant') return job
+  const byId = new Map((jobs || []).map((j) => [j.id, j]))
+  const seen = new Set([job.id])
+  let cur = job
+  while (cur.role === 'variant') {
+    if (cur.parent_id == null || seen.has(cur.parent_id)) return job
+    cur = byId.get(cur.parent_id)
+    if (!cur) return job
+    seen.add(cur.id)
+  }
+  return { ...job, style: cur.style, lyrics: cur.lyrics, seed: cur.seed, cot: cur.cot }
+}

@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
 import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
+import { renderJob } from '../requests.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
 
@@ -345,7 +346,9 @@ async function tickOnce() {
     for (const spec of pending.value) {
       let child = find(spec.childId)
       if (!child && spec.instId) {
-        const childId = await recreateChild(spec, find(spec.srcJob))
+        // у версии-варианта стиль/текст/сид — исходного трека (renderJob), иначе кусок рендерился бы без них
+        const src = find(spec.srcJob)
+        const childId = await recreateChild(spec, src && renderJob(src, jobs || []))
         if (childId) { spec.childId = childId; child = find(childId) }
       }
       if (!child) { spec.dead = true; continue }

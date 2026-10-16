@@ -1,10 +1,10 @@
 <script setup>
-// Блок «Обработка голоса» шага «Голос»: эффекты, уместные на голосе (мегафон, телефон,
+// Строка «Обработка» в блоке «Голос трека» (шаг «Голос»): эффекты, уместные на голосе (мегафон, телефон,
 // перегруз, слэпбэк + общие с пометкой for_voice), всегда на дорожку «голос». Клик по
 // эффекту — сразу превью: выделение, а без него — с первого места, где поют (голосовой
 // эффект на вступлении не слышно). Схема та же, что у «Педалей»: свой слот превью,
 // «было / стало», «только голос», применение — запись реестра пересборки.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
@@ -32,10 +32,12 @@ const fx = computed(() => voiceFxChains(props.chains))
 const selId = ref('')
 const params = ref({})
 const prev = ref(null)              // {from, to, which: 'wet'|'dry', hasSolo}
+const stale = ref(false)            // ручки сдвинули после рендера куска — следующее «слушать» пересчитает
 const solo = ref(false)             // только голос, без музыки
 const busy = ref(false)
 const msg = ref('')
 const cur = computed(() => fx.value.find((c) => c.id === selId.value) || null)
+watch(params, () => { if (prev.value) stale.value = true }, { deep: true })
 
 const win = () => voicePreviewWindow(props.sel, props.sungAt, props.cursor || null, props.job.duration_sec)
 function curPos() {
@@ -50,29 +52,37 @@ async function play(which, start = 0) {
   refreshPlayer()
 }
 
-async function preview() {
-  if (!cur.value) return
+async function render() {
   const w = win()
+  const r = await api.fxPreview(props.job.id, STEM, [{ chain: cur.value.id, params: { ...params.value } }], w.from, w.to, SLOT)
+  prev.value = { from: r.from, to: r.to, which: 'wet', hasSolo: !!r.wet_solo }
+  stale.value = false
+}
+
+// одна кнопка слушать: куска ещё нет или ручки сдвинули — рендер и «с эффектом»;
+// иначе переключение с эффектом ⇄ без с той же секунды
+async function listen() {
+  if (!cur.value) return
   busy.value = true
   msg.value = ''
   try {
-    const r = await api.fxPreview(props.job.id, STEM, [{ chain: cur.value.id, params: { ...params.value } }], w.from, w.to, SLOT)
-    prev.value = { from: r.from, to: r.to, which: 'wet', hasSolo: !!r.wet_solo }
-    await play('wet')
+    if (!prev.value || stale.value) {
+      await render()
+      await play('wet')
+    } else {
+      await play(prev.value.which === 'wet' ? 'dry' : 'wet', curPos())
+    }
   } catch (e) { msg.value = String(e) } finally { busy.value = false }
 }
 
-// клик по эффекту: ручки по умолчанию и сразу слушать
+// клик по эффекту — выбран (подсвечен) и сразу звучит; повторный клик снимает выбор
 function pick(c) {
+  prev.value = null
+  stale.value = false
+  if (selId.value === c.id) { selId.value = ''; return }
   selId.value = c.id
   params.value = chainDefaults(c)
-  prev.value = null
-  preview()
-}
-
-async function toggleAB() {
-  if (!prev.value) return
-  try { await play(prev.value.which === 'wet' ? 'dry' : 'wet', curPos()) } catch (e) { msg.value = String(e) }
+  listen()
 }
 
 async function apply() {
@@ -90,40 +100,38 @@ async function apply() {
 </script>
 
 <template>
-  <div class="studio-box">
-    <div class="studio-box-head"><span><AppIcon name="mic" /> {{ t('studio.voicefx.title') }}</span> <span class="muted studio-box-hint">{{ t('studio.voicefx.sub') }}</span></div>
-    <div class="studio-box-body">
-      <div class="voice-presets">
-        <button v-for="c in fx" :key="c.id" class="ghost small-btn" :class="{ on: selId === c.id }"
-                :title="c.note" :disabled="busy" @click="pick(c)">{{ c.name }}</button>
-      </div>
-      <template v-if="cur">
-        <p class="muted dsp-note">{{ cur.note }}</p>
-        <div class="dsp-row">
-          <button class="ghost small-btn" :disabled="busy" :title="t('studio.voicefx.again.tip')" @click="preview">
-            <AppIcon name="play" /> {{ busy ? '…' : t('studio.voicefx.again') }}
-          </button>
-          <button v-if="prev" class="ghost small-btn" :title="t('studio.dsp.ab.tip')" @click="toggleAB">
-            <AppIcon name="play" /> {{ prev.which === 'wet' ? t('studio.dsp.ab.wet') : t('studio.dsp.ab.dry') }}
-          </button>
-          <label v-if="prev && prev.hasSolo" class="muted" :title="t('studio.voicefx.solo.tip')">
-            <input v-model="solo" type="checkbox" @change="play(prev.which, curPos())" /> {{ t('studio.voicefx.solo') }}
-          </label>
-          <span v-if="prev" class="muted">{{ fmtDur(prev.from) }}–{{ fmtDur(prev.to) }}</span>
-          <button class="primary small" :disabled="busy" :title="t('studio.voicefx.apply.tip')" @click="apply">
-            {{ t('studio.dsp.apply') }}
-          </button>
-        </div>
-        <div class="dsp-params">
-          <label v-for="p in cur.params" :key="p.id">
-            <span class="dsp-plabel">{{ p.label }}</span>
-            <input v-model.number="params[p.id]" type="range" :min="p.min" :max="p.max" :step="p.step" :disabled="busy" />
-            <span class="dsp-pval">{{ params[p.id] }}</span>
-          </label>
-        </div>
-      </template>
-      <p v-else class="muted">{{ t('studio.voicefx.hint') }}</p>
-      <p v-if="msg" class="muted">{{ msg }}</p>
+  <div class="voice-fx">
+    <div class="voice-presets">
+      <span class="muted" :title="t('studio.voicefx.sub')">{{ t('studio.voicefx.title') }}</span>
+      <button v-for="c in fx" :key="c.id" class="toggle small-btn" :class="{ on: selId === c.id }"
+              :title="c.note" :disabled="busy" @click="pick(c)">{{ c.name }}</button>
     </div>
+    <template v-if="cur">
+      <p class="muted dsp-note">{{ cur.note }}</p>
+      <div class="dsp-row">
+        <button class="ghost small-btn" :disabled="busy" :title="t('studio.voicefx.listen.tip')" @click="listen">
+          <AppIcon name="play" /> <template v-if="busy">…</template><template v-else-if="!prev || stale || prev.which === 'wet'">{{ t('studio.voicefx.wet') }}</template><template v-else>{{ t('studio.voicefx.dry') }}</template>
+        </button>
+        <label v-if="prev && prev.hasSolo" class="muted" :title="t('studio.voicefx.solo.tip')">
+          <input v-model="solo" type="checkbox" @change="play(prev.which, curPos())" /> {{ t('studio.voicefx.solo') }}
+        </label>
+        <span v-if="prev" class="muted">{{ fmtDur(prev.from) }}–{{ fmtDur(prev.to) }}</span>
+        <button class="primary small" :disabled="busy" :title="t('studio.voicefx.apply.tip')" @click="apply">
+          {{ t('studio.voicefx.apply') }}
+        </button>
+      </div>
+      <div class="dsp-params">
+        <label v-for="p in cur.params" :key="p.id">
+          <span class="dsp-plabel">{{ p.label }}</span>
+          <input v-model.number="params[p.id]" type="range" :min="p.min" :max="p.max" :step="p.step" :disabled="busy" />
+          <span class="dsp-pval">{{ params[p.id] }}</span>
+        </label>
+      </div>
+    </template>
+    <p v-if="msg" class="muted">{{ msg }}</p>
   </div>
 </template>
+
+<style scoped>
+.voice-fx { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+</style>

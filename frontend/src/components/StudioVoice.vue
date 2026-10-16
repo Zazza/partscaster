@@ -63,8 +63,9 @@ const blocker = computed(() => {
 const canRun = computed(() => !blocker.value && !!curParams.value && !busy.value)
 const canProbe = computed(() => canRun.value && !!probePlan.value)
 // план подкачиваем сразу: без нот голоса «прослушать кусок» недоступна до нажатия, а не после.
-// Следим за abcFile: партитуру могут создать в этой же студии («Создать партитуру»)
-watch(() => props.abcFile, async () => {
+// Следим за abcFile (партитуру могут создать в этой же студии) и за текстом/блокировкой: у версии-варианта
+// текст приходит позже — когда студия загрузит список треков и найдёт исходный трек (renderJob)
+watch(() => [props.abcFile, props.job.lyrics, blocker.value], async () => {
   if (blocker.value) return
   baseAbc = null
   try { probePlan.value = voiceProbe(await ensureAbc(), props.job.lyrics, PROBE_BARS) } catch (e) { err.value = String(e) }
@@ -157,11 +158,12 @@ async function save() {
     <div class="studio-box-body">
       <p v-if="blocker" class="muted">{{ blocker }}</p>
       <p v-else-if="probePlan === null" class="muted">{{ t('studio.voice.noVocalPlan') }}</p>
+      <p v-else-if="!curParams" class="muted">{{ t('studio.voice.pickFirst') }}</p>
       <div class="dsp-row">
         <VSelect v-model="selId" :options="cardOptions" :disabled="own" style="max-width: 260px"
                  :placeholder="voices.length ? t('studio.voice.pick') : t('studio.voice.noCards')" />
         <span v-if="card && !own" class="muted voice-card-desc" :title="voiceDescriptor(voiceCardParams(card))">{{ voiceDescriptor(voiceCardParams(card)) }}</span>
-        <button class="ghost small-btn" :class="{ on: own }" @click="own = !own">
+        <button class="toggle small-btn" :class="{ on: own }" @click="own = !own">
           <AppIcon name="sliders" /> {{ t('studio.voice.own') }}
         </button>
       </div>
@@ -205,6 +207,8 @@ async function save() {
         <template v-else-if="fullJob.status === 'error'">{{ fullJob.error }}</template>
       </p>
       <p v-if="err" class="error">{{ err }}</p>
+      <!-- обработка голоса (эффекты на дорожку «голос») — строкой в этом же блоке -->
+      <slot />
     </div>
   </div>
 </template>
