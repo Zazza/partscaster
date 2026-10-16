@@ -37,6 +37,9 @@ export function queueRows(snapshot, stats) {
       result: resultOf(it),
       pct: it.kind === 'generate' && it.state === 'running' && run && run.job_id === it.job_id &&
         run.progress_pct != null ? run.progress_pct : null,
+      // ход идущей операции клиента (пресет): шаг, номер сборки, оценка, время шага — см. opProgress.js
+      progress: it.state === 'running' && it.stage
+        ? { stage: it.stage, pass: it.pass, eta_s: it.eta_s ?? null, stage_since: it.stage_since ?? null } : null,
     }
   })
 }

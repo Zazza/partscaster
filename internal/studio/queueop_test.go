@@ -48,7 +48,7 @@ func (f *opFake) QueueAdd(_ context.Context, in yue.QueueOpIn) (*yue.QueueOp, er
 	return &yue.QueueOp{ID: fakeOpID, Kind: in.Kind, Title: in.Title, JobID: in.JobID, State: f.addState}, nil
 }
 
-func (f *opFake) QueueBeat(_ context.Context, id int64) (*yue.QueueOp, error) {
+func (f *opFake) QueueBeat(_ context.Context, id int64, _ ...yue.QueueProgress) (*yue.QueueOp, error) {
 	f.mu.Lock()
 	f.beats++
 	n, fn := f.beats, f.beat

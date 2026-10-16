@@ -8,6 +8,7 @@ import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { queueRows } from '../queueView.js'
+import { opProgressText } from '../opProgress.js'
 
 const props = defineProps({
   logo: { type: String, default: '' },
@@ -96,7 +97,7 @@ function onNav(id) { emit('nav', id) }
       <span v-if="!collapsed" class="sb-worker-text">{{ health && health.up ? workerHost : t('sb.worker.down') }}</span>
     </div>
 
-    <!-- линия видеопамяти (и очереди воркера, текущей джобы) -->
+    <!-- линия видеопамяти: занято/всего (что идёт и что ждёт — в очереди ниже) -->
     <div v-if="stats && !collapsed" class="sb-stats">
       <span v-if="stats.vram_total" class="sb-vram" :title="t('footer.vram.tip')">
         <span class="sb-vram-bar">
@@ -104,14 +105,6 @@ function onNav(id) { emit('nav', id) }
                 :style="{ width: Math.min(100, 100 * stats.vram_used / stats.vram_total) + '%' }"></span>
         </span>
         <span class="sb-text">{{ (stats.vram_used / 1024).toFixed(1) }}/{{ Math.round(stats.vram_total / 1024) }} {{ t('footer.vram.gb') }}</span>
-      </span>
-      <span v-if="stats.queue && stats.queue.queued" class="sb-text">· {{ t('footer.queue', { n: stats.queue.queued }) }}</span>
-      <span v-if="stats.gpu_waiting" class="sb-text">· {{ t('footer.gpu_queue', { n: stats.gpu_waiting }) }}</span>
-      <span v-if="stats.running" class="sb-text sb-job" :title="stats.running.title">
-        · #{{ stats.running.job_id }}
-        <template v-if="stats.running.progress_pct != null">{{ stats.running.progress_pct }}%</template>
-        <template v-else>{{ t('queue.progress.' + (stats.running.stage || 'plan')) }}</template>
-        <template v-if="stats.running.tok_per_s"> · {{ stats.running.tok_per_s }} {{ t('queue.progress.tps') }}</template>
       </span>
     </div>
     <div v-else-if="stats && collapsed && stats.vram_total" class="sb-stats-mini"
@@ -149,6 +142,8 @@ function onNav(id) { emit('nav', id) }
           <button v-else-if="r.result.type === 'version' && r.result.jobId" class="sb-mini sb-q-res"
                   :title="t('pq.result.version.tip', { id: r.result.jobId })" @click.stop="openResult(r)">{{ resultText(r) }}</button>
           <span v-else class="sb-q-res" :class="r.result.type">{{ resultText(r) }}</span>
+          <!-- ход идущей операции (пресет): шаг, номер сборки, время шага, «осталось ≈» -->
+          <span v-if="r.progress" class="sb-q-step">{{ opProgressText(r.progress, t) }}</span>
         </div>
       </div>
       <div v-else class="muted sb-q-empty">{{ t('nav.queue.empty') }}</div>
@@ -190,7 +185,8 @@ function onNav(id) { emit('nav', id) }
 .sb-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .sb-q-head { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
 .sb-q-list { display: flex; flex-direction: column; gap: 3px; }
-.sb-q-item { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.sb-q-item { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 6px; font-size: 12px; min-width: 0; }
+.sb-q-step { flex-basis: 100%; padding-left: 14px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-q-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .sb-q-dot.running { background: var(--ok, #7ec16c); animation: sbpulse 1.2s ease-in-out infinite; }
 .sb-q-dot.queued { background: var(--muted); }

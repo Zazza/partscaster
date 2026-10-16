@@ -100,7 +100,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 | Инструмент | Параметры | Что делает |
 |---|---|---|
-| `queue_list` | — | Идущая операция, ждущие по порядку, последние завершённые, пауза. У записи: `id`, `kind` (generate, preset, rebuild, stems, fx, transcribe, whisper, voice, plan, preview), `title`, `job_id`, `source` (`app` — человек, `mcp` — ИИ), `state`, `result_job_id`, `error` |
+| `queue_list` | — | Идущая операция, ждущие по порядку, последние завершённые, пауза. У записи: `id`, `kind` (generate, preset, rebuild, stems, fx, transcribe, whisper, voice, plan, preview), `title`, `job_id`, `source` (`app` — человек, `mcp` — ИИ), `state`, `result_job_id`, `error`; ход пресета: `stage` (prepare, parts, levels, render, verify, fix), `pass` (номер сборки), `eta_s` (оценка оставшегося, с; `null` — ещё нет), `stage_since` (с с начала шага) |
 | `queue_move` | **id**, **dir** | Подвинуть ждущую запись: `dir` −1 — раньше, 1 — позже |
 | `queue_cancel` † | **id**, **confirm** | Ждущую — снять, идущую — остановить |
 | `queue_pause` | **paused** | Пауза: новое не начинается, идущая доделывается; `false` — снять |
@@ -111,7 +111,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 |---|---|---|
 | `status` | — | Доступен ли воркер, загружена ли модель, версия воркера |
 | `jobs` | folder, limit, brief | Список треков. `folder` — папка («Альбом»…; `"-"` — без папки), `limit` — последние N, `brief` — короткие строки без стиля, текста и плана |
-| `job_update` | **job_id**, title, folder | Название и папка трека (версии следуют за корнем); `folder=""` — убрать из папки |
+| `job_update` | **job_id**, title, folder, parent_id | Название и папка трека (версии следуют за корнем); `folder=""` — убрать из папки; `parent_id` — перенести под другой трек (производная версия, сворачивается под ним) |
 | `submit` | **style**, **lyrics**, title, seed, n, cot, draft, arc, max_tokens, temperature, cfg, parent_id, role, sound_preset_ids | Поставить трек в очередь. `n` — веер из 1–10 треков с сидами base+0…n−1; `temperature` 0.5–1.5 (0 — по умолчанию 1.0); `cfg` 1–4 (0 — по умолчанию 1.5); остальное — как у `POST /jobs` ([api.md](api.md)). Инструментал — `lyrics='[Instrumental]'` |
 | `plan` | **style**, **lyrics**, seed | План трека (ABC) без звука — посмотреть и поправить ноты до генерации. Медленно |
 | `render_abc` | **abc**, **style**, lyrics, title, seed, parent_id, role | Трек по своей партитуре. С `parent_id` и `role=section` — кусок для вклейки под родителем; `seed=0` — сид родителя |

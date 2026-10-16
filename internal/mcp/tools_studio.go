@@ -459,20 +459,30 @@ func RegisterStudioTools(s *Server) {
 		Name: "job_update",
 		Description: "Подпись и папка трека: человеческое название вместо номера (номер при переносе меняется) " +
 			"и папка песни («Альбом», «Основы», «Эксперименты» или своя; версии следуют за корнем). " +
-			"Поле не передано — не меняется; folder \"\" — убрать из папки.",
+			"parent_id — перенести трек под другой (производная версия: в списке сворачивается под ним; так пресет " +
+			"кладёт промежуточные версии под итоговую). Поле не передано — не меняется; folder \"\" — убрать из папки.",
 		InputSchema: props(map[string]any{
-			"job_id": prop("ID трека", "integer"),
-			"title":  prop("новое название (непустое)", "string"),
-			"folder": prop("папка; пустая строка — без папки", "string"),
+			"job_id":    prop("ID трека", "integer"),
+			"title":     prop("новое название (непустое)", "string"),
+			"folder":    prop("папка; пустая строка — без папки", "string"),
+			"parent_id": prop("ID трека-родителя (существующий, не сам трек)", "integer"),
 		}, "job_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			title, folder := optString(args, "title"), optString(args, "folder")
-			if title == nil && folder == nil {
-				return "", fmt.Errorf("нечего менять: передай title и/или folder")
+			_, hasParent := args["parent_id"]
+			if title == nil && folder == nil && !hasParent {
+				return "", fmt.Errorf("нечего менять: передай title, folder и/или parent_id")
 			}
-			j, err := s.client.UpdateJob(context.Background(), argInt(args, "job_id"), title, folder)
+			id := argInt(args, "job_id")
+			// сначала название/папка (воркер проверяет название): отказ не оставит трек уже перенесённым
+			j, err := s.client.UpdateJob(context.Background(), id, title, folder)
 			if err != nil {
 				return "", err
+			}
+			if hasParent {
+				if err := s.client.SetJobParent(context.Background(), id, argInt(args, "parent_id")); err != nil {
+					return "", err
+				}
 			}
 			where := "без папки"
 			if j.Folder != "" {

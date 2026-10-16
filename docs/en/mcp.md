@@ -101,7 +101,7 @@ operation, the tool returns the error "canceled by a person" ("отменено 
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `queue_list` | — | The running operation, the waiting ones in order, the last finished ones, pause. An entry has: `id`, `kind` (generate, preset, rebuild, stems, fx, transcribe, whisper, voice, plan, preview), `title`, `job_id`, `source` (`app` — a person, `mcp` — AI), `state`, `result_job_id`, `error` |
+| `queue_list` | — | The running operation, the waiting ones in order, the last finished ones, pause. An entry has: `id`, `kind` (generate, preset, rebuild, stems, fx, transcribe, whisper, voice, plan, preview), `title`, `job_id`, `source` (`app` — a person, `mcp` — AI), `state`, `result_job_id`, `error`; preset progress: `stage` (prepare, parts, levels, render, verify, fix), `pass` (build number), `eta_s` (estimate of the time left, s; `null` — not yet), `stage_since` (s since the step began) |
 | `queue_move` | **id**, **dir** | Move a waiting entry: `dir` −1 — earlier, 1 — later |
 | `queue_cancel` † | **id**, **confirm** | A waiting one — remove, a running one — stop |
 | `queue_pause` | **paused** | Pause: nothing new starts, the running one is finished; `false` — remove the pause |
@@ -112,7 +112,7 @@ operation, the tool returns the error "canceled by a person" ("отменено 
 |---|---|---|
 | `status` | — | Is the worker available, is the model loaded, worker version |
 | `jobs` | folder, limit, brief | List of tracks. `folder` — a folder ("Album"…; `"-"` — without a folder), `limit` — the last N, `brief` — short lines without style, lyrics and plan |
-| `job_update` | **job_id**, title, folder | Track title and folder (versions follow the root); `folder=""` — remove from the folder |
+| `job_update` | **job_id**, title, folder, parent_id | Track title and folder (versions follow the root); `folder=""` — remove from the folder; `parent_id` — move under another track (a derived version, folded under it) |
 | `submit` | **style**, **lyrics**, title, seed, n, cot, draft, arc, max_tokens, temperature, cfg, parent_id, role, sound_preset_ids | Queue a track. `n` — a fan of 1–10 tracks with seeds base+0…n−1; `temperature` 0.5–1.5 (0 — default 1.0); `cfg` 1–4 (0 — default 1.5); the rest — as for `POST /jobs` ([api.md](api.md)). Instrumental — `lyrics='[Instrumental]'` |
 | `plan` | **style**, **lyrics**, seed | The track plan (ABC) without audio — look at and fix the notes before generation. Slow |
 | `render_abc` | **abc**, **style**, lyrics, title, seed, parent_id, role | A track from your own score. With `parent_id` and `role=section` — a part for splicing in under the parent; `seed=0` — the parent's seed |

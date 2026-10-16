@@ -32,6 +32,7 @@ import proclock
 import recipe
 import waveform
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -1544,10 +1545,20 @@ def queue_add(req: QueueOpIn):
     return QUEUE.add(req.kind, req.title, req.job_id, source=_req_source.get(), client=True).as_dict()
 
 
+class QueueBeatIn(BaseModel):
+    """Ход операции клиента: шаг, номер сборки, оценка оставшегося (null — оценки ещё нет)."""
+    stage: Literal["prepare", "parts", "levels", "render", "verify", "fix"]
+    pass_: int = Field(default=1, ge=1, alias="pass")
+    eta_s: float | None = Field(default=None, ge=0)
+
+
 @app.post("/queue/ops/{op_id}/beat")
-def queue_beat(op_id: int):
+def queue_beat(op_id: int, req: QueueBeatIn | None = None):
+    """Отметка «жива»; с телом — ещё и ход операции (без тела последний ход остаётся)."""
     try:
-        return QUEUE.beat(op_id)
+        if req is None:
+            return QUEUE.beat(op_id)
+        return QUEUE.beat(op_id, req.stage, req.pass_, req.eta_s)
     except KeyError:
         raise HTTPException(404, f"операции {op_id} нет") from None
 
@@ -1923,6 +1934,7 @@ JOB_FOLDER_MAX = 60
 class JobPatchIn(BaseModel):
     title: str | None = None    # None — не менять; пустое после strip — ошибка
     folder: str | None = None   # None — не менять; "" — убрать из папки
+    parent_id: int | None = None  # None — не менять; существующий трек, не сам себе (промежуточные версии пресета)
 
 
 @app.patch("/jobs/{job_id}")
@@ -1947,6 +1959,13 @@ def patch_job(job_id: int, req: JobPatchIn):
     with db_lock, db() as conn:
         if conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone() is None:
             raise HTTPException(404, "job not found")
+        if req.parent_id is not None:
+            if req.parent_id == job_id:
+                raise HTTPException(422, "parent_id must differ from job id")
+            if conn.execute("SELECT 1 FROM jobs WHERE id=?", (req.parent_id,)).fetchone() is None:
+                raise HTTPException(422, f"parent job {req.parent_id} not found")
+            sets.append("parent_id=?")
+            vals.append(req.parent_id)
         if sets:
             conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id=?", (*vals, job_id))
         row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()

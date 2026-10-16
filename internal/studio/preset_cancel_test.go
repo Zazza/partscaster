@@ -40,8 +40,8 @@ func (f *psQueueFake) QueueAdd(ctx context.Context, in yue.QueueOpIn) (*yue.Queu
 	return op, err
 }
 
-func (f *psQueueFake) QueueBeat(ctx context.Context, id int64) (*yue.QueueOp, error) {
-	return f.q.QueueBeat(ctx, id)
+func (f *psQueueFake) QueueBeat(ctx context.Context, id int64, progress ...yue.QueueProgress) (*yue.QueueOp, error) {
+	return f.q.QueueBeat(ctx, id, progress...)
 }
 
 func (f *psQueueFake) QueueFinish(ctx context.Context, id int64, in yue.QueueFinishIn) (*yue.QueueOp, error) {

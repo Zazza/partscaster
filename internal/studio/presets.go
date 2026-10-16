@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"partscaster/internal/dsp"
 	"partscaster/internal/yue"
@@ -27,6 +28,8 @@ type PresetResult struct {
 	File    string
 	// Warnings — что пресет сделал не так, как записано (у трека нет плана — гитарист пропущен)
 	Warnings []string
+	// Intermediates — промежуточные версии (до исправляющих проходов): подписаны шагом, родитель — ChildID
+	Intermediates []int64
 }
 
 // guitaristNoPlanMark — пометка в названии версии и предупреждение: у трека нет плана, гитарист «по аккордам плана»
@@ -48,9 +51,12 @@ func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 		res = r
 		// пресет отменили, а версия уже есть (в том числе отмена принята в последний миг — уже после этого
 		// шага, во внешней операции приложения) — отменённый пресет следа в треке не оставляет
+		// (промежуточные — первыми: они производные итоговой)
 		OnCanceled(ctx, func(c context.Context) {
-			if _, derr := svc.DeleteJob(c, r.ChildID); derr != nil {
-				log.Printf("пресет «%s» отменён: версия #%d не удалена: %v", p.Name, r.ChildID, derr)
+			for _, id := range append(slices.Clone(r.Intermediates), r.ChildID) {
+				if _, derr := svc.DeleteJob(c, id); derr != nil {
+					log.Printf("пресет «%s» отменён: версия #%d не удалена: %v", p.Name, id, derr)
+				}
 			}
 		})
 		return r.ChildID, nil
@@ -68,6 +74,7 @@ func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 }
 
 func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
+	ReportStep(ctx, "prepare", 1, nil) // дорожки, проверка плана
 	job, err := findJob(ctx, svc, jobID)
 	if err != nil {
 		return nil, err
@@ -94,6 +101,7 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err := ensurePresetStems(ctx, svc, jobID, p.Specs); err != nil {
 		return nil, err
 	}
+	ReportStep(ctx, "parts", 1, nil) // партии, слой, наборы
 	// партии — до наборов: пропущенная (нет нот, нет аккордов) свой набор не качает и ошибкой не роняет пресет
 	parts, err := presetParts(ctx, svc, job, p.Parts)
 	if err != nil {
@@ -111,6 +119,7 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err := ensurePresetKits(ctx, svc, p.Specs, parts); err != nil {
 		return nil, err
 	}
+	ReportStep(ctx, "levels", 1, nil)
 	levels, total, err := presetLevels(ctx, svc, jobID, p.Specs)
 	if err != nil {
 		return nil, err
@@ -119,6 +128,8 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if title == "" {
 		title = fmt.Sprintf("#%d", jobID)
 	}
+	passStart := time.Now()
+	ReportStep(ctx, "render", 1, nil)
 	file, err := renderPreset(ctx, svc, job, p, parts, levels, total, nil)
 	if err != nil {
 		return nil, err
@@ -134,15 +145,31 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	// сверка по итогу: цель ставится до мастера, а мастер и остатки старых дорожек сдвигают баланс
 	// (#725: гитара −5,9 при цели −9,5) — итог разделяется и меряется как эталоны; при промахе — исправляющий проход,
 	// поправки копятся; один проход исправлял ~половину (#728: −5,9 → −7,2), поэтому их до presetVerifyPasses
+	// оценка оставшегося — только после первой сверки: «сборка+сверка» первого прохода минус прошедшее в текущем
 	total2 := map[int]float64{}
-	for range presetVerifyPasses {
+	var firstPass time.Duration
+	eta := func() *float64 {
+		if firstPass == 0 {
+			return nil
+		}
+		v := max(0, (firstPass - time.Since(passStart)).Seconds())
+		return &v
+	}
+	var inter []int64
+	for n := 1; n <= presetVerifyPasses; n++ {
+		ReportStep(ctx, "verify", n, eta())
 		corr := presetVerify(ctx, svc, child, p.Specs, levels)
+		if firstPass == 0 {
+			firstPass = time.Since(passStart)
+		}
 		if len(corr) == 0 {
 			break
 		}
 		for i, c := range corr {
 			total2[i] = max(-presetVerifySumDb, min(presetVerifySumDb, total2[i]+c))
 		}
+		passStart = time.Now()
+		ReportStep(ctx, "fix", n+1, eta())
 		next, err := renderPreset(ctx, svc, job, p, parts, levels, total, total2)
 		if err != nil {
 			log.Printf("пресет «%s»: исправляющий проход: %v — остаётся прежний", p.Name, err)
@@ -153,12 +180,29 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 			log.Printf("пресет «%s»: версия исправляющего прохода: %v — остаётся прежняя", p.Name, err)
 			break
 		}
-		if _, err := svc.DeleteJob(ctx, child); err != nil {
-			log.Printf("пресет «%s»: промежуточная версия #%d не удалена: %v", p.Name, child, err)
+		// прежняя версия остаётся — подписана, что это за шаг: слышно, что сделала сверка
+		label := name + " · " + intermediateLabel(n)
+		if _, err := svc.UpdateJob(ctx, child, &label, nil); err != nil {
+			log.Printf("пресет «%s»: промежуточная версия #%d не подписана: %v", p.Name, child, err)
 		}
+		inter = append(inter, child)
 		child, file = nextChild, next
 	}
-	return &PresetResult{ChildID: child, File: file, Warnings: warnings}, nil
+	// промежуточные — производные итоговой: в списке сворачиваются под ней
+	for _, id := range inter {
+		if err := svc.SetJobParent(ctx, id, child); err != nil {
+			log.Printf("пресет «%s»: промежуточная версия #%d не перенесена под #%d: %v", p.Name, id, child, err)
+		}
+	}
+	return &PresetResult{ChildID: child, File: file, Warnings: warnings, Intermediates: inter}, nil
+}
+
+// intermediateLabel — подпись промежуточной версии n (после неё был исправляющий проход).
+func intermediateLabel(n int) string {
+	if n == 1 {
+		return "промежуточная: сборка 1 — до сверки баланса"
+	}
+	return fmt.Sprintf("промежуточная: сборка %d — после поправки %d", n, n-1)
 }
 
 // hasGuitarist — есть ли в записях пресета гитарист «по аккордам плана» (блок движка gtrnotes).

@@ -1373,7 +1373,6 @@ h2 {
   font-size: 11.5px; color: var(--muted);
 }
 .sb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sb-job { max-width: 46ch; }
 .sb-vram { display: flex; align-items: center; gap: 6px; }
 .sb-vram-bar {
   width: 70px; height: 5px; border-radius: 3px; overflow: hidden; flex: none;
@@ -1461,7 +1460,6 @@ h2 {
 /* узкое окно: меньше промежутки, короче громкость и название, у «＋ Новый трек» — только «＋» */
 @media (max-width: 1150px) {
   header { gap: 8px; padding: 8px 12px; }
-  .head-stats .sb-job { max-width: 24ch; }
   .playerbar-footer .playerbar { gap: 5px; }
   .playerbar-footer .playerbar .vol input { width: 50px; }
   h1 { letter-spacing: 1px; }

@@ -25,6 +25,20 @@ type QueueOp struct {
 	CreatedAt       string `json:"created_at"`
 	StartedAt       string `json:"started_at"`
 	FinishedAt      string `json:"finished_at"`
+	// ход операции клиента (бит с телом): шаг prepare | parts | levels | render | verify | fix, номер сборки,
+	// оценка оставшегося (nil — оценки ещё нет), сек с начала шага (nil — хода нет)
+	Stage      string   `json:"stage"`
+	Pass       int      `json:"pass"`
+	EtaS       *float64 `json:"eta_s"`
+	StageSince *float64 `json:"stage_since"`
+}
+
+// QueueProgress — ход операции клиента для бита: шаг, номер сборки (≥ 1), оценка оставшегося в секундах
+// (nil — оценки ещё нет; 0 — значение «вот-вот готово»).
+type QueueProgress struct {
+	Stage string   `json:"stage"`
+	Pass  int      `json:"pass"`
+	EtaS  *float64 `json:"eta_s"`
 }
 
 // QueueSnapshot — очередь целиком: идущая, ждущие по месту, последние завершённые.
@@ -53,7 +67,8 @@ type QueueFinishIn struct {
 type Queuer interface {
 	QueueList(ctx context.Context) (*QueueSnapshot, error)
 	QueueAdd(ctx context.Context, in QueueOpIn) (*QueueOp, error)
-	QueueBeat(ctx context.Context, id int64) (*QueueOp, error)
+	// QueueBeat — отметка «жива»; с ходом (первый из progress) — ещё и шаг операции.
+	QueueBeat(ctx context.Context, id int64, progress ...QueueProgress) (*QueueOp, error)
 	QueueFinish(ctx context.Context, id int64, in QueueFinishIn) (*QueueOp, error)
 	QueueMove(ctx context.Context, id int64, dir int) error
 	QueueCancel(ctx context.Context, id int64) error
@@ -118,9 +133,16 @@ func (c *Client) QueueAdd(ctx context.Context, in QueueOpIn) (*QueueOp, error) {
 	return &out, nil
 }
 
-func (c *Client) QueueBeat(ctx context.Context, id int64) (*QueueOp, error) {
+func (c *Client) QueueBeat(ctx context.Context, id int64, progress ...QueueProgress) (*QueueOp, error) {
 	var out QueueOp
-	if err := c.post(ctx, fmt.Sprintf("/queue/ops/%d/beat", id), requestTimeout, &out); err != nil {
+	path := fmt.Sprintf("/queue/ops/%d/beat", id)
+	var err error
+	if len(progress) > 0 {
+		err = c.postJSON(ctx, path, progress[0], requestTimeout, &out)
+	} else {
+		err = c.post(ctx, path, requestTimeout, &out) // прежний бит: без тела, ход воркер оставляет как был
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -175,12 +197,12 @@ func (j *journaled) QueueAdd(ctx context.Context, in QueueOpIn) (*QueueOp, error
 	return q.QueueAdd(ctx, in)
 }
 
-func (j *journaled) QueueBeat(ctx context.Context, id int64) (*QueueOp, error) {
+func (j *journaled) QueueBeat(ctx context.Context, id int64, progress ...QueueProgress) (*QueueOp, error) {
 	q, err := j.queuer()
 	if err != nil {
 		return nil, err
 	}
-	return q.QueueBeat(ctx, id)
+	return q.QueueBeat(ctx, id, progress...)
 }
 
 func (j *journaled) QueueFinish(ctx context.Context, id int64, in QueueFinishIn) (*QueueOp, error) {

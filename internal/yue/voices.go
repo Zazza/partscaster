@@ -171,6 +171,13 @@ func (c *Client) UpdateJob(ctx context.Context, jobID int64, title, folder *stri
 	return &out, nil
 }
 
+// SetJobParent — родитель трека (PATCH /jobs/{id} {parent_id}): промежуточные версии пресета сворачиваются
+// под итоговой. Воркер: существующий трек, не сам себе — иначе 422.
+func (c *Client) SetJobParent(ctx context.Context, jobID, parentID int64) error {
+	body := map[string]any{"parent_id": parentID}
+	return c.call(ctx, http.MethodPatch, fmt.Sprintf("/jobs/%d", jobID), requestTimeout, jsonReq(body), nil)
+}
+
 // RetryJob — «повторить» (POST /jobs/{id}/retry): упавшая или отменённая
 // джоба снова в очередь с теми же параметрами.
 func (c *Client) RetryJob(ctx context.Context, jobID int64) error {

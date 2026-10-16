@@ -19,8 +19,7 @@ From top to bottom:
 - **Logo and name** — a click opens the [“What it is / What's new”](#what-it-is--whats-new) window.
 - **Worker address** (the GPU machine that runs the neural network) with a status dot. If the worker does not
   respond — a red dot and "worker unavailable".
-- **Video memory** — a bar and "used/total GB". Next to it, if present: "queued: N", "GPU queue: N"
-  and the number of the running generation with a percentage.
+- **Video memory** — a bar and "used/total GB". What is running and waiting is in the queue below.
 - **Section menu**: "New track", "track list", "voices", "instruments", "sound presets", "settings".
   The open section is highlighted. A menu item closes the studio if it is open.
 - **Queue** — takes the rest of the panel, described below.
@@ -38,6 +37,8 @@ and jobs started by an AI agent through MCP — these are marked "AI".
 
 - At the top is the running job (a generation shows a percentage), then the waiting ones, below — the last
   5 results.
+- A running preset shows its step under the title: "preparing stems", "parts and kits", "measuring levels", "build N",
+  "balance check N", "balance fix N", the step time and, after the first balance check, "≈ M:SS left".
 - Results: "done → #N" (a click opens this version in the studio), "done", "error" (the text is in the
   tooltip), "canceled", "interrupted" (whoever started it stopped responding, or the worker restarted).
 - ✕ on any unfinished job — cancel, with confirmation. A waiting job is simply removed from the queue. A running
@@ -416,7 +417,10 @@ track: −14 — like streaming services, −11 — loud), "limiter", peak "ceil
 
 **Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"apply to
 track"**: no stems — the track is split (drum parts — with the RoFormer model), the stems are rebuilt, the final
-result is a new version "track · preset" (a few minutes, the job goes through the queue).
+result is a new version "track · preset" (a few minutes, the job goes through the queue). If the balance check
+  rebuilt it, the earlier builds stay as versions "track · preset · промежуточная: сборка N — …" (the label is
+  always in Russian) and fold under the final version once it finishes. Listen to the final one; the intermediate
+  ones let you hear what the check corrected.
 
 - Under the selected preset — a description and a volume slider for each of its edits (bass louder, voice
   quieter…): the preset is applied with them, the preset itself does not change. If you changed them — "as in

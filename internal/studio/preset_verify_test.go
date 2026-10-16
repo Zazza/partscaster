@@ -3,7 +3,6 @@ package studio
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,7 @@ import (
 // (rms_p95_db дорожки − сумма мощностей основных vocals/drums/bass/other из JobStems(V)); если хоть одна
 // дальше 1 дБ от цели — исправляющий проход: у каждой целевой записи поправка −ошибка (за проход не больше
 // ±6 дБ), поправки накапливаются (сумма не больше ±9 дБ на запись). Не больше двух исправляющих проходов
-// (всего ≤ 3 пересборки). Каждая промежуточная версия удаляется (DeleteJob), ответ — последняя. Все в
+// (всего ≤ 3 пересборки). Промежуточные версии не удаляются (internal-preset-progress), ответ — последняя. Все в
 // пределах 1 дБ — дальше не исправляется. Сбой разделения на любом шаге — ответ последняя готовая версия,
 // без ошибки.
 //
@@ -187,8 +186,8 @@ func vfApply(t *testing.T, f *vfFake, p yue.SoundPreset) *PresetResult {
 }
 
 // vfCheck — проходы: гитара в проходе k (k ≥ 2) ниже первого на shifts[k−2] ±0,1, бас как в первом;
-// удалены ровно версии deleted (трек и ответ — нет), ответ — child.
-func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts []float64, deleted []int64, child int64) {
+// версии не удаляются (промежуточные остаются — internal-preset-progress, условие 5), ответ — child.
+func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts []float64, _ []int64, child int64) {
 	t.Helper()
 	want := len(shifts) + 1
 	if n := f.guitarRuns(); n != want {
@@ -207,34 +206,18 @@ func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts 
 			t.Errorf("бас в проходе %d: %+.2f дБ к первому, want 0 ±0,1 (бас у цели)", k+2, d)
 		}
 	}
-	var wantDel []string
-	for _, id := range deleted {
-		wantDel = append(wantDel, fmt.Sprintf("job %d", id))
-	}
 	var gotDel []string
 	for _, d := range f.deleted {
 		if strings.HasPrefix(d, "job ") {
 			gotDel = append(gotDel, d)
 		}
 	}
-	if fmt.Sprint(vfSorted(gotDel)) != fmt.Sprint(vfSorted(wantDel)) {
-		t.Errorf("удалены версии %v, want %v (промежуточные; трек и ответ остаются)", gotDel, wantDel)
+	if len(gotDel) != 0 {
+		t.Errorf("удалены версии %v, want ни одной (промежуточные, трек и ответ остаются)", gotDel)
 	}
 	if res.ChildID != child {
 		t.Errorf("ChildID = %d, want %d (последняя версия)", res.ChildID, child)
 	}
-}
-
-func vfSorted(s []string) []string {
-	out := append([]string(nil), s...)
-	for i := range out {
-		for j := i + 1; j < len(out); j++ {
-			if out[j] < out[i] {
-				out[i], out[j] = out[j], out[i]
-			}
-		}
-	}
-	return out
 }
 
 func vfRun(t *testing.T, id int64, errs map[int64]float64, fail ...int64) (*vfFake, []float32, *PresetResult) {

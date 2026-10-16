@@ -58,7 +58,7 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 |---|---|---|
 | GET | `/queue` | `{paused, items}`: the running operation, the waiting ones in order, the last finished ones (up to 20) |
 | POST | `/queue/ops` | `{kind, title, job_id}` → entry. A client operation is a chain of steps of the app or MCP (preset, rebuild). The client must check in: without `/beat` for longer than 180 s the operation becomes `interrupted` |
-| POST | `/queue/ops/{id}/beat` | "Alive" check-in → entry (shows `state` and `cancel_requested`); unknown — 404 |
+| POST | `/queue/ops/{id}/beat` | "Alive" check-in → entry (shows `state` and `cancel_requested`); unknown — 404. Optional body `{stage, pass, eta_s}` — the operation's progress: `stage` — `prepare`, `parts`, `levels`, `render`, `verify` or `fix` (anything else — 422), `pass` — build number ≥ 1, `eta_s` — estimate of the time left, s (≥ 0 or `null`). Without a body the last progress stays. The entry returns `stage`, `pass`, `eta_s` and `stage_since` (s since the step began); an entry without progress has `""`/`null` |
 | POST | `/queue/ops/{id}/finish` | `{state: done/error/canceled, result_job_id, error}` → entry; not a client operation or already finished — 409 |
 | POST | `/queue/ops/{id}/move` | `{dir: -1 or 1}` → `{moved}`: one place earlier or later; at the edge `moved=false`; not waiting — 409 |
 | POST | `/queue/ops/{id}/cancel` | → `{canceled, running}`: a waiting one is removed at once; a running one gets a cancel mark, its external processes (RoFormer, Seed-VC, whisper) stop, a step inside the worker is finished |
@@ -72,7 +72,7 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 | POST | `/plan` | `{style, lyrics, seed, cot}` → `{abc, truncated, seconds, seed}` — only the plan (ABC score) without audio. Waits for its turn at the graphics card. `cot=off` — 422 |
 | GET | `/jobs` | List of tracks, newest first, no more than 2000. No filters |
 | GET | `/jobs/{id}` | One track. Fields are below |
-| PATCH | `/jobs/{id}` | `{title?, folder?}` → track: title (not empty, up to 200 characters) and folder (up to 60; `""` — remove from the folder). A field that is not passed does not change |
+| PATCH | `/jobs/{id}` | `{title?, folder?, parent_id?}` → track: title (not empty, up to 200 characters), folder (up to 60; `""` — remove from the folder) and parent (`parent_id` — an existing track, not this one; otherwise 422). A field that is not passed does not change |
 | DELETE | `/jobs/{id}` | Delete the track and its folder → `{deleted}`; a waiting generation is removed from the queue; a running track — 409 (cancel it first) |
 | POST | `/jobs/{id}/cancel` | Queued — remove; running — stop the generation at the nearest step → `{canceled, running?}` |
 | POST | `/jobs/{id}/retry` | A failed or canceled track goes back to the queue with the same parameters → `{retried}`; another status — 409 |

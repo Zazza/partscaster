@@ -27,6 +27,8 @@ OP_TTL = 180.0  # с без отметки «жива» — операция к�
 FINAL = ("done", "error", "canceled", "interrupted")
 CANCELED_TEXT = "отменено человеком"
 
+STAGES = ("prepare", "parts", "levels", "render", "verify", "fix")  # шаги операции клиента (ход пресета)
+
 current_op: contextvars.ContextVar[int] = contextvars.ContextVar("current_op", default=0)
 
 
@@ -49,8 +51,9 @@ def _now_str() -> str:
 
 class Op:
     def __init__(self, op_id: int, kind: str, title: str, job_id: int, source: str, client: bool,
-                 pos: int, now: float):
+                 pos: int, now: float, clock: Callable[[], float] = time.monotonic):
         self.id = op_id
+        self._clock = clock
         self.kind = kind
         self.title = title
         self.job_id = int(job_id or 0)
@@ -67,16 +70,29 @@ class Op:
         self.last_beat = now
         self.taken = False  # генерация: queue_loop уже забрал выданный слот
         self.active = 0     # сколько тяжёлых секций сейчас идут внутри операции (шаги цепочки клиента)
+        # ход операции клиента (бит с телом): шаг, номер сборки, оценка оставшегося; начало шага — по часам очереди
+        self.stage = ""
+        self.pass_: int | None = None
+        self.eta_s: float | None = None
+        self.stage_start: float | None = None
         self.hooks: list[Callable[[], None]] = []
         self.procs: set[subprocess.Popen] = set()
 
+    def set_progress(self, stage: str, pass_: int, eta_s: float | None) -> None:
+        """Тот же шаг (stage и pass) — отсчёт времени шага не сбрасывается: клиент повторяет ход с каждым битом."""
+        if (stage, pass_) != (self.stage, self.pass_):
+            self.stage_start = self._clock()
+        self.stage, self.pass_, self.eta_s = stage, pass_, eta_s
+
     def as_dict(self) -> dict:
+        since = None if self.stage_start is None else round(max(0.0, self._clock() - self.stage_start), 1)
         return {"id": self.id, "kind": self.kind, "title": self.title, "job_id": self.job_id,
                 "source": self.source, "state": self.state, "pos": self.pos,
                 "result_job_id": self.result_job_id, "error": self.error,
                 "cancel_requested": self.cancel_requested, "client": self.client,
                 "created_at": self.created_at, "started_at": self.started_at,
-                "finished_at": self.finished_at}
+                "finished_at": self.finished_at,
+                "stage": self.stage, "pass": self.pass_, "eta_s": self.eta_s, "stage_since": since}
 
 
 def _kill(p: subprocess.Popen) -> None:
@@ -173,7 +189,7 @@ class OpQueue:
                 pos = self._pos
             else:
                 self._pos = max(self._pos, int(pos))
-            op = Op(self._seq, kind, title, job_id, source, client, int(pos), self._clock())
+            op = Op(self._seq, kind, title, job_id, source, client, int(pos), self._clock(), self._clock)
             self._ops[op.id] = op
             self._dispatch()
             self._cv.notify_all()
@@ -274,7 +290,10 @@ class OpQueue:
                 self._dispatch()
                 self._cv.notify_all()
 
-    def beat(self, op_id: int) -> dict:
+    def beat(self, op_id: int, stage: str = "", pass_: int = 1, eta_s: float | None = None) -> dict:
+        """Отметка «жива»; со stage — ещё и ход операции (без stage последний ход остаётся)."""
+        if stage and stage not in STAGES:
+            raise ValueError(f"stage {stage!r}: {' | '.join(STAGES)}")
         with self._cv:
             self._sweep()
             op = self._find(op_id)
@@ -282,6 +301,8 @@ class OpQueue:
                 raise KeyError(op_id)
             if op.state not in FINAL:
                 op.last_beat = self._clock()
+                if stage:
+                    op.set_progress(stage, int(pass_), eta_s)
             return op.as_dict()
 
     def finish(self, op_id: int, state: str, result_job_id: int = 0, error: str = "") -> dict:

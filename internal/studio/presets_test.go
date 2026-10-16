@@ -158,6 +158,19 @@ func (f *psFake) DeleteJob(_ context.Context, id int64) (bool, error) {
 	return true, nil
 }
 
+// UpdateJob — подпись промежуточной версии пресета (исправляющий проход).
+func (f *psFake) UpdateJob(_ context.Context, id int64, title, _ *string) (*yue.Job, error) {
+	for i := range f.jobs {
+		if f.jobs[i].ID == id && title != nil {
+			f.jobs[i].Title = *title
+		}
+	}
+	return &yue.Job{ID: id}, nil
+}
+
+// SetJobParent — промежуточная версия под итоговой.
+func (f *psFake) SetJobParent(context.Context, int64, int64) error { return nil }
+
 func (f *psFake) DspVariantDelete(_ context.Context, id int64, fname string) (bool, error) {
 	f.deleted = append(f.deleted, key(id, fname))
 	return true, nil

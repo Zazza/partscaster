@@ -25,7 +25,7 @@ var (
 // opQueue — то, что нужно операции от очереди воркера (yue.Client, обёртка журнала).
 type opQueue interface {
 	QueueAdd(ctx context.Context, in yue.QueueOpIn) (*yue.QueueOp, error)
-	QueueBeat(ctx context.Context, id int64) (*yue.QueueOp, error)
+	QueueBeat(ctx context.Context, id int64, progress ...yue.QueueProgress) (*yue.QueueOp, error)
 	QueueFinish(ctx context.Context, id int64, in yue.QueueFinishIn) (*yue.QueueOp, error)
 }
 
@@ -85,6 +85,81 @@ func (u *undoList) run(ctx context.Context) {
 	defer cancel()
 	for i := len(fns) - 1; i >= 0; i-- {
 		fns[i](uctx)
+	}
+}
+
+// progressKey — ход операции очереди: последний шаг, который видит воркер.
+type progressKey struct{}
+
+// opProgress — ход операции: шаг уходит воркеру сразу (ReportStep) и повторяется с каждой отметкой «жива».
+// Отправки идут под mu: отметка, начатая со старым шагом, не обгонит новый.
+type opProgress struct {
+	mu    sync.Mutex
+	q     opQueue
+	id    int64
+	cur   []yue.QueueProgress // пусто — хода ещё нет (отметка без тела)
+	at    time.Time           // когда шаг сообщён: оценка в отметках убывает на прошедшее с этого момента
+	now   func() time.Time    // часы (тесты подменяют); nil — time.Now
+	ended bool                // операция закрыта — больше ничего не шлём
+}
+
+func (p *opProgress) clock() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
+
+// current — ход для отметки: оценка оставшегося минус прошедшее с отчёта шага (не меньше 0), иначе в строке
+// очереди минутами висело бы одно и то же «осталось ≈».
+func (p *opProgress) current() []yue.QueueProgress {
+	if len(p.cur) == 0 || p.cur[0].EtaS == nil {
+		return p.cur
+	}
+	pr := p.cur[0]
+	v := max(0, *pr.EtaS-p.clock().Sub(p.at).Seconds())
+	pr.EtaS = &v
+	return []yue.QueueProgress{pr}
+}
+
+// beat — отметка «жива» с последним ходом.
+func (p *opProgress) beat(ctx context.Context) (*yue.QueueOp, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.q.QueueBeat(ctx, p.id, p.current()...)
+}
+
+func (p *opProgress) end() {
+	p.mu.Lock()
+	p.ended = true
+	p.mu.Unlock()
+}
+
+// ReportStep — ход операции очереди, внутри которой идёт ctx: шаг (prepare | parts | levels | render | verify |
+// fix), номер сборки, оценка оставшегося в секундах (nil — оценки ещё нет). Уходит воркеру сразу и дальше
+// с каждой отметкой «жива». Вне операции (и после её итога) — ничего.
+func ReportStep(ctx context.Context, stage string, pass int, eta *float64) {
+	p, ok := ctx.Value(progressKey{}).(*opProgress)
+	if !ok {
+		return
+	}
+	pr := yue.QueueProgress{Stage: stage, Pass: pass}
+	if eta != nil {
+		v := *eta
+		pr.EtaS = &v
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ended {
+		return
+	}
+	p.cur = []yue.QueueProgress{pr}
+	p.at = p.clock()
+	bctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := p.q.QueueBeat(bctx, p.id, pr); err != nil {
+		// ход — только подпись в очереди; отмену и пропажу операции решает обычная отметка
+		log.Printf("очередь: ход операции %d (%s %d): %v", p.id, stage, pass, err)
 	}
 }
 
@@ -180,7 +255,9 @@ func runOp(ctx context.Context, q opQueue, op *yue.QueueOp, fn func(context.Cont
 		return 0, err
 	}
 	undo := &undoList{}
-	wctx, cancel := context.WithCancelCause(context.WithValue(yue.WithOp(ctx, op.ID), undoKey{}, undo))
+	prog := &opProgress{q: q, id: op.ID}
+	wctx, cancel := context.WithCancelCause(context.WithValue(
+		context.WithValue(yue.WithOp(ctx, op.ID), undoKey{}, undo), progressKey{}, prog))
 	defer cancel(nil)
 	stop := make(chan struct{})
 	done := make(chan struct{})
@@ -193,7 +270,7 @@ func runOp(ctx context.Context, q opQueue, op *yue.QueueOp, fn func(context.Cont
 			case <-stop:
 				return
 			case <-t.C:
-				cur, err := q.QueueBeat(ctx, op.ID)
+				cur, err := prog.beat(ctx)
 				if v := beatVerdict(cur, err); v != nil {
 					cancel(v)
 					return
@@ -202,6 +279,7 @@ func runOp(ctx context.Context, q opQueue, op *yue.QueueOp, fn func(context.Cont
 		}
 	}()
 	res, ferr := fn(wctx)
+	prog.end()
 	close(stop)
 	<-done
 	cause := context.Cause(wctx)

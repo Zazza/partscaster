@@ -41,7 +41,9 @@ func registerQueueTools(s *Server) {
 			"Запись: id (для queue_move/queue_cancel), kind (generate — генерация, preset — пресет звука, rebuild — " +
 			"пересборка, stems, fx, transcribe, whisper, voice, plan, preview), title, job_id (трек), source " +
 			"(app — человек в приложении, mcp — ИИ), state (waiting | running | done | error | canceled | " +
-			"interrupted), result_job_id (итог — версия трека), error. Долгие инструменты (sound_preset_apply, " +
+			"interrupted), result_job_id (итог — версия трека), error; ход операции клиента (пресет): stage (prepare | parts | " +
+			"levels | render | verify | fix), pass (номер сборки), eta_s (оценка оставшегося, с; null — ещё нет), " +
+			"stage_since (с с начала шага; null — хода нет). Долгие инструменты (sound_preset_apply, " +
 			"rebuild_sections, make_stems, fx_apply…) встают в эту очередь и ждут своей очереди; человек видит их " +
 			"с пометкой «ИИ» и может отменить — тогда инструмент вернёт ошибку «отменено человеком».",
 		InputSchema: props(map[string]any{}),
