@@ -148,3 +148,39 @@ def parse_abc(text: str) -> dict:
         "bars": bars,
         "duration_sec": round(max(vt.values(), default=0.0), 2),
     }
+
+
+_NOTE_DUR_RE = re.compile(r"(?:[=_^]?[A-Ga-g][,']*|z)(\d+)?")
+
+
+def _silence(seg: str) -> str:
+    """Такт голоса → паузы той же длины; аккорды-аннотации остаются на своих местах."""
+    out = []
+    for i, part in enumerate(re.split(r'("[^"]*")', seg)):
+        if i % 2:
+            out.append(part)   # "аккорд"
+            continue
+        units = sum(int(m.group(1) or 1) for m in _NOTE_DUR_RE.finditer(part))
+        if units:
+            out.append(f"z{units}")
+    return "".join(out)
+
+
+def mute_voice(abc: str, voice: str = "Vocal") -> str:
+    """План без партии голоса voice: каждый такт с нотами → паузы той же длительности.
+
+    Так модель сама пишет молчащий голос во вступлениях (`"Fm"z32`). Заголовок, другие
+    голоса, секции, строки и число тактов не меняются; такты из одних пауз — тоже.
+    """
+    out, cur = [], None
+    for line in abc.split("\n"):
+        s = line.strip()
+        if (v := _header_field(s, "V:")):
+            cur = v.split()[0]
+        elif cur == voice and s and not s.startswith("%") and not (s[0].isalpha() and s[1:2] == ":"):
+            body = CHORD_RE.sub(" ", line)
+            if NOTE_RE.search(body):
+                line = "|".join(_silence(seg) if NOTE_RE.search(CHORD_RE.sub(" ", seg)) else seg
+                                for seg in line.split("|"))
+        out.append(line)
+    return "\n".join(out)

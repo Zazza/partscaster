@@ -40,7 +40,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator
 
-from abcparse import parse_abc
+from abcparse import mute_voice, parse_abc
 from plancheck import plan_diff
 from dsp import analyze_file, beat_grid, vocal_activity
 from sheetsage import transcribe as ss_transcribe
@@ -275,6 +275,9 @@ def _migrate():
         # где в треке «без голоса» звучит дорожка голоса (секунды через запятую)
         if "vocal_leak" not in cols:
             conn.execute("ALTER TABLE jobs ADD COLUMN vocal_leak TEXT DEFAULT ''")
+        # генерация упёрлась в бюджет токенов: финал трека мог не родиться (1 — обрезан)
+        if "truncated" not in cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN truncated INTEGER DEFAULT 0")
         # характер исполнения: температура (смелость игры) и cfg (точность по
         # стилю/нотам); 0 — по умолчанию (температура библиотеки, CFG_SCALE)
         if "temperature" not in cols:
@@ -704,17 +707,54 @@ def _cpp_plan(cpp, style: str, lyrics: str, cot: str, seed: int) -> str:
     return parts["replay"].get("abc") or ""
 
 
-def job_budget(draft: bool, max_tokens: int, role: "str | None") -> int:
-    """Бюджет семантических токенов джобы. Превью — ~18 с (450); без явной длины —
-    MAX_SEM_TOKENS; явная длина — с потолком MAX_SEM_TOKENS: KV-кеш yue2 выделяется
-    под весь бюджет заранее, и на 16 ГБ модель + кес на 16000 не помещаются.
-    Кусок — ровно до конца окна + хвост (минимум 200 шагов держит _continue_song);
-    общий минимум 500 добавлял короткому куску лишние секунды генерации."""
-    budget = 450 if draft else MAX_SEM_TOKENS
-    if not draft and max_tokens:
-        floor = 200 if role == "fragment" else 500
-        budget = max(floor, min(int(max_tokens), MAX_SEM_TOKENS, 30000))
-    return budget
+# минимум бюджета полной генерации: с 2500 модель обрывала трек до финала (#1029–#1031 — без аутро)
+MIN_FULL_TOKENS = 6000
+# заглушка «без слов»: шагов на секцию [Instrumental] и запас на вступление и финал
+INSTR_SECTION_TOKENS = 1200
+INSTR_EXTRA_TOKENS = 800
+# авторетрай обрезанного трека: во столько раз больше бюджет (не выше MAX_SEM_TOKENS)
+RETRY_BUDGET_FACTOR = 1.6
+
+_LYRIC_TAG_RE = re.compile(r"\[[^\]]*\]")
+_INSTR_TAG_RE = re.compile(r"\[\s*instrumental\s*\]", re.I)
+
+
+def _has_words(lyrics: str) -> bool:
+    """В лирике есть что петь: что-то кроме тегов [..] и пробелов."""
+    return bool(re.search(r"\w", _LYRIC_TAG_RE.sub(" ", lyrics or "")))
+
+
+def instrumental_sections(lyrics: str) -> int:
+    """Секций в заглушке «без слов» (одни теги, среди них [Instrumental]); лирика со словами — 0."""
+    return 0 if _has_words(lyrics) else len(_INSTR_TAG_RE.findall(lyrics or ""))
+
+
+def is_instrumental_job(style: str, lyrics: str) -> bool:
+    """Трек заказан без голоса по явным признакам: петь нечего (в лирике нет слов) и есть заглушка
+    [Instrumental] или «instrumental»/«no vocals» в стиле. Лирика со словами — песня, что бы ни было в стиле."""
+    return not _has_words(lyrics) and (instrumental_sections(lyrics) > 0 or is_instrumental(style))
+
+
+def job_budget(draft: bool, max_tokens: int, role: "str | None", lyrics: str = "") -> int:
+    """Бюджет семантических токенов джобы — потолок, а не длина: длину трека задаёт число секций.
+    Превью — ~18 с (450). Кусок — ровно до конца окна + хвост (минимум 200 шагов держит
+    _continue_song). Полная генерация — не меньше MIN_FULL_TOKENS: ниже модель обрывает трек до
+    финала; заглушка «без слов» — по числу секций, max_tokens не учитывается. Всё — с потолком
+    MAX_SEM_TOKENS: KV-кеш yue2 выделяется под весь бюджет заранее, и на 16 ГБ больше не помещается."""
+    if draft:
+        return 450
+    if role == "fragment":
+        return max(200, min(int(max_tokens), MAX_SEM_TOKENS, 30000)) if max_tokens else MAX_SEM_TOKENS
+    if (n := instrumental_sections(lyrics)):
+        budget = n * INSTR_SECTION_TOKENS + INSTR_EXTRA_TOKENS
+    else:
+        budget = min(int(max_tokens), 30000) if max_tokens else MAX_SEM_TOKENS
+    return min(max(MIN_FULL_TOKENS, budget), MAX_SEM_TOKENS)
+
+
+def retry_budget(budget: int) -> int:
+    """Бюджет авторетрая обрезанного трека."""
+    return min(int(budget * RETRY_BUDGET_FACTOR), MAX_SEM_TOKENS)
 
 
 def _gpu_holders():
@@ -763,6 +803,11 @@ def friendly_error(e: BaseException) -> str:
             "(модель в Ollama, Stable Diffusion и т. п.) и нажмите «повторить».")
 
 
+def _auto_retry_ok(row) -> bool:
+    """Авторетрай — только у полного трека: черновик и кусок для вклейки короткие по замыслу."""
+    return not row["draft"] and row["role"] not in ("fragment", "voice")
+
+
 def _run_job(job_id: int):
     if not opqueue.current_op.get():
         op = QUEUE.find_job(job_id)
@@ -771,17 +816,75 @@ def _run_job(job_id: int):
             QUEUE.acquire(op.id)
             _run_in_op(op.id, job_id)
             return
-    with db_lock, db() as conn:
-        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    row = _job_row(job_id)
     job_dir = JOBS_DIR / str(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
-    with _state_lock:
-        cancel_ev = _cancel_flags.setdefault(job_id, threading.Event())
-    on_token, counters = _on_token_cb(job_id)
-    budget = job_budget(row["draft"], row["max_tokens"], row["role"])
     if row["role"] == "voice":
         _run_voice_job(job_id, row, job_dir)
         return
+    with _state_lock:
+        cancel_ev = _cancel_flags.setdefault(job_id, threading.Event())
+    budget = job_budget(row["draft"], row["max_tokens"], row["role"], row["lyrics"])
+    # каждый авторетрай — не больше одного раза: обрезанный трек на дорогой карте не должен крутиться вечно
+    retried: set[str] = set()
+    try:
+        while True:
+            row = _job_row(job_id)   # сид мог смениться авторетраем
+            can_retry = _auto_retry_ok(row)
+            res = _render_attempt(job_id, row, job_dir, budget, cancel_ev,
+                                  retry_truncated=can_retry and "truncated" not in retried
+                                  and retry_budget(budget) > budget)
+            if res is None:
+                return   # отмена или ошибка — итог уже в строке
+            if res == "retry":
+                retried.add("truncated")
+                log.warning("job %s: трек обрезан на бюджете %s — повтор с %s", job_id, budget, retry_budget(budget))
+                budget = retry_budget(budget)
+                continue
+            if res == "truncated":
+                log.warning("job %s: трек обрезан (бюджет %s), авторетрая больше нет", job_id, budget)
+            instrumental = is_instrumental(row["style"]) or is_instrumental_job(row["style"], row["lyrics"])
+            if instrumental and auto_stems_instrumental():
+                try:
+                    _ensure_stems(job_id)   # дорожки + проверка голоса
+                except Exception:  # noqa: BLE001 - трек готов; метка — подсказка
+                    log.exception("auto stems failed for job %s", job_id)
+                leak = _job_row(job_id)["vocal_leak"] or ""
+                if can_retry and "leak" not in retried and leak and is_instrumental_job(row["style"], row["lyrics"]):
+                    retried.add("leak")
+                    _reset_for_leak_retry(job_id, row, leak)
+                    continue
+            # «готово» — после проверки голоса: клиент не возьмёт трек, который сейчас перегенерируется
+            with db_lock, db() as conn:
+                conn.execute("UPDATE jobs SET status='done', finished_at=? WHERE id=?",
+                             (time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
+            return
+    finally:
+        with _state_lock:
+            _cancel_flags.pop(job_id, None)
+            _progress.pop(job_id, None)
+
+
+def _reset_for_leak_retry(job_id: int, row, leak: str) -> None:
+    """Голос в инструментале: повтор с соседним сидом (старые дорожки уберёт сохранение нового звука)."""
+    seed = (row["seed"] + 1) if row["seed"] else random.randrange(1, 2**31)
+    log.warning("job %s: голос в инструментале (%s) — повтор с сидом %s", job_id, leak, seed)
+    with db_lock, db() as conn:
+        conn.execute("UPDATE jobs SET seed=?, vocal_leak='', truncated=0 WHERE id=?", (seed, job_id))
+
+
+def _own_plan(cpp, pipe, request: dict, row) -> str:
+    """План, который воркер строит сам (драматургия, инструментал): тот же, что модель написала бы в треке."""
+    if cpp is not None:
+        return _cpp_plan(cpp, request["style"], request["lyrics"], row["cot"], row["seed"] or LIB_DEFAULT_SEED)
+    return pipe.plan(style=request["style"], lyrics=request["lyrics"], cot=row["cot"],
+                     **({"seed": row["seed"]} if row["seed"] else {})).abc
+
+
+def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, retry_truncated: bool):
+    """Один прогон генерации. None — отмена/ошибка (итог в строке); "retry" — обрезан, звук не
+    сохраняем; "truncated" / "ok" — звук и форматы записаны, статус ещё running."""
+    on_token, counters = _on_token_cb(job_id)
     watch_stop = _progress_watcher(job_id, counters, time.time(), budget)
     try:  # noqa: SIM105 - очистка состояния после любого исхода
         with gpu_queue(f"render {job_id}"), _pipe_lock:
@@ -811,6 +914,8 @@ def _run_job(job_id: int):
                 pass
             if row["seed"]:
                 request["seed"] = row["seed"]
+            continuation = row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
+            own_plan = False
             if row["req_abc"]:
                 abc_path = job_dir / row["req_abc"]
                 if abc_path.is_file():
@@ -825,17 +930,22 @@ def _run_job(job_id: int):
                 # драматургия: строим план сами, правим темп/вокал по дуге —
                 # и рендерим по своему ABC (механизм req_abc)
                 counters["phase"] = "arc-plan"
-                if cpp is not None:
-                    plan_abc = _cpp_plan(cpp, request["style"], request["lyrics"], row["cot"],
-                                         row["seed"] or LIB_DEFAULT_SEED)
-                else:
-                    plan_abc = pipe.plan(style=request["style"], lyrics=request["lyrics"],
-                                         cot=row["cot"],
-                                         **({"seed": row["seed"]} if row["seed"] else {})).abc
+                plan_abc = _own_plan(cpp, pipe, request, row)
                 request["style"] = arc.style_with_arc(request["style"], row["arc"])
                 request["abc"] = arc.apply_arc(plan_abc, row["arc"])
-                (job_dir / "request.abc").write_text(request["abc"], encoding="utf-8")
+                own_plan = True
                 log.info("job %s: arc=%s applied to plan", job_id, row["arc"])
+            if is_instrumental_job(row["style"], row["lyrics"]) and row["cot"] != "off" and not continuation:
+                # инструментал: мелодию голоса из плана убираем — модель поёт план нота в ноту,
+                # и без нот у Vocal голосу нечего петь (теги «no vocals» её не останавливали, #1031)
+                if "abc" not in request:
+                    counters["phase"] = "arc-plan"
+                    request["abc"] = _own_plan(cpp, pipe, request, row)
+                    own_plan = True
+                request["abc"] = mute_voice(request["abc"], "Vocal")
+                log.info("job %s: instrumental — Vocal muted in plan", job_id)
+            if own_plan:
+                (job_dir / "request.abc").write_text(request["abc"], encoding="utf-8")
             t0 = time.time()
             failure = ""
             try:
@@ -844,9 +954,7 @@ def _run_job(job_id: int):
                     if cpp is not None:
                         song = _cpp_render(cpp, row, request, job_dir, budget, counters, cancel_ev)
                     else:
-                        song = (_continue_song(pipe, row, request)
-                                if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
-                                else pipe(**request))
+                        song = _continue_song(pipe, row, request) if continuation else pipe(**request)
                     # через counters: сторож прогресса раз в 2 с пишет стадию оттуда
                     # и затёр бы прямую запись в _progress
                     counters["phase"] = "finalize"
@@ -860,13 +968,21 @@ def _run_job(job_id: int):
                         song = pipe(**request)
                     else:
                         raise
+                truncated = song.truncated
+                if isinstance(truncated, dict):
+                    truncated = any(truncated.values())
+                if truncated and retry_truncated:
+                    return "retry"   # обрезанный звук не сохраняем: повтор перепишет каталог
+                # дорожки и кэш ролла — от прошлого звука (авторетрай, «повторить» после отмены на дорожках)
+                for f in [*job_dir.glob("stem-*"), job_dir / "score.json"]:
+                    f.unlink(missing_ok=True)
                 song.save_artifacts(job_dir)
             except (InterruptedError, KeyboardInterrupt):
                 log.info("job %s canceled by user", job_id)
                 with db_lock, db() as conn:
                     conn.execute("UPDATE jobs SET status='canceled', finished_at=? WHERE id=?",
                                  (time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
-                return
+                return None
             except Exception as e:  # noqa: BLE001
                 log.exception("job %s failed", job_id)
                 _mark_failed(job_id, e)
@@ -876,10 +992,7 @@ def _run_job(job_id: int):
                 if failure == "oom":
                     _unload_pipe()
                     _stop_cpp()
-                return
-            truncated = song.truncated
-            if isinstance(truncated, dict):
-                truncated = any(truncated.values())
+                return None
             audio = job_dir / "audio.flac"
             mp3, wav = _make_formats(job_dir)
             # «переиграть»: громкость 0 — кавер, новый трек без смешивания
@@ -888,24 +1001,17 @@ def _run_job(job_id: int):
                 _mix_overdub(int(row["overdub_of"]), job_id, od_gain)
             with db_lock, db() as conn:
                 conn.execute(
-                    "UPDATE jobs SET status='done', duration_sec=?, audio_file=?, mp3_file=?, wav_file=?, abc_file=?, finished_at=? WHERE id=?",  # noqa: E501
+                    "UPDATE jobs SET duration_sec=?, audio_file=?, mp3_file=?, wav_file=?, abc_file=?, truncated=? WHERE id=?",  # noqa: E501
                     (_audio_duration(audio),
                      "audio.flac" if audio.exists() else "",
                      mp3,
                      wav,
                      "score.abc" if (job_dir / "score.abc").exists() else "",
-                     time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
-        log.info("job %s done in %.1fs (truncated=%s)", job_id, time.time() - t0, truncated)
-        if row["role"] != "voice" and is_instrumental(row["style"]) and auto_stems_instrumental():
-            try:
-                _ensure_stems(job_id)   # дорожки + проверка голоса
-            except Exception:  # noqa: BLE001 - трек готов; метка — подсказка
-                log.exception("auto stems failed for job %s", job_id)
+                     int(bool(truncated)), job_id))
+        log.info("job %s rendered in %.1fs (truncated=%s)", job_id, time.time() - t0, truncated)
+        return "truncated" if truncated else "ok"
     finally:
         watch_stop.set()
-        with _state_lock:
-            _cancel_flags.pop(job_id, None)
-            _progress.pop(job_id, None)
 
 
 def _mark_failed(job_id: int, e: BaseException) -> None:
@@ -1281,7 +1387,8 @@ def check_vocal_leak(job_id: int) -> None:
     не трогаем; сбой проверки не должен ронять разделение на дорожки."""
     row = _job_row(job_id)
     stem = JOBS_DIR / str(job_id) / "stem-vocals.flac"
-    if row is None or not is_instrumental(row["style"]) or not stem.is_file():
+    if row is None or not stem.is_file() \
+            or not (is_instrumental(row["style"]) or is_instrumental_job(row["style"], row["lyrics"])):
         return
     try:
         import soundfile as sf
@@ -1975,6 +2082,7 @@ def plan(req: PlanIn):
 def _job_dict(row) -> dict:
     d = {k: row[k] for k in row.keys()}
     d["draft"] = bool(d.get("draft"))  # sqlite даёт 0/1, клиент ждёт bool
+    d["truncated"] = bool(d.get("truncated"))
     d["sound_presets"] = _job_presets(d.get("sound_presets"))
     # готовые миксы трека (вклейки, эффекты на дорожки): по ним список треков
     # показывает «версии» и у трека без дочерних треков

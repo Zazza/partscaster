@@ -211,7 +211,7 @@ class TestFragmentReviewR1(_FragmentRunCase):
         s = requests[0]["semantic_sampling"]
         self.assertEqual(s.max_tokens, 400, "короткому куску поднят бюджет до общего минимума")
 
-    def test_regular_job_budget_400_still_500(self):
+    def test_regular_job_budget_400_raised_to_full_minimum(self):
         calls = self._fake_continue()
         with self._conn() as c:
             jid = c.execute(
@@ -222,7 +222,8 @@ class TestFragmentReviewR1(_FragmentRunCase):
         self.assertEqual(calls, [])
         gens = self._pipeline_generations()
         self.assertTrue(gens, f"пайплайн не вызван: {self.model.calls}")
-        self.assertEqual(gens[0]["semantic_sampling"].max_tokens, 500)
+        # полный трек — не меньше 6000: ниже модель обрывает трек до финала
+        self.assertEqual(gens[0]["semantic_sampling"].max_tokens, 6000)
 
     def test_title_has_clamped_end(self):
         parent = self._job(duration=60.0)

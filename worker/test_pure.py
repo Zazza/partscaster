@@ -1701,7 +1701,7 @@ class TestFriendlyError(_WorkerDbCase):
 class TestJobBudget(_WorkerDbCase):
     """job_budget: превью — 450; без длины — MAX_SEM_TOKENS; явная длина — с потолком
     MAX_SEM_TOKENS (KV-кес yue2 выделяется под весь бюджет заранее — 16 ГБ не вмещают
-    модель и 16000); кусок — свой минимум."""
+    модель и 16000); кусок — свой минимум, полный трек — не меньше 6000."""
 
     def test_draft_preview(self):
         self.assertEqual(self.w.job_budget(True, 0, None), 450)
@@ -1721,7 +1721,7 @@ class TestJobBudget(_WorkerDbCase):
         from unittest import mock
         with mock.patch.object(self.w, "MAX_SEM_TOKENS", 9000):
             self.assertEqual(self.w.job_budget(False, 100, "fragment"), 200)
-            self.assertEqual(self.w.job_budget(False, 100, None), 500)
+            self.assertEqual(self.w.job_budget(False, 100, None), 6000)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")

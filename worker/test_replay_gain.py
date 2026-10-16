@@ -35,9 +35,17 @@ class _Song:
         _write_flac(job_dir / "audio.flac", amp=0.3)
 
 
+class _Plan:
+    abc = "X:1\nL:1/32\nV: Vocal\nV: Ins\nK:C\nV: Vocal\nc32|\nV: Ins\nC32|\n"
+
+
 class _Pipe:
     def __init__(self):
         self.calls = 0
+
+    def plan(self, **kw):
+        # трек «без слов» воркер рендерит по своему плану (голос в нём заглушён)
+        return _Plan()
 
     def __call__(self, **kw):
         self.calls += 1

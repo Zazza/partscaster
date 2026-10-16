@@ -675,6 +675,8 @@ export default {
   'queue.retry': '↻ retry',
   'queue.retry.tip': 'Queue again with the same parameters. If it failed on GPU memory, free the GPU from other programs first',
   'queue.vocalLeak': 'voice in instrumental',
+  'queue.truncated': 'cut short',
+  'queue.truncated.tip': 'Generation hit the length limit even after an automatic retry — the ending may be missing. Retry with a longer duration',
   'queue.vocalLeak.tip': 'The vocal stem sounds in a track without vocals: {at}. Most likely the AI slipped in a voice — listen to these spots; to remove, mute the vocal stem in the studio',
   'queue.head.badge': 'main: #{id}',
   'queue.head.main': 'main',

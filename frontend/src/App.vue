@@ -1113,6 +1113,7 @@ function onWindowClick(e) {
             <span v-else-if="j.status === 'error'" class="status" :class="j.status">{{ statusLabelC[j.status] || j.status }}</span>
             <span v-else-if="j.status === 'queued'" class="status" :class="j.status">{{ statusLabelC[j.status] || j.status }}</span>
             <span v-else-if="j.status === 'done' && headOf(j).vocal_leak" class="badge warn" :title="leakTip(headOf(j))"><AppIcon name="alert" /></span>
+            <span v-if="j.status === 'done' && headOf(j).truncated" class="badge warn" :title="t('queue.truncated.tip')">{{ t('queue.truncated') }}</span>
             <span v-if="j.status === 'running'" class="job-progress" :title="progressTip(j)">
               <span class="progress-track slim" :class="{ indet: j.progress_pct == null }">
                 <span v-if="j.progress_pct != null" class="progress-fill" :style="{ width: j.progress_pct + '%' }"></span>
@@ -1211,6 +1212,7 @@ function onWindowClick(e) {
                   <span>{{ v.id === j.id ? t('queue.kids.original') : v.title }}</span>
                   <span v-if="v.id !== j.id" class="badge">{{ t('queue.role.' + v.role) }}</span>
                   <span v-if="v.vocal_leak" class="badge warn" :title="leakTip(v)"><AppIcon name="alert" /></span>
+                  <span v-if="v.truncated" class="badge warn" :title="t('queue.truncated.tip')">{{ t('queue.truncated') }}</span>
                   <span v-if="v.id !== j.id && v.status !== 'done'" class="status" :class="v.status">{{ statusLabelC[v.status] || v.status }}</span>
                   <span class="spacer"></span>
                   <span v-if="v.duration_sec" class="tl-meta">{{ fmtDur(v.duration_sec) }}</span>
