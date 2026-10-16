@@ -4,7 +4,8 @@
 import { SLOT_ORDER, dictStyle, effectiveLyrics } from './styleLogic.js'
 import { durTokens } from './slotOptions.js'
 import { characterPayload } from './character.js'
-import { beatSecAt, continuationPlan, planTimeline, trickStyleSuffix } from './abcEdit.js'
+import { applyTrick, beatSecAt, continuationPlan, planTimeline, sliceAbc, trickStyleSuffix } from './abcEdit.js'
+import { swapVocals, voiceDescriptor } from './voiceLab.js'
 import { revoiceSpecKinds } from './vocalParts.js'
 import { useI18n } from './i18n/index.js'
 
@@ -78,16 +79,37 @@ export function dropVoices(abc, voiceNames) {
 // вокальные голоса плана (по порядку голосов ролла)
 export const vocalVoices = (voiceOrder) => (voiceOrder || []).filter((v) => /vocal/i.test(v))
 
-// инструментал: та же музыка (план, в т.ч. с накопленными приёмами), но без вокальной партии;
-// стиль получает подсказку, лирика — [Instrumental]
-export function instrumentalRequest(job, plan, vocals, specs) {
+// «применить всё» с изменениями, которым нужен рендер (черновик gen): ОДИН рендер со всеми ними — план с
+// приёмами (по порядку, как пересборка), обрезанный по длительности аудио (полный план бывает длиннее трека);
+// стиль — сначала новый голос (замена голосовых тегов), потом приписки приёмов: приписка октавы содержит
+// «vocal» и иначе вырезалась бы заменой голоса. «Без голоса» — план без голосов Vocal, заглушка вместо текста,
+// голос не применяется. job — renderJob версии (стиль, текст, seed исходного трека)
+export function genRequest(job, { baseAbc, gen, vocals, title }) {
+  const g = gen || {}
+  const specs = g.specs || []
+  const full = specs.reduce((abc, sp) => applyTrick(abc, sp), String(baseAbc || ''))
+  const dur = Number(job.duration_sec) || 0
+  let abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
+  let style = job.style || ''
+  let lyrics = job.lyrics
+  if (g.instrumental) {
+    const names = vocals && vocals.length ? vocals
+      : [...new Set([...abc.matchAll(/^V:\s*(\S+)/gm)].map((m) => m[1]))].filter((v) => /vocal/i.test(v))
+    abc = dropVoices(abc, names)
+    style = trickStyle(style, specs) + ', instrumental, no vocals'
+    lyrics = '[Instrumental]'
+  } else {
+    if (g.voice && g.voice.params) style = swapVocals(style, voiceDescriptor(g.voice.params))
+    style = trickStyle(style, specs)
+  }
   return {
-    title: (job.title || t('common.track')) + ' · ' + t('requests.instrumental'),
-    style: trickStyle(job.style, specs) + ', instrumental, no vocals',
-    lyrics: '[Instrumental]',
+    title,
+    style,
+    lyrics,
     seed: job.seed || 0,   // 0 — воркер возьмёт сид родителя
-    cot: job.cot === 'off' ? 'melody' : job.cot,
-    abc: dropVoices(plan, vocals),
+    cot: job.cot === 'off' || !job.cot ? 'melody' : job.cot,   // abc требует full|melody
+    abc,
+    draft: false,
     parent_id: job.id, role: 'rebuild',
   }
 }

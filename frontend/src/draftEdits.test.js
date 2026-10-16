@@ -7,7 +7,7 @@
 //   localTs — { [parentId]: мс } (ключ yue_insert_ts), remote — [{job_id, state}],
 //   state черновика — { v: 1, edits, queue (без parent), ts }.
 import { describe, it, expect } from 'vitest'
-import { editStep, editsBySteps, mergeDrafts, draftState, isEmptyDraft } from './draftEdits.js'
+import { editStep, editsBySteps, mergeDrafts, draftState, isEmptyDraft, isEmptyGen } from './draftEdits.js'
 
 // записи реестра — в форме, в которой их пишет useInserts
 const base = { from: 4, to: 8, lead: 0, beat: 0, db: 0, stems: ['drums'], fadeIn: 0, fadeOut: 0, keepHighHz: 0 }
@@ -328,5 +328,144 @@ describe('mergeDrafts: ключ трека', () => {
     expect(Object.keys(r.applied)).toEqual(['7'])
     expect(r.applied[7]).toEqual([fx(-1)])
     expect(ids(r.push)).toEqual([7])
+  })
+})
+
+// internal-studio-draft3, условие 1, ТК2: изменения с рендером (gen) — часть состояния черновика трека.
+// gen = {specs: [приёмы плана], voice: {params, name} | null, instrumental: bool};
+// gens — { [parentId]: gen }, как applied. applying — {job_id, title} идущего «применить всё».
+describe('gen в черновике трека (ТК2)', () => {
+  const remoteOf = (jobId, state) => ({ job_id: jobId, state: { v: 1, edits: [], queue: [], ts: 1, ...state } })
+  const oct = { kind: 'octave', dir: 'up', label: 'октава вверх', targets: [{ voice: 'Vocal', bar: 0 }] }
+  const voice = { params: { register: 'female', delivery: 1 }, name: 'Эфир' }
+  const G = { specs: [oct], voice: null, instrumental: false }
+  const GV = { specs: [], voice, instrumental: true }
+  const EMPTY = { specs: [], voice: null, instrumental: false }
+
+  describe('isEmptyGen', () => {
+    it('нет gen / пустой gen (нет specs, нет voice, instrumental false) → true', () => {
+      expect(isEmptyGen(undefined)).toBe(true)
+      expect(isEmptyGen(null)).toBe(true)
+      expect(isEmptyGen({})).toBe(true)
+      expect(isEmptyGen(EMPTY)).toBe(true)
+    })
+
+    it('есть приёмы, или голос, или «без голоса» → false', () => {
+      expect(isEmptyGen({ ...EMPTY, specs: [oct] })).toBe(false)
+      expect(isEmptyGen({ ...EMPTY, voice })).toBe(false)
+      expect(isEmptyGen({ ...EMPTY, instrumental: true })).toBe(false)
+    })
+  })
+
+  describe('draftState', () => {
+    it('gen трека переносится в состояние; правки и очередь — как прежде', () => {
+      const st = draftState(7, { 7: [fx(-1)] }, [{ childId: 40, parent: 7 }], 55, { 7: G, 8: GV })
+      expect(st.gen).toEqual(G)
+      expect(st.edits).toEqual([fx(-1)])
+      expect(st.queue).toEqual([{ childId: 40 }])
+      expect(st.ts).toBe(55)
+      expect(st.v).toBe(1)
+    })
+
+    it('gen другого трека не попадает', () => {
+      const st = draftState(7, {}, [], 1, { 8: GV })
+      expect(isEmptyGen(st.gen)).toBe(true)
+    })
+
+    it('без gens (старый вызов) → состояние без gen, как в этапе 2', () => {
+      const st = draftState(7, { 7: [fx(-1)] }, [], 1)
+      expect(isEmptyGen(st.gen)).toBe(true)
+      expect(st.edits).toEqual([fx(-1)])
+    })
+
+    it('не мутирует gens', () => {
+      const gens = { 7: clone(G) }
+      const snap = clone(gens)
+      draftState(7, {}, [], 1, gens)
+      expect(gens).toEqual(snap)
+    })
+  })
+
+  describe('isEmptyDraft с gen и applying', () => {
+    it('трек только с gen (без правок и очереди) — не пуст', () => {
+      expect(isEmptyDraft(draftState(7, {}, [], 1, { 7: G }))).toBe(false)
+      expect(isEmptyDraft(draftState(7, {}, [], 1, { 7: { ...EMPTY, instrumental: true } }))).toBe(false)
+      expect(isEmptyDraft(draftState(7, {}, [], 1, { 7: { ...EMPTY, voice } }))).toBe(false)
+    })
+
+    it('пустой gen и нет правок/очереди → пусто', () => {
+      expect(isEmptyDraft(draftState(7, {}, [], 1, { 7: EMPTY }))).toBe(true)
+      expect(isEmptyDraft({ v: 1, edits: [], queue: [], ts: 1, gen: EMPTY })).toBe(true)
+    })
+
+    it('идёт «применить всё» (applying) → не пусто', () => {
+      expect(isEmptyDraft({ v: 1, edits: [], queue: [], ts: 1, applying: { job_id: 901, title: 'итог' } })).toBe(false)
+    })
+  })
+
+  describe('mergeDrafts', () => {
+    it('трек только на воркере с gen → gens[трек] = gen воркера', () => {
+      const r = mergeDrafts({ applied: {}, pending: [], gens: {} }, {}, [remoteOf(9, { gen: G, ts: 800 })])
+      expect(r.gens[9]).toEqual(G)
+      expect(ids(r.push)).toEqual([])
+    })
+
+    it('трек только локально и только с gen → gen остаётся, трек в push', () => {
+      const r = mergeDrafts({ applied: {}, pending: [], gens: { 7: GV } }, { 7: 500 }, [])
+      expect(r.gens[7]).toEqual(GV)
+      expect(ids(r.push)).toEqual([7])
+    })
+
+    it('новее локальный → gen локальный (в т.ч. отсутствие gen побеждает старый gen воркера)', () => {
+      const r1 = mergeDrafts({ applied: { 7: [fx(-1)] }, pending: [], gens: { 7: G } }, { 7: 900 },
+        [remoteOf(7, { edits: [insert(5)], gen: GV, ts: 100 })])
+      expect(r1.gens[7]).toEqual(G)
+      const r2 = mergeDrafts({ applied: { 7: [fx(-1)] }, pending: [], gens: {} }, { 7: 900 },
+        [remoteOf(7, { edits: [insert(5)], gen: GV, ts: 100 })])
+      expect(isEmptyGen(r2.gens[7])).toBe(true)
+    })
+
+    it('новее воркер → gen воркера (локальный gen трека заменяется)', () => {
+      const r = mergeDrafts({ applied: { 7: [fx(-1)] }, pending: [], gens: { 7: G } }, { 7: 100 },
+        [remoteOf(7, { edits: [insert(5)], gen: GV, ts: 900 })])
+      expect(r.gens[7]).toEqual(GV)
+      expect(r.applied[7]).toEqual([insert(5)])
+    })
+
+    it('gen соседнего трека не теряется', () => {
+      const r = mergeDrafts({ applied: { 8: [mute(-2)] }, pending: [], gens: { 8: G } }, { 7: 100, 8: 100 },
+        [remoteOf(7, { gen: GV, ts: 900 })])
+      expect(r.gens[8]).toEqual(G)
+      expect(r.gens[7]).toEqual(GV)
+    })
+
+    it('applying из черновика воркера переносится (ход «применить всё» переживает перезапуск)', () => {
+      const applying = { job_id: 901, title: 'Песня · итог' }
+      const r = mergeDrafts({ applied: {}, pending: [], gens: {}, applying: {} }, {},
+        [remoteOf(7, { edits: [fx(-1)], gen: G, applying, ts: 800 })])
+      expect(r.applying[7]).toEqual(applying)
+      expect(r.gens[7]).toEqual(G)
+    })
+
+    it('draftState → mergeDrafts: gen трека восстанавливается', () => {
+      const st = draftState(7, { 7: [fx(-1)] }, [], 77, { 7: GV })
+      const r = mergeDrafts({ applied: {}, pending: [], gens: {} }, {}, [{ job_id: 7, state: st }])
+      expect(r.gens[7]).toEqual(GV)
+      expect(r.applied[7]).toEqual([fx(-1)])
+    })
+
+    it('старый вход без gens/applying — работает как прежде', () => {
+      const r = mergeDrafts({ applied: { 7: [fx(-1)] }, pending: [] }, { 7: 500 }, [])
+      expect(r.applied[7]).toEqual([fx(-1)])
+      expect(isEmptyGen((r.gens || {})[7])).toBe(true)
+    })
+
+    it('вход не мутируется', () => {
+      const local = { applied: { 7: [fx(-1)] }, pending: [], gens: { 7: clone(G) }, applying: {} }
+      const remote = [remoteOf(7, { gen: GV, ts: 900 }), remoteOf(8, { gen: G, applying: { job_id: 1, title: 't' }, ts: 5 })]
+      const snap = clone({ local, remote })
+      mergeDrafts(local, { 7: 100 }, remote)
+      expect({ local, remote }).toEqual(snap)
+    })
   })
 })

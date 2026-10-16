@@ -9,7 +9,7 @@ import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
 import { renderJob } from '../requests.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
-import { draftState, isEmptyDraft, mergeDrafts } from '../draftEdits.js'
+import { draftState, isEmptyDraft, isEmptyGen, mergeDrafts } from '../draftEdits.js'
 
 const { t } = useI18n()
 const KEY = 'yue_insert_queue'
@@ -22,9 +22,18 @@ const TS_KEY = 'yue_insert_ts'
 // что по каждому треку уже лежит на воркере (JSON правок и очереди): переживает перезапуск — иначе при
 // старте без воркера все локальные треки казались бы изменёнными и затёрли бы его черновики
 const SENT_KEY = 'yue_insert_sent'
+// изменения с рендером по трекам {parentId: {specs, voice, instrumental}} и ход «применить всё» с рендером
+// {parentId: {job_id, title} | {error, title} | {finalize: true, title}} — часть черновика трека
+const GEN_KEY = 'yue_insert_gen'
+const APPLYING_KEY = 'yue_insert_applying'
 const pending = ref(load(KEY, []))
 const applied = ref(load(APPLIED_KEY, {}))
+const gens = ref(load(GEN_KEY, {}))
+const applyings = ref(load(APPLYING_KEY, {}))
 let ts = load(TS_KEY, {})
+// ход «применить всё» двигаем только после стартового слияния с черновиками воркера: иначе запоздавший снимок
+// воркера вернул бы уже завершённый ход (applying, gen, правки) — и итог собрался бы второй раз
+let synced = false
 
 function load(key, dflt) {
   try { return JSON.parse(localStorage.getItem(key) || 'null') || dflt } catch { return dflt }
@@ -34,6 +43,8 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(pending.value))
     localStorage.setItem(APPLIED_KEY, JSON.stringify(applied.value))
+    localStorage.setItem(GEN_KEY, JSON.stringify(gens.value))
+    localStorage.setItem(APPLYING_KEY, JSON.stringify(applyings.value))
     localStorage.setItem(TS_KEY, JSON.stringify(ts))
     localStorage.setItem(SENT_KEY, JSON.stringify(sent))
   } catch { /* localStorage недоступен — живём в памяти до перезапуска */ }
@@ -45,12 +56,14 @@ function save() {
 // получают новое время и уходят на воркер; так не нужно знать, какой вызов что поменял
 const sent = load(SENT_KEY, {})
 const dirty = new Set()
+const stateOf = (id, at) => draftState(id, applied.value, pending.value, at, gens.value, applyings.value)
 const body = (id) => {
-  const st = draftState(id, applied.value, pending.value, 0)
-  return JSON.stringify([st.edits, st.queue])
+  const st = stateOf(id, 0)
+  return JSON.stringify([st.edits, st.queue, st.gen || null, st.applying || null])
 }
 function trackIds() {
-  return new Set([...Object.keys(applied.value), ...pending.value.map((x) => String(x.parent)), ...Object.keys(sent)])
+  return new Set([...Object.keys(applied.value), ...pending.value.map((x) => String(x.parent)), ...Object.keys(sent),
+    ...Object.keys(gens.value), ...Object.keys(applyings.value)])
 }
 function markChanged() {
   for (const id of trackIds()) {
@@ -60,13 +73,13 @@ function markChanged() {
     dirty.add(id)
   }
 }
-body.empty = JSON.stringify([[], []])
+body.empty = JSON.stringify([[], [], null, null])
 // отправка по одной: черновики трека не должны обгонять друг друга
 let pushing = Promise.resolve()
 function pushDirty() {
   pushing = pushing.then(async () => {
     for (const id of [...dirty]) {
-      const st = draftState(id, applied.value, pending.value, ts[id] || Date.now())
+      const st = stateOf(id, ts[id] || Date.now())
       const b = body(id)
       try {
         const empty = isEmptyDraft(st)
@@ -106,14 +119,22 @@ async function syncFromWorker() {
   try {
     remote = (await api.drafts()) || []
   } catch (e) {
-    // старый воркер или нет связи — работаем по копии на ПК, слияние повторится
+    // старый воркер (нет /drafts — 404): черновиков там нет и не будет, правда — копия на ПК, ход можно двигать
+    if (/\b404\b/.test(String(e))) {
+      synced = true
+      return
+    }
+    // нет связи — работаем по копии на ПК, слияние повторится
     console.warn('черновики студии с воркера не получены — повтор через', SYNC_RETRY_MS / 1000, 'с', e)
     setTimeout(syncFromWorker, SYNC_RETRY_MS)
     return
   }
-  const m = mergeDrafts({ applied: applied.value, pending: pending.value }, ts, remote)
+  const m = mergeDrafts({ applied: applied.value, pending: pending.value, gens: gens.value,
+    applying: applyings.value }, ts, remote)
   applied.value = m.applied
   pending.value = m.pending
+  gens.value = m.gens
+  applyings.value = m.applying
   ts = m.ts
   const pushIds = new Set(m.push.map(String))
   for (const d of remote) {
@@ -122,12 +143,17 @@ async function syncFromWorker() {
   }
   for (const id of pushIds) dirty.add(id)
   save()
+  synced = true
 }
 syncFromWorker()
 
 // specs: [{parent, childId, instId, from, to, lead, beat, db, stems, fadeIn, fadeOut, srcJob}]
 function register(specs) {
   for (const sp of specs) notApplying(sp.parent)
+  registerOwn(specs)
+}
+// без проверки «применить всё»: перенос вклеек на новую версию — шаг самого хода (carryTo)
+function registerOwn(specs) {
   pending.value = [...pending.value, ...specs]
   save()
 }
@@ -147,6 +173,10 @@ const building = ref({})
 // его между пересборкой итога и созданием трека (в итог попали бы чужие громкости)
 function rebuild(parentId) {
   try { notApplying(parentId) } catch (e) { return Promise.reject(e) }
+  return rebuildOwn(parentId)
+}
+// без проверки: пересборка, когда готов кусок вклейки (тик), — в т.ч. у новой версии, ждущей итога
+function rebuildOwn(parentId) {
   return queued(parentId, () => doRebuild(parentId))
 }
 // «послушать громкости пресета до применения»: пересборка активных правок трека
@@ -240,7 +270,7 @@ function carryTo(fromParent, toParent, srcJob) {
   const inRegistry = new Set(done.map((it) => it.childId))
   const waiting = byParent(fromParent).filter((s) => !inRegistry.has(s.childId) && s.childId > 0)
     .map(({ parent: _p, done: _d, dead: _x, ...it }) => it)
-  register([...done, ...waiting].map((it) => ({ ...it, parent: toParent, srcJob })))
+  registerOwn([...done, ...waiting].map((it) => ({ ...it, parent: toParent, srcJob })))
 }
 
 // файл свежего микса: Go называет его по последней активной вклейке реестра
@@ -465,14 +495,112 @@ async function setDb(parentId, childId, db) {
 // пока идёт «применить всё», правки трека не принимаются: итог собирается из списка на момент нажатия,
 // а после успеха список очищается — правка, сделанная в это время, пропала бы молча
 const applying = new Set()
+// идёт ход «применить всё» с рендером: ждём рендер (job_id) или итог новой версии (finalize) — правки человека в это
+// время не принимаются: итог собирается без них и стёр бы их (новый голос на версии, ждущей кусков, — потерялся бы)
+const rendering = (parentId) => {
+  const a = applyings.value[parentId]
+  return !!(a && !a.error && (a.job_id || a.finalize))
+}
 function notApplying(parentId) {
-  if (applying.has(Number(parentId))) throw new Error(t('inserts.applying'))
+  if (applying.has(Number(parentId)) || rendering(parentId)) throw new Error(t('inserts.applying'))
+}
+
+// ---- изменения с рендером (gen): голос, приёмы плана, «без голоса» ----
+const genFor = (parentId) => gens.value[parentId] || null
+const applyingFor = (parentId) => applyings.value[parentId] || null
+// слияние полей; пустой gen убирается
+function setGen(parentId, patch) {
+  notApplying(parentId)
+  const g = { specs: [], voice: null, instrumental: false, ...(gens.value[parentId] || {}), ...JSON.parse(JSON.stringify(patch || {})) }
+  const rest = { ...gens.value }
+  if (isEmptyGen(g)) delete rest[parentId]
+  else rest[parentId] = g
+  gens.value = rest
+  save()
+}
+function setApplying(parentId, a) {
+  const rest = { ...applyings.value }
+  if (a) rest[parentId] = a
+  else delete rest[parentId]
+  applyings.value = rest
+  save()
+}
+// ход «применить всё» с рендером: рендер готов — правки на новую версию, затем её итог; ошибка — причина видна,
+// трек разблокирован; новая версия ещё ждёт куски вклеек — итог после них (finalize)
+let advancing = false
+async function advanceApplying() {
+  if (advancing || !synced) return
+  const live = Object.entries(applyings.value).filter(([, a]) => a && (a.finalize || (a.job_id && !a.error)))
+  if (!live.length) return
+  advancing = true
+  try {
+    const jobs = (await api.jobs()) || []
+    for (const [pid, a] of live) {
+      if (a.finalize) {
+        // правки новой версии ждут свои рендеры кусков — итог, когда очередь пуста
+        if (!byParent(Number(pid)).length && !isBuilding(pid)) await finalize(Number(pid), a.title)
+        continue
+      }
+      const row = jobs.find((j) => Number(j.id) === Number(a.job_id))
+      if (!row || ['error', 'canceled'].includes(row.status)) {
+        setApplying(pid, { title: a.title, error: (row && (row.error || row.status)) || 'job not found' })
+        continue
+      }
+      if (row.status !== 'done') {
+        if (row.status !== a.status) setApplying(pid, { ...a, status: row.status })
+        continue
+      }
+      const newId = Number(a.job_id)
+      const from = Number(pid)
+      // правки трека — на новую версию (как у пересборки), у исходного трека — чисто
+      carryTo(from, newId, from)
+      const restGen = { ...gens.value }
+      delete restGen[pid]
+      gens.value = restGen
+      setApplying(pid, null)
+      dropTrack(from)
+      await finalize(newId, a.title)
+    }
+  } catch (e) {
+    // список джоб недоступен — следующий тик повторит
+    console.warn('«применить всё»: ход не продвинут', e)
+  } finally { advancing = false }
+}
+// итог новой версии: есть правки — «применить всё» на ней; нет — она и есть итог (переименовать)
+// Отметка {finalize} на новой версии снимается только после успеха: упал шаг или приложение перезапустили во время
+// него — тик повторит; ошибка шага — {error} на новой версии (видно в её «Готово»), итог можно собрать вручную
+async function finalize(newId, title) {
+  setApplying(newId, { finalize: true, title })
+  if (byParent(newId).length) return   // куски вклеек ещё рендерятся — итог после них (тик)
+  try {
+    if (appliedFor(newId).some((it) => !it.off)) await applyAllOwn(newId, title)
+    else {
+      dropTrack(newId)   // выключенные записи не дают итога — трек без правок и есть итог
+      await api.renameJob(newId, title)
+    }
+    setApplying(newId, null)
+  } catch (e) {
+    setApplying(newId, { title, error: String((e && e.message) || e) })
+  }
 }
 
 // «применить всё»: один новый трек из всех включённых правок (Go: пересборка → трек → черновик удалён);
 // после успеха реестр и ожидающие рендеры трека очищаются. Ошибка — реестр не тронут
-function applyAll(parentId, title) {
+function applyAll(parentId, title, genCtx) {
   notApplying(parentId)
+  return applyAllOwn(parentId, title, genCtx)
+}
+// без проверки хода — для шага итога самого хода (finalize): отметка {finalize} стоит, пока он не закончится
+function applyAllOwn(parentId, title, genCtx) {
+  if (genCtx && genCtx.request && !isEmptyGen(genFor(parentId))) {
+    // изменения с рендером: один рендер со всеми ними; ход — в черновике (переживает закрытие студии)
+    applying.add(Number(parentId))
+    return (async () => {
+      const id = await api.submit(genCtx.request)
+      setApplying(parentId, { job_id: id, title, status: 'queued' })
+      return id
+    })().finally(() => applying.delete(Number(parentId)))
+  }
   applying.add(Number(parentId))
   // мимо общей цепочки пересборок: итог собирается минутами (в очереди воркера), и правки ДРУГИХ треков
   // не должны его ждать. Свои пересборки трека в это время не начнутся — правки отклоняются (applying),
@@ -500,6 +628,15 @@ function dropTrack(parentId) {
   const rest = { ...applied.value }
   delete rest[parentId]
   applied.value = rest
+  const restGen = { ...gens.value }
+  delete restGen[parentId]
+  gens.value = restGen
+  // причина прошлой неудачи «применить всё» уходит вместе с изменениями (идущий ход сюда не попадает: notApplying)
+  if (applyings.value[parentId] && applyings.value[parentId].error) {
+    const restA = { ...applyings.value }
+    delete restA[parentId]
+    applyings.value = restA
+  }
   pending.value = pending.value.filter((s) => Number(s.parent) !== Number(parentId))
   save()
 }
@@ -568,7 +705,7 @@ async function tickOnce() {
         }] }
       }
       try {
-        await rebuild(spec.parent)
+        await rebuildOwn(spec.parent)
         spec.done = true
       } catch { /* сеть/воркер моргнул — вклейка уже в реестре, пересборка на следующем тике */ }
     }
@@ -580,7 +717,8 @@ async function tickOnce() {
 }
 
 setInterval(tick, 3000)
+setInterval(advanceApplying, 3000)
 
 export function useInserts() {
-  return { pending, applied, applyAll, clearDraft, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, applyAll, clearDraft, genFor, setGen, applyingFor, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }

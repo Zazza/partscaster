@@ -4,7 +4,7 @@ import { slotOptions, durOptions, durTokens } from './slotOptions.js'
 import { planTimeline } from './abcEdit.js'
 import {
   formStyle, newTrackPayload,
-  trickStyle, dropVoices, vocalVoices, instrumentalRequest, continueRequest,
+  trickStyle, dropVoices, vocalVoices, continueRequest,
   vocalBars, revoicePlan, revoiceRecord, stemFxRequest,
 } from './requests.js'
 
@@ -253,49 +253,6 @@ describe('инструментал: план без голоса (dropVoices, vo
     const out = dropVoices(two, ['Vocal'])
     expect(bodyOf(out, 'Vocal2')).toEqual(bodyOf(ABC, 'Ins'))
     expect(bodyOf(out, 'Vocal')).toEqual([])
-  })
-})
-
-describe('инструментал: заявка (instrumentalRequest)', () => {
-  const job = { id: 41, title: 'Gone', style: 'indie rock, male baritone', seed: 777, cot: 'full', lyrics: '[Verse]\nla' }
-
-  it('производная пересборка того же трека: parent_id, role rebuild', () => {
-    const r = instrumentalRequest(job, ABC, ['Vocal'], [])
-    expect(r.parent_id).toBe(41)
-    expect(r.role).toBe('rebuild')
-  })
-
-  it('без голоса: лирика [Instrumental], план без вокала, стиль с подсказкой «без вокала»', () => {
-    const r = instrumentalRequest(job, ABC, ['Vocal'], [])
-    expect(r.lyrics).toBe('[Instrumental]')
-    expect(Object.keys(planTimeline(r.abc))).toEqual(['Ins'])
-    expect(r.style.startsWith('indie rock, male baritone')).toBe(true)
-    expect(r.style).toMatch(/instrumental/)
-    expect(r.style).toMatch(/no vocals/)
-  })
-
-  it('название — трека с пометкой; без названия — «трек»', () => {
-    expect(instrumentalRequest(job, ABC, ['Vocal'], []).title).toMatch(/^Gone · /)
-    expect(instrumentalRequest({ ...job, title: '' }, ABC, ['Vocal'], []).title).toMatch(/^трек · /)
-  })
-
-  it('сид родителя — та же интерпретация; без сида — 0 (воркер возьмёт сид родителя)', () => {
-    expect(instrumentalRequest(job, ABC, ['Vocal'], []).seed).toBe(777)
-    expect(instrumentalRequest({ ...job, seed: 0 }, ABC, ['Vocal'], []).seed).toBe(0)
-    expect(instrumentalRequest({ ...job, seed: undefined }, ABC, ['Vocal'], []).seed).toBe(0)
-  })
-
-  it('cot off у родителя → melody (рендер по плану с off воркер отклоняет), иначе — как у родителя', () => {
-    expect(instrumentalRequest({ ...job, cot: 'off' }, ABC, ['Vocal'], []).cot).toBe('melody')
-    expect(instrumentalRequest({ ...job, cot: 'full' }, ABC, ['Vocal'], []).cot).toBe('full')
-    expect(instrumentalRequest({ ...job, cot: 'melody' }, ABC, ['Vocal'], []).cot).toBe('melody')
-  })
-
-  it('накопленные приёмы голоса ±октава попадают в стиль', () => {
-    const plain = instrumentalRequest(job, ABC, ['Vocal'], []).style
-    const withUp = instrumentalRequest(job, ABC, ['Vocal'], [{ kind: 'octave', dir: 'up' }]).style
-    expect(withUp).not.toBe(plain)
-    expect(withUp).toMatch(/no vocals/)
   })
 })
 

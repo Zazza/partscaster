@@ -9,7 +9,6 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { usePlayer } from '../composables/usePlayer.js'
-import { sliceAbc } from '../abcEdit.js'
 import { jobWatchStep } from '../jobWatch.js'
 import { useInserts } from '../composables/useInserts.js'
 import { voicePreviewWindow } from '../dspVoice.js'
@@ -31,14 +30,14 @@ const props = defineProps({
   cursor: { type: Number, default: 0 },         // курсор воспроизведения, с
   sungAt: { type: Number, default: null },      // начало первого спетого такта по плану, с
 })
-// built(id) — полная версия готова: студия переносит на неё вклейки, как у пересборки
-// applied — эффект ушёл в черновик (студия обновляет список версий)
-const emit = defineEmits(['built', 'applied'])
+// applied — эффект или голос ушли в черновик (студия обновляет список версий)
+const emit = defineEmits(['applied'])
 const { t } = useI18n()
 const { toggleArtifact, playBtn, nowPlayingKey, refreshPlayer } = usePlayer()
 const inserts = useInserts()
 const fxSel = ref(null)             // выбранная обработка голоса {chain, params} или null
 const probeKey = ref('')            // голос, которым спета проба (ключ ручек): тот же — новый рендер не нужен
+const voiceMsg = ref('')            // голос записан в черновик
 const playOnDone = ref(false)       // проба запущена кнопкой «прослушать кусок» — по готовности играет сама
 const STEM = 'vocals'
 const SLOT = 'V'                    // свой слот превью: не путается с «Эффектами» и «Педалями»
@@ -51,7 +50,6 @@ const probeJob = ref(null)          // {id, status, …} draft-пробы
 const probeParams = ref(null)       // ручки, с которыми проба ушла: сохраняется именно её голос
 const probeOwn = ref(false)         // проба спета своими ручками — только такую можно сохранить новой карточкой
 const probePlan = ref(undefined)    // кусок плана для пробы: undefined — план ещё не подкачан, null — нот голоса нет
-const fullJob = ref(null)
 const busy = ref(false)
 const err = ref('')
 const saveName = ref('')
@@ -125,44 +123,24 @@ async function poll() {
       // проба готова — включаем сами (с выбранной обработкой): «прослушать» и должно звучать само
       if (p.done && playOnDone.value) { playOnDone.value = false; await playProbe() }
     }
-    const f = jobWatchStep(fullJob.value, jobs)
-    if (f) {
-      fullJob.value = f.next
-      if (f.done) emit('built', f.row.id)
-    }
   } catch (e) { err.value = String(e) }
-  if (!active(probeJob) && !active(fullJob)) stopPoll()
+  if (!active(probeJob)) stopPoll()
 }
 
-async function submit(draft) {
+// черновой рендер куска выбранным голосом (проба): с первого спетого места, ~18 с
+async function renderProbe() {
   busy.value = true
   err.value = ''
   try {
-    const full = await ensureAbc()
-    let abc, lyrics
-    if (draft) {
-      const probe = voiceProbe(full, props.job.lyrics, PROBE_BARS)
-      if (!probe) return
-      ;({ abc, lyrics } = probe)
-    } else {
-      // план режем по фактической длительности аудио — как пересборка (полный план бывает длиннее трека)
-      const dur = Number(props.job.duration_sec) || 0
-      abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
-      lyrics = props.job.lyrics
-    }
-    const title = draft
-      ? t('studio.voice.probeTitle', { name: voiceName.value })
-      : t('studio.voice.trackTitle', { title: props.job.title || t('common.track'), name: voiceName.value })
+    const probe = voiceProbe(await ensureAbc(), props.job.lyrics, PROBE_BARS)
+    if (!probe) return
     const used = curParams.value
-    const id = await api.submit(voiceTrackJob(props.job, used, { abc, lyrics, title, draft }))
-    if (draft) {
-      probeJob.value = { id, status: 'queued' }
-      probeParams.value = used
-      probeOwn.value = own.value
-      probeKey.value = JSON.stringify(used)
-    } else {
-      fullJob.value = { id, status: 'queued' }
-    }
+    const id = await api.submit(voiceTrackJob(props.job, used,
+      { ...probe, title: t('studio.voice.probeTitle', { name: voiceName.value }), draft: true }))
+    probeJob.value = { id, status: 'queued' }
+    probeParams.value = used
+    probeOwn.value = own.value
+    probeKey.value = JSON.stringify(used)
     startPoll()
   } catch (e) { err.value = String(e) } finally { busy.value = false }
 }
@@ -191,7 +169,7 @@ async function listen() {
   }
   if (plan === 'render') {
     playOnDone.value = true
-    await submit(true)
+    await renderProbe()
     return
   }
   busy.value = true
@@ -231,8 +209,14 @@ async function apply() {
     err.value = String(e)
     return
   } finally { busy.value = false }
-  // submit сам ведёт busy
-  if (withVoice) await submit(false)
+  // голос — в черновик (gen.voice): трек этим голосом сделает «применить всё» одним рендером вместе с приёмами плана
+  if (withVoice) {
+    try {
+      inserts.setGen(props.job.id, { voice: { params: curParams.value, name: voiceName.value } })
+      voiceMsg.value = t('studio.voice.applied', { name: voiceName.value })
+      emit('applied')
+    } catch (e) { err.value = String(e) }
+  }
 }
 
 const canSave = computed(() => own.value && probeOwn.value && saveName.value.trim() && probeParams.value
@@ -298,16 +282,7 @@ async function save() {
         <button class="ghost" :disabled="!canSave" :title="t('studio.voice.save.tip')" @click="save"><AppIcon name="save" /> {{ t('voicelab.save') }}</button>
       </div>
 
-      <p v-if="fullJob" class="trick-hint" :class="fullJob.status === 'error' ? 'error' : 'muted'">
-        <template v-if="['queued', 'running'].includes(fullJob.status)">
-          <span class="pulse">⟳</span> {{ t('studio.voice.apply.label') }} #{{ fullJob.id }} · {{ t('queue.status.' + fullJob.status) }} · {{ t('studio.voice.apply.wait') }}<template v-if="fullJob.elapsed_s"> {{ Math.round(fullJob.elapsed_s) }} {{ t('common.sec') }}</template><template v-if="fullJob.progress_pct != null"> · {{ fullJob.progress_pct }}%</template>
-        </template>
-        <template v-else-if="fullJob.status === 'done'">
-          ✓ {{ t('studio.voice.apply.label') }} #{{ fullJob.id }} — {{ t('studio.voice.apply.done') }}
-          <button class="ghost small-btn" @click="toggleArtifact('vf' + fullJob.id, fullJob.title, () => api.playAudio(fullJob.id))">{{ playBtn('vf' + fullJob.id) }}</button>
-        </template>
-        <template v-else-if="fullJob.status === 'error'">{{ fullJob.error }}</template>
-      </p>
+      <p v-if="voiceMsg" class="muted">{{ voiceMsg }}</p>
       <p v-if="err" class="error">{{ err }}</p>
     </div>
   </div>

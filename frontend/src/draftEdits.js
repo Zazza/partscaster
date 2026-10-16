@@ -25,15 +25,25 @@ export function editsBySteps(list) {
 
 const copy = (x) => JSON.parse(JSON.stringify(x))
 
-// Состояние черновика трека: его записи и его ожидающие рендеры (без поля parent — трек и так известен)
-export function draftState(parentId, applied, pending, ts) {
+// gen — изменения, которым нужен рендер: {specs: [приёмы плана], voice: {params, name} | null, instrumental}
+export const isEmptyGen = (g) => !g || (!(g.specs || []).length && !g.voice && !g.instrumental)
+
+// Состояние черновика трека: его записи, ожидающие рендеры (без поля parent — трек и так известен), gen и ход
+// «применить всё» с рендером (applying: {job_id, title, …})
+export function draftState(parentId, applied, pending, ts, gens, applyings) {
   const edits = copy((applied || {})[parentId] || [])
-  const queue = (pending || []).filter((s) => Number(s.parent) === Number(parentId))
+  const queue = (pending || []).filter((s) => String(s.parent) === String(parentId))
     .map(({ parent: _p, ...s }) => copy(s))
-  return { v: 1, edits, queue, ts }
+  const st = { v: 1, edits, queue, ts }
+  const g = (gens || {})[parentId]
+  if (!isEmptyGen(g)) st.gen = copy(g)
+  const a = (applyings || {})[parentId]
+  if (a) st.applying = copy(a)
+  return st
 }
 
-export const isEmptyDraft = (st) => !st || (!(st.edits || []).length && !(st.queue || []).length)
+export const isEmptyDraft = (st) => !st
+  || (!(st.edits || []).length && !(st.queue || []).length && isEmptyGen(st.gen) && !st.applying)
 
 // Слияние локальной копии с черновиками воркера — по каждому треку отдельно: побеждает более свежий
 // по ts (локальный без ts — старше любого воркерного, равные — воркер). Трек с локальным ts — локальный
@@ -43,6 +53,8 @@ export const isEmptyDraft = (st) => !st || (!(st.edits || []).length && !(st.que
 export function mergeDrafts(local, localTs, remote) {
   const lApplied = (local && local.applied) || {}
   const lPending = (local && local.pending) || []
+  const lGens = (local && local.gens) || {}
+  const lApplying = (local && local.applying) || {}
   const lTs = localTs || {}
   // ключи — строкой, как у объекта applied: номер трека с воркера (число) и локальный ключ совпадают
   const key = (x) => String(x)
@@ -51,8 +63,12 @@ export function mergeDrafts(local, localTs, remote) {
     ...Object.keys(lApplied).filter((k) => (lApplied[k] || []).length),
     ...lPending.map((s) => key(s.parent)),
     ...Object.keys(lTs),
+    ...Object.keys(lGens).filter((k) => !isEmptyGen(lGens[k])),
+    ...Object.keys(lApplying).filter((k) => lApplying[k]),
   ])
   const applied = {}
+  const gens = {}
+  const applying = {}
   let pending = []
   const ts = {}
   const push = []
@@ -65,12 +81,16 @@ export function mergeDrafts(local, localTs, remote) {
       if ((lApplied[id] || []).length) applied[id] = copy(lApplied[id])
       pending = pending.concat(lPending.filter((s) => key(s.parent) === id).map(copy))
       if (lt != null) ts[id] = lt
+      if (!isEmptyGen(lGens[id])) gens[id] = copy(lGens[id])
+      if (lApplying[id]) applying[id] = copy(lApplying[id])
       push.push(Number.isFinite(Number(id)) ? Number(id) : id)
     } else {
       if ((r.edits || []).length) applied[id] = copy(r.edits)
       pending = pending.concat((r.queue || []).map((s) => ({ ...copy(s), parent: d.job_id })))
       if (r.ts != null) ts[id] = r.ts
+      if (!isEmptyGen(r.gen)) gens[id] = copy(r.gen)
+      if (r.applying) applying[id] = copy(r.applying)
     }
   }
-  return { applied, pending, ts, push }
+  return { applied, pending, gens, applying, ts, push }
 }

@@ -12,7 +12,7 @@ import { useRevoice } from '../composables/useRevoice.js'
 import { vocalEndsQuiet, voiceSource } from '../vocalParts.js'
 import { INSERT_DEFAULT_DB, INSERT_MAX_DB, INSERT_MIN_DB } from '../insertMix.js'
 import { insertTitle, insertWindow, mixChildId, mixLabel } from '../insertLabels.js'
-import { editsBySteps } from '../draftEdits.js'
+import { EDIT_STEPS, editsBySteps, isEmptyGen } from '../draftEdits.js'
 import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
 import { isFlat, bumpRange } from '../envelope.js'
@@ -22,7 +22,7 @@ import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
 import { targetFor, targetChoice } from '../activeTrack.js'
-import { continueRequest, fragmentRequest, fragmentWindow, instrumentalRequest, renderJob, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
+import { continueRequest, fragmentRequest, fragmentWindow, genRequest, renderJob, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
 import { resultTitle, resultsOrder, resultDate, playFragment as playFragmentJob } from '../results.js'
 import { jobWatchStep } from '../jobWatch.js'
 import { readFlag, writeFlag } from '../prefs.js'
@@ -515,27 +515,23 @@ async function makePreview() {
 const hasVocals = computed(() =>
   ((rollData.value && rollData.value.voice_order) || []).some((v) => /vocal/i.test(v)))
 
-async function renderInstrumental() {
-  const vocals = vocalVoices(rollData.value && rollData.value.voice_order)
-  if (!vocals.length) return
-  trickBusy.value = true
+// «Применить» приёмов плана: в черновик (gen.specs) — пересборку по плану сделает «применить всё» одним рендером
+// вместе с голосом и «без голоса». Нет приёмов — убрать их из черновика
+async function applyPlan() {
   rollErr.value = ''
-  trickMsg.value = ''
-  buildJob.value = { id: null, status: 'starting' }
   try {
-    await ensureBaseAbc()
-    const id = await api.submit(instrumentalRequest(genJob.value, planDraft.value || baseAbc.value, vocals, pendingSpecs.value))
-    trickMsg.value = t('studio.trick.done', { id })
-    buildJob.value = { id, status: 'queued' }
-    startJobPoll()
-    pollBuild()
-  } catch (e) {
-    buildJob.value = null
-    rollErr.value = String(e)
-  } finally {
-    trickBusy.value = false
-  }
+    inserts.setGen(props.job.id, { specs: pendingSpecs.value.map((s) => ({ ...s })) })
+    trickMsg.value = pendingSpecs.value.length ? t('studio.trick.applied', { n: pendingSpecs.value.length }) : ''
+  } catch (e) { rollErr.value = String(e) }
 }
+// «без голоса» — переключатель в черновике (gen.instrumental)
+function toggleInstrumental() {
+  rollErr.value = ''
+  try {
+    inserts.setGen(props.job.id, { instrumental: !(gen.value && gen.value.instrumental) })
+  } catch (e) { rollErr.value = String(e) }
+}
+
 
 // Приёмы: точечные «поломки» плана по выделенным тактам
 
@@ -733,43 +729,30 @@ function trickStyle(base) {
 
 // пересборка: одна кнопка на все накопленные приёмы; тот же стиль/лирика/seed,
 // план с поломками (req_abc). Черновик — быстрая проба начала, список не сбрасывает.
-async function rebuild(draft = false) {
+// черновик-проба плана («✦»): короткий рендер начала с накопленными приёмами — тот же стиль/лирика/seed,
+// план с поломками (req_abc). Полную пересборку по плану делает «применить всё» (приёмы — в черновике, gen.specs)
+async function redraft() {
   trickBusy.value = true
   rollErr.value = ''
   trickMsg.value = ''
-  if (!draft) buildJob.value = { id: null, status: 'starting' }   // отклик сразу
   try {
     await ensureBaseAbc()
-    // без план-правок — исходный план (тот же seed → практически тот же трек).
-    // План режем по фактической длительности аудио: аудио могло обрезаться
-    // лимитом токенов, а полный план длиннее — пересборка по нему раздувалась
-    // до десятков минут («2-минутный трек → 10:40»).
+    // План режем по фактической длительности аудио: аудио могло обрезаться лимитом токенов, а полный план длиннее
     const full = planDraft.value || baseAbc.value
     const dur = Number(props.job.duration_sec) || 0
     const abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
     const id = await api.submit({
-      title: (props.job.title || t('common.track')) + (draft ? ' · ✦' : ' · ' + t('studio.tricksSuffix')),
+      title: (props.job.title || t('common.track')) + ' · ✦',
       style: trickStyle(genJob.value.style),
       lyrics: genJob.value.lyrics,
       seed: genJob.value.seed || 0,   // тот же seed = тот же голос; 0 — воркер возьмёт сид родителя
       cot: genJob.value.cot === 'off' ? 'melody' : genJob.value.cot,   // abc требует full|melody
       abc,
-      draft,
-      parent_id: props.job.id, role: draft ? 'fragment' : 'rebuild',
+      draft: true,
+      parent_id: props.job.id, role: 'fragment',
     })
-    if (draft) {
-      trickMsg.value = t('studio.trick.drafted', { id })
-    } else {
-      inheritMarks(id)
-      sentMarks.value = trickMarks.value.slice()   // всё отправленное — история
-      pendingSpecs.value = []
-      trickMsg.value = t('studio.trick.done', { id })
-      buildJob.value = { id, status: 'queued' }
-      startJobPoll()
-      pollBuild()
-    }
+    trickMsg.value = t('studio.trick.drafted', { id })
   } catch (e) {
-    buildJob.value = null
     rollErr.value = String(e)
   } finally {
     trickBusy.value = false
@@ -782,18 +765,6 @@ function resetDraft() {
   pendingSpecs.value = []
   sentMarks.value = []
   trickMsg.value = ''
-}
-
-// метки приёмов переезжают в новую версию (формат — состояние студии)
-function inheritMarks(newJobId) {
-  if (!newJobId) return
-  try {
-    const key = 'yue_studio_state'
-    const st = JSON.parse(localStorage.getItem(key) || '{}')
-    st.jobs = st.jobs || {}
-    st.jobs[newJobId] = { ...(st.jobs[newJobId] || {}), trickMarks: trickMarks.value }
-    localStorage.setItem(key, JSON.stringify(st))
-  } catch {}
 }
 
 // проверка приёма по месту: мини-партитура из текущего плана (окно выделения
@@ -875,15 +846,41 @@ const editGroups = computed(() => editsBySteps(appliedInserts.value))
 const waitingRenders = computed(() => inserts.byParent(props.job.id).length)
 const applyAllBusy = ref(false)
 const applyAllMsg = ref('')
-const canApplyAll = computed(() => activeEdits.value.length > 0 && !waitingRenders.value
-  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value)
+// изменения с рендером (приёмы плана, голос, «без голоса») — gen черновика; ход «применить всё» с рендером —
+// applying (переживает закрытие студии: доводит сервис useInserts)
+const gen = computed(() => inserts.genFor(props.job.id))
+const hasGen = computed(() => !isEmptyGen(gen.value))
+const applying = computed(() => inserts.applyingFor(props.job.id))
+// «Изменения трека» по шагам: правки черновика и изменения с рендером — в группе своего шага
+// (приёмы плана и «без голоса» — «2 · Править», новый голос — «4 · Голос»)
+const finalGroups = computed(() => {
+  const g = gen.value || {}
+  const genBy = { edit: [], sound: [], voice: [], done: [] }
+  if (g.specs && g.specs.length) genBy.edit.push(t('studio.final.gen.plan', { list: g.specs.map((x) => x.label).join(', ') }))
+  if (g.instrumental) genBy.edit.push(t('studio.final.gen.instrumental'))
+  else if (g.voice) genBy.voice.push(t('studio.final.gen.voice', { name: g.voice.name }))
+  const items = Object.fromEntries(editGroups.value.map((x) => [x.step, x.items]))
+  return EDIT_STEPS.map((step) => ({ step, gen: genBy[step], items: items[step] || [] }))
+    .filter((x) => x.gen.length || x.items.length)
+})
+const applyingStatus = computed(() => t('queue.status.' + ((applying.value && applying.value.status) || 'queued')))
+const canApplyAll = computed(() => (activeEdits.value.length > 0 || hasGen.value) && !waitingRenders.value
+  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value && !(applying.value && !applying.value.error))
 async function applyAll() {
   if (!canApplyAll.value) return
   applyAllBusy.value = true
   applyAllMsg.value = ''
   try {
-    const id = await inserts.applyAll(props.job.id, t('studio.final.title', { title: props.job.title || t('common.track') }))
-    applyAllMsg.value = t('studio.final.done', { id })
+    const title = t('studio.final.title', { title: props.job.title || t('common.track') })
+    let genCtx
+    if (hasGen.value) {
+      // один рендер со всеми изменениями с рендером: план с приёмами, голос, «без голоса»
+      await ensureBaseAbc()
+      genCtx = { request: genRequest(genJob.value, { baseAbc: baseAbc.value, gen: gen.value,
+        vocals: vocalVoices(rollData.value && rollData.value.voice_order), title }) }
+    }
+    const id = await inserts.applyAll(props.job.id, title, genCtx)
+    applyAllMsg.value = genCtx ? t('studio.final.rendering', { id }) : t('studio.final.done', { id })
   } catch (e) {
     applyAllMsg.value = String(e)
   } finally { applyAllBusy.value = false }
@@ -1352,6 +1349,8 @@ async function applyEnvelope() {
       // ровная линия — снять записанную (пустая линия убирает запись)
       const res = await inserts.setMixEnvelope(props.job.id, isFlat(pts) ? [] : pts)
       v = res && res.variant
+      // правок не осталось (сняли единственную линию) — слушать оригинал, а не прежний микс с линией
+      if (res && res.empty) await api.playAudio(props.job.id)
     }
     await reloadVariants()
     if (v) await api.playFile(props.job.id, v.file, props.job.duration_sec)
@@ -1701,12 +1700,12 @@ function setWindowTitle() {
                 <button class="ghost small-btn" :disabled="trickBusy || !(selTimeRange() || pendingSpecs.length)"
                         :title="t('studio.trick.fragment.tip')" @click="renderFragment">
                   <template v-if="trickBusy">…</template><template v-else><AppIcon name="play" /> {{ t('studio.trick.fragment') }}</template></button>
-                <button class="primary small" :disabled="trickBusy"
-                        :title="t('studio.trick.rebuild.tip')" @click="rebuild(false)">{{ t('studio.trick.rebuild') }}</button>
+                <button class="primary small" :disabled="trickBusy || !(pendingSpecs.length || (gen && gen.specs && gen.specs.length))"
+                        :title="t('studio.trick.apply.tip')" @click="applyPlan">{{ t('studio.trick.apply') }}</button>
                 <button class="ghost small-btn" :disabled="trickBusy"
-                        :title="t('studio.trick.redraft.tip')" @click="rebuild(true)">{{ t('studio.trick.redraft') }}</button>
-                <button class="ghost small-btn" :disabled="!hasVocals || trickBusy"
-                        :title="t('studio.novocal.tip')" @click="renderInstrumental">{{ t('studio.novocal') }}</button>
+                        :title="t('studio.trick.redraft.tip')" @click="redraft">{{ t('studio.trick.redraft') }}</button>
+                <button class="toggle small-btn" :class="{ on: gen && gen.instrumental }" :disabled="!hasVocals || trickBusy"
+                        :title="t('studio.novocal.tip')" @click="toggleInstrumental">{{ t('studio.novocal') }}</button>
                 <span class="spacer"></span>
                 <button class="ghost small-btn" :disabled="!pickableCount || trickBusy"
                         :title="t('studio.trick.unpick.tip')" @click="unpickSelection"><AppIcon name="x" /> {{ t('studio.trick.unpick') }}</button>
@@ -1911,17 +1910,24 @@ function setWindowTitle() {
 
           <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
           <StudioVoice :job="genJob" :abc-file="abcFile" :chains="dspChains" :sel="selRange" :cursor="waveCursor"
-                       :sung-at="sungAt" @built="(id) => inserts.carryTo(job.id, id, job.id)" @applied="reloadVariants" />
+                       :sung-at="sungAt" @applied="reloadVariants" />
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
           <div class="studio-box">
             <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span></div>
             <div class="studio-box-body">
-              <p v-if="!editGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
-              <div v-for="g in editGroups" :key="g.step" class="final-group">
+              <p v-if="!finalGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
+              <p v-if="applying && !applying.error && applying.job_id" class="muted"><span class="pulse">⟳</span>
+                {{ t('studio.final.progress', { id: applying.job_id, status: applyingStatus }) }}</p>
+              <p v-if="applying && !applying.error && applying.finalize" class="muted"><span class="pulse">⟳</span>
+                {{ t('studio.final.finalizing') }}</p>
+              <p v-if="applying && applying.error" class="error">{{ t('studio.final.applyError', { error: applying.error }) }}</p>
+              <div v-for="g in finalGroups" :key="g.step" class="final-group">
                 <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
                 <ul>
+                  <!-- изменения с рендером: «применить всё» сделает их одним рендером, потом наложит правки -->
+                  <li v-for="line in g.gen" :key="line" class="final-gen">{{ line }}</li>
                   <li v-for="it in g.items" :key="it.childId" :class="{ off: it.off }">
                     {{ insertTitle(it, insertNames) }}<template v-if="it.off"> · {{ t('studio.final.off') }}</template>
                   </li>
@@ -1929,7 +1935,7 @@ function setWindowTitle() {
               </div>
               <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
               <div class="dsp-row final-actions">
-                <button v-if="editGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
+                <button v-if="finalGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
                   <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
                 <span class="spacer"></span>
                 <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">

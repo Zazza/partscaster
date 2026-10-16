@@ -164,7 +164,7 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 | `job_peaks` | **job_id**, file, bins | Loudness envelope as numbers: find a drop, an entry, a place to edit |
 | `job_spectrum` | **job_id**, file | Spectrogram PNG to the downloads directory. Needs ffmpeg on the worker |
 | `draft_list` | — | Studio drafts (unfinished work) of all tracks: `[{job_id, state, updated_at}]` |
-| `draft_get` | **job_id** | The track's draft: `state` — `{v, edits, queue, ts}` ("Track edits" and pending renders); none — empty |
+| `draft_get` | **job_id** | The track's draft: `state` — `{v, edits, queue, ts, gen?, applying?}` ("Track edits", pending renders, changes that need a render — voice/plan tricks/no vocals, the "apply all" progress); none — empty |
 | `draft_set` | **job_id**, **state** | Write the track's draft (a JSON object). The studio picks it up on its next start |
 | `draft_clear` | **job_id**, **confirm** | Delete the track's draft — the studio edits are lost. Only with `confirm=true` after the human agrees |
 

@@ -321,10 +321,11 @@ Trick groups:
   - "▶ stretch with edits" — the selected spot with edits in the context of the track: the model continues the
     track from the start of the selection following the edited plan and plays to the end of the selection (+2 s);
     playback starts 4 s before the edit and begins automatically;
-  - "⟳ rebuild the track" — one generation with all edits (the same style, lyrics and seed); when ready it plays
-    in the studio;
+  - **"Apply"** — the plan tricks go into "Track changes" (the "Done" step); "apply all" rebuilds with them (the
+    same style, lyrics and seed) in one render together with a new voice; without tricks — removes them from the list;
   - "✦ draft" — a quick test of the track's start with edits (~18 s);
-  - "⟳ instrumental (no vocals)" — the same music without the vocal part;
+  - "⟳ instrumental (no vocals)" — a toggle: the same music without the vocal part, also into "Track changes" (press
+    again to undo);
   - "remove in selection" and "reset edits" — remove the marks and plan edits.
 
 Trick marks carry over to new versions.
@@ -428,8 +429,8 @@ track, so listen to a piece before the full render.
   plays by itself when ready; with an effect too — the same piece with the effect on the voice, no new render; no
   voice but an effect — a piece of the track with the effect on the voice; nothing picked — the original. In "tune my
   own" mode, after a probe — a name and **"save voice"**: a card with the probe's voice and the track seed.
-- **"Apply"** (bottom right): the effect — into "Track changes" (the "Done" step); the voice — a new whole version of
-  the track in the shared generation queue "<track> · voice <name>", the track's edits (with this effect) carry over.
+- **"Apply"** (bottom right): the effect and the voice — into "Track changes" (the "Done" step); "apply all" makes
+  the track in the new voice in one render (together with the plan tricks), the track's edits go onto it.
 - For a track without lyrics or without a score the step explains why the voice render is unavailable.
 
 ### 5 Done
@@ -438,7 +439,10 @@ track, so listen to a piece before the full render.
 "4 · Voice", "5 · Done"; disabled ones are pale). The list is kept on the worker: it survives closing the app and
 restarts, and the track in the list shows the "unfinished work" mark. **"apply all"** — one new track
 "<title> · final" from all enabled changes, then the list is cleared; while pieces render ("waiting for render: N")
-or the mix is being built, the button is unavailable. **"reset draft"** — remove all changes (the track itself and
+or the mix is being built, the button is unavailable. If the list has changes that need a render (a new voice, plan
+tricks, "no vocals"), first one render with all of them goes to the shared queue ("Applying: render #N"); you can
+close the studio and the app — the progress is kept on the worker and continues. When it is ready the edits go onto
+the new version and the final is built; if it fails, the reason is shown here and the changes stay. **"reset draft"** — remove all changes (the track itself and
 finished versions do not change).
 
 **Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS",

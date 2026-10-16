@@ -703,7 +703,9 @@ func registerDraftTools(s *Server) {
 	s.Register(Tool{
 		Name: "draft_list",
 		Description: "Черновики студии (незаконченная работа) всех треков: [{job_id, state, updated_at}]. " +
-			"state — {v, edits (записи «Правок трека»), queue (ожидающие рендеры кусков), ts}.",
+			"state — {v, edits (записи «Правок трека»), queue (ожидающие рендеры кусков), ts, gen?, applying?}: " +
+			"gen — изменения с рендером {specs (приёмы плана), voice {params, name}, instrumental}, " +
+			"applying — ход «применить всё» ({job_id, title} — ждём рендер, {finalize, title} — итог новой версии, {error, title}).",
 		InputSchema: props(nil),
 		Handler: func(s *Server, _ map[string]any) (string, error) {
 			list, err := s.client.Drafts(context.Background())
@@ -733,8 +735,9 @@ func registerDraftTools(s *Server) {
 	})
 	s.Register(Tool{
 		Name: "draft_set",
-		Description: "Записать черновик студии трека целиком (state — JSON-объект {v, edits, queue, ts}). " +
-			"Приложение подхватит его при следующем запуске; прежний черновик заменяется.",
+		Description: "Записать черновик студии трека целиком (state — JSON-объект {v, edits, queue, ts, gen?, applying?}, " +
+			"см. draft_list). Приложение подхватит его при следующем запуске; прежний черновик заменяется — " +
+			"не затирайте applying, пока идёт «применить всё» (ход потеряется).",
 		InputSchema: props(map[string]any{
 			"job_id": prop("ID трека", "integer"),
 			"state":  prop("состояние черновика — JSON-объект", "object"),

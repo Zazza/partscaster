@@ -371,7 +371,7 @@ type TranscribeResult struct {
 	Stats    map[string]any `json:"stats"`
 }
 
-// Draft — черновик студии трека: state — JSON-объект приложения ({v, edits, queue, ts})
+// Draft — черновик студии трека: state — JSON-объект приложения ({v, edits, queue, ts, gen?, applying?})
 type Draft struct {
 	JobID     int64           `json:"job_id"`
 	State     json.RawMessage `json:"state"`

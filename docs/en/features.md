@@ -33,7 +33,7 @@ version. Details — [ui-guide.md](ui-guide.md).
 
 - **Listen** — waveform, spectrum and the plan's piano roll; a click plays from that point, a drag selects a stretch.
 - **Tricks on a selection** — "wrong chord" (darker / brighter / more tense), "drop-out (silence)", "cut bars",
-  "vocal ↑/↓ oct.", tempo. The tricks collect in the plan and sound after "⟳ rebuild the track"; for a quick listen —
+  "vocal ↑/↓ oct.", tempo. The tricks collect in the plan, "Apply" puts them into the draft, they sound after "apply all" in "Done"; for a quick listen —
   "stretch with edits" or "✦ draft".
 - **Voice by sections** — "voice higher", "voice: variations", "voice: hold phrase ends", "voice: stop", then
   "↻ re-sing from here": two new vocal takes only in the selected part; the music does not change.
