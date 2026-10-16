@@ -425,7 +425,7 @@ result is a new version "track · preset" (a few minutes, the job goes through t
 - Under the selected preset — a description and a volume slider for each of its edits (bass louder, voice
   quieter…): the preset is applied with them, the preset itself does not change. If you changed them — "as in
   preset" (reset) and "save as mine" (a new preset of your own with these levels).
-- **"preview"** — a rebuild of the stem volumes from the sliders, with the track edits but without the preset's
+- **"preview levels"** — volumes only: a rebuild of the stem volumes from the sliders, with the track edits but without the preset's
   processing: seconds.
 - **"save edits as preset"** — the preset includes "whole track" edits with a sound chain, an effect or
   pedals, and the track master ("master included"). A counter shows how many will be included and how many are
