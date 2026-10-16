@@ -162,42 +162,57 @@ function onNav(id) { emit('nav', id) }
 
 <style scoped>
 .sidebar {
-  flex: none; width: 216px; display: flex; flex-direction: column; gap: 8px;
+  flex: none; width: 216px; display: flex; flex-direction: column; gap: 6px;
   padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--border);
   min-height: 0;
 }
 .sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
+/* логотип: по центру, крупно, с запасом до статуса */
 .sb-top { display: flex; align-items: center; justify-content: center; gap: 9px;
-  padding-bottom: 14px; cursor: pointer; color: var(--text); }
+  padding-bottom: 10px; cursor: pointer; color: var(--text); }
 .sb-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* статус и статистика: одна строка 11px, muted, по центру */
 .sb-worker { display: flex; align-items: center; justify-content: center; gap: 6px;
   font-size: 11px; color: var(--muted); }
 .sb-worker.down .sb-worker-text { color: var(--err, #e06c75); }
 .sidebar.collapsed .sb-worker { justify-content: center; }
-/* статистика — те же классы, что были в шапке (глобальные стили App) */
 .sb-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; font-size: 11px;
-  color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-.sb-stats-mini { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0;
-  border-bottom: 1px solid var(--border); }
+  color: var(--muted); }
+.sb-stats-mini { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0; }
 .sb-stats-mini.hot { color: var(--err, #e06c75); }
-/* очередь генераций */
-.sb-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-.sb-q-head { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
-.sb-q-list { display: flex; flex-direction: column; gap: 3px; }
-.sb-q-item { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 6px; font-size: 12px; min-width: 0; }
-.sb-q-step { flex-basis: 100%; padding-left: 14px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* меню разделов: 13px, разделитель снизу */
+.sb-nav { display: flex; flex-direction: column; gap: 2px;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.sb-nav-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px;
+  background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text);
+  cursor: pointer; text-align: left; position: relative; width: 100%;
+}
+.sb-nav-item:hover { background: var(--panel2); }
+.sb-nav-item.on { color: var(--lcd-text, var(--accent)); border-color: var(--lcd-text, var(--accent)); }
+.sidebar.collapsed .sb-nav-item { justify-content: center; padding: 6px 0; }
+.sb-badge { position: absolute; top: -3px; right: 2px; font-size: 9px; line-height: 1;
+  background: var(--accent, #7aa2f7); color: #fff; border-radius: 7px; padding: 2px 4px; }
+/* очередь: те же 13px что меню, разделитель сверху — визуально продолжение списка */
+.sb-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; display: flex; flex-direction: column;
+  padding-top: 6px; }
+.sb-q-head { display: flex; align-items: center; justify-content: space-between;
+  padding: 0 8px 4px; font-size: 13px; color: var(--text); }
+.sb-q-head .muted { font-size: 11px; }
+.sb-q-list { display: flex; flex-direction: column; gap: 1px; }
+.sb-q-item { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 6px;
+  padding: 4px 8px; font-size: 12px; min-width: 0; border-radius: 4px; }
+.sb-q-item:hover { background: var(--panel2); }
+.sb-q-step { flex-basis: 100%; padding-left: 13px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-q-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .sb-q-dot.running { background: var(--ok, #7ec16c); animation: sbpulse 1.2s ease-in-out infinite; }
 .sb-q-dot.queued { background: var(--muted); }
 .sb-q-dot.done { background: var(--ok, #7ec16c); }
 .sb-q-dot.err { background: var(--err, #e06c75); }
 .sb-q-dot.off { background: var(--muted); opacity: .4; }
-/* обработка: пауза очереди и мини-кнопки управления записью */
-.sb-q-proc-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .sb-q-pause { padding: 0 4px; font-size: 10px; }
 .sb-q-pause.on { color: var(--accent, #7aa2f7); }
-/* кнопки записи видны всегда; ▲▼ только там, куда можно двинуть (место держится — строки ровные) */
 .sb-q-ctl { flex: none; display: inline-flex; gap: 2px; }
 .sb-mini { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 9px;
   padding: 0 2px; line-height: 1; }
@@ -212,20 +227,8 @@ button.sb-q-res { color: var(--ok, #7ec16c); font-size: 10px; }
 @keyframes sbpulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
 .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }
-.sb-q-more, .sb-q-empty { font-size: 11px; }
-/* меню разделов — над очередью; очередь занимает остаток блока */
-.sb-nav { display: flex; flex-direction: column; gap: 2px;
-  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-.sb-nav-item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px;
-  background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text);
-  cursor: pointer; text-align: left; position: relative; width: 100%;
-}
-.sb-nav-item:hover { background: var(--panel2); }
-.sb-nav-item.on { color: var(--lcd-text, var(--accent)); border-color: var(--lcd-text, var(--accent)); }
-.sidebar.collapsed .sb-nav-item { justify-content: center; padding: 6px 0; }
-.sb-badge { position: absolute; top: -3px; right: 2px; font-size: 9px; line-height: 1;
-  background: var(--accent, #7aa2f7); color: #fff; border-radius: 7px; padding: 2px 4px; }
+.sb-q-more, .sb-q-empty { font-size: 12px; padding: 4px 8px; color: var(--muted); }
+/* нижняя строка: сворачивание, тема, язык */
 .sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px;
   border-top: 1px solid var(--border); margin-top: auto; }
 .sidebar.collapsed .sb-foot { flex-direction: column; align-items: center; }
