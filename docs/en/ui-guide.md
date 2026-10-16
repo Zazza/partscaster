@@ -166,8 +166,8 @@ number and "Collapse all" if several rows are expanded. A long list is paged wit
 
 ### Track row
 
-Number, ▶/⏸ for a finished track (an unfinished one has a status dot), the title with marks ("draft", "queued",
-"error", ⚠ — a voice is heard in an instrumental; details in the tooltip), a progress bar during generation,
+Number, ▶/⏸ for a finished track (an unfinished one has a status dot), the title with marks ("draft", "unfinished work" — the studio has
+changes not applied yet, "queued", "error", ⚠ — a voice is heard in an instrumental; details in the tooltip), a progress bar during generation,
 ✎ — rename (your own title instead of the number: the number changes when you move to another machine), a counter
 of versions and attachments, duration, creation date ("01.10 17:26", the year if it is not the current one),
 folder, ▸/▾. A click on the row expands the details.
@@ -436,6 +436,13 @@ re-rendered), "voice only", the knobs, **"make a version with the effect"** — 
 piece (the whole track without a selection), collected in "Track edits", the new version in "Done".
 
 ### 5 Done
+
+**Track changes** — everything you applied in the steps above, listed by step ("2 · Edit", "3 · Sound",
+"4 · Voice", "5 · Done"; disabled ones are pale). The list is kept on the worker: it survives closing the app and
+restarts, and the track in the list shows the "unfinished work" mark. **"apply all"** — one new track
+"<title> · final" from all enabled changes, then the list is cleared; while pieces render ("waiting for render: N")
+or the mix is being built, the button is unavailable. **"reset draft"** — remove all changes (the track itself and
+finished versions do not change).
 
 **Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS",
 "Master: loud −11 LUFS", "Master: soft glue"; "loudness" and "to target" (LUFS is the perceived loudness of the

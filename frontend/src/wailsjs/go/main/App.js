@@ -22,6 +22,10 @@ export function YueApplyDsp(arg1, arg2, arg3) {
   return window['go']['main']['App']['YueApplyDsp'](arg1, arg2, arg3);
 }
 
+export function YueApplyEdits(arg1, arg2, arg3) {
+  return window['go']['main']['App']['YueApplyEdits'](arg1, arg2, arg3);
+}
+
 export function YueApplyFx(arg1, arg2) {
   return window['go']['main']['App']['YueApplyFx'](arg1, arg2);
 }
@@ -68,6 +72,18 @@ export function YueContinueJob(arg1, arg2, arg3, arg4, arg5) {
 
 export function YueDeleteJob(arg1) {
   return window['go']['main']['App']['YueDeleteJob'](arg1);
+}
+
+export function YueDraftDelete(arg1) {
+  return window['go']['main']['App']['YueDraftDelete'](arg1);
+}
+
+export function YueDraftPut(arg1, arg2) {
+  return window['go']['main']['App']['YueDraftPut'](arg1, arg2);
+}
+
+export function YueDrafts() {
+  return window['go']['main']['App']['YueDrafts']();
 }
 
 export function YueDspChains() {

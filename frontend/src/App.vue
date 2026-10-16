@@ -355,6 +355,8 @@ async function loadKidMixes(id) {
 // эффект на дорожку без дочерних треков)
 const kidCount = (j) => (grouped.value.children[j.id] || []).length + (j.mixes || 0)
 const kidResults = (id) => (grouped.value.children[id] || []).filter(isResultJob)
+// незаконченная работа в студии: черновик правок (на воркере) у трека или любой его версии
+const songDraft = (j) => !!j.has_draft || (grouped.value.children[j.id] || []).some((k) => k.has_draft)
 // основная версия песни (head_id у корня): её играет «▶» и открывает студия
 function headOf(j) {
   if (!j.head_id) return j
@@ -1085,6 +1087,8 @@ function onWindowClick(e) {
             <span v-else-if="j.status === 'queued'" class="status" :class="j.status">{{ statusLabelC[j.status] || j.status }}</span>
             <span v-else-if="j.status === 'done' && headOf(j).vocal_leak" class="badge warn" :title="leakTip(headOf(j))"><AppIcon name="alert" /></span>
             <span v-if="j.status === 'done' && headOf(j).truncated" class="badge warn" :title="t('queue.truncated.tip')">{{ t('queue.truncated') }}</span>
+            <!-- после цепочки v-if/v-else-if пометок статуса: внутри неё ломала бы «ошибку», «в очереди», ⚠ -->
+            <span v-if="songDraft(j)" class="badge wip" :title="t('queue.wip.tip')">{{ t('queue.wip') }}</span>
             <span v-if="j.status === 'running'" class="job-progress" :title="progressTip(j)">
               <span class="progress-track slim" :class="{ indet: j.progress_pct == null }">
                 <span v-if="j.progress_pct != null" class="progress-fill" :style="{ width: j.progress_pct + '%' }"></span>
@@ -1182,6 +1186,7 @@ function onWindowClick(e) {
                   <span class="muted tl-num" style="width:auto">{{ v.id }}</span>
                   <span>{{ v.id === j.id ? t('queue.kids.original') : v.title }}</span>
                   <span v-if="v.id !== j.id" class="badge">{{ t('queue.role.' + v.role) }}</span>
+                  <span v-if="v.has_draft" class="badge wip" :title="t('queue.wip.tip')">{{ t('queue.wip') }}</span>
                   <span v-if="v.vocal_leak" class="badge warn" :title="leakTip(v)"><AppIcon name="alert" /></span>
                   <span v-if="v.truncated" class="badge warn" :title="t('queue.truncated.tip')">{{ t('queue.truncated') }}</span>
                   <span v-if="v.id !== j.id && v.status !== 'done'" class="status" :class="v.status">{{ statusLabelC[v.status] || v.status }}</span>

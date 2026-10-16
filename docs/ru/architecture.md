@@ -76,7 +76,7 @@ Partscaster — это три программы: desktop-приложение (
 |---|---|
 | `src/main.js`, `src/App.vue` | вход и оболочка: боковая панель, список треков, форма «Новый трек», переключение страниц |
 | `src/components/` | экраны и крупные блоки (31 компонент): `SideBar` (разделы и витрина очереди), `StudioPage` (студия трека) с `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` и редактор пресетов, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, модальные окна |
-| `src/composables/` | общее состояние и поведение: `usePlayer`, `useProcQueue` (слежение за операцией очереди), `useWorkerCompat` (совместимость версий), `useInserts`, `useRevoice`, `useWindowPlay` и др. |
+| `src/composables/` | общее состояние и поведение: `usePlayer`, `useProcQueue` (слежение за операцией очереди), `useWorkerCompat` (совместимость версий), `useInserts` (реестр «Правки трека» — черновик студии: главный экземпляр на воркере, `/jobs/{id}/draft`, копия в localStorage, слияние по времени правки — `draftEdits.js`), `useRevoice`, `useWindowPlay` и др. |
 | `src/*.js` | чистая логика без DOM (тесты рядом — `*.test.js`, vitest): библиотека стилей (`presets.js`, `slotOptions.js`, `groups.js`), цепочки эффектов (`fxPresets.js`, `fxBlocks.json`, `fxChain.js`), пресеты звука, очередь (`queueView.js`), рецепт и др. |
 | `src/api.js` | обёртка над сгенерированными биндингами Wails (`src/wailsjs/`) |
 | `src/i18n/` | строки интерфейса: `ru.js`, `en.js` |

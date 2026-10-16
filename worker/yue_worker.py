@@ -344,6 +344,15 @@ def _migrate():
             created_at TEXT NOT NULL
         );
         """)
+        # черновик студии: незаконченная работа над треком (правки «Правок трека», ожидающие рендеры).
+        # Пишет приложение, содержимое state воркер не разбирает; удаляется вместе с треком
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS studio_drafts (
+            job_id INTEGER PRIMARY KEY,
+            state TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        """)
         # сессии импорта рецепта: ведёт приложение/MCP шаг за шагом, здесь — состояние и захват
         conn.execute("""
         CREATE TABLE IF NOT EXISTS recipe_imports (
@@ -2033,7 +2042,13 @@ def list_jobs():
         # вся библиотека (с запасом): при LIMIT 100 старые корни пропадали из
         # списка — версии песни теряли родителя, а «перепеть» — свои дубли
         rows = conn.execute("SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (JOBS_LIST_LIMIT,)).fetchall()
-    return [_job_dict(r) for r in rows]
+        drafts = {r["job_id"] for r in conn.execute("SELECT job_id FROM studio_drafts")}
+    out = []
+    for r in rows:
+        d = _job_dict(r)
+        d["has_draft"] = r["id"] in drafts   # незаконченная работа в студии — пометка в списке треков
+        out.append(d)
+    return out
 
 
 @app.get("/jobs/{job_id}")
@@ -2098,6 +2113,7 @@ def delete_job(job_id: int):
         if row["status"] == "running":
             raise HTTPException(409, "job is running, cancel first")
         conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        conn.execute("DELETE FROM studio_drafts WHERE job_id=?", (job_id,))
     op = QUEUE.find_job(job_id)
     if op is not None:  # ждущая генерация удалённого трека не висит в очереди
         QUEUE.cancel(op.id)
@@ -4718,6 +4734,57 @@ class JobOpIn(BaseModel):
     params: dict = Field(default_factory=dict)
     result: str = ""
     refs: list[int] = Field(default_factory=list)
+
+
+DRAFT_MAX_BYTES = 1024 * 1024  # черновик — список правок, не аудио: больше — ошибка клиента
+
+
+class DraftIn(BaseModel):
+    state: dict
+
+
+def _draft_row(r) -> dict:
+    return {"job_id": r["job_id"], "state": json.loads(r["state"]), "updated_at": r["updated_at"]}
+
+
+@app.get("/drafts")
+def list_drafts():
+    """Все черновики студии — приложение сливает их со своей копией при старте."""
+    with db_lock, db() as conn:
+        rows = conn.execute("SELECT * FROM studio_drafts ORDER BY job_id").fetchall()
+    return [_draft_row(r) for r in rows]
+
+
+@app.get("/jobs/{job_id}/draft")
+def get_draft(job_id: int):
+    with db_lock, db() as conn:
+        r = conn.execute("SELECT * FROM studio_drafts WHERE job_id=?", (job_id,)).fetchone()
+    if r is None:
+        raise HTTPException(404, "no draft")
+    return _draft_row(r)
+
+
+@app.put("/jobs/{job_id}/draft")
+def put_draft(job_id: int, req: DraftIn):
+    """Черновик студии трека: создать или заменить целиком (state — JSON-объект до 1 МБ)."""
+    text = json.dumps(req.state, ensure_ascii=False)
+    if len(text.encode("utf-8")) > DRAFT_MAX_BYTES:
+        raise HTTPException(422, f"draft state is larger than {DRAFT_MAX_BYTES} bytes")
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with db_lock, db() as conn:
+        if conn.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone() is None:
+            raise HTTPException(404, "job not found")
+        conn.execute("INSERT INTO studio_drafts(job_id,state,updated_at) VALUES(?,?,?) "
+                     "ON CONFLICT(job_id) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at",
+                     (job_id, text, now))
+    return {"job_id": job_id, "state": req.state, "updated_at": now}
+
+
+@app.delete("/jobs/{job_id}/draft")
+def delete_draft(job_id: int):
+    with db_lock, db() as conn:
+        cur = conn.execute("DELETE FROM studio_drafts WHERE job_id=?", (job_id,))
+    return {"deleted": cur.rowcount > 0}
 
 
 @app.post("/jobs/{job_id}/ops")

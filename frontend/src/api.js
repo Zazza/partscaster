@@ -8,6 +8,7 @@ import {
   YueMakeStems, YueJobStems, YueMakeMinus, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YueGuitarPart, YuePlayLoop, YueFxKitProgress, YueInstallEngineModel, YueEngineModelProgress,
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
+  YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused, YueSetWindowTitle,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
@@ -114,6 +115,11 @@ export const api = {
   // все замены дорожек трека заново с чистого оригинала:
   // [{child_id, from, to, lead, beat_sec, db, stems, fade_in, fade_out}]
   rebuildSections: (parentId, specs) => YueRebuildSections(parentId, specs),
+  // черновик студии (незаконченная работа над треком) на воркере и «применить всё»
+  drafts: () => YueDrafts(),
+  draftPut: (jobId, state) => YueDraftPut(jobId, state),
+  draftDelete: (jobId) => YueDraftDelete(jobId),
+  applyEdits: (parentId, specs, title) => YueApplyEdits(parentId, specs, title),
   // линия громкости по волне: stem '' — весь трек (вариант), иначе только дорожка
   volumeEnvelope: (id, stem, points) => YueVolumeEnvelope(id, stem || '', points),
   dspVariantDelete: (id, file) => YueDspVariantDelete(id, file),

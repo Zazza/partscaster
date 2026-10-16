@@ -117,6 +117,7 @@ Main: `id`, `title`, `status` (`queued` / `running` / `done` / `error` / `cancel
 | `voice_src` | The track whose voice is put into the version; empty — its own voice |
 | `req_abc` | The track was rendered from its own plan (`request.abc`) |
 | `engine` | What made it: `torch`, `cpp-bf16` / `cpp-q8` / `cpp-q6` / `cpp-q5`; empty on old tracks — PyTorch. A seed repeats the performance only on the same engine |
+| `has_draft` | The track has a studio draft — unfinished work (see "Studio draft") |
 | `mixes` | Number of finished studio mixes (`overdub-inst-*.flac`: splices, effects on stems) |
 | `sound_presets` | `[{id, status: pending/running/done/error, child_id, error}]` |
 | `queue_pos`, `source` | Place in the queue and who queued it |
@@ -277,6 +278,19 @@ changed through the API.
 | POST | `/voices` | `{name, job_id, params (JSON string of knobs), seed}` → `{id}` — a voice card from a finished audition track; the audio is copied and survives deletion of the track |
 | GET | `/voices` | Cards, newest first; `job_alive` — whether the source track still exists, `has_audio` |
 | DELETE | `/voices/{id}` | Delete the card and the audio copy → `{deleted}` |
+
+## Studio draft
+
+Unfinished work on a track: studio edits ("Track edits": splices, effects on stems, pedals, engine, volumes,
+placement, master) and pending piece renders. The app writes it; the worker does not parse `state` (a JSON object
+up to 1 MB). The draft is deleted with the track and after "apply all" in the studio.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/drafts` | All drafts `[{job_id, state, updated_at}]` |
+| GET | `/jobs/{id}/draft` | The track's draft `{job_id, state, updated_at}`; none — 404 |
+| PUT | `/jobs/{id}/draft` | `{state}` → the draft; no track — 404, `state` not an object or over 1 MB — 422 |
+| DELETE | `/jobs/{id}/draft` | → `{deleted}` |
 
 ## Edit log and recipes
 

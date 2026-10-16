@@ -91,7 +91,8 @@ async function apply() {
   msg.value = ''
   try {
     // окно — выделение; без него — весь трек
-    const res = await inserts.addStemFx(props.job.id, stemFxRequest(STEM, cur.value.id, params.value, props.sel))
+    // step 'voice' — в «Готово» правка стоит в шаге «Голос», а не «Звук»
+    const res = await inserts.addStemFx(props.job.id, { ...stemFxRequest(STEM, cur.value.id, params.value, props.sel), step: 'voice' })
     emit('applied')
     msg.value = t('studio.voicefx.applied', { name: cur.value.name })
     if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)

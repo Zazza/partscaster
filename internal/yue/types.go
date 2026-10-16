@@ -73,6 +73,11 @@ type Service interface {
 	VoiceCreate(ctx context.Context, name string, jobID int64, params string, seed int64) (int64, error)
 	Voices(ctx context.Context) ([]Voice, error)
 	VoiceDelete(ctx context.Context, id int64) (bool, error)
+	// черновик студии (незаконченная работа над треком): Draft без черновика — nil, nil
+	Drafts(ctx context.Context) ([]Draft, error)
+	Draft(ctx context.Context, jobID int64) (*Draft, error)
+	DraftPut(ctx context.Context, jobID int64, state json.RawMessage) error
+	DraftDelete(ctx context.Context, jobID int64) (bool, error)
 	VariantToTrack(ctx context.Context, jobID int64, file, title string, voiceSrc int64) (int64, error)
 	VocalContour(ctx context.Context, id int64, from, to float64) (*VocalContour, error)
 	JobTones(ctx context.Context, id int64, from, to float64, stem string) ([]Tone, error)
@@ -151,6 +156,8 @@ type Job struct {
 	Truncated bool `json:"truncated,omitempty"`
 	// Mixes — сколько у трека готовых миксов (overdub-inst-*: вклейки, эффекты на дорожки)
 	Mixes int `json:"mixes,omitempty"`
+	// HasDraft — у трека есть черновик студии (незаконченная работа): пометка в списке треков
+	HasDraft bool `json:"has_draft"`
 	// источник голоса: рендер, чей голос звучит в этой версии (у версии,
 	// созданной подстановкой голоса); пусто — голос свой или от родителя
 	VoiceSrc *int64 `json:"voice_src,omitempty"`
@@ -362,6 +369,13 @@ type TranscribeResult struct {
 	Seconds  float64        `json:"seconds"`
 	Warnings []string       `json:"warnings"`
 	Stats    map[string]any `json:"stats"`
+}
+
+// Draft — черновик студии трека: state — JSON-объект приложения ({v, edits, queue, ts})
+type Draft struct {
+	JobID     int64           `json:"job_id"`
+	State     json.RawMessage `json:"state"`
+	UpdatedAt string          `json:"updated_at"`
 }
 
 // Voice — карточка голоса примерочной: ручки (params, JSON-строка) + seed

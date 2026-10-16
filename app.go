@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -309,6 +310,28 @@ func (a *App) runGraph(jobID int64, graph, fname, label string) (*yue.DspVariant
 // Результат — overdub-inst-<последний рендер>.flac + отчёт.
 func (a *App) YueRebuildSections(parentID int64, specs []studio.SectionSpec) (*studio.RebuildResult, error) {
 	return studio.RebuildSections(a.ctx, a.yue, parentID, specs)
+}
+
+// Черновик студии (незаконченная работа над треком): state — объект приложения {v, edits, queue, ts}.
+func (a *App) YueDrafts() ([]yue.Draft, error) {
+	return a.yue.Drafts(a.ctx)
+}
+
+func (a *App) YueDraftPut(jobID int64, state map[string]any) error {
+	b, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return a.yue.DraftPut(a.ctx, jobID, b)
+}
+
+func (a *App) YueDraftDelete(jobID int64) (bool, error) {
+	return a.yue.DraftDelete(a.ctx, jobID)
+}
+
+// YueApplyEdits — «применить всё»: пересборка со всеми правками → один новый трек, черновик очищается.
+func (a *App) YueApplyEdits(parentID int64, specs []studio.SectionSpec, title string) (int64, error) {
+	return studio.ApplyEdits(a.ctx, a.yue, parentID, specs, title)
 }
 
 func (a *App) YueApplyDsp(jobID int64, chainID string, params map[string]float64) (*yue.DspVariant, error) {

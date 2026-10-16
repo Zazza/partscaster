@@ -12,6 +12,7 @@ import { useRevoice } from '../composables/useRevoice.js'
 import { vocalEndsQuiet, voiceSource } from '../vocalParts.js'
 import { INSERT_DEFAULT_DB, INSERT_MAX_DB, INSERT_MIN_DB } from '../insertMix.js'
 import { insertTitle, insertWindow, mixChildId, mixLabel } from '../insertLabels.js'
+import { editsBySteps } from '../draftEdits.js'
 import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
 import { isFlat, bumpRange } from '../envelope.js'
@@ -870,6 +871,29 @@ const dbBusy = ref(false)
 const deskRef = ref(null)
 const deskBox = ref(null)
 const activeEdits = computed(() => appliedInserts.value.filter((it) => !it.off))
+// «5 Готово»: все правки черновика по шагам, «применить всё» — один итоговый трек
+const editGroups = computed(() => editsBySteps(appliedInserts.value))
+const waitingRenders = computed(() => inserts.byParent(props.job.id).length)
+const applyAllBusy = ref(false)
+const applyAllMsg = ref('')
+const canApplyAll = computed(() => activeEdits.value.length > 0 && !waitingRenders.value
+  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value)
+async function applyAll() {
+  if (!canApplyAll.value) return
+  applyAllBusy.value = true
+  applyAllMsg.value = ''
+  try {
+    const id = await inserts.applyAll(props.job.id, t('studio.final.title', { title: props.job.title || t('common.track') }))
+    applyAllMsg.value = t('studio.final.done', { id })
+  } catch (e) {
+    applyAllMsg.value = String(e)
+  } finally { applyAllBusy.value = false }
+}
+function resetEdits() {
+  askConfirm(t('studio.final.reset.title'), t('studio.final.reset.body'), async () => {
+    try { await inserts.clearDraft(props.job.id) } catch (e) { applyAllMsg.value = String(e) }
+  })
+}
 const mixFile = computed(() => inserts.mixFile(props.job.id))
 // контекст плеера: «плей» панели в студии без истории прослушивания играет сам
 // трек, а с активными правками — свежий микс (последняя правка); прослушанное
@@ -1885,6 +1909,30 @@ function setWindowTitle() {
           </StudioVoice>
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
+          <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
+          <div class="studio-box">
+            <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span></div>
+            <div class="studio-box-body">
+              <p v-if="!editGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
+              <div v-for="g in editGroups" :key="g.step" class="final-group">
+                <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
+                <ul>
+                  <li v-for="it in g.items" :key="it.childId" :class="{ off: it.off }">
+                    {{ insertTitle(it, insertNames) }}<template v-if="it.off"> · {{ t('studio.final.off') }}</template>
+                  </li>
+                </ul>
+              </div>
+              <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
+              <div class="dsp-row final-actions">
+                <button v-if="editGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
+                  <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
+                <span class="spacer"></span>
+                <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">
+                  {{ applyAllBusy ? t('studio.final.applying') : t('studio.final.apply') }}</button>
+              </div>
+              <p v-if="applyAllMsg" class="muted">{{ applyAllMsg }}</p>
+            </div>
+          </div>
           <div ref="masterBox" class="studio-box">
             <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
             <div class="studio-box-body">

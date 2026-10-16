@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ func RegisterStudioTools(s *Server) {
 	registerRevoiceTools(s)
 	registerFxTools(s)
 	registerPresetTools(s)
+	registerDraftTools(s)
 	registerRecipeTools(s)
 	s.Register(Tool{
 		Name:        "config_get",
@@ -687,6 +689,84 @@ func RegisterStudioTools(s *Server) {
 				return "", errConfirm
 			}
 			ok, err := s.client.VoiceDelete(context.Background(), argInt(args, "voice_id"))
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("deleted=%v", ok), nil
+		},
+	})
+}
+
+// registerDraftTools — черновик студии (незаконченная работа над треком): правки «Правок трека» и ожидающие
+// рендеры, как их ведёт приложение. Применить черновик агенту — rebuild_sections + variant_track.
+func registerDraftTools(s *Server) {
+	s.Register(Tool{
+		Name: "draft_list",
+		Description: "Черновики студии (незаконченная работа) всех треков: [{job_id, state, updated_at}]. " +
+			"state — {v, edits (записи «Правок трека»), queue (ожидающие рендеры кусков), ts}.",
+		InputSchema: props(nil),
+		Handler: func(s *Server, _ map[string]any) (string, error) {
+			list, err := s.client.Drafts(context.Background())
+			if err != nil {
+				return "", err
+			}
+			if list == nil {
+				list = []yue.Draft{}
+			}
+			return toJSON(list), nil
+		},
+	})
+	s.Register(Tool{
+		Name:        "draft_get",
+		Description: "Черновик студии трека: {job_id, state, updated_at}; черновика нет — «no draft».",
+		InputSchema: props(map[string]any{"job_id": prop("ID трека", "integer")}, "job_id"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			d, err := s.client.Draft(context.Background(), argInt(args, "job_id"))
+			if err != nil {
+				return "", err
+			}
+			if d == nil {
+				return "no draft", nil
+			}
+			return toJSON(d), nil
+		},
+	})
+	s.Register(Tool{
+		Name: "draft_set",
+		Description: "Записать черновик студии трека целиком (state — JSON-объект {v, edits, queue, ts}). " +
+			"Приложение подхватит его при следующем запуске; прежний черновик заменяется.",
+		InputSchema: props(map[string]any{
+			"job_id": prop("ID трека", "integer"),
+			"state":  prop("состояние черновика — JSON-объект", "object"),
+		}, "job_id", "state"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			st, ok := args["state"].(map[string]any)
+			if !ok {
+				return "", errors.New("state — JSON-объект {v, edits, queue, ts}")
+			}
+			b, err := json.Marshal(st)
+			if err != nil {
+				return "", err
+			}
+			if err := s.client.DraftPut(context.Background(), argInt(args, "job_id"), b); err != nil {
+				return "", err
+			}
+			return "saved", nil
+		},
+	})
+	s.Register(Tool{
+		Name: "draft_clear",
+		Description: "Удалить черновик студии трека — его неприменённые правки пропадут (сам трек не меняется). " +
+			"Деструктивное: требует confirm=true (спроси пользователя).",
+		InputSchema: props(map[string]any{
+			"job_id":  prop("ID трека", "integer"),
+			"confirm": prop("явное подтверждение пользователя", "boolean"),
+		}, "job_id", "confirm"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			if !argBool(args, "confirm") {
+				return "", errConfirm
+			}
+			ok, err := s.client.DraftDelete(context.Background(), argInt(args, "job_id"))
 			if err != nil {
 				return "", err
 			}

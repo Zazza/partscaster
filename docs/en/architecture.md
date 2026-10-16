@@ -76,7 +76,7 @@ The worker stores the preset recipes and the "preset on track" statuses (table `
 |---|---|
 | `src/main.js`, `src/App.vue` | entry and shell: sidebar, track list, "New track" form, page switching |
 | `src/components/` | screens and large blocks (31 components): `SideBar` (sections and the queue panel), `StudioPage` (track studio) with `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` and the preset editor, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, modal windows |
-| `src/composables/` | shared state and behavior: `usePlayer`, `useProcQueue` (tracking a queue operation), `useWorkerCompat` (version compatibility), `useInserts`, `useRevoice`, `useWindowPlay` and others |
+| `src/composables/` | shared state and behavior: `usePlayer`, `useProcQueue` (tracking a queue operation), `useWorkerCompat` (version compatibility), `useInserts` (the "Track edits" registry — the studio draft: the main copy on the worker, `/jobs/{id}/draft`, a copy in localStorage, merged by edit time — `draftEdits.js`), `useRevoice`, `useWindowPlay` and others |
 | `src/*.js` | pure logic without DOM (tests next to it — `*.test.js`, vitest): style library (`presets.js`, `slotOptions.js`, `groups.js`), effect chains (`fxPresets.js`, `fxBlocks.json`, `fxChain.js`), sound presets, queue (`queueView.js`), recipe and others |
 | `src/api.js` | wrapper over the generated Wails bindings (`src/wailsjs/`) |
 | `src/i18n/` | interface strings: `ru.js`, `en.js` |

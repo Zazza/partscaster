@@ -9,6 +9,7 @@ import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
 import { renderJob } from '../requests.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
+import { draftState, isEmptyDraft, mergeDrafts } from '../draftEdits.js'
 
 const { t } = useI18n()
 const KEY = 'yue_insert_queue'
@@ -16,21 +17,117 @@ const KEY = 'yue_insert_queue'
 // beat, db, stems, fadeIn, fadeOut, aligned, score}]} — из них трек
 // пересобирается с чистого оригинала
 const APPLIED_KEY = 'yue_insert_applied'
+// время последней правки по трекам {parentId: мс} — по нему копия на ПК и черновик воркера сливаются
+const TS_KEY = 'yue_insert_ts'
+// что по каждому треку уже лежит на воркере (JSON правок и очереди): переживает перезапуск — иначе при
+// старте без воркера все локальные треки казались бы изменёнными и затёрли бы его черновики
+const SENT_KEY = 'yue_insert_sent'
 const pending = ref(load(KEY, []))
 const applied = ref(load(APPLIED_KEY, {}))
+let ts = load(TS_KEY, {})
 
 function load(key, dflt) {
   try { return JSON.parse(localStorage.getItem(key) || 'null') || dflt } catch { return dflt }
 }
 function save() {
+  markChanged()
   try {
     localStorage.setItem(KEY, JSON.stringify(pending.value))
     localStorage.setItem(APPLIED_KEY, JSON.stringify(applied.value))
+    localStorage.setItem(TS_KEY, JSON.stringify(ts))
+    localStorage.setItem(SENT_KEY, JSON.stringify(sent))
   } catch { /* localStorage недоступен — живём в памяти до перезапуска */ }
+  pushDirty()
 }
+
+// ---- черновик студии на воркере: главный экземпляр реестра (копия выше — на ПК) ----
+// sent — что по каждому треку уже лежит на воркере (JSON правок и очереди без ts): изменившиеся треки
+// получают новое время и уходят на воркер; так не нужно знать, какой вызов что поменял
+const sent = load(SENT_KEY, {})
+const dirty = new Set()
+const body = (id) => {
+  const st = draftState(id, applied.value, pending.value, 0)
+  return JSON.stringify([st.edits, st.queue])
+}
+function trackIds() {
+  return new Set([...Object.keys(applied.value), ...pending.value.map((x) => String(x.parent)), ...Object.keys(sent)])
+}
+function markChanged() {
+  for (const id of trackIds()) {
+    const b = body(id)
+    if (b === (sent[id] ?? body.empty)) continue
+    if (!dirty.has(id)) ts = { ...ts, [id]: Date.now() }
+    dirty.add(id)
+  }
+}
+body.empty = JSON.stringify([[], []])
+// отправка по одной: черновики трека не должны обгонять друг друга
+let pushing = Promise.resolve()
+function pushDirty() {
+  pushing = pushing.then(async () => {
+    for (const id of [...dirty]) {
+      const st = draftState(id, applied.value, pending.value, ts[id] || Date.now())
+      const b = body(id)
+      try {
+        const empty = isEmptyDraft(st)
+        if (empty) await api.draftDelete(Number(id))
+        else await api.draftPut(Number(id), st)
+        // пока шла отправка, трек могли поменять ещё раз — тогда он остаётся в очереди отправки
+        if (body(id) === b) {
+          dirty.delete(id)
+          if (empty) {
+            // удалённому черновику не нужны ни время, ни отметка «отправлено»: иначе трек навсегда
+            // остался бы «локальным» и при каждом старте слал бы удаление
+            delete sent[id]
+            ts = { ...ts }
+            delete ts[id]
+          } else sent[id] = b
+        }
+        persistSync()
+      } catch (e) {
+        // воркер недоступен (или старый, без черновиков): правки целы в localStorage, повтор — при следующем сохранении
+        console.warn('черновик студии не отправлен на воркер', id, e)
+      }
+    }
+  })
+  return pushing
+}
+function persistSync() {
+  try {
+    localStorage.setItem(TS_KEY, JSON.stringify(ts))
+    localStorage.setItem(SENT_KEY, JSON.stringify(sent))
+  } catch { /* localStorage недоступен — отметки живут в памяти до перезапуска */ }
+}
+// старт: копия на ПК + черновики воркера, по каждому треку — более свежий; локальные новее — на воркер.
+// Воркер недоступен — повтор позже: свежие черновики с другого ПК не должны затираться копией этого
+const SYNC_RETRY_MS = 15000
+async function syncFromWorker() {
+  let remote
+  try {
+    remote = (await api.drafts()) || []
+  } catch (e) {
+    // старый воркер или нет связи — работаем по копии на ПК, слияние повторится
+    console.warn('черновики студии с воркера не получены — повтор через', SYNC_RETRY_MS / 1000, 'с', e)
+    setTimeout(syncFromWorker, SYNC_RETRY_MS)
+    return
+  }
+  const m = mergeDrafts({ applied: applied.value, pending: pending.value }, ts, remote)
+  applied.value = m.applied
+  pending.value = m.pending
+  ts = m.ts
+  const pushIds = new Set(m.push.map(String))
+  for (const d of remote) {
+    const id = String(d.job_id)
+    if (!pushIds.has(id)) sent[id] = body(id)
+  }
+  for (const id of pushIds) dirty.add(id)
+  save()
+}
+syncFromWorker()
 
 // specs: [{parent, childId, instId, from, to, lead, beat, db, stems, fadeIn, fadeOut, srcJob}]
 function register(specs) {
+  for (const sp of specs) notApplying(sp.parent)
   pending.value = [...pending.value, ...specs]
   save()
 }
@@ -46,13 +143,17 @@ let chain = Promise.resolve()
 // сколько пересборок трека ждут или идут: пока их больше нуля, файл микса ещё старый —
 // студия не даёт его слушать как «микс с правками» и делать из него версию
 const building = ref({})
+// пока идёт «применить всё», файл микса трека собирает итог — своя пересборка или превью перезаписали бы
+// его между пересборкой итога и созданием трека (в итог попали бы чужие громкости)
 function rebuild(parentId) {
+  try { notApplying(parentId) } catch (e) { return Promise.reject(e) }
   return queued(parentId, () => doRebuild(parentId))
 }
 // «послушать громкости пресета до применения»: пересборка активных правок трека
 // с временными записями громкости ВПЕРЕДИ (в реестр не попадают — трек не меняется,
 // следующая пересборка из реестра вернёт микс без них). Идёт общей очередью пересборок
 function previewSpecs(parentId, extra) {
+  try { notApplying(parentId) } catch (e) { return Promise.reject(e) }
   return queued(parentId, async () => {
     const own = appliedFor(parentId).filter((it) => !it.off).map(specOf)
     const all = [...(extra || []), ...own]
@@ -153,6 +254,7 @@ function mixFile(parentId) {
 }
 
 async function selectAlt(parentId, childId, altId) {
+  notApplying(parentId)
   const it = appliedFor(parentId).find((x) => x.childId === childId)
   if (!it || !(it.alts || []).includes(altId)) return null
   it.childId = altId
@@ -169,6 +271,7 @@ async function addMute(parentId, item) {
 // несколько «громкостей дорожек» разом — одна пересборка
 let muteSeq = 0
 async function addMutes(parentId, items) {
+  notApplying(parentId)
   const added = items.map(({ instId, from, to, stems, db = -100 }) => ({
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId, from, to, lead: 0, beat: 0, db, stems,
     fadeIn: 0, fadeOut: 0, keepHighHz: 0,
@@ -180,10 +283,13 @@ async function addMutes(parentId, items) {
 
 // эффект на дорожку (стем) в окне: запись реестра как у «громкости дорожек»
 // (childId < 0, в api уходит 0) + цепочка; копится вместе с вклейками
-async function addStemFx(parentId, { stem, chain, params, from = 0, to = 0 }) {
+async function addStemFx(parentId, { stem, chain, params, from = 0, to = 0, step = '' }) {
+  notApplying(parentId)
   const item = {
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'fx-' + chain, from, to, lead: 0, beat: 0, db: 0,
     stems: [stem], fadeIn: 0, fadeOut: 0, keepHighHz: 0, chain, params: { ...(params || {}) },
+    // шаг студии для списка «Изменения трека» («Обработка голоса» — voice); без него — по виду записи
+    ...(step ? { step } : {}),
   }
   applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
   save()
@@ -193,6 +299,7 @@ async function addStemFx(parentId, { stem, chain, params, from = 0, to = 0 }) {
 // доска педалей на дорожку в окне: одна запись реестра со списком шагов
 // (эффекты по порядку, а не сумма отдельных); label — подпись в списке вставок
 async function addStemPedals(parentId, { stem, steps, from = 0, to = 0, label = '' }) {
+  notApplying(parentId)
   const item = {
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'pedals', from, to, lead: 0, beat: 0, db: 0,
     stems: [stem], fadeIn: 0, fadeOut: 0, keepHighHz: 0, steps: (steps || []).map((s) => ({ ...s })), label,
@@ -206,6 +313,7 @@ async function addStemPedals(parentId, { stem, steps, from = 0, to = 0, label = 
 // считается на воркере при пересборке; label — подпись в списке вставок
 // add — добавить кусок поверх трека, исходную дорожку не вычитать (синт-партия на «mix» — без разделения)
 async function addStemEngine(parentId, { stem, chain, from = 0, to = 0, label = '', add = false, place = null }) {
+  notApplying(parentId)
   const item = {
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'engine', from, to, lead: 0, beat: 0, db: 0,
     stems: [stem], fadeIn: 0, fadeOut: 0, keepHighHz: 0, engine: (chain || []).map((b) => ({ ...b })), label,
@@ -219,6 +327,7 @@ async function addStemEngine(parentId, { stem, chain, from = 0, to = 0, label = 
 
 // несколько цепочек движка разом («ритм-секция набором») — одна пересборка
 async function addStemEngines(parentId, items) {
+  notApplying(parentId)
   if (!(items || []).length) return null
   const added = items.map(({ stem, chain, from = 0, to = 0, label = '' }) => ({
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'engine', from, to, lead: 0, beat: 0, db: 0,
@@ -232,6 +341,7 @@ async function addStemEngines(parentId, items) {
 // линия громкости дорожки (по волне): одна запись на дорожку — повторная
 // заменяет прежнюю, пустая — убирает; эффекты и вклейки не трогаются
 async function addStemEnvelope(parentId, { stem, envelope }) {
+  notApplying(parentId)
   const rest = appliedFor(parentId).filter((x) => !(x.envelope && (x.stems || [])[0] === stem))
   const item = envelope && envelope.length ? [{
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'env', from: 0, to: 0, lead: 0, beat: 0, db: 0,
@@ -244,6 +354,7 @@ async function addStemEnvelope(parentId, { stem, envelope }) {
 
 // выключить/вернуть запись: остаётся в реестре (и в localStorage), пересборка без неё
 async function setOff(parentId, childId, off) {
+  notApplying(parentId)
   const list = appliedFor(parentId)
   const it = list.find((x) => x.childId === childId)
   if (!it) return null
@@ -256,6 +367,7 @@ async function setOff(parentId, childId, off) {
 // удалить запись; ожидающая спека той же вклейки уходит из очереди — иначе готовый рендер
 // вернул бы её в реестр. Записи не было — пересборки нет
 async function remove(parentId, childId) {
+  notApplying(parentId)
   const before = pending.value.length
   pending.value = pending.value.filter((s) => !(s.parent === parentId && s.childId === childId))
   const list = appliedFor(parentId)
@@ -271,6 +383,7 @@ async function remove(parentId, childId) {
 
 // новая цепочка у записи движка: окно и дорожка прежние, подпись — новая, если дана
 async function replaceEngine(parentId, childId, { chain, label } = {}) {
+  notApplying(parentId)
   const list = appliedFor(parentId)
   const it = list.find((x) => x.childId === childId)
   if (!it || !it.engine) throw new Error(t('inserts.notEngine'))
@@ -283,12 +396,14 @@ async function replaceEngine(parentId, childId, { chain, label } = {}) {
 
 // место дорожки в стерео (пульт): одна запись на дорожку, центр — запись убирается
 async function setStemPlace(parentId, stem, place) {
+  notApplying(parentId)
   applied.value = { ...applied.value, [parentId]: withStemPlace(appliedFor(parentId), stem, place) }
   save()
   return rebuild(parentId)
 }
 // место партии-добавления (синт, перкуссия) — у самой записи
 async function setPlace(parentId, childId, place) {
+  notApplying(parentId)
   const it = appliedFor(parentId).find((x) => x.childId === childId)
   if (!it) return null
   it.place = { ...place }
@@ -298,17 +413,61 @@ async function setPlace(parentId, childId, place) {
 }
 // мастер трека: одна запись, новая заменяет прежнюю
 async function setMaster(parentId, { chain, label = '' }) {
+  notApplying(parentId)
   applied.value = { ...applied.value, [parentId]: withMaster(appliedFor(parentId), chain, label) }
   save()
   return rebuild(parentId)
 }
 
 async function setDb(parentId, childId, db) {
+  notApplying(parentId)
   const it = appliedFor(parentId).find((x) => x.childId === childId)
   if (!it) return null
   it.db = clampDb(db)
   save()
   return rebuild(parentId)
+}
+
+// пока идёт «применить всё», правки трека не принимаются: итог собирается из списка на момент нажатия,
+// а после успеха список очищается — правка, сделанная в это время, пропала бы молча
+const applying = new Set()
+function notApplying(parentId) {
+  if (applying.has(Number(parentId))) throw new Error(t('inserts.applying'))
+}
+
+// «применить всё»: один новый трек из всех включённых правок (Go: пересборка → трек → черновик удалён);
+// после успеха реестр и ожидающие рендеры трека очищаются. Ошибка — реестр не тронут
+function applyAll(parentId, title) {
+  notApplying(parentId)
+  applying.add(Number(parentId))
+  // мимо общей цепочки пересборок: итог собирается минутами (в очереди воркера), и правки ДРУГИХ треков
+  // не должны его ждать. Свои пересборки трека в это время не начнутся — правки отклоняются (applying),
+  // а кнопка недоступна, пока пересборка трека идёт. Счётчик building — чтобы «▶ микс» ждал итога
+  building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
+  return (async () => {
+    const specs = appliedFor(parentId).filter((it) => !it.off).map(specOf)
+    const id = await api.applyEdits(parentId, specs, title)
+    dropTrack(parentId)
+    return id
+  })().finally(() => {
+    applying.delete(Number(parentId))
+    building.value = { ...building.value, [parentId]: building.value[parentId] - 1 }
+  })
+}
+// «сбросить черновик»: все правки и ожидающие рендеры трека — прочь, черновик на воркере удаляется
+async function clearDraft(parentId) {
+  notApplying(parentId)
+  dropTrack(parentId)
+  await pushing
+  // трек без правок черновика мог и не иметь — удаление всё равно отправляем: на воркере мог остаться чужой
+  if (!dirty.has(String(parentId))) await api.draftDelete(parentId)
+}
+function dropTrack(parentId) {
+  const rest = { ...applied.value }
+  delete rest[parentId]
+  applied.value = rest
+  pending.value = pending.value.filter((s) => Number(s.parent) !== Number(parentId))
+  save()
 }
 
 async function recreateChild(spec, src) {
@@ -389,5 +548,5 @@ async function tickOnce() {
 setInterval(tick, 3000)
 
 export function useInserts() {
-  return { pending, applied, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, applyAll, clearDraft, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }
