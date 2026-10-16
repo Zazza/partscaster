@@ -81,7 +81,7 @@ dist-mac: ## пакет macOS в dist/ (только на Mac)
 
 mcp: ## собрать MCP-сервер (build/bin/partscaster-mcp)
 	go build -ldflags "-X main.buildHash=$$(go run ./cmd/srchash) -X main.srcDir=$(CURDIR) -X main.version=$(VERSION)" -o build/bin/partscaster-mcp ./cmd/partscaster-mcp
-	@echo "mcp-сервер: $(CURDIR)/build/bin/partscaster-mcp (конфигурация клиентов: docs/mcp.md)"
+	@echo "mcp-сервер: $(CURDIR)/build/bin/partscaster-mcp (конфигурация клиентов: docs/ru/mcp.md, docs/en/mcp.md)"
 
 mcp-data: ## перегенерировать данные библиотеки MCP из фронтенда (go:embed)
 	./tools/mcp-gendata.sh

@@ -12,7 +12,7 @@ Partscaster @VERSION@ — установка / installation
    запускает службу на порту 8091. Обновление — то же самое с новым архивом;
    откат на предыдущую версию: ~/partscaster/current/install.sh --rollback
    Необязательные компоненты (тексты треков, чистое разделение дорожек) ставит AI-агент
-   инструментом install_worker — или по docs/deployment.md.
+   инструментом install_worker — или по docs/ru/deployment.md (docs/en/deployment.md).
 
    Windows без WSL: запустите partscaster-worker.exe (двойной щелчок). Первый раз он сам поставит
    Python и пакеты (~25 ГБ вместе с моделью), дальше просто запускает воркер; окно открыто —

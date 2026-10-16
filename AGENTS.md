@@ -1,145 +1,189 @@
-# AGENTS.md — правила работы с репозиторием для AI-агентов
+# AGENTS.md — rules for AI agents working in this repository
 
-Это рабочий контракт для любых агентов (Codex, Claude, ZCode и др.).
-Прочитай целиком перед изменениями. Нарушение правил = сломанный CI.
+This is the working contract for any coding agent (Codex, Claude and others). Read it in full before
+changing anything. Breaking these rules means a red CI or a broken release.
 
-## Железные правила
+Partscaster has three parts: a desktop app (Go + Wails v2, Vue 3 UI), an MCP server for AI agents
+(same Go code base) and a Python worker on the GPU machine (FastAPI around the YuE2 model).
 
-1. **Перед отправкой изменений: `make lint && make test` — всё зелёное.** Это же гоняет CI
-   (`.github/workflows/ci.yml`): gofmt/go vet/golangci-lint + go test; eslint + vitest
-   + сборка фронта; ruff + unittest воркера.
-2. **CHANGELOG ведём с `v0.1.0` (вышла 2026-09-27).** Каждый заметный PR сопровождается
-   записью в `Unreleased`, а перед тегом `vX.Y.Z` раздел переименовывается в версию
-   с датой. Релиз без changelog-записи не делать.
-   **«Что нового» пишет агент, не человек.** Когда человек просит выпустить версию
-   (или поставить тег), агент тем же коммитом добавляет запись в начало
-   `frontend/src/releaseNotes.js` — окно «Что нового» в приложении. Источник — раздел
-   версии в CHANGELOG, но текст свой: 5–10 пунктов, каждый — одна строка простыми
-   словами о том, что изменилось для пользователя (без имён файлов, эндпоинтов и
-   внутренних терминов), ru и en. Номер записи = номер тега: по первой записи
-   приложение понимает, что вышла новая версия. Тест `releaseNotes.test.js` падает,
-   если в CHANGELOG есть версия новее первой записи.
-3. **Правило синхронного обновления** — при правках проверь, не требует ли
-   обновления зависимое, и обнови в том же PR:
-   - новый/изменённый эндпоинт воркера или поля ответов → метод `yue.Service`
-     (`internal/yue/`) + биндинг `App` (app.go) + обёртка `api.js` + **инструмент
-     MCP** (`internal/mcp/tools_*.go`) — паритет всех клиентов API;
-   - правки слотов/групп/пресетов во `frontend/src/` (slotOptions.js, groups.js,
-     presets.js) → `make mcp-data` и закоммитить перегенерированные
-     `internal/mcp/*.json` (иначе CI уронит parity-проверку);
-   - смена архитектуры/потоков данных/деплоя → `docs/architecture.md`,
-     `docs/deployment.md`, `docs/mcp.md`, `docs/api.md` — актуальными в тех же
-     изменениях, не «потом»;
-   - новая/изменённая DSP-цепочка (`internal/dsp`) → строка в `docs/effects.md` с её ID
-     в виде (`id`) и число «Всего N цепочек» (тест `TestEffectsDocListsEveryChain` уронит CI);
-   - смена env-переменных воркера → `worker.env.example`, таблица в
-     `docs/deployment.md`, при необходимости `docs/mcp.md`;
-   - заметные пользователю изменения → после выхода `v0.1.0` кандидат в CHANGELOG
-     (см. правило 2).
-4. **Тесты пишутся по спецификации «как должно работать»**, а не фиксацией текущего
-   поведения. Если тест вскрыл дефект — чини код, а не тест (кроме случаев, когда
-   тест неверно понял фактический контракт данных).
-5. **Никаких личных данных в коде/доках**: адреса машин, `/home/<user>`, `/mnt/<буква>`,
-   LAN-IP, внутренние клички серверов. Для примеров — нейтральные пути
-   (`/opt/yue/...`, `user@gpu-host`) или env-переменные.
-6. **Секретов и токенов в репозитории быть не должно.** Машинные настройки — только
-   в `worker.env.example` как закомментированные примеры.
+## Hard rules
 
-## Архитектура (не ломать)
+1. **Before handing off changes: `make lint && make test`, all green.**
+   CI (`.github/workflows/ci.yml`) runs the same checks in three jobs:
+   - `go` — builds the frontend (needed by `go:embed`), then gofmt, go vet, golangci-lint, go test;
+   - `frontend` — eslint, vitest, production build, and the MCP data parity check (see rule 3);
+   - `worker` — ruff and `unittest` discovery over `worker/test_*.py`.
 
-### Go-хост (desktop, Wails v2)
+   CI runs on pushes to `main` and on pull requests. Pushes to `develop` are **not** checked by CI,
+   so on `develop` the local `make lint && make test` is the only gate.
+2. **CHANGELOG and "What's new" go with every release.**
+   - Every noticeable change gets an entry under `## [Unreleased]` in `CHANGELOG.md`, in the same commit.
+   - When a human asks to cut a release, the agent renames `Unreleased` to `## [X.Y.Z] - YYYY-MM-DD`
+     (Keep a Changelog groups: Added / Changed / Fixed / Removed) and, **in the same commit**, adds a new
+     first entry to `frontend/src/releaseNotes.js` — the "What's new" window in the app. The source is the
+     CHANGELOG section, but the text is written anew: 5–10 items, one plain line each about what changed for
+     the user (no file names, endpoints or internal terms), in both `ru` and `en`. The entry's `version`
+     equals the tag: the app uses the first entry to detect a new version. `releaseNotes.test.js` fails if
+     CHANGELOG has a version newer than the first entry.
+   - The tag `vX.Y.Z` is created and pushed by a human. The tag starts `.github/workflows/release.yml`,
+     which builds and publishes the packages (see [CONTRIBUTING.md](CONTRIBUTING.md)). Agents do not tag,
+     push tags or publish releases.
+3. **Update dependents in the same change.** When you edit something, check what depends on it:
+   - new or changed worker endpoint or response fields → method in the `yue.Service` interface
+     (`internal/yue/types.go`) and its implementation in `internal/yue/<domain>.go` → `App` binding
+     (`app*.go`) → wrapper in `frontend/src/api.js` → **MCP tool** (`internal/mcp/tools_*.go`). All API
+     clients stay at parity;
+   - slots, groups or presets in `frontend/src/` (`slotOptions.js`, `groups.js`, `presets.js`,
+     `fxPresets.js`) or engine blocks in `worker/fx_blocks.json` → run `make mcp-data` and commit every
+     regenerated file: `internal/mcp/*.json`, `frontend/src/fxBlocks.json` and `worker/fx_presets.json`.
+     CI only diffs `internal/mcp/` and `frontend/src/fxBlocks.json`, so a stale `worker/fx_presets.json`
+     slips through — commit it anyway;
+   - architecture, data flow or deployment changes → `docs/{ru,en}/architecture.md`, `deployment.md`,
+     `mcp.md`, `api.md` updated in the same change, not "later";
+   - new or changed DSP chain (`internal/dsp`) → a row in `docs/ru/effects.md` and `docs/en/effects.md`
+     with its ID written as (`id`), plus the updated chain count (`TestEffectsDocListsEveryChain` fails
+     otherwise);
+   - worker environment variables → `worker.env.example`, the variable table in `docs/{ru,en}/deployment.md`,
+     and `docs/{ru,en}/mcp.md` if MCP is affected;
+   - user-visible UI strings → both dictionaries `frontend/src/i18n/ru.js` and `en.js` (`i18n.test.js`
+     checks that keys match);
+   - noticeable user-facing changes → CHANGELOG `Unreleased` (rule 2).
+4. **Documentation exists in two languages, kept in step.**
+   - `docs/ru/` and `docs/en/` hold the same set of files with identical names; the root has `README.md`
+     (English) and `README.ru.md` (Russian); `CONTRIBUTING.md` / `CONTRIBUTING.ru.md` likewise.
+   - Any documentation change is made in **both** languages in the same commit. A fact added only to one
+     language is a bug.
+   - Tests read the docs: `docs/ru/effects.md` and `docs/en/effects.md` (every DSP chain as (`id`), the
+     chain count, the `` | `level` | `` row of the engine block table) and `docs/ru/ui-guide.md` (the
+     `## Пресеты звука` section). Keep these anchors when editing.
+5. **Tests follow the specification of how things should work**, not a snapshot of current behaviour.
+   If a test exposes a defect, fix the code, not the test (unless the test misread the actual data contract).
+6. **No personal data in code or docs:** machine addresses, home directories (`/home/<user>`), Windows
+   drive mounts (`/mnt/<letter>`), LAN IPs, internal host nicknames. Use neutral examples
+   (`~/partscaster`, `/data/hf-cache`, `user@gpu-host`, `192.0.2.10`) or environment variables.
+7. **No secrets or tokens in the repository.** Machine-specific settings live only in
+   `worker.env.example`, as commented-out examples.
 
-- `App` (app.go) — тонкие биндинги Wails для фронтенда. Бизнес-логику в биндинги
-  не тащить: конвейеры — в `internal/`, воркер — на GPU-машине.
-- Зависимости внедряются через интерфейсы, **не глобальными переменными**:
-  - `Player` (player.go) — плеер, внедряется в `App` через `NewApp(client, player)`.
-    Глобальный `var pl` — запрещён (был, убран).
-  - `yue.Service` (internal/yue/types.go) — API воркера, `App` работает с интерфейсом.
-- HTTP-вызовы воркера — только через общий хелпер `Client.call`/`get`/`postJSON`/
-  `postRaw`/`del` (internal/yue/client.go). Копировать вручную
-  marshal→request→status→decode — запрещено, для того хелпер и сделан.
-- Новые HTTP-методы воркера: добавить в интерфейс `Service`, реализовать в
-  `internal/yue/<домен>.go` (jobs/llm/stems/corpus — по доменам), биндинг в `app.go`,
-  при необходимости — прокси в main.go.
-- Платформозависимое — только через build tags (`_unix.go` / `_windows.go`):
-  плеер, сигналы, `openExternal`. Не смешивать с общим кодом.
-- ffmpeg-цепочки — `internal/dsp`; фрагментация через `dsp.Span`, а не отдельная функция.
-- Магические числа — в именованные константы (см. верх app.go).
+## Architecture (do not break)
 
-### Фронтенд (Vue 3)
+### Repository layout
 
-- **App.vue — оркестратор** (страницы, форма, список джоб). Не раздувать:
-  экраны — в `src/components/`, состояние — в `src/composables/`.
-- `usePlayer` / `useConfirm` — синглтоны (state в module scope). Не плодить копии
-  состояния плеера в компонентах — зовётся `usePlayer()` откуда угодно.
-- Чистая логика (без DOM) — в отдельных модулях (`src/styleLogic.js`) и покрывается
-  vitest. Логику в компонентах, которую хочется протестировать, — сначала вынести.
-- Словарные данные (слоты, заготовки партий, длительности) — в `src/slotOptions.js`,
-  не в компонентах.
-- Пропсы/события между App и компонентами; `defineModel` для v-model.
-- Стиль: UI-тексты и комментарии — **на русском**, идентификаторы — на английском.
-- `src/wailsjs/**` — сгенерировано Wails, руками не править.
+| Path | What it is |
+|---|---|
+| `main.go`, `app*.go` | Wails entry point; `App` bindings split by area (`app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go`); `audioProxy` in `main.go` serves job artifacts to the webview |
+| `player*.go`, `signals_*.go`, `open_*.go` | external audio player, pause signals, opening URLs — per-OS via build tags |
+| `internal/yue` | HTTP client of the worker: `Service` interface, transport in `client.go`, methods per domain (`jobs`, `stems`, `llm`, `fx`, `presets`, `queue`, `recipe`, `voices`, `engine`, `instruments`, `journal`, `version`) |
+| `internal/studio` | studio pipelines on the desktop side (ffmpeg + worker): preview cache, DSP apply, splice, sections, live layer, recipe |
+| `internal/dsp` | ffmpeg filter chains (effects) |
+| `internal/mcp`, `cmd/partscaster-mcp` | MCP server: tools, embedded library data |
+| `internal/config` | worker address: `PARTSCASTER_URL` → app settings → `http://localhost:8091` |
+| `internal/agentsetup` | the "For AI agents" settings section: ready-made MCP client config snippets |
+| `internal/buildinfo`, `cmd/srchash` | source fingerprint baked into the MCP binary, so it can report being older than its sources |
+| `internal/workerexe`, `cmd/partscaster-worker` | Windows worker without WSL (`partscaster-worker.exe`): installs uv, Python, packages and runs the worker |
+| `cmd/partscaster-align` | developer tool: measures timing alignment of a rendered part against a track window |
+| `frontend/` | Vue 3 UI |
+| `worker/` | Python worker (FastAPI), its install scripts and data |
+| `tools/` | `release.sh`, `worker-tar.sh`, `mcp-gendata.sh`, `yue2cpp-build.sh` / `.ps1` |
+| `deploy/` | systemd user unit `partscaster-worker.service`, `INSTALL.txt` for release packages |
 
-### MCP-сервер (cmd/partscaster-mcp, internal/mcp)
+### Go host (desktop, Wails v2)
 
-- Протокол — JSON-RPC over stdio, без внешних зависимостей; инструменты — в
-  `internal/mcp/tools_*.go`, регистрируются в `cmd/partscaster-mcp/main.go`.
-- Клиентская логика — через `yue.Service` (тот же интерфейс, что у приложения).
-- **Паритет**: новый метод API воркера → метод `yue.Service` → инструмент MCP.
-- Данные библиотеки `internal/mcp/*.json` генерируются из `frontend/src/`
-  (`make mcp-data`), вшиваются `go:embed`; **руками не править** — CI проверяет
-  паритет (gendata + git diff --exit-code).
-- Деструктивные инструменты (delete/cancel/install) требуют `confirm=true` —
-  агенты обязаны спрашивать пользователя (описания инструментов это говорят).
+- `App` holds thin Wails bindings for the frontend. Keep business logic out of bindings: pipelines go to
+  `internal/`, heavy work to the worker.
+- Dependencies are injected through interfaces, **not global variables**:
+  - `Player` (`player.go`) — passed to `NewApp(client, player)`. A global player variable is forbidden.
+  - `yue.Service` (`internal/yue/types.go`) — `App` and the MCP server work with the interface.
+    `yue.Journaled` wraps it so that mutating calls are written to the track's edit journal.
+- Worker HTTP calls only through the shared helpers `Client.call` / `get` / `postJSON` / `postRaw` / `del`
+  (`internal/yue/client.go`). Do not hand-roll marshal → request → status → decode.
+- A new worker method: add it to `Service`, implement it in `internal/yue/<domain>.go`, add a binding in
+  `app*.go`; if the webview needs a URL to the file, extend `audioProxy` in `main.go`.
+- Platform-specific code only via build-tagged files (`_unix.go` / `_windows.go`): player, signals,
+  `openExternal`. Do not mix it into shared code.
+- ffmpeg chains live in `internal/dsp`; fragment processing goes through `dsp.Span`, not a separate function.
+- Magic numbers become named constants (see the top of `app.go`).
 
-### Воркер (Python, FastAPI)
+### Frontend (Vue 3)
 
-- Один файл-точка входа `yue_worker.py`; чистые помощники — отдельными модулями
-  (`llm.py` — Ollama-обёртка, `media.py` — кодирование, `abcparse.py`, `dsp.py`,
-  `sheetsage.py`, `stems.py`, `whisper_run.py`).
-- Ollama — только через `llm.ollama_chat` (+ `llm.strip_md`); дублировать
-  urllib-вызовы — запрещено. `keep_alive=0` обязателен (VRAM делится с YuE2).
-- Конвертации — через `media.encode_mp3` и soundfile; ffmpeg на GPU-машине
-  не предполагается (единственное исключение — спектрограмма студии:
-  `waveform.render_spectrum_png` использует ffmpeg, если он есть в PATH;
-  нет — эндпоинт спектра отвечает 503, волна громкости работает).
-- Env-переменные: чтение в одном месте при старте (`PARTSCASTER_DATA_DIR`, `PARTSCASTER_OLLAMA_URL`,
-  `PARTSCASTER_OLLAMA_MODEL`, `PARTSCASTER_WHISPER_PY`); новую переменную — в `worker.env.example`
-  и таблицу в `docs/deployment.md`.
+- `App.vue` is the orchestrator (pages, form, job list). Do not grow it: screens go to `src/components/`,
+  state to `src/composables/`.
+- `usePlayer` / `useConfirm` are singletons (state in module scope). Do not copy player state into
+  components; call `usePlayer()` from anywhere.
+- Pure logic (no DOM) lives in plain modules (e.g. `src/styleLogic.js`) and is covered by vitest. Logic in
+  a component that you want to test — move it out first.
+- Dictionary data (slots, part templates, durations) lives in `src/slotOptions.js`, not in components.
+- Props/events between `App` and components; `defineModel` for `v-model`.
+- UI strings go through `t('key')` with dictionaries `src/i18n/ru.js` and `src/i18n/en.js`; never hardcode a
+  user-visible string in one language.
+- `src/wailsjs/**` is generated by Wails — do not edit by hand.
 
-## Осознанные решения (не «чинить» без вопроса)
+### MCP server (`cmd/partscaster-mcp`, `internal/mcp`)
 
-- Воркер без аутентификации — осознанно, LAN-инструмент (см. README «Безопасность»).
-- Пауза плеера на Linux — SIGSTOP/SIGCONT внешнего процесса; на Windows — рестарт.
-- В webview (webkit2gtk) нет аудиовыхода — поэтому внешний плеер, а не `<audio>`.
-- Транзиентное состояние студии в localStorage переживает перезапуск — формат
-  вложенный по job (`yue_studio_state.jobs.<id>`), при смене схемы — старое просто
-  игнорируется, миграции не пишем.
+- Protocol: JSON-RPC over stdio, no external dependencies. Tools live in `internal/mcp/tools_*.go`.
+- Client logic goes through `yue.Service` — the same interface the app uses.
+- **Parity:** new worker API method → `yue.Service` method → MCP tool.
+- Library data `internal/mcp/*.json` is generated from `frontend/src/` and `worker/fx_blocks.json`
+  (`make mcp-data`) and embedded with `go:embed`. **Never edit it by hand.**
+- Destructive tools (delete / cancel / install and similar) require `confirm=true`; agents must ask the
+  user first (the tool descriptions say so).
 
-## Коммиты и процесс
+### Worker (Python, FastAPI)
 
-- Conventional Commits: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`
-  (+ `build:` для сборочного).
-- Поведение меняем осознанно; заметные пользователю изменения — кандидат в CHANGELOG.
-- Коммитить только то, что относится к задаче; `build/bin/`, `dist/`, `__pycache__/`,
-  `.idea/`, `.zcode/` — не трекаются (см. .gitignore).
-- Сборка: `make build` (wails); MCP-сервер: `make mcp` (+ `make mcp-data` после правок
-  слотов/групп/пресетов во фронте); деплой воркера: `make worker` (хост — `PARTSCASTER_DEPLOY_HOST`).
+- Entry point: `yue_worker.py` (API around the resident YuE2 pipeline, port 8091). Pure helpers are separate
+  modules, for example: `opqueue.py` (shared queue of long GPU operations), `llm.py` (Ollama wrapper),
+  `media.py` (audio conversion), `stems.py` + `sep_run.py` (stem separation), `engine_cpp.py` (second
+  engine, yue2.cpp, experimental), `fx_engine.py` / `fx_nam.py` (sound engine), `presets.py` / `genres.py`
+  (sound presets), `voice.py` + `seedvc_run.py` (voice timbre swap), `whisper_run.py` (lyrics
+  transcription), `sheetsage.py` (melody to ABC), `instruments.py` / `phrases.py` ("Instruments" page),
+  `recipe.py`, `plancheck.py`, `proclock.py`, `kits_install.py`, `waveform.py`.
+- Ollama only through `llm.ollama_chat` (+ `llm.strip_md`); no duplicate urllib calls. `keep_alive=0` is
+  mandatory: VRAM is shared with YuE2.
+- Conversions through `media.encode_mp3` and soundfile; ffmpeg is not assumed on the GPU machine. The one
+  exception is the studio spectrogram: `waveform.render_spectrum_png` uses ffmpeg if it is on PATH;
+  otherwise the spectrum endpoint returns 503 and the loudness waveform still works.
+- Environment variables are read in several modules: `yue_worker.py`, `stems.py`, `engine_cpp.py`,
+  `voice.py`. Most are read once at import; some are read on every call (for example
+  `PARTSCASTER_FX_ENGINE`, `PARTSCASTER_STEMS_MODEL`, `PARTSCASTER_SEP_PY`, and the yue2.cpp paths in
+  `engine_cpp.py`). Do not assume a single place to look. A new variable goes into
+  `worker.env.example` and the table in `docs/{ru,en}/deployment.md`.
+- Packaging is by rule, not by list (`tools/worker-tar.sh`): the worker archive contains `worker/*.py`
+  except `test_*`, `worker/*.json`, `worker/requirements*.txt`, `install.sh`, `seedvc_install.sh`,
+  `worker/phrases/*`, the systemd unit and, if built, yue2.cpp. A new file of any other type or location
+  will **not** ship — extend the script in the same change.
 
-## Частые команды
+## Deliberate decisions (do not "fix" without asking)
+
+- The worker has no authentication — a LAN tool by design (README, "Security").
+- Player pause on Linux/macOS is SIGSTOP/SIGCONT of the external process; on Windows it is stop and restart.
+- The webview (webkit2gtk) has no audio output — hence an external player, not `<audio>`.
+- Transient studio state survives restarts in localStorage, nested per job (`yue_studio_state.jobs.<id>`).
+  On a schema change old data is ignored; no migrations.
+- localStorage keys and some paths keep historical `yue` names (`yue_studio_state`, `yue_server`,
+  `yue_volume`, `~/yue/.venv`, `~/yue/hf-cache`). Renaming them would lose users' state or force a reinstall;
+  leave them as they are.
+
+## Commits and process
+
+- Conventional Commits: `feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:` (+ `build:` for build
+  changes), optional scope: `fix(worker): …`. Messages are written in Russian in this repository's history;
+  either language is accepted.
+- Code comments are in Russian; identifiers are in English.
+- Change behaviour deliberately; noticeable user-facing changes go to CHANGELOG.
+- Commit only what belongs to the task. `build/bin/`, `dist/`, `__pycache__/`, `.idea/`, `tmp/` and
+  `cmd/partscaster-worker/payload/*.tar.gz` are not tracked (see `.gitignore`).
+- Build: `make build` (Wails). MCP server: `make mcp` (and `make mcp-data` after the edits listed in rule 3).
+  Worker deploy: `make worker` (host from `PARTSCASTER_DEPLOY_HOST`). Release package for this OS:
+  `make release` (or `make dist-linux` / `dist-windows` / `dist-mac`).
+
+## Common commands
 
 ```bash
-make lint        # все линтеры
-make test        # все тесты
-make fmt         # gofmt
+make lint        # gofmt check, go vet, golangci-lint (skipped if absent), eslint, ruff
+make test        # go test ./..., vitest, worker unittest
+make fmt         # gofmt -w
 make build       # wails build
+make mcp-data    # regenerate embedded MCP data from frontend sources
 cd frontend && npm test && npx eslint src && npm run build
 cd worker && python3 -m unittest discover -p 'test_*.py' && ruff check .
 go test ./... && go vet ./...
 ```
-
-## Состояние на 2026-09-27
-
-- Вышла v0.1.0: публичный репозиторий, рефакторинг, тесты, CI, линтеры, MIT, MCP-сервер,
-  отмена/прогресс генерации, режим черновика, i18n.
-- Скриншот в README — добавить при случае (воркер запущен, можно снять UI).

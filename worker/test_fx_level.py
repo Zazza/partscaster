@@ -270,7 +270,7 @@ class LevelPreviewMatchesRenderTest(_ApiBase):
 
 class LevelBlocksJsonTest(unittest.TestCase):
     """Блок level описан во всех трёх копиях fx_blocks.json (копии совпадают побайтно) и в таблице блоков
-    docs/effects.md (строка «| `level` |»)."""
+    docs/{ru,en}/effects.md (строка «| `level` |»)."""
 
     COPIES = ("worker/fx_blocks.json", "frontend/src/fxBlocks.json", "internal/mcp/fx_blocks.json")
 
@@ -284,8 +284,9 @@ class LevelBlocksJsonTest(unittest.TestCase):
                 self.assertTrue(lbl.get("ru") and lbl.get("en"), f"{rel}: у level нет подписи ru/en")
 
     def test_effects_doc_row(self):
-        with open(os.path.join(ROOT, "docs", "effects.md"), encoding="utf-8") as f:
-            self.assertIn("| `level` |", f.read())
+        for lang in ("ru", "en"):
+            with self.subTest(lang), open(os.path.join(ROOT, "docs", lang, "effects.md"), encoding="utf-8") as f:
+                self.assertIn("| `level` |", f.read())
 
     def test_copies_identical(self):
         with open(os.path.join(ROOT, self.COPIES[0]), "rb") as f:

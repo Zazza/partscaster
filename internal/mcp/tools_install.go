@@ -21,15 +21,15 @@ func RegisterInstallTools(s *Server) {
 	s.Register(Tool{
 		Name: "doctor",
 		Description: "Диагностика окружения: доступность воркера, GPU/VRAM (nvidia-smi), ffmpeg, " +
-			"HF-токен для весов YuE2, версия Go/Node, необязательные компоненты (whisper, Seed-VC). " +
+			"версия Go/Node, необязательные компоненты (whisper, Seed-VC). " +
 			"Для GPU-проверок на отдельной машине — host.",
 		InputSchema: props(map[string]any{
 			"host": prop("user@gpu-host для проверки удалённой машины (пусто = локально)", "string"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
-			// воркер и компоненты — по его адресу (отсюда); железо и токен — на машине с GPU
+			// воркер и компоненты — по его адресу (отсюда); железо — на машине с GPU
 			out, _ := runSteps("", []step{
-				{name: "воркер Yue (health)", cmd: fmt.Sprintf("curl -sf --max-time 5 %s/health", s.client.GetURL())},
+				{name: "воркер Partscaster (health)", cmd: fmt.Sprintf("curl -sf --max-time 5 %s/health", s.client.GetURL())},
 				{name: "компоненты воркера (whisper, Seed-VC, модель разделения)", cmd: fmt.Sprintf(
 					"curl -sf --max-time 5 %s/config | grep -o '\"\\(whisper_available\\|seedvc_available\\|stems_model\\)\": *\"*[a-z-]*'", s.client.GetURL())},
 				{name: "ffmpeg (нужен для DSP на ПК)", cmd: "ffmpeg -version | head -1"},
@@ -39,7 +39,6 @@ func RegisterInstallTools(s *Server) {
 			gpu, _ := runSteps(argString(args, "host"), []step{
 				{name: "GPU/VRAM", cmd: "nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader"},
 				{name: "место на диске (домашний каталог)", cmd: "df -h ~ | tail -1"},
-				{name: "HF-токен (веса YuE2, gated)", cmd: "test -f ~/.cache/huggingface/token && echo токен есть || echo 'нет (нужен huggingface-cli login)'"},
 			}, true)
 			return workerVersionLine(s) + out + "\n" + gpu + workerAddress(s), nil
 		},

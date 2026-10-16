@@ -34,7 +34,7 @@ function rendersComponent(src, name) {
 
 const APP = join(srcDir, 'App.vue')
 const PRESETS_PAGE = join(srcDir, 'components', 'PresetsPage.vue')
-const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
+const UI_GUIDE = join(repoDir, 'docs', 'ru', 'ui-guide.md')
 
 test('в левом блоке SideBar есть пункт раздела пресетов, App вешает на navGo', () => {
   const sb = read(join(srcDir, 'components', 'SideBar.vue'))
@@ -68,7 +68,7 @@ function h2Sections(md) {
   return out
 }
 
-test('docs/ui-guide.md: есть раздел «## Пресеты звука»', () => {
+test('docs/ru/ui-guide.md: есть раздел «## Пресеты звука»', () => {
   const sections = h2Sections(read(UI_GUIDE))
   expect(sections.some((s) => s.title.startsWith('Пресеты звука'))).toBe(true)
 })

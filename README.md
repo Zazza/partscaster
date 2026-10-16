@@ -1,121 +1,124 @@
 # Partscaster
 
-Desktop-приложение для генерации музыки на [YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B):
-форма-слоты стиля → песня со стихом или инструментал. Wails v2 (Go + Vue 3) на ПК,
-FastAPI-воркер с GPU — отдельно, по сети.
+**English** · [Русский](README.ru.md)
 
-- **Форма-слоты стиля** на русском (жанр, ритм, гитары, голос, настроение…) — компилируются
-  в строку тегов YuE, словарь подсказок + автоперевод через Ollama
-- **Библиотека стилей**: 27 курируемых групп (100+ откалиброванных стилей) + свои группы
-- **Веер best-of-N** (×5 сидов), стадия плана (ABC-партитура) с правкой до рендера,
-  каверы из чужих треков (транскрипция SheetSage2)
-- **Пиано-ролл** партитуры с превью фрагментов (VAE-decode, секунды), **стемы** (demucs),
-  **минус-треки**, **овердаб**, 43 DSP-цепочки эффектов (ffmpeg на ПК: реверб, дилей, модуляция,
-  фильтры, динамика, глитч) с метриками и дельтами — [docs/effects.md](docs/effects.md)
-- **Профили исполнителей** из корпусов треков (тональности/прогрессии/темп/структура + строка стиля)
-- Копайтер стихов (Ollama), история, отмена, прослушивание в браузере
-- **MCP-сервер** (`make mcp`): весь рабочий флоу — через AI-агента (Claude/Codex),
-  включая установку и настройки — [docs/mcp.md](docs/mcp.md)
+A generated track is a draft. Partscaster turns it into something that sounds like a band played it:
+it swaps the instruments for real ones, has a guitarist play the song's chords and a drummer play fills,
+and mixes the tracks the way real records are mixed. A desktop app plus an MCP server for AI agents,
+open source.
 
-> Скриншот: TODO до первого релиза.
+<!-- screenshot: track studio — the "Sound" step, the "Tracks" mixer -->
 
-## Быстрый старт
+## How it is different
 
-Нужно три части: GPU-машина с воркером, опционально Ollama, и desktop-приложение.
-Ставить можно из готового релиза, руками из исходников (ниже) или попросить ИИ-агента — он сделает всё сам.
+There are dozens of apps around the YuE2 music model. Nearly all of them solve one problem: how to get
+a song faster and with less effort. What you get is what the model produced — a flat mix where guitar,
+drums and voice are fused into one.
 
-### Из релиза (скачал, поставил, работает)
+Partscaster starts where they stop. Generation is the raw material that you then listen to and work on,
+the way a producer works on a band's recording: replace the drums here, re-play the guitar there, push
+the chorus, fix a part of the song.
 
-На странице [Releases](../../releases) — пакет под вашу ОС (`partscaster-<версия>-<ОС>-<арх>`) и архив
-воркера `worker-<версия>.tar.gz`.
+## What it does to a track
 
-1. **Воркер** на машине с видеокартой NVIDIA (Ubuntu + CUDA, нужен [uv](https://docs.astral.sh/uv/)):
-   `tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh` — окружение, пакеты, служба на порту 8091.
-   Обновление — то же с новым архивом; откат — `~/partscaster/current/install.sh --rollback`.
-2. **Приложение**: распакуйте пакет и запустите `partscaster`. В «Настройках» введите адрес воркера
-   (достаточно IP — порт 8091 подставится) и нажмите «Проверить».
-3. **AI-агенты** (по желанию): «Настройки» → «Для AI-агентов» — кнопка «Подключить к Claude Code» и
-   готовые фрагменты конфига для Claude Desktop и Codex.
+- **Swaps instruments for real ones.** The track is split into stems, and kick, snare, hi-hat, cymbals
+  and bass are played with samples of real instruments, following the notes of the track itself.
+- **A guitarist who plays the chords.** A recorded guitar replaces the model's guitar: it strikes where
+  the old guitar struck and plays the chords from the song's score. Pick the manner: strumming,
+  arpeggio, bass + chord, power chords, or "auto" by song section.
+- **Genre presets.** 106 ready presets: 34 styles in four families (rock, heavy, electronic, pop and
+  other), 3–4 variants each. A preset changes the whole sound of the track: which drum kit and which
+  guitar, pedals and amp, effects, the level of every stem. Levels follow measurements of real records
+  in the genre, and after mixing the preset checks the balance and corrects it.
+- **A live drummer.** A tom fill before every change of song section (longer into a chorus, two bars
+  into the last chorus), drums step forward in choruses, crashes mark section changes.
+- **The top end the model cuts off.** YuE2 cuts everything above 16 kHz; Partscaster rebuilds it, and
+  the voice loses its "ceiling".
+- **Voice.** Re-sing the voice from any point, move it an octave up or down, make variations of single
+  parts, process it with effects. Try out a voice's character before generating in the voice fitting
+  room. Replacing the timbre with the voice of another song is experimental.
+- **Editing the song.** The song's score (notes and chords the model writes before the audio) can be
+  edited and a part of the track rebuilt by continuing from the original — no splice seams.
+- **Pedals and effects.** Guitar pedals, amps (NAM), reverb, delay, tape, glitch — 53 effect chains for
+  the whole track or a single stem.
 
-### Через ИИ-агента (проще всего)
+Before → after examples: [docs/en/examples.md](docs/en/examples.md).
 
-Подойдёт агент с доступом к терминалу и поддержкой MCP: Claude Code, Codex.
+<!-- screenshot: the "Sound presets" page -->
 
-1. Склонируйте репозиторий и откройте агента в его папке.
-2. Попросите: *«Собери MCP-сервер Partscaster (`make mcp`), подключи его себе и поставь
-   воркер и приложение — сначала покажи план»*. Агент соберёт `build/bin/partscaster-mcp` (нужен Go),
-   подключит его ([docs/mcp.md](docs/mcp.md)) и дальше пойдёт инструментами `install_worker`
-   и `install_app`: сначала сухой прогон — что поставит и сколько места займёт, потом
-   установка после вашего «да». Воркер на отдельной GPU-машине — скажите адрес
-   `user@host`, агент поставит его по ssh.
-3. Одно агент за вас не сделает: модель YuE2 закрытая (gated) на Hugging Face —
-   нужно принять условия на странице модели и выполнить `huggingface-cli login` со своим
-   токеном. Проверить, что всё стоит и работает, — попросите «проверь установку» (`doctor`).
+## YuE2 at the core, but not only
 
-Подробно про компоненты, место и сценарии — [docs/deployment.md](docs/deployment.md).
+Songs are generated by [YuE2](https://github.com/multimodal-art-projection/YuE), an open model that
+writes a score first and then sings it. There are two engines: the main one (PyTorch) and
+[yue2.cpp](https://github.com/ServeurpersoCom/yue2.cpp), a C++ port that needs less video memory
+(experimental, off by default).
 
-### Руками
+You can also work on a track from elsewhere — another generator or your own recording: it is imported with the "import track" button in the track list,
+split into stems, and the score with chords and song sections is recovered by transcription. Both the
+guitarist and the drummer work with it.
 
-1. **Воркер** (Ubuntu + CUDA, NVIDIA ≥16 ГБ VRAM): архив из исходников и его установщик —
-   [docs/deployment.md](docs/deployment.md). Коротко:
-   ```bash
-   make worker-tar                       # → dist/worker-<версия>.tar.gz
-   # на GPU-машине:
-   tar xzf worker-<версия>.tar.gz && ./worker-<версия>/install.sh   # :8091
-   ```
-   С этой машины на отдельную GPU-машину — `PARTSCASTER_DEPLOY_HOST=user@gpu-host make worker`.
-2. **Приложение** (Go 1.22+, Node.js 20+, [Wails CLI v2](https://wails.io)):
-   ```bash
-   make build && ./build/bin/partscaster       # make release — пакет под эту ОС в dist/
-   ```
-3. Адрес воркера — в «Настройках» приложения (кнопка «Проверить») или переменная `PARTSCASTER_URL`.
+## Why "Partscaster"
 
-Ollama (`qwen2.5`) не обязателен: без него работают генерация/стемы/эффекты,
-недоступны копайтер/автоперевод/профиль-стиль.
+Guitarists call an electric guitar assembled from parts of different makers a partscaster: the body
+from one, the neck from another, the pickups from a third. The program does the same to a track: takes
+it apart and puts it back together with other instruments. Until October 14, 2026 the project was
+called Yue Studio.
 
-## Документация
+## Requirements
 
-- [docs/features.md](docs/features.md) — **что умеет приложение**: обзор возможностей по шагам работы
-- [docs/effects.md](docs/effects.md) — **все эффекты** (43 DSP-цепочки) и как ими пользоваться, рецепты против «плоского» звука
-- [docs/deployment.md](docs/deployment.md) — развёртывание воркера (включая WSL2/dual-boot), деплой, сборка по ОС
-- [docs/architecture.md](docs/architecture.md) — архитектура: стороны ПК/GPU, конвейер YuE2, VRAM
-- [docs/api.md](docs/api.md) — HTTP API воркера
-- [docs/mcp.md](docs/mcp.md) — MCP-сервер для управления через AI-агента
-- [docs/ui-guide.md](docs/ui-guide.md) — гайд по интерфейсу
-- [docs/lyrics-melody.md](docs/lyrics-melody.md) — работа со стихом и мелодией
-- [docs/limitations.md](docs/limitations.md) — честные ограничения (правка середины, звук в webview и пр.)
+- **An NVIDIA GPU.** The main engine needs about 12 GB of video memory, yue2.cpp from 8 GB (from 5 GB in
+  economy mode).
+- **The worker** — the part that generates and processes audio: Linux, Windows (a program, no WSL) or
+  WSL2. It can run on the same computer or on a separate GPU machine on your network.
+- **The app** — Linux and Windows; a macOS build exists but is untested.
+- Models download by themselves on first run; no Hugging Face account needed.
 
-## Структура
+## Install
 
-| Каталог | Роль |
-|---|---|
-| `main.go`, `app.go`, `player*.go` | Wails-приложение: биндинги, прокси аудио, встроенный плеер |
-| `internal/yue/` | Go-клиент воркера (jobs, план, стемы, корпус) |
-| `internal/dsp/` | ffmpeg-цепочки эффектов на ПК |
-| `frontend/` | Vue 3 + Vite |
-| `worker/` | FastAPI-воркер: резидентная YuE2Pipeline + очередь SQLite |
+- **From a release.** The [Releases](https://github.com/Zazza/partscaster/releases) page has a package for your OS. The Windows package
+  ships `partscaster-worker.exe` next to the app: double-click it and the worker sets itself up. On
+  Linux: `tar xzf worker-<version>.tar.gz && ./worker-<version>/install.sh`. Then enter the worker
+  address in the app's Settings and press "Check".
+- **With an AI agent** (Claude Code, Codex). Clone the repository and ask the agent: *"Build the
+  Partscaster MCP server (`make mcp`), connect it to yourself and install the worker and the app — show
+  me the plan first"*. The agent shows what goes where and starts after your "yes".
+- **From source** — [docs/en/deployment.md](docs/en/deployment.md).
 
-## Тесты и линтеры
+**Updating.** Worker first (new archive, same `install.sh`), then the app. If the versions don't match,
+the app tells you.
 
-```bash
-make test      # всё: Go + фронтенд + воркер
-make lint      # go vet + golangci-lint, eslint, ruff
-```
+<!-- screenshot: settings — worker address and "For AI agents" -->
 
-Или напрямую: `go test ./...` · `cd frontend && npm test` · `cd worker && python3 -m unittest discover -p 'test_*.py'`.
-CI прогоняет то же самое на каждый push/PR.
+## Documentation
 
-## Безопасность
+- [Features](docs/en/features.md) — what it can do, step by step
+- [Interface](docs/en/ui-guide.md) — screen by screen
+- [Effects and presets](docs/en/effects.md) — every chain, instrument and genre preset
+- [Lyrics and melody](docs/en/lyrics-melody.md) — writing lyrics and editing the score
+- [Limitations](docs/en/limitations.md) — what doesn't work yet or works differently
+- [Install](docs/en/deployment.md) · [Architecture](docs/en/architecture.md) ·
+  [Worker API](docs/en/api.md) · [MCP for AI agents](docs/en/mcp.md)
+- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) (in Russian)
 
-Воркер слушает `0.0.0.0:8091` **без аутентификации**: API позволяет загружать/удалять файлы
-и управлять очередью генераций. Это осознанное решение для LAN-инструмента — **не выставляйте
-воркер в интернет** напрямую (при необходимости — reverse-proxy с авторизацией или VPN/SSH-туннель).
-Аутентификация в планах, пока нет.
+Bugs and ideas — [Issues](https://github.com/Zazza/partscaster/issues).
 
-## Лицензия
+## Security
 
-Код — [MIT](LICENSE). Веса моделей в репозиторий не входят и имеют свои лицензии:
-YuE2 — CC BY-NC 4.0 с дополнительным разрешением для авторов (отдельные музыканты и авторы
-контента могут монетизировать сгенерированные песни без отчислений; компаниям — по договору с
-авторами модели); SheetSage2, BS-Roformer-SW и DrumSep (разделение дорожек) — CC BY-NC/BY-NC-SA
-без такого разрешения; demucs — MIT. Условия проверяйте на страницах моделей.
+The worker has no password: whoever can reach its port controls it. Keep it on your home network and
+don't expose it to the internet; for outside access use a VPN or an SSH tunnel. The Windows program
+listens only on the local computer by default.
+
+## Licenses
+
+- **Code** — [MIT](LICENSE).
+- **YuE2** — weights under CC BY-NC 4.0 with an additional permission from the model's authors:
+  individual users, musicians and content creators may monetize generated songs with no fees or
+  royalties; companies need a license from the authors
+  ([terms](https://github.com/multimodal-art-projection/YuE#license)).
+- **Stem separation and transcription** — BS-RoFormer-SW, DrumSep and SheetSage2 are under
+  non-commercial licenses without such a permission; demucs is MIT. Seed-VC voice conversion is
+  GPL-3.0. Models are not part of the repository; check the terms on their pages — the user is
+  responsible for how the output is used.
+- **Samples:** Salamander Grand Piano V3 — Alexander Holm, CC BY 3.0; clean guitar phrases from
+  [GuitarSet](https://zenodo.org/records/3371780) — Q. Xi, R. M. Bittner, J. Pauwels, X. Ye, J. P. Bello,
+  CC BY 4.0; Karoryfer, FreePats and VSCO-2 kits — CC0. Details — [docs/en/effects.md](docs/en/effects.md).

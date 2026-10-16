@@ -1,23 +1,16 @@
 # CLAUDE.md
 
-Правила работы с этим репозиторием описаны в [AGENTS.md](AGENTS.md) — прочитай его целиком
-перед изменениями. Краткая выжимка:
+The rules for this repository are in [AGENTS.md](AGENTS.md) — read it in full before making changes. Digest:
 
-- Перед любыми изменениями в коде: **`make lint && make test` — всё зелёное** после работы.
-  Это же проверяет CI (gofmt/vet/golangci-lint, eslint/vitest, ruff/unittest).
-- **Архитектуру не ломать:** Go — DI через интерфейсы `Player`/`yue.Service`, HTTP воркера
-  только через хелперы `Client.call*`; фронтенд — App.vue-оркестратор, экраны в
-  `src/components/`, состояние в `src/composables/`, чистая логика в отдельных модулях
-  с тестами; воркер — Ollama только через `llm.ollama_chat`, конвертации через `media.py`.
-- **Тесты — по спецификации «как должно работать»**, не фиксация текущего поведения.
-- **Личных данных не добавлять** (адреса машин, домашние пути, LAN-IP) — нейтральные
-  примеры или env-переменные. Секретов в репо не должно быть.
-- **Правило синхронного обновления**: новый эндпоинт/поля API воркера → `yue.Service` + биндинг
-  `App` + `api.js` + **инструмент MCP** одним PR; правки слотов/групп/пресетов во фронте →
-  `make mcp-data`; смена архитектуры/деплоя → соответствующие `docs/*.md` тем же коммитом.
-- **CHANGELOG**: заметные изменения — в `Unreleased`, перед тегом — раздел в версию с датой
-  (ведётся с `v0.1.0`); тем же коммитом агент сам пишет «Что нового» в `frontend/src/releaseNotes.js`
-  (простыми словами, ru+en, номер = тег) — как, см. AGENTS.md п.2.
-- Коммиты — Conventional Commits; UI-тексты/комментарии на русском, идентификаторы на английском.
-- Осознанные решения (без аутентификации воркера, SIGSTOP-пауза плеера, внешний плеер вместо
-  `<audio>`) — не «чинить» без обсуждения.
+- **`make lint && make test` must be green** before handing off. CI checks `main` and pull requests only, not `develop`.
+- **Keep API clients at parity:** worker endpoint → `yue.Service` → `App` binding → `api.js` → MCP tool, in one change.
+  Edits to slots/groups/presets or `worker/fx_blocks.json` → `make mcp-data` and commit every regenerated file.
+- **Docs in two languages:** `docs/ru/` and `docs/en/` (same file names), `README.md` + `README.ru.md`. Change both in the
+  same commit. Tests read `docs/{ru,en}/effects.md` and `docs/ru/ui-guide.md` — keep their anchors.
+- **Releases:** CHANGELOG `Unreleased` → version with date, plus a new first entry in `frontend/src/releaseNotes.js`
+  (plain words, ru + en, version = tag) in the same commit. A human tags; CI builds and publishes.
+- **Architecture:** DI via `Player` / `yue.Service`, worker HTTP only through `Client.call*`; screens in
+  `src/components/`, state in `src/composables/`; UI strings via i18n (ru + en); Ollama only via `llm.ollama_chat`.
+- **Tests follow the spec**, not current behaviour. **No personal data, no secrets.**
+- Conventional Commits; comments in Russian, identifiers in English. Deliberate decisions (no worker auth,
+  SIGSTOP pause, external player) are not to be "fixed" without asking.

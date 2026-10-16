@@ -32,7 +32,7 @@ const rendersComponent = (src, name) => {
 const LIBRARY = join(srcDir, 'components', 'PresetLibrary.vue')
 const EDITOR = join(srcDir, 'components', 'PresetEditor.vue')
 const CATALOG = join(srcDir, 'components', 'PresetCatalog.vue')
-const UI_GUIDE = join(repoDir, 'docs', 'ui-guide.md')
+const UI_GUIDE = join(repoDir, 'docs', 'ru', 'ui-guide.md')
 
 test('PresetLibrary импортирует и рендерит PresetEditor и кнопку «новый пресет»', () => {
   const src = read(LIBRARY)
@@ -89,7 +89,7 @@ test('PresetCatalog: табы дорожек и ритм-секция набор
   expect(templateOf(src)).toContain(`emit('add'`)
 })
 
-test('docs/ui-guide.md: раздел «Пресеты звука» описывает редактор и демо-эталоны', () => {
+test('docs/ru/ui-guide.md: раздел «Пресеты звука» описывает редактор и демо-эталоны', () => {
   const lines = read(UI_GUIDE).split('\n')
   const out = []
   for (const line of lines) {
