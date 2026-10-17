@@ -108,7 +108,7 @@ The row above the form:
   and sets the card's seed. With no saved voices yet, there is a "Pick a voice in Voices →" button instead of the list.
 - **"Style as a single line"** (collapsed) — the line built from the slots and the instruments. If you type your own,
   it wins over the slots ("· overridden manually"); "follow the slots" — return to automatic building.
-- **"Instruments:"** — one row: group (rhythm section, guitars, keys, folk, brass, strings, percussion, electronic,
+- **"Instruments:"** — one row: group (rhythm section, guitars, keys, folk, brass, strings, electronic,
   special layers), instrument (searchable), effect ("clean", reverb, fuzz…) and "Add". Added items are chips below,
   ✕ removes; several are fine, adding the same instrument again only changes its effect. Everything added goes into
   the style as short English names (the model hears them better that way).

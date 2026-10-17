@@ -21,6 +21,9 @@ export const rackGroups = [
       { id: 'gtr-trem', name: 'Гитара: тремоло', nameEn: 'Guitar: tremolo', phrasing: 'tremolo-picked guitar' },
       { id: 'gtr-acoustic', name: 'Акустика', nameEn: 'Acoustic', phrasing: 'strummed acoustic guitar' },
       { id: 'gtr-slide', name: 'Слайд', nameEn: 'Slide', phrasing: 'slide guitar lines' },
+      // 12-струнная и ситар модель играет как другой звук гитары, а не отдельным слоем (опыт #1099–#1144)
+      { id: 'gtr-12', name: '12-струнная гитара', nameEn: '12-string guitar', phrasing: '12-string guitar' },
+      { id: 'sitar', name: 'Ситар', nameEn: 'Sitar', phrasing: 'sitar' },
     ],
   },
   {
@@ -62,17 +65,6 @@ export const rackGroups = [
       { id: 'strings-section', name: 'Струнная группа', nameEn: 'String section', phrasing: 'string section' },
       { id: 'mandolin', name: 'Мандолина', nameEn: 'Mandolin', phrasing: 'mandolin' },
       { id: 'banjo', name: 'Банджо', nameEn: 'Banjo', phrasing: 'banjo' },
-      { id: 'gtr-12', name: '12-струнная гитара', nameEn: '12-string guitar', phrasing: '12-string guitar' },
-      { id: 'sitar', name: 'Ситар', nameEn: 'Sitar', phrasing: 'sitar' },
-    ],
-  },
-  {
-    id: 'perc', name: 'Перкуссия', nameEn: 'Percussion',
-    items: [
-      { id: 'tambourine', name: 'Бубен', nameEn: 'Tambourine', phrasing: 'tambourine' },
-      { id: 'shaker', name: 'Шейкер', nameEn: 'Shaker', phrasing: 'shaker' },
-      { id: 'congas', name: 'Конги', nameEn: 'Congas', phrasing: 'congas' },
-      { id: 'cowbell', name: 'Ковбелл', nameEn: 'Cowbell', phrasing: 'cowbell' },
     ],
   },
   {
@@ -81,8 +73,6 @@ export const rackGroups = [
       { id: 'synth-bass', name: 'Синт-бас', nameEn: 'Synth bass', phrasing: 'moogy synth bass' },
       { id: 'arp', name: 'Арпеджиатор', nameEn: 'Arpeggiator', phrasing: 'sequenced synth arpeggio' },
       { id: 'noise', name: 'Шумовой слой', nameEn: 'Noise layer', phrasing: 'tape hiss and noise layer' },
-      { id: 'tr808', name: 'Драм-машина 808', nameEn: '808 drum machine', phrasing: 'TR-808 drum machine' },
-      { id: 'breakbeat', name: 'Брейкбит', nameEn: 'Breakbeat', phrasing: 'breakbeat drums' },
     ],
   },
   {

@@ -1,7 +1,7 @@
 // Тесты стойки инструментов (пачка 8): добавление/удаление позиций без мутации входа (ТК18)
 // и состав каталога позиций с новыми инструментами (ТК19).
 import { describe, it, expect } from 'vitest'
-import { rackAdd, rackRemove, allRackItems } from './rack.js'
+import { rackAdd, rackRemove, allRackItems, rackGroups } from './rack.js'
 
 describe('rackAdd', () => {
   it('добавление в пустой выбор → одна позиция с id и эффектом', () => {
@@ -101,17 +101,27 @@ describe('allRackItems — каталог позиций', () => {
     }
   })
 
-  it('новые позиции из условия 37 присутствуют', () => {
+  it('новые позиции из условия 37 присутствуют (с поправкой условия 40)', () => {
     const ids = new Set(items.map(i => i.id))
     const expected = [
       'trumpet', 'sax', 'trombone', 'horns',
       'strings-section', 'mandolin', 'banjo', 'gtr-12', 'sitar',
       'mellotron', 'wurlitzer', 'harpsichord', 'vibraphone', 'marimba',
-      'tambourine', 'shaker', 'congas', 'cowbell',
-      'tr808', 'breakbeat',
       'harmonica', 'theremin', 'whistle',
     ]
     const missing = expected.filter(id => !ids.has(id))
     expect(missing).toEqual([])
+  })
+
+  // условие 40: по опыту #1099–#1144 перкуссия не слышна, 808 и брейкбит глушат барабаны — их нет;
+  // 12-струнная и ситар звучат как гитара — они в группе «Гитары»
+  it('убранных позиций и группы «Перкуссия» нет; 12-струнная и ситар — в «Гитарах»', () => {
+    const ids = new Set(items.map(i => i.id))
+    for (const id of ['tambourine', 'shaker', 'congas', 'cowbell', 'tr808', 'breakbeat']) {
+      expect(ids.has(id), id).toBe(false)
+    }
+    expect(rackGroups.some(g => g.id === 'perc')).toBe(false)
+    const guitars = rackGroups.find(g => g.id === 'guitars').items.map(i => i.id)
+    expect(guitars).toEqual(expect.arrayContaining(['gtr-12', 'sitar']))
   })
 })
