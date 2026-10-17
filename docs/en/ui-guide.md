@@ -73,7 +73,7 @@ If the app and worker versions do not match, a warning appears at the top of the
 ## New track
 
 The "New track" menu item opens the "New track" page. On the left are three blocks: **"1 · Style"** (style library
-and name), **"2 · Sound"** (style slots, saved voice, rack, style as one line), **"3 · Lyrics"** (text, part tags,
+and name), **"2 · Sound"** (style slots, saved voice, instruments, style as one line), **"3 · Lyrics"** (text, part tags,
 "No vocals", a ready note plan). On the right is the **"Send"** column: what goes to the model, sound presets, start
 buttons and "Advanced"; it stays in place while you scroll and moves under the form in a narrow window. After
 "Queue", "Variants" or "Draft" the track list opens, and the track is already in the queue. The filled-in form stays
@@ -106,10 +106,12 @@ The row above the form:
   write your own words in English — Russian ones are not translated.
 - **"saved voice — descriptor + seed"** — a voice from the [voice lab](#voice-lab): it fills the "Voice" slot
   and sets the card's seed. With no saved voices yet, there is a "Pick a voice in Voices →" button instead of the list.
-- **"Style as a single line"** (collapsed) — the line built from the slots and the rack. If you type your own,
+- **"Style as a single line"** (collapsed) — the line built from the slots and the instruments. If you type your own,
   it wins over the slots ("· overridden manually"); "follow the slots" — return to automatic building.
-- **"Instrument rack (N)"** (collapsed) — instrument groups with checkboxes; a checked one has an effect choice.
-  Checked items are added to the style automatically.
+- **"Instruments:"** — one row: group (rhythm section, guitars, keys, folk, brass, strings, percussion, electronic,
+  special layers), instrument (searchable), effect ("clean", reverb, fuzz…) and "Add". Added items are chips below,
+  ✕ removes; several are fine, adding the same instrument again only changes its effect. Everything added goes into
+  the style as short English names (the model hears them better that way).
 - **Lyrics** — your own song lyrics; lines with `#` are your notes, they are not sung. "No vocals" is in the
   block header, the part tags are above the field:
   - "No vocals" — instrumental: no lyrics needed, the voice in the slots changes to "no vocal" (turn it off and

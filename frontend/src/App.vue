@@ -3,7 +3,7 @@
 // переключение страниц. Экранные компоненты и модалки — в ./components/.
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { api } from './api.js'
-import { rackGroups, rackEffects, rackCompile } from './rack.js'
+import { rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
 import { slotKeys, slotHints, slotHintsEn, durOptions } from './slotOptions.js'
 import { CHARACTER, characterPayload, characterLabel } from './character.js'
@@ -46,6 +46,7 @@ import { keyAction } from './hotkeys.js'
 import { fanCount, FAN_DEFAULT } from './fanCount.js'
 import PageView from './components/PageView.vue'
 import PageBox from './components/PageBox.vue'
+import RackPicker from './components/RackPicker.vue'
 import MetricsModal from './components/MetricsModal.vue'
 import PlanModal from './components/PlanModal.vue'
 
@@ -145,17 +146,7 @@ const title = ref('')
 const submitting = ref(false)
 
 // инструментальная стойка: [{id, effect}] — разворачивается в текст стиля
-const rackSel = ref([])
-
-function rackToggle(itemId) {
-  const i = rackSel.value.findIndex(r => r.id === itemId)
-  if (i >= 0) rackSel.value = rackSel.value.filter(r => r.id !== itemId)
-  else rackSel.value = [...rackSel.value, { id: itemId, effect: '' }]
-}
-
-function rackSetEffect(itemId, effect) {
-  rackSel.value = rackSel.value.map(r => (r.id === itemId ? { ...r, effect } : r))
-}
+const rackSel = ref([])   // инструменты: [{ id, effect }] (RackPicker)
 
 // свой выпадающий список подсказок слотов (нативные datalist в WebView2 глючат)
 const openSlot = ref('')
@@ -917,6 +908,8 @@ function onWindowClick(e) {
               <!-- своих голосов нет — подсказать, где их подобрать -->
               <button v-else class="ghost" @click="navGo('voices')">{{ t('form.voice.pick') }}</button>
             </div>
+            <!-- инструментальная стойка: группа → инструмент → эффект → «Добавить», добавленное — фишками -->
+            <RackPicker v-model="rackSel" />
             <details>
               <summary>
                 {{ t('form.styleline') }}
@@ -929,25 +922,6 @@ function onWindowClick(e) {
                       @click="styleOverride = ''">{{ t('form.styleline.follow') }}</button>
             </details>
 
-            <details>
-              <summary>{{ t('form.rack') }} <span class="muted">({{ rackSel.length }})</span></summary>
-              <div class="rack">
-                <div v-for="g in rackGroups" :key="g.id" class="rack-group">
-                  <div class="rack-gname">{{ dataName(g) }}</div>
-                  <div v-for="it in g.items" :key="it.id" class="rack-item">
-                    <label class="rack-pick">
-                      <input type="checkbox" :checked="rackSel.some(r => r.id === it.id)" @change="rackToggle(it.id)" />
-                      {{ dataName(it) }}
-                    </label>
-                    <VSelect v-if="rackSel.some(r => r.id === it.id)"
-                            :model-value="rackSel.find(r => r.id === it.id).effect"
-                            :options="rackEffects.map((e) => ({ value: e.id, label: dataName(e) }))"
-                            style="max-width: 150px"
-                            @update:model-value="(v) => rackSetEffect(it.id, v)" />
-                  </div>
-                </div>
-              </div>
-            </details>
         </PageBox>
 
         <PageBox :title="'3 · ' + t('nt.step.lyrics')" :hint="t('form.lyrics')">
@@ -1863,11 +1837,6 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .cop-form input[type="text"], .cop-form input:not([type]) { flex: 1; min-width: 220px; }
 .cop-example { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 
-.rack { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-.rack-gname { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 4px; }
-.rack-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
-.rack-pick { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
-.rack-item select { font-size: 12px; }
 
 .corpus-new { display: flex; gap: 8px; }
 .corpus-new input { flex: 1; }

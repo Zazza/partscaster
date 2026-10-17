@@ -11,8 +11,8 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
   submit they become English tags for the YuE2 model; write your own words in English — Russian ones are not
   translated, and the form warns about it. The result is shown in the
   "Style as a single line" field — you can rewrite it by hand.
-- **Style library** — 37 groups, 112 ready styles; **instrument rack** — instrument cards;
-  the selected ones are added to the style.
+- **Style library** — 37 groups, 112 ready styles; **instruments** — group, instrument, effect and "Add";
+  the added ones go into the style.
 - **Your own lyrics**; section tags (`[Verse]`, `[Chorus]`…) are inserted with buttons above the field and are optional:
   without them YuE2 lays out the parts itself if stanzas are separated by an empty line. Lines with `#` are your notes and
   are not sung; the "no vocals" option gives an instrumental. Details — [lyrics-melody.md](lyrics-melody.md).

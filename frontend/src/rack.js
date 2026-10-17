@@ -30,6 +30,12 @@ export const rackGroups = [
       { id: 'synth-pad', name: 'Синт-пэд', nameEn: 'Synth pad', phrasing: 'warm analog synth pad' },
       { id: 'piano-upright', name: 'Пианино (прямое)', nameEn: 'Upright piano', phrasing: 'detuned upright piano' },
       { id: 'rhodes', name: 'Родес', nameEn: 'Rhodes', phrasing: 'Rhodes electric piano' },
+      // короткие названия — модель слышит их лучше описаний (опыт #1070–#1083)
+      { id: 'mellotron', name: 'Меллотрон', nameEn: 'Mellotron', phrasing: 'Mellotron' },
+      { id: 'wurlitzer', name: 'Wurlitzer', nameEn: 'Wurlitzer', phrasing: 'Wurlitzer electric piano' },
+      { id: 'harpsichord', name: 'Клавесин', nameEn: 'Harpsichord', phrasing: 'harpsichord' },
+      { id: 'vibraphone', name: 'Вибрафон', nameEn: 'Vibraphone', phrasing: 'vibraphone' },
+      { id: 'marimba', name: 'Маримба', nameEn: 'Marimba', phrasing: 'marimba' },
     ],
   },
   {
@@ -42,11 +48,41 @@ export const rackGroups = [
     ],
   },
   {
+    id: 'brass', name: 'Духовые', nameEn: 'Brass',
+    items: [
+      { id: 'trumpet', name: 'Труба', nameEn: 'Trumpet', phrasing: 'trumpet' },
+      { id: 'sax', name: 'Саксофон', nameEn: 'Saxophone', phrasing: 'saxophone' },
+      { id: 'trombone', name: 'Тромбон', nameEn: 'Trombone', phrasing: 'trombone' },
+      { id: 'horns', name: 'Духовая секция', nameEn: 'Horn section', phrasing: 'horn section' },
+    ],
+  },
+  {
+    id: 'strings', name: 'Струнные', nameEn: 'Strings',
+    items: [
+      { id: 'strings-section', name: 'Струнная группа', nameEn: 'String section', phrasing: 'string section' },
+      { id: 'mandolin', name: 'Мандолина', nameEn: 'Mandolin', phrasing: 'mandolin' },
+      { id: 'banjo', name: 'Банджо', nameEn: 'Banjo', phrasing: 'banjo' },
+      { id: 'gtr-12', name: '12-струнная гитара', nameEn: '12-string guitar', phrasing: '12-string guitar' },
+      { id: 'sitar', name: 'Ситар', nameEn: 'Sitar', phrasing: 'sitar' },
+    ],
+  },
+  {
+    id: 'perc', name: 'Перкуссия', nameEn: 'Percussion',
+    items: [
+      { id: 'tambourine', name: 'Бубен', nameEn: 'Tambourine', phrasing: 'tambourine' },
+      { id: 'shaker', name: 'Шейкер', nameEn: 'Shaker', phrasing: 'shaker' },
+      { id: 'congas', name: 'Конги', nameEn: 'Congas', phrasing: 'congas' },
+      { id: 'cowbell', name: 'Ковбелл', nameEn: 'Cowbell', phrasing: 'cowbell' },
+    ],
+  },
+  {
     id: 'electro', name: 'Электроника', nameEn: 'Electronic',
     items: [
       { id: 'synth-bass', name: 'Синт-бас', nameEn: 'Synth bass', phrasing: 'moogy synth bass' },
       { id: 'arp', name: 'Арпеджиатор', nameEn: 'Arpeggiator', phrasing: 'sequenced synth arpeggio' },
       { id: 'noise', name: 'Шумовой слой', nameEn: 'Noise layer', phrasing: 'tape hiss and noise layer' },
+      { id: 'tr808', name: 'Драм-машина 808', nameEn: '808 drum machine', phrasing: 'TR-808 drum machine' },
+      { id: 'breakbeat', name: 'Брейкбит', nameEn: 'Breakbeat', phrasing: 'breakbeat drums' },
     ],
   },
   {
@@ -55,6 +91,9 @@ export const rackGroups = [
       { id: 'choir', name: 'Бэк-вокал/хор', nameEn: 'Backing vocals/choir', phrasing: 'distant choir backing vocals' },
       { id: 'glockenspiel', name: 'Колокольчики', nameEn: 'Glockenspiel', phrasing: 'sparse glockenspiel' },
       { id: 'field', name: 'Полевые записи', nameEn: 'Field recordings', phrasing: 'field recording interjections' },
+      { id: 'harmonica', name: 'Губная гармошка', nameEn: 'Harmonica', phrasing: 'harmonica' },
+      { id: 'theremin', name: 'Терменвокс', nameEn: 'Theremin', phrasing: 'theremin' },
+      { id: 'whistle', name: 'Свист', nameEn: 'Whistling', phrasing: 'whistling melody' },
     ],
   },
 ]
@@ -80,6 +119,18 @@ const effectPhrase = {
 
 export function allRackItems() {
   return rackGroups.flatMap(g => g.items)
+}
+
+// Добавить инструмент в стойку: уже есть — заменить эффект (место то же), нет — в конец. Вход не меняется.
+export function rackAdd(sel, id, effect = '') {
+  const list = sel || []
+  if (list.some((r) => r.id === id)) return list.map((r) => (r.id === id ? { ...r, effect } : r))
+  return [...list, { id, effect }]
+}
+
+/** Убрать инструмент из стойки. Вход не меняется. */
+export function rackRemove(sel, id) {
+  return (sel || []).filter((r) => r.id !== id)
 }
 
 // Стойка → фрагмент строки стиля
