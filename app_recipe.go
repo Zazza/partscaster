@@ -73,16 +73,22 @@ func (a *App) YueExportRecipe(jobID int64) (*RecipeExport, error) {
 }
 
 func recipeFileName(title string, id int64) string {
-	name := strings.Map(func(r rune) rune {
+	name := safeFileName(title)
+	if name == "" {
+		name = fmt.Sprintf("track-%d", id)
+	}
+	return name + ".yue-track.json"
+}
+
+// safeFileName — название трека как имя файла: без пробелов по краям, символы, недопустимые
+// в именах файлов (Windows строже всех), и управляющие — «_».
+func safeFileName(title string) string {
+	return strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`/\:*?"<>|`, r) || r < 32 {
 			return '_'
 		}
 		return r
 	}, strings.TrimSpace(title))
-	if name == "" {
-		name = fmt.Sprintf("track-%d", id)
-	}
-	return name + ".yue-track.json"
 }
 
 // YuePickRecipe — выбрать файл рецепта для импорта: его текст (превью строит фронтенд); "" — отмена.

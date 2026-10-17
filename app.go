@@ -365,8 +365,18 @@ func (a *App) YueSaveAudio(id int64, file string) (string, error) {
 	}
 	defer func() { _ = body.Close() }()
 
+	// имя по умолчанию — название трека (список треков — ради названия; не нашёлся — по номеру)
+	title := ""
+	if jobs, jerr := a.yue.Jobs(a.ctx); jerr == nil {
+		for _, j := range jobs {
+			if j.ID == id {
+				title = j.Title
+				break
+			}
+		}
+	}
 	target, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		DefaultFilename: fmt.Sprintf("yue-%d-%s", id, file),
+		DefaultFilename: exportFileName(title, id, file),
 	})
 	if err != nil {
 		return "", err
@@ -383,6 +393,16 @@ func (a *App) YueSaveAudio(id int64, file string) (string, error) {
 		return "", err
 	}
 	return target, nil
+}
+
+// exportFileName — имя файла по умолчанию при скачивании flac/mp3/нот: «<название>.<расширение>»,
+// без названия — «Partscaster <номер>»; расширение — от файла на воркере.
+func exportFileName(title string, id int64, file string) string {
+	name := safeFileName(title)
+	if name == "" {
+		name = fmt.Sprintf("Partscaster %d", id)
+	}
+	return name + filepath.Ext(file)
 }
 
 func (a *App) YuePlayAudio(id int64) error {
