@@ -1,5 +1,6 @@
 <script setup>
 // Страница настроек: воркер, дорожки, движок генерации, пути воркера.
+import PageView from './PageView.vue'
 import { STEMS_AUTO } from '../trackDesk.js'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../i18n/index.js'
@@ -194,13 +195,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="modal-backdrop page-backdrop">
-    <section class="panel page-modal">
-      <div class="page-modal-head">
-        <h2>{{ t('settings.title') }}</h2>
-        <button class="ghost icon" :title="t('common.close')" @click="emit('close')"><AppIcon name="x" /></button>
-      </div>
-      <div class="page-modal-body">
+  <PageView :title="t('nav.settings')">
 
       <h3 class="set-h">{{ t('settings.worker') }}</h3>
       <div class="set-row">
@@ -287,7 +282,5 @@ async function save() {
       <div class="set-actions">
         <button @click="save"><AppIcon name="save" /> {{ t('common.save') }}</button>
       </div>
-      </div>
-    </section>
-  </div>
+  </PageView>
 </template>

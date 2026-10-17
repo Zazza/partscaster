@@ -42,6 +42,8 @@ import { RELEASE_NOTES } from './releaseNotes.js'
 import logoUrl from './assets/logo.png'
 import ConfirmModal from './components/ConfirmModal.vue'
 import TitleBar from './components/TitleBar.vue'
+import { keyAction } from './hotkeys.js'
+import PageView from './components/PageView.vue'
 import MetricsModal from './components/MetricsModal.vue'
 import PlanModal from './components/PlanModal.vue'
 
@@ -608,8 +610,8 @@ const sectionFlag = (name) => computed({
 const settingsPage = sectionFlag('settings')
 const voicesPage = sectionFlag('voices')
 const instrumentsPage = sectionFlag('instruments')   // «Инструменты»: дорожка через цепочку звукового движка
-const presetsPage = sectionFlag('presets')           // «Пресеты звука»: библиотека пресетов
 const recipeImport = ref(false)      // окно «Импорт рецепта»
+const trackSearch = ref(null)        // поиск по трекам: Ctrl+F ставит в него фокус
 const imports = ref([])             // импорты рецептов: ход над списком треков
 const replayJob = ref(null)          // «переиграть в другом стиле»: трек или null
 const studioJob = ref(null)
@@ -627,6 +629,17 @@ function onNewTrackKey(e) {
 }
 onMounted(() => window.addEventListener('keydown', onNewTrackKey))
 onUnmounted(() => window.removeEventListener('keydown', onNewTrackKey))
+
+// Ctrl/Cmd+F — к списку треков и в поиск (пробел и стрелки плеера — в PlayerBar.vue)
+async function onSearchKey(e) {
+  if (keyAction(e) !== 'search') return
+  e.preventDefault()
+  navGo('tracks')
+  await nextTick()
+  trackSearch.value?.focus()
+}
+onMounted(() => window.addEventListener('keydown', onSearchKey))
+onUnmounted(() => window.removeEventListener('keydown', onSearchKey))
 
 // страницы в меню «⋮»: треки/голоса переключаются, настройки просто открываются
 const navOpen = ref(false)
@@ -858,13 +871,8 @@ function onWindowClick(e) {
   <!-- разделы — в основном контексте (не модалками): закрываются «вернуться» в шапке и ✕;
        библиотека своих треков и корпуса — по-прежнему модалки поверх формы -->
   <div v-if="!studioJob && section" class="ctx-view">
-    <section v-if="section === 'new'" class="panel ctx-page-form newtrack-modal">
-      <!-- форма нового трека — страница раздела «новый трек» -->
-      <div class="page-modal-head">
-        <h2>{{ t('form.title') }}</h2>
-        <button class="ghost icon" :title="t('common.close')" @click="newTrackPage = false"><AppIcon name="x" /></button>
-      </div>
-      <div class="page-modal-body">
+    <!-- форма нового трека — страница раздела «Новый трек», колонкой по центру -->
+    <PageView v-if="section === 'new'" :title="t('nav.new')" class="newtrack-page">
         <div class="lib-row" :title="t('form.lib.tip')">
           <VSelect v-model="libGroup" :options="libGroupOptions" :placeholder="t('form.lib.group')" searchable @update:model-value="onLibGroupChange()" />
           <VSelect v-model="libStyle" :options="libStyleOptions" :disabled="!libGroup" :placeholder="t('form.lib.style')" @update:model-value="onLibStyleChange()" />
@@ -1020,24 +1028,33 @@ function onWindowClick(e) {
           </button>
           <span v-if="submitErr" class="error submit-err" :title="submitErr">{{ submitErr }}</span>
         </div>
-      </div>
-    </section>
+    </PageView>
 
     <SettingsPage v-if="section === 'settings'" v-model:server-url="serverURL"
                   @close="settingsPage = false" @saved="refresh(); loadEngine()" />
     <VoicesPage v-if="section === 'voices'"
                 @close="voicesPage = false; loadVoiceCards()" />
     <InstrumentsPage v-if="section === 'instruments'" @close="instrumentsPage = false; refresh()" />
-    <PresetsPage v-if="section === 'presets'" @close="presetsPage = false; loadPresetNames()" />
+    <PresetsPage v-if="section === 'presets'" />
   </div>
   <StudioPage v-else-if="studioJob" :job="studioJob"
               @close="studioJob = null; refresh()"
               @open-metrics="openMetrics" />
 
   <main v-else>
-    <!-- страница треков: без панельной обёртки и заголовка «Треки» —
-         страница и есть список; рамка у таблицы своя, двойная рамка не нужна -->
-    <section class="track-list">
+    <!-- страница треков: заголовок, справа — импорт (свой трек / рецепт) и «Новый трек» -->
+    <PageView :title="t('nav.tracks')" class="track-list">
+      <template #actions>
+        <details class="menu-pop down">
+          <summary class="ghost-btn" :class="{ busy: importBusy }">
+            <AppIcon name="folder" /> {{ importBusy ? t('track.import.busy') : t('import.menu') }}</summary>
+          <ul class="nav-menu" @click="closeMenu">
+            <li :title="t('track.import.tip')" @click="!importBusy && importTrack()">{{ t('track.import.btn') }}</li>
+            <li :title="t('recipe.importMenu.tip')" @click="recipeImport = true">{{ t('recipe.importMenu.btn') }}</li>
+          </ul>
+        </details>
+        <button class="primary" @click="openNewTrack"><AppIcon name="plus" /> {{ t('nav.new') }}</button>
+      </template>
       <div v-for="imp in imports" :key="imp.id" class="recipe-progress" :class="{ error: imp.status === 'error' }">
         {{ imp.status === 'error' ? t('recipe.progress.error', { title: imp.title, error: imp.error })
                                   : t('recipe.progress', { title: imp.title, progress: imp.progress || '…' }) }}
@@ -1046,22 +1063,16 @@ function onWindowClick(e) {
           <button class="ghost small-btn" @click="importAction(imp, 'dismiss')">{{ t('recipe.dismiss') }}</button>
         </template>
       </div>
-      <p v-if="!jobs.length" class="muted">{{ t('common.empty') }}
-        <button class="primary" @click="openNewTrack"><AppIcon name="plus" /> {{ t('nav.new') }}</button>
-        <button class="ghost" :disabled="importBusy" :title="t('track.import.tip')" @click="importTrack">
-          {{ importBusy ? t('track.import.busy') : t('track.import.btn') }}</button></p>
+      <p v-if="!jobs.length" class="muted">{{ t('common.empty') }}</p>
       <template v-else>
         <div class="queue-tools">
+          <!-- поиск первым и шире, фильтры — следом; импорт — в строке заголовка страницы -->
+          <input ref="trackSearch" v-model="qf.q" class="queue-search" :placeholder="t('queue.filter.search')" />
           <VSelect v-model="qf.status" :options="qStatusOptions" />
           <VSelect v-model="qf.period" :options="qPeriodOptions" />
           <VSelect v-model="qf.dur" :options="qDurOptions" />
           <VSelect v-model="qf.draft" :options="qDraftOptions" />
           <VSelect v-model="qf.folder" :options="qFolderOptions" :title="t('queue.folder.tip')" />
-          <input v-model="qf.q" :placeholder="t('queue.filter.search')" />
-          <button class="ghost small-btn" :title="t('recipe.importMenu.tip')" @click="recipeImport = true">
-            <AppIcon name="folder" /> {{ t('recipe.importMenu.btn') }}</button>
-          <button class="ghost small-btn" :disabled="importBusy" :title="t('track.import.tip')" @click="importTrack">
-            <AppIcon name="plus" /> {{ importBusy ? t('track.import.busy') : t('track.import.btn') }}</button>
         </div>
         <p class="muted">{{ filteredJobs.length
           ? t('queue.filter.shown', { shown: queuePage.length, total: filteredJobs.length })
@@ -1073,7 +1084,8 @@ function onWindowClick(e) {
         <article v-for="j in queuePage" :key="j.id" class="job"
                  :class="[j.status, { playing: songPlaying(j), open: openJobs.has(j.id) }]">
         <div class="job-row" :class="{ open: openJobs.has(j.id) }" @click="toggleOpenJob(j.id)">
-          <span class="tl-num" :title="'#' + j.id">{{ j.id }}</span>
+          <!-- играющий сейчас трек: значок вместо номера, строка отмечена (стили .job.playing) -->
+          <span class="tl-num" :title="'#' + j.id"><AppIcon v-if="songPlaying(j)" name="volume" /><template v-else>{{ j.id }}</template></span>
           <span class="tl-play-cell">
             <button v-if="j.status === 'done' && j.audio_file" class="tl-play"
                     :class="{ 'is-playing': isPlaying('m' + headOf(j).id) }" :disabled="playBusy['m' + headOf(j).id]"
@@ -1108,7 +1120,7 @@ function onWindowClick(e) {
           <span v-if="j.duration_sec" class="tl-meta col-dur">{{ fmtDur(j.duration_sec) }}</span>
           <span v-if="fmtWhen(j.created_at)" class="tl-meta job-when" :title="j.created_at">{{ fmtWhen(j.created_at) }}</span>
           <span v-if="(j.folder || '').trim()" class="tl-pill job-folder">{{ j.folder.trim() }}</span>
-          <button class="ghost icon job-caret" :title="t('queue.details.tip')">{{ openJobs.has(j.id) ? '▾' : '▸' }}</button>
+          <button class="ghost icon job-caret" :title="t('queue.details.tip')"><AppIcon :name="openJobs.has(j.id) ? 'chev-up' : 'chev-down'" /></button>
         </div>
         <div v-if="openJobs.has(j.id)" class="job-detail">
           <!-- мета трека: сид, характер, свой ABC, head — одной приглушённой строкой;
@@ -1139,7 +1151,7 @@ function onWindowClick(e) {
           <div class="job-body">
             <!-- действия без подписи: играть — в строке, здесь студия/скачать/меню -->
             <div v-if="j.status === 'done' && j.audio_file" class="job-actions">
-            <button v-if="j.status === 'done'" class="ghost" @click="studioJob = headOf(j)">{{ t('queue.studio') }}</button>
+            <button v-if="j.status === 'done'" class="primary" @click="studioJob = headOf(j)">{{ t('queue.studio') }}</button>
             <details class="menu-pop">
               <summary class="ghost-btn">{{ t('queue.download') }}</summary>
               <ul class="nav-menu" @click="closeMenu">
@@ -1246,11 +1258,11 @@ function onWindowClick(e) {
           <button class="ghost small-btn" :disabled="qPageNow >= qPageMax" @click="qPage = qPageNow + 1">→</button>
         </div>
       </template>
-    </section>
+    </PageView>
   </main>
   </div>
 
-  <!-- плеер — единственный внизу: транспорт стабилен, что бы ни было открыто -->
+  <!-- плеер — единственный внизу, под содержимым: транспорт стабилен, что бы ни было открыто -->
   <footer class="playerbar-footer">
     <PlayerBar :jobs="jobs" @play-job="togglePlay" @refresh="refresh" />
   </footer>
@@ -1302,23 +1314,17 @@ body { overflow: hidden; }
 /* каркас: слева статичный блок (лого, статистика, очередь, меню), справа колонка
    из шапки, прокручиваемого контекста и плеера */
 .app-shell { flex: 1 1 auto; min-height: 0; display: flex; }
-.app-col { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.app-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
-/* раздел в основном контексте: страница-модалка встраивается потоком — без
-   фиксированной подложки и затемнения (сами компоненты не меняем) */
+/* правая колонка: содержимое в рамке со всех сторон, под ним плеер. Левая панель, полоса
+   заголовка, плеер и края окна одного цвета (--frame), линия отделяет от них содержимое
+   (а не обрывается у заголовка) */
+.app-col { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--frame); }
+.app-body { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--bg);
+  border: 1px solid var(--border); }
+/* раздел в основном контексте: страница (PageView) прокручивается сама */
 .ctx-view { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.ctx-view .modal-backdrop { position: static; inset: auto; background: none; z-index: auto;
-  display: block; padding: 0; overflow: visible; }
-.ctx-view .page-backdrop { padding: 16px; overflow: visible; }
-/* страница в контексте — не модалка: без рамки/фона/скругления и без ✕
-   (заголовок остаётся); выход — разделы левого блока */
-.ctx-view .page-modal { width: auto; max-width: none; max-height: none;
-  border: none; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
-.ctx-view .page-modal-head { margin: 0; padding: 10px 4px; background: none; border: none; box-shadow: none; }
-.ctx-view .page-modal-head button { display: none; }
-/* форма нового трека — по центру колонкой, как страница */
-.ctx-view .ctx-page-form { border: none; background: none; box-shadow: none;
-  width: min(980px, 100%); margin: 12px auto; }
+/* форма нового трека — колонкой по центру */
+.newtrack-page { width: min(980px, 100%); margin: 0 auto; }
 header { flex: 0 0 auto; }
 header {
   /* выше панелей main (стекинг-контексты из backdrop-filter), но ниже модалок (z-index 70) */
@@ -1333,7 +1339,7 @@ header {
 }
 h1 {
   font-size: 16px; margin: 0; letter-spacing: 2px; text-transform: uppercase;
-  color: var(--lcd-text); text-shadow: 0 0 10px var(--lcd-glow);
+  color: var(--accent-text); text-shadow: 0 0 10px var(--lcd-glow);
 }
 h2 {
   font-size: 13px; margin: -16px -16px 12px; padding: 6px 12px;
@@ -1342,7 +1348,6 @@ h2 {
   border-bottom: 1px solid var(--bevel-lo);
   text-shadow: 1px 1px 0 rgba(0,0,0,.4);
 }
-.page-head h2 { margin: 0; border-bottom: none; background: none; text-shadow: none; padding: 0; }
 .icon-btn {
   background: none; border: none; box-shadow: none; cursor: pointer;
   color: var(--muted); font-size: 15px; padding: 2px 0; font-weight: 400;
@@ -1363,15 +1368,12 @@ h2 {
 }
 .health-dot.up { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .health-dot.down { background: var(--err); box-shadow: 0 0 8px var(--err); }
-/* футер-плеер: транспорт снизу на всю ширину — стабилен при любом экране */
+/* футер-плеер: под содержимым, на той же поверхности, что заголовок, левая панель и
+   края окна (--frame) — часть окна, а не полоса поверх содержимого */
 .playerbar-footer {
   position: relative; z-index: 5; flex: 0 0 auto;
-  display: flex; align-items: center; padding: 8px 16px;
-  background: color-mix(in srgb, var(--panel2) 78%, transparent);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border-top: 1px solid var(--bevel-lo);
-  box-shadow: 0 -1px 4px rgba(0,0,0,.35);
+  display: flex; align-items: center; padding: 6px 10px 0;
+  background: var(--frame);
 }
 .playerbar-footer .playerbar { flex: 1 1 auto; min-width: 0; }
 /* статус воркера в шапке — компактная строка после точки здоровья */
@@ -1426,6 +1428,10 @@ h2 {
   /* прилипает к верху прокрутки: фильтры и поиск всегда под рукой, как волна в студии */
   position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 6px 0; }
 .queue-tools input { flex: 1 1 150px; min-width: 0; }
+.queue-tools .queue-search { flex: 2 1 240px; }
+/* играющий трек: акцентная черта слева, номер — значком, название — акцентом */
+.job.playing > .job-row { box-shadow: inset 3px 0 0 var(--accent); }
+.job.playing .tl-num, .job.playing .job-name { color: var(--accent-text); }
 .pager { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 6px; font-size: 13px; }
 .nav-wrap { position: relative; }
 .nav-menu {
@@ -1482,6 +1488,10 @@ h2 {
 }
 .new-track-btn { margin-left: auto; }
 .playerbar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+/* ▶ — главная кнопка плеера: круглая, янтарная (--play-grad), крупнее соседних */
+.playerbar .player-play { width: 34px; height: 34px; min-width: 0; padding: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; }
+.playerbar .player-play svg { width: 12px; height: 12px; }
 /* полоса прокрутки растягивается на свободное место шапки; под ней —
    метки минут-секунд: плеер здесь — навигация по треку, не просто индикатор */
 .playerbar .seek-wrap { flex: 1 1 auto; min-width: 80px; display: flex; flex-direction: column; }
@@ -1516,6 +1526,8 @@ h2 {
   padding: 2px 8px; border-radius: 2px; border: 1px solid var(--border);
   box-shadow: inset 0 0 6px rgba(0,0,0,.55); text-shadow: 0 0 6px var(--lcd-glow);
 }
+/* светлая: экран таймера светлый — тёмная внутренняя тень была бы грязью */
+[data-theme="light"] .playerbar .pos { box-shadow: inset 0 1px 2px rgba(15,20,35,.1); }
 .playerbar .ghost {
   min-width: 30px; width: auto; height: 24px; padding: 0 4px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1526,17 +1538,17 @@ h2 {
   border-left-color: var(--bevel-hi);
   font-size: 12px; line-height: 1;
 }
-.playerbar .ghost:hover { color: var(--lcd-text); border-color: var(--lcd-text); }
+.playerbar .ghost:hover { color: var(--accent-text); border-color: var(--accent-text); }
 .spacer { flex: 1; }
 
 main {
   display: grid;
   /* одна страница за раз: список треков или форма нового трека */
   grid-template-columns: minmax(0, 1fr);
-  gap: 20px; padding: 20px 24px; max-width: 1800px; margin: 0 auto;
+  /* поля задаёт сама страница (PageView) */
+  max-width: 1800px; margin: 0 auto;
 }
 /* тело модалки прокручивается само: части формы не сжимаются (иначе стих — в одну строку) */
-.newtrack-modal .page-modal-body > * { flex-shrink: 0; }
 .home-link { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 /* значок приложения в шапке — тот же, что иконка окна (build/appicon.png) */
 .app-logo { width: 26px; height: 26px; flex: none; filter: drop-shadow(0 0 4px var(--lcd-glow)); }
@@ -1575,7 +1587,6 @@ textarea { width: 100%; resize: vertical; font-family: inherit; }
 .lyrics-tools .dur-select { max-width: 110px; font-size: 12px; }
 .lyrics-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0 0 4px; }
 .lyrics-tags-hint { font-size: 11px; }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 button.toggle { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 400; font-size: 12px; padding: 3px 10px; }
 button.toggle.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .seed input { width: 110px; min-width: 0; }
@@ -1730,8 +1741,8 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 .collapse-all { margin-left: 8px; }
 .status { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--border); }
 .status.done { background: rgba(255,190,61,.16); color: var(--lcd-text); text-shadow: 0 0 8px var(--lcd-glow); }
-/* светлая: чип «готово» — мини-тёмный LCD, янтарный текст на белом не читается */
-[data-theme="light"] .status.done { background: var(--lcd-bg); }
+/* светлая: чип «готово» — акцентный текст на бледной подложке акцента */
+[data-theme="light"] .status.done { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .status.running { background: rgba(217,160,61,.2); color: var(--run); }
 .status.error { background: rgba(224,93,61,.2); color: var(--err); }
 /* строка стиля — таблица «что где»: колонка меток и колонка значений */
@@ -1747,6 +1758,9 @@ button.job-sec-h:hover, button.job-sec-h.on { color: var(--text); }
 }
 .menu-pop > summary.ghost-btn:hover, .menu-pop[open] > summary.ghost-btn { color: var(--text); filter: brightness(1.1); }
 .menu-pop > .nav-menu { top: auto; bottom: 100%; margin: 0 0 2px; }
+/* меню вниз (в строке заголовка страницы): список под кнопкой, по правому краю */
+.menu-pop.down > .nav-menu { top: 100%; bottom: auto; left: auto; right: 0; margin: 2px 0 0; }
+.menu-pop > summary.ghost-btn.busy { opacity: .6; }
 .menu-pop .nav-menu li.danger { color: var(--err, #e5534b); }
 .style-tags { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 6px 0; align-items: baseline; }
 .style-tag-key {

@@ -251,9 +251,9 @@ the original (the overdrive does not break the mix), "dry/processed" (сухой
 
 | Effect | What it does | Main knobs |
 |---|---|---|
-| Megaphone (`megaphone`) | A voice through a horn: narrow band, overdrive, short echo (Jack White) | band 400 Hz–3 kHz · saturation 5 · ring 6 · echo 0.5 |
+| Megaphone (`megaphone`) | A voice through a horn: narrow band, overdrive, short echo, as in garage rock | band 400 Hz–3 kHz · saturation 5 · ring 6 · echo 0.5 |
 | Telephone (`phone`) | A handset: an even narrower band, dry, a light rasp | band 420 Hz–2.6 kHz · rasp 3 |
-| Vocal overdrive (`voice-drive`) | A dense overdriven mid, a top closed as if by tape (Letov) | drive 22 dB · mid +5 dB · low from 200 Hz · top 8.5 kHz |
+| Vocal overdrive (`voice-drive`) | A dense overdriven mid, a top closed as if by tape, as on 1980s punk records | drive 22 dB · mid +5 dB · low from 200 Hz · top 8.5 kHz |
 | Slapback (`slapback`) | A single echo of 80–120 ms — rockabilly | delay 100 ms · volume 0.6 |
 
 ### Recipes against a "flat" sound

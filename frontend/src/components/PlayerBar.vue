@@ -4,10 +4,34 @@ import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
+import { keyAction } from '../hotkeys.js'
 
 defineProps({ jobs: { type: Array, default: () => [] } })
 const emit = defineEmits(['play-job', 'refresh'])
 const { playerState, nowPlaying, volume, seekPos, onVolume, onSeekInput, onSeekChange, playRange, togglePlay } = usePlayer()
+
+// горячие клавиши плеера (вне полей ввода): пробел — играть/пауза, ←/→ — перемотка;
+// Ctrl+F — в App.vue
+const SEEK_STEP_SEC = 5
+function onHotkey(e) {
+  // открыт диалог (подтверждение, план…) — пробел и стрелки принадлежат ему
+  if (document.querySelector('.modal-backdrop')) return
+  const a = keyAction(e)
+  const st = playerState.value
+  if (a === 'toggle') {
+    if (!st.job_id && !playRange.value) return
+    e.preventDefault()   // иначе пробел ещё и нажмёт кнопку в фокусе
+    togglePlay()
+  } else if (a === 'back' || a === 'fwd') {
+    if (!st.duration_sec) return
+    e.preventDefault()
+    const to = (st.position_sec || 0) + (a === 'fwd' ? SEEK_STEP_SEC : -SEEK_STEP_SEC)
+    seekPos.value = Math.min(Math.max(to, 0), st.duration_sec)
+    onSeekChange()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onHotkey))
+onUnmounted(() => window.removeEventListener('keydown', onHotkey))
 
 async function stopPlaying() {
   await api.stopAudio()
@@ -73,7 +97,7 @@ function onSeekHover(e) {
 <template>
   <div class="playerbar">
     <button class="ghost" :disabled="!playerState.job_id" :title="t('player.prev')" style="letter-spacing:-2px" @click="playNeighbor(jobs, -1)"><svg width="12" height="10" viewBox="0 0 12 10"><path d="M2 0h1.6v10H2zM11 0v10L4.4 5z" fill="currentColor"/></svg></button>
-    <button class="ghost" :disabled="!playerState.job_id && !playRange" @click="togglePlay" :title="t('player.pause')"><svg v-if="playerState.playing" width="10" height="10" viewBox="0 0 10 10"><path d="M1 0h2.8v10H1zM6.2 0H9v10H6.2z" fill="currentColor"/></svg><svg v-else width="10" height="10" viewBox="0 0 10 10"><path d="M1 0l8 5-8 5z" fill="currentColor"/></svg></button>
+    <button class="play-main player-play" :disabled="!playerState.job_id && !playRange" @click="togglePlay" :title="t('player.pause')"><svg v-if="playerState.playing" width="10" height="10" viewBox="0 0 10 10"><path d="M1 0h2.8v10H1zM6.2 0H9v10H6.2z" fill="currentColor"/></svg><svg v-else width="10" height="10" viewBox="0 0 10 10"><path d="M1 0l8 5-8 5z" fill="currentColor"/></svg></button>
     <button class="ghost" :disabled="!playerState.job_id" @click="stopPlaying" :title="t('player.stop')"><svg width="9" height="9" viewBox="0 0 9 9"><rect width="9" height="9" fill="currentColor"/></svg></button>
     <button class="ghost" :disabled="!playerState.job_id" :title="t('player.next')" style="letter-spacing:-2px" @click="playNeighbor(jobs, 1)"><svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 0v10l6.6-5zM8.4 0H10v10H8.4z" fill="currentColor"/></svg></button>
     <!-- название — только когда что-то играет: пустое занимало 220 px между кнопками и полосой -->

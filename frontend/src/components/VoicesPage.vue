@@ -3,6 +3,7 @@
 // короткое draft-прослушивание на нейтральном стенде, карточки голосов.
 // Карточка = ручки + seed прослушивания; аудио копируется на воркере,
 // так что карточка переживает удаление исходной джобы из очереди.
+import PageView from './PageView.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
@@ -144,14 +145,8 @@ function cleanProbes() {
 </script>
 
 <template>
-  <div class="modal-backdrop page-backdrop">
-    <section class="panel page-modal">
-      <div class="page-modal-head">
-        <h2>{{ t('voicelab.title') }}</h2>
-        <button class="ghost icon" :title="t('common.close')" @click="emit('close')"><AppIcon name="x" /></button>
-      </div>
-      <div class="page-modal-body">
-      <p class="muted">{{ t('voicelab.desc') }}</p>
+  <PageView :title="t('nav.voices')">
+    <template #lead>{{ t('voicelab.desc') }}</template>
 
       <VoiceKnobs v-model="params">
         <label>
@@ -186,7 +181,7 @@ function cleanProbes() {
       </div>
       <p v-if="err" class="error">{{ err }}</p>
 
-      <h2 style="margin-top:18px">{{ t('voicelab.cards') }}
+      <h2>{{ t('voicelab.cards') }}
         <button class="ghost small-btn" style="margin-left:10px" :disabled="cleaning"
                 :title="t('voicelab.clean.tip')" @click="cleanProbes"><AppIcon name="eraser" /> {{ t('voicelab.clean') }}</button>
       </h2>
@@ -201,7 +196,5 @@ function cleanProbes() {
         <button class="ghost small-btn" @click="del(v)"><AppIcon name="x" /></button>
       </div>
       <p v-if="!voices.length" class="muted">{{ t('voicelab.empty') }}</p>
-      </div>
-    </section>
-  </div>
+  </PageView>
 </template>

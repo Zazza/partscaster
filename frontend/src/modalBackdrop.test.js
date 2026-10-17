@@ -125,16 +125,12 @@ test('подложки модалок найдены (обход исходни�
   const names = files.map((f) => f.rel)
   // У этих подложка есть.
   for (const n of [
-    // App.vue больше не держит собственных модалок: форма нового трека и разделы —
-    // страницы основного контекста, диалоги — отдельные компоненты
+    // App.vue больше не держит собственных модалок; разделы (пресеты, инструменты, голоса,
+    // настройки) — страницы PageView без подложки, диалоги — отдельные компоненты
     'components/WelcomeModal.vue',
     'components/PlanModal.vue',
-    'components/PresetsPage.vue',
     'components/MetricsModal.vue',
-    'components/InstrumentsPage.vue',
     'components/ConfirmModal.vue',
-    'components/VoicesPage.vue',
-    'components/SettingsPage.vue',
   ]) {
     expect(names, `нет подложки modal-backdrop в ${n}`).toContain(n)
   }

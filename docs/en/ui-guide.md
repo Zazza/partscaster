@@ -10,6 +10,12 @@ On the left is a fixed panel: the section menu and the job queue. On the right i
 studio. At the bottom is the player. There is no header: sections open from the menu on the left, and you also
 leave the studio with a menu item.
 
+Every section has a title at the top — the same word as in the menu on the left; to its right is the section's main
+action ("Import" and "New track" in the track list, "New preset" in sound presets).
+
+Keyboard shortcuts (when the cursor is not in a text field): **Space** — play / pause, **← / →** — seek by 5 seconds,
+**Ctrl+F** (Cmd+F on a Mac) — go to the track list and its search.
+
 The window frame is the app's own, in the theme colours. At the top is a bar with the title: "Partscaster" outside
 the studio, the track number and name in the studio. Drag the bar to move the window; double-click it to maximise.
 On the right of the bar are "minimise", "maximise" and "close". Resize by the frame on the left, right and bottom.
@@ -603,11 +609,13 @@ done in the studio, in the "Stems" desk.
 The "voices" menu item. Choosing the character of a voice: an audition of ~18 s on the same neutral backing track,
 so that voices are compared under equal conditions. A voice you like is saved as a card.
 
-<!-- screenshot: voice lab — voice knobs, "in the vein of:", voice cards -->
+<!-- screenshot: voice lab — voice knobs, "manner:", voice cards -->
 
 - **"presets:"** — "operatic", "dark drama", "scream", "whisper", "velvet low", "reset".
-- **"in the vein of:"** — Letov, Thom Yorke, Jack White, Placebo, Interpol, Zemfira, Mumiy Troll, Cobain, Nick
-  Cave, Amy Winehouse, Björk, Lou Reed, Vysotsky, BG: they set the knobs for that manner.
+- **"manner:"** — "nasal strain", "fragile falsetto", "piercing wail", "androgynous, sneering", "cold baritone",
+  "husky, laid-back", "purring, mannered", "grunge strain", "dark preacher", "smoky soul", "eccentric, wild leaps",
+  "talk-singing", "rasping, all-out", "detached, enigmatic": they set the knobs for that manner. There are no
+  artist names: the model does not know them, only the manner comes through.
 - **Knobs**: "register" (female, male, high male, low male), "roughness", "creak", "delivery", "breath".
 - **"custom"** — timbre and manner tags in English: "whiskey-soaked", "nasal", "slurred", "child-like".
   Russian words are not translated: under the line for the "Voice" slot, the same warning as in the form

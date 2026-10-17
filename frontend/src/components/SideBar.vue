@@ -163,7 +163,7 @@ function onNav(id) { emit('nav', id) }
 <style scoped>
 .sidebar {
   flex: none; width: 216px; display: flex; flex-direction: column; gap: 6px;
-  padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--border);
+  padding: 10px 8px; background: var(--frame);
   min-height: 0;
 }
 .sidebar.collapsed { width: 46px; align-items: stretch; padding: 10px 4px; }
@@ -181,16 +181,22 @@ function onNav(id) { emit('nav', id) }
   color: var(--muted); }
 .sb-stats-mini { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0; }
 .sb-stats-mini.hot { color: var(--err, #e06c75); }
-/* меню разделов: 13px, разделитель снизу */
-.sb-nav { display: flex; flex-direction: column; gap: 2px;
-  border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+/* меню разделов: 13px; от очереди отделено отступом, без линии — линии-обрывки
+   внутри панели выбивались из рамки окна */
+.sb-nav { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; }
 .sb-nav-item {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 13px;
   background: none; border: 1px solid transparent; border-radius: 6px; color: var(--text);
   cursor: pointer; text-align: left; position: relative; width: 100%;
 }
 .sb-nav-item:hover { background: var(--panel2); }
-.sb-nav-item.on { color: var(--lcd-text, var(--accent)); border-color: var(--lcd-text, var(--accent)); }
+.sb-nav-item.on { color: var(--accent-text); border-color: var(--accent-text); }
+/* пункты меню — не кнопки: светлая тема красит все button стеклом с рамкой и тенью
+   (style.css, [data-theme="light"] button) — возвращаем плоский вид */
+[data-theme="light"] button.sb-nav-item { background: none; box-shadow: none; backdrop-filter: none;
+  -webkit-backdrop-filter: none; border-color: transparent; }
+[data-theme="light"] button.sb-nav-item:hover { background: var(--panel3); filter: none; }
+[data-theme="light"] button.sb-nav-item.on { border-color: var(--accent-text); }
 .sidebar.collapsed .sb-nav-item { justify-content: center; padding: 6px 0; }
 .sb-badge { position: absolute; top: -3px; right: 2px; font-size: 9px; line-height: 1;
   background: var(--accent, #7aa2f7); color: #fff; border-radius: 7px; padding: 2px 4px; }
@@ -228,8 +234,7 @@ button.sb-q-res { color: var(--ok, #7ec16c); font-size: 10px; }
 .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }
 .sb-q-more, .sb-q-empty { font-size: 12px; padding: 4px 8px; color: var(--muted); }
-/* нижняя строка: сворачивание, тема, язык */
-.sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px;
-  border-top: 1px solid var(--border); margin-top: auto; }
+/* нижняя строка: сворачивание, тема, язык — прижата вниз, без линии */
+.sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px; margin-top: auto; }
 .sidebar.collapsed .sb-foot { flex-direction: column; align-items: center; }
 </style>

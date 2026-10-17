@@ -36,11 +36,18 @@ installWindowFrame()
 /* перетаскивание окна — свойство Wails; кнопки его не наследуют */
 .titlebar { --wails-draggable: drag; position: relative; z-index: 100; flex: none; display: flex; align-items: center;
   height: 32px; background: var(--frame); color: var(--muted); user-select: none; }
-.titlebar-text { flex: 1 1 auto; min-width: 0; padding-left: 12px; font-size: 13px;
+/* название — по центру окна (а не полосы без кнопок): по бокам равные поля под кнопки */
+.titlebar-text { position: absolute; left: 140px; right: 140px; text-align: center; font-size: 13px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.titlebar-btn:first-of-type { margin-left: auto; }
 .titlebar-btn { --wails-draggable: no-drag; flex: none; width: 44px; height: 100%; padding: 0; border: 0; border-radius: 0;
   background: none; box-shadow: none; color: var(--muted); display: flex; align-items: center; justify-content: center; }
 .titlebar-btn:hover { background: var(--panel3); color: var(--text); filter: none; }
 .titlebar-btn:active:not(:disabled) { background: var(--panel3); transform: none; }
+/* светлая тема красит все button стеклом с рамкой (style.css) — кнопкам окна это не нужно */
+[data-theme="light"] .titlebar-btn { background: none; box-shadow: none; backdrop-filter: none;
+  -webkit-backdrop-filter: none; border: 0; }
+[data-theme="light"] .titlebar-btn:hover { background: var(--panel3); }
+[data-theme="light"] .titlebar-btn.close:hover { background: var(--err); color: #fff; }
 .titlebar-btn.close:hover { background: var(--err); color: #fff; }
 </style>

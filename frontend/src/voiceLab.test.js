@@ -167,7 +167,7 @@ describe('быстрые пресеты', () => {
   })
 })
 
-describe('архотипы «в духе»', () => {
+describe('манеры голоса («манера:»)', () => {
   it('id уникальны и не пересекаются с пресетами, все нормализуются без потерь', () => {
     const ids = [...VOICE_PRESETS.map(p => p.id), ...VOICE_ARCHETYPES.map(a => a.id)]
     expect(new Set(ids).size).toBe(ids.length)
@@ -194,21 +194,21 @@ describe('архотипы «в духе»', () => {
 
   it('ключевые теги архотипов на месте', () => {
     const byId = Object.fromEntries(VOICE_ARCHETYPES.map(a => [a.id, voiceDescriptor(a.params)]))
-    expect(byId.letov).toContain('shouted')
-    expect(byId.letov).toContain('off-key')
-    expect(byId['thom-yorke']).toContain('nasal')
-    expect(byId['thom-yorke']).toContain('falsetto')
-    expect(byId['jack-white']).toContain('whiny wail')
-    expect(byId.placebo).toContain('androgynous')
-    expect(byId.interpol).toContain('deadpan baritone')
-    expect(byId.zemfira).toContain('husky')
-    expect(byId['mumiy-troll']).toContain('purring')
-    expect(byId.cobain).toContain('grunge whine')
-    expect(byId['nick-cave']).toContain('deep baritone')
-    expect(byId['amy-winehouse']).toContain('smoky soul')
-    expect(byId.bjork).toContain('child-like')
-    expect(byId['lou-reed']).toContain('talk-singing')
-    expect(byId.vysocky).toContain('rasping')
-    expect(byId.bg).toContain('detached')
+    expect(byId['nasal-strain']).toContain('shouted')
+    expect(byId['nasal-strain']).toContain('off-key')
+    expect(byId['fragile-falsetto']).toContain('nasal')
+    expect(byId['fragile-falsetto']).toContain('falsetto')
+    expect(byId['piercing-wail']).toContain('whiny wail')
+    expect(byId['androgynous-sneer']).toContain('androgynous')
+    expect(byId['cold-baritone']).toContain('deadpan baritone')
+    expect(byId['husky-laidback']).toContain('husky')
+    expect(byId['purring-mannered']).toContain('purring')
+    expect(byId['grunge-strain']).toContain('grunge whine')
+    expect(byId['dark-preacher']).toContain('deep baritone')
+    expect(byId['smoky-soul']).toContain('smoky soul')
+    expect(byId['eccentric-leaps']).toContain('child-like')
+    expect(byId['talk-singing']).toContain('talk-singing')
+    expect(byId['rasping-allout']).toContain('rasping')
+    expect(byId['detached-enigmatic']).toContain('detached')
   })
 })

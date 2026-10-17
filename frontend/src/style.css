@@ -28,36 +28,45 @@
   /* бейджи «черновик»/«свой ABC» */
   --badge-bg: rgba(120,140,255,.15);
   --badge-fg: #9aa5ff;
-  /* своя рамка окна: полоса заголовка и края — цвет левой панели; ползунок скроллбара */
+  /* поверхность окна вокруг содержимого: полоса заголовка, левая панель, плеер, края */
   --frame: var(--panel);
+  /* акцентный текст на фоне интерфейса (активный пункт, заголовки): в тёмной — янтарь LCD,
+     в светлой янтарь на белом не читается — акцент темы */
+  --accent-text: var(--lcd-text);
   --scroll-thumb: #4a4a5c;
 }
 [data-theme="light"] {
   /* тёплая бумага вместо серого: панели белые, контур — светлый,
      а не тёмно-серый (тёмный --border красит рамки ВСЕХ кнопок,
      включая круглые ▶ и ★, и читается как «чёрный бордер») */
-  --bg: #f7f7f5;
+  /* содержимое — белое, вокруг него (заголовок, левая панель, плеер) — светло-серая
+     поверхность окна: так содержимое читается листом, как в тёмной теме */
+  --bg: #ffffff;
+  --frame: #efefec;
+  --accent-text: var(--accent);
   --panel: #ffffff;
   --panel2: #f4f4f2;
   --panel3: #ececea;
   --border: #dcdfd9;
   --line: #e2e4de;   /* тонкие разделители — светлые, без фолбэка #2a2a35 */
   --btn-border: #d3d6d0;
-  --btn-bevel-hi: #ffffff;
-  --bevel-hi: #ffffff;
-  --bevel-lo: #d9dcd6;
+  /* грани фасок — того же тона, что контур: на белом фоне белая грань исчезала,
+     и рамки кнопок/полей выглядели обрубленными (видны только две стороны) */
+  --btn-bevel-hi: #d3d6d0;
+  --bevel-hi: #dcdfd9;
+  --bevel-lo: #cdd0c9;
   --text: #191c17;
   --muted: #464b44;
   --accent: #c2410c;
   --ok: #15803d;
   --err: #b91c1c;
   --run: #a16207;
-  /* LCD-дисплеи — «физическое железо»: тёмные с янтарём и в светлой теме,
-     как экран прибора, а не фон всего интерфейса */
-  --lcd-bg: #191b1f;
-  --lcd-text: #ffbe3d;
-  --lcd-dim: #4a3a15;
-  --lcd-glow: rgba(255, 190, 61, .35);
+  /* LCD-дисплеи (таймер плеера, чип «готово») — светлые с акцентными цифрами: тёмный
+     «экран прибора» на светлой поверхности выглядел чёрной дырой; свечения на белом нет */
+  --lcd-bg: #ffffff;
+  --lcd-text: var(--accent);
+  --lcd-dim: #e7d3c8;
+  --lcd-glow: transparent;
   /* главные кнопки — коралловый градиент */
   --play-grad: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, #ffffff), var(--accent) 45%, #9a340a);
   --play-fg: #ffffff;
@@ -200,22 +209,36 @@ input[type="range"] {
   padding: 0;
   cursor: pointer;
 }
+/* рельса — светлее фона панели (тёмная LCD-рельса на тёмной панели не читалась:
+   на страницах голосов и инструментов были видны одни ручки) */
 input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
-  background: var(--lcd-bg);
+  background: var(--panel3);
   border: 1px solid var(--border);
   border-top-color: var(--bevel-lo);
   border-left-color: var(--bevel-lo);
-  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, .5);
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, .4);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 10px; height: 16px;
   margin-top: -6px;
-  background: linear-gradient(180deg, var(--panel3), var(--panel));
+  background: linear-gradient(180deg, var(--muted), var(--panel3));
   border: 1px solid var(--border);
   border-top-color: var(--bevel-hi);
   border-left-color: var(--bevel-hi);
+}
+input[type="range"]:hover::-webkit-slider-thumb { border-color: var(--accent); }
+
+/* светлая: рельса ползунков (перемотка, громкость) — серая, а не чёрная полоса LCD:
+   на белом чёрная рельса читалась тяжелее всего остального */
+[data-theme="light"] input[type="range"]::-webkit-slider-runnable-track {
+  background: var(--panel3); border-color: var(--border);
+  box-shadow: inset 0 1px 2px rgba(15, 20, 35, .12);
+}
+[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
+  background: linear-gradient(180deg, #ffffff, var(--panel2)); border-color: var(--bevel-lo);
+  box-shadow: 0 1px 2px rgba(15, 20, 35, .18);
 }
 
 /* Светлая тема: стеклянные контролы — полу-прозрачный белый + blur.
@@ -225,10 +248,8 @@ input[type="range"]::-webkit-slider-thumb {
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 3px rgba(15,20,35,.14);
-  /* рамка целиком светлая: нижняя/правая грань фаска не затемняет контур */
+  /* рамка одним тоном со всех сторон (белая верхняя/левая грань на белом фоне пропадала) */
   border-color: #d3d6d0;
-  border-top-color: rgba(255,255,255,.95);
-  border-left-color: rgba(255,255,255,.95);
 }
 /* неактивные: не выцветать opacity, а читаемый серый текст */
 [data-theme="light"] button:disabled { opacity: 1; color: #6e7268; filter: none; }
@@ -242,7 +263,7 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.85), 0 1px 3px rgba(25,28,23,.07);
 }
 /* заголовки-строки h2 наследуют тёмную тень текста — на белом грязь */
-[data-theme="light"] h2 { text-shadow: none; }
+[data-theme="light"] h1, [data-theme="light"] h2 { text-shadow: none; }
 [data-theme="light"] button:hover { filter: brightness(1.05) saturate(1.05); }
 [data-theme="light"] button:active:not(:disabled) {
   background: linear-gradient(180deg, rgba(244,245,248,.75), rgba(255,255,255,.45));

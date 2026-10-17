@@ -124,63 +124,63 @@ export function normalizeVoiceParams(o) {
   return out
 }
 
-// Архотипы «в духе»: подпись в UI может называть артиста, но сами теги —
-// обезличенные клише (в промпт имена не идут, модель их всё равно не знает).
+// Манеры голоса: подпись — описание манеры, теги — английские клише (имён исполнителей
+// нет ни в подписях, ни в промпте: модель их не знает, а имя обещало бы «как у X»).
 export const VOICE_ARCHETYPES = [
   {
-    id: 'letov', params: { register: 'male', rough: 2, creak: 1, delivery: 3, breath: 0,
+    id: 'nasal-strain', params: { register: 'male', rough: 2, creak: 1, delivery: 3, breath: 0,
       extra: 'nasal, cracked, shouted, off-key' },
   },
   {
-    id: 'thom-yorke', params: { register: 'male-high', rough: 0, creak: 0, delivery: 0, breath: 1,
+    id: 'fragile-falsetto', params: { register: 'male-high', rough: 0, creak: 0, delivery: 0, breath: 1,
       extra: 'nasal, frail falsetto, anxious, mournful' },
   },
   {
-    id: 'jack-white', params: { register: 'male-high', rough: 1, creak: 0, delivery: 3, breath: 0,
+    id: 'piercing-wail', params: { register: 'male-high', rough: 1, creak: 0, delivery: 3, breath: 0,
       extra: 'piercing whiny wail, nasal, manic' },
   },
   {
-    id: 'placebo', params: { register: 'male-high', rough: 0, creak: 0, delivery: 2, breath: 0,
+    id: 'androgynous-sneer', params: { register: 'male-high', rough: 0, creak: 0, delivery: 2, breath: 0,
       extra: 'androgynous, sneering, seductive' },
   },
   {
-    id: 'interpol', params: { register: 'male', rough: 0, creak: 0, delivery: 1, breath: 0,
+    id: 'cold-baritone', params: { register: 'male', rough: 0, creak: 0, delivery: 1, breath: 0,
       extra: 'deadpan baritone, cold, cryptic, unsettling' },
   },
   {
-    id: 'zemfira', params: { register: 'female', rough: 1, creak: 0, delivery: 2, breath: 0,
+    id: 'husky-laidback', params: { register: 'female', rough: 1, creak: 0, delivery: 2, breath: 0,
       extra: 'husky, laid-back phrasing, confident' },
   },
   {
-    id: 'mumiy-troll', params: { register: 'male-high', rough: 0, creak: 0, delivery: 1, breath: 1,
+    id: 'purring-mannered', params: { register: 'male-high', rough: 0, creak: 0, delivery: 1, breath: 1,
       extra: 'purring, mannered, drawling, playful' },
   },
   {
-    id: 'cobain', params: { register: 'male', rough: 2, creak: 1, delivery: 3, breath: 0,
+    id: 'grunge-strain', params: { register: 'male', rough: 2, creak: 1, delivery: 3, breath: 0,
       extra: 'grunge whine, cracked, desperate' },
   },
   {
-    id: 'nick-cave', params: { register: 'male-low', rough: 1, creak: 0, delivery: 2, breath: 0,
+    id: 'dark-preacher', params: { register: 'male-low', rough: 1, creak: 0, delivery: 2, breath: 0,
       extra: 'deep baritone, ominous, sermonizing' },
   },
   {
-    id: 'amy-winehouse', params: { register: 'female', rough: 1, creak: 0, delivery: 2, breath: 0,
+    id: 'smoky-soul', params: { register: 'female', rough: 1, creak: 0, delivery: 2, breath: 0,
       extra: 'smoky soul, jazzy phrasing, brazen' },
   },
   {
-    id: 'bjork', params: { register: 'female', rough: 0, creak: 0, delivery: 3, breath: 0,
+    id: 'eccentric-leaps', params: { register: 'female', rough: 0, creak: 0, delivery: 3, breath: 0,
       extra: 'eccentric, wild leaps, child-like' },
   },
   {
-    id: 'lou-reed', params: { register: 'male', rough: 1, creak: 1, delivery: 1, breath: 0,
+    id: 'talk-singing', params: { register: 'male', rough: 1, creak: 1, delivery: 1, breath: 0,
       extra: 'talk-singing, deadpan, dry' },
   },
   {
-    id: 'vysocky', params: { register: 'male', rough: 3, creak: 2, delivery: 3, breath: 0,
+    id: 'rasping-allout', params: { register: 'male', rough: 3, creak: 2, delivery: 3, breath: 0,
       extra: 'rasping, straining, theatrical intensity' },
   },
   {
-    id: 'bg', params: { register: 'male', rough: 0, creak: 0, delivery: 1, breath: 0,
+    id: 'detached-enigmatic', params: { register: 'male', rough: 0, creak: 0, delivery: 1, breath: 0,
       extra: 'cool, detached, enigmatic' },
   },
 ]

@@ -69,7 +69,7 @@ const close = () => emit('close', dontShow.value)
 .welcome-tabs .on { color: var(--text); border-color: var(--accent); }
 .welcome-body { overflow-y: auto; min-height: 0; }
 .welcome-modal h2.welcome-title { margin: 0 0 6px; padding: 0; background: none; border: none; text-shadow: none;
-  font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--lcd-text); }
+  font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--accent-text); }
 .welcome-lead { margin: 0 0 14px; line-height: 1.5; max-width: 62ch; }
 .welcome-points { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; }
 .welcome-points dt { font-weight: 600; white-space: nowrap; }

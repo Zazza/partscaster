@@ -6,6 +6,7 @@
 // fxPresets.js, семья фразы и место в круге — phraseLoop.js.
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
+import PageView from './PageView.vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { ensureKits as ensureKitsOn, kitChain } from '../engineRun.js'
@@ -310,14 +311,8 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
 </script>
 
 <template>
-  <div class="modal-backdrop page-backdrop">
-    <section class="panel page-modal">
-      <div class="page-modal-head">
-        <h2>{{ t('instr.title') }}</h2>
-        <button class="ghost icon" :title="t('common.close')" @click="emit('close')"><AppIcon name="x" /></button>
-      </div>
-      <div class="page-modal-body">
-        <p class="muted">{{ t('instr.desc') }}</p>
+  <PageView :title="t('nav.instruments')">
+    <template #lead>{{ t('instr.desc') }}</template>
         <p v-if="!phrasesKnown" class="err">{{ t('instr.phrases.old') }}</p>
         <p v-else-if="!engineOn" class="err">{{ t('instr.engine.off') }}</p>
         <p v-if="err" class="err">{{ err }}</p>
@@ -378,9 +373,7 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
 
         <ChainEditor v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
         <p v-if="missing.length" class="err">{{ t('instr.needAmp') }}</p>
-      </div>
-    </section>
-  </div>
+  </PageView>
 </template>
 
 <style scoped>

@@ -1,5 +1,5 @@
-// internal-drop-corpus: импорт своего трека — кнопкой в строке инструментов списка треков
-// (рядом с «Импорт рецепта»); страница «Свои треки» и профили исполнителей удалены со всех
+// internal-drop-corpus: импорт своего трека (с internal-window-frame, пачка 3 — пунктом меню «Импорт»
+// в строке заголовка списка треков, рядом с «Рецепт трека»); страница «Свои треки» и профили исполнителей удалены со всех
 // слоёв фронта; в примерочной голосов нет «в форму →». Проверка по исходникам, как в
 // presetsPage.test.js: ловит «страницу удалили, а кнопку импорта не перенесли» и остатки профилей.
 import { readFileSync, existsSync } from 'node:fs'
@@ -30,32 +30,6 @@ function scriptOf(src) {
   return m ? m.join('\n') : ''
 }
 
-// Элемент с классом cls: от открывающего <div ... class="... cls ..."> до парного </div>
-// (с учётом вложенных div).
-function divWithClass(tpl, cls) {
-  const open = new RegExp(`<div\\b[^>]*class="[^"]*\\b${cls}\\b[^"]*"[^>]*>`)
-  const m = open.exec(tpl)
-  if (!m) return ''
-  let depth = 1
-  const re = /<div\b[^>]*>|<\/div>/g
-  re.lastIndex = m.index + m[0].length
-  let x
-  while ((x = re.exec(tpl))) {
-    depth += x[0].startsWith('</') ? -1 : 1
-    if (depth === 0) return tpl.slice(m.index, x.index + x[0].length)
-  }
-  return tpl.slice(m.index)
-}
-
-// Кнопки блока: открывающий тег с атрибутами + содержимое до </button>.
-function buttonsOf(block) {
-  const out = []
-  const re = /<button\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/button>/g
-  let m
-  while ((m = re.exec(block))) out.push({ attrs: m[1], body: m[2] })
-  return out
-}
-
 const clickOf = (attrs) => (/@click="([^"]*)"/.exec(attrs) || [])[1] || ''
 const tKeys = (s) => [...s.matchAll(/\bt\(\s*['"]([\w.-]+)['"]/g)].map((m) => m[1])
 
@@ -82,50 +56,55 @@ function leadsToImportTrack(expr, script, depth = 0) {
   return false
 }
 
-function importTrackButton() {
+// Меню «Импорт» в строке заголовка списка треков: <details class="menu-pop down"> … </details>
+function importMenu() {
   const src = read(APP)
-  const tools = divWithClass(templateOf(src), 'queue-tools')
-  const script = scriptOf(src)
-  return {
-    tools,
-    script,
-    button: buttonsOf(tools).find((b) => leadsToImportTrack(clickOf(b.attrs), script)),
-  }
+  const tpl = templateOf(src)
+  const m = /<details\b[^>]*class="[^"]*\bmenu-pop\b[^"]*\bdown\b[^"]*"[^>]*>([\s\S]*?)<\/details>/.exec(tpl)
+  const block = m ? m[0] : ''
+  const items = [...block.matchAll(/<li\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/li>/g)]
+    .map((x) => ({ attrs: x[1], body: x[2] }))
+  const summary = (/<summary\b[\s\S]*?<\/summary>/.exec(block) || [''])[0]
+  return { src, tpl, block, items, summary, script: scriptOf(src) }
 }
 
-describe('условие 1: кнопка «Импорт трека» в строке инструментов списка треков', () => {
-  test('строка инструментов списка треков есть и в ней кнопка «Импорт рецепта»', () => {
-    const { tools } = importTrackButton()
-    expect(tools, 'блок .queue-tools в App.vue').not.toBe('')
-    expect(tools).toContain("recipe.importMenu.btn")
+describe('условие 1 (пачка 3, условие 16): импорт своего трека — пункт меню «Импорт» в заголовке списка треков', () => {
+  test('меню «Импорт» стоит в строке заголовка страницы (слот actions), рядом — «Новый трек»', () => {
+    const { tpl, block } = importMenu()
+    expect(block, 'меню .menu-pop.down в App.vue').not.toBe('')
+    const actions = (/<template #actions>([\s\S]*?)<\/template>/.exec(tpl.slice(tpl.indexOf("t('nav.tracks')"))) || [])[1] || ''
+    expect(actions, 'меню внутри #actions страницы списка треков').toContain('menu-pop down')
+    expect(actions, '«Новый трек» в той же строке').toContain("t('nav.new')")
   })
 
-  test('рядом с «Импорт рецепта» — кнопка, которая зовёт api.importTrack', () => {
-    const { button } = importTrackButton()
-    expect(button, 'кнопка в .queue-tools с обработчиком, ведущим к api.importTrack').toBeTruthy()
+  test('в меню — «Рецепт трека» и пункт, который зовёт api.importTrack', () => {
+    const { items, script } = importMenu()
+    expect(items.some((it) => it.body.includes('recipe.importMenu.btn'))).toBe(true)
+    expect(items.some((it) => leadsToImportTrack(clickOf(it.attrs), script)), 'пункт ведёт к api.importTrack').toBe(true)
   })
 
-  test('подпись кнопки — из i18n, ключ есть в ru и en, по-русски «Импорт трека»', () => {
-    const { button } = importTrackButton()
-    expect(button).toBeTruthy()
-    const keys = tKeys(button.body + button.attrs)
-    expect(keys.length, 'подпись кнопки через t(…)').toBeGreaterThan(0)
+  test('подпись пункта — из i18n, ключ есть в ru и en, по-русски «Свой трек»', () => {
+    const { items, script } = importMenu()
+    const it = items.find((x) => leadsToImportTrack(clickOf(x.attrs), script))
+    expect(it).toBeTruthy()
+    const keys = tKeys(it.body + it.attrs)
+    expect(keys.length, 'подпись через t(…)').toBeGreaterThan(0)
     for (const k of keys) {
       expect(RU[k], `ru: ${k}`).toBeTruthy()
       expect(EN[k], `en: ${k}`).toBeTruthy()
     }
-    expect(keys.some((k) => /импорт\s+трека/i.test(RU[k])), 'ru-подпись «Импорт трека»').toBe(true)
-    expect(keys.some((k) => /import\s+(a\s+)?track/i.test(EN[k])), 'en-подпись «Import track»').toBe(true)
-    // перенесённые ключи — под новыми именами, не corpus.*
+    expect(keys.some((k) => /свой\s+трек/i.test(RU[k] || '')), 'ru-подпись «Свой трек»').toBe(true)
+    expect(keys.some((k) => /own\s+track/i.test(EN[k] || '')), 'en-подпись «Your own track»').toBe(true)
     expect(keys.filter((k) => k.startsWith('corpus.'))).toEqual([])
   })
 
-  test('пока идёт импорт — кнопка занята и подписана «импортирую…»', () => {
-    const { button } = importTrackButton()
-    expect(button).toBeTruthy()
-    expect(button.attrs, 'у кнопки привязан :disabled').toMatch(/:disabled="[^"]+"/)
-    const keys = tKeys(button.body + button.attrs)
-    expect(keys.some((k) => /импортирую/i.test(RU[k] || '')), 'ru: «импортирую…»').toBe(true)
+  test('пока идёт импорт — повторный импорт не стартует, на кнопке меню «импортирую…»', () => {
+    const { items, summary, script } = importMenu()
+    const it = items.find((x) => leadsToImportTrack(clickOf(x.attrs), script))
+    expect(it).toBeTruthy()
+    expect(clickOf(it.attrs), 'клик защищён флагом importBusy').toMatch(/!importBusy\s*&&/)
+    const keys = tKeys(summary)
+    expect(keys.some((k) => /импортирую/i.test(RU[k] || '')), 'ru: «импортирую…» на кнопке меню').toBe(true)
     expect(keys.every((k) => EN[k]), 'en-перевод каждого ключа кнопки').toBe(true)
   })
 

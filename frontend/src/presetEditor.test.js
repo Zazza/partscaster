@@ -34,11 +34,15 @@ const EDITOR = join(srcDir, 'components', 'PresetEditor.vue')
 const CATALOG = join(srcDir, 'components', 'PresetCatalog.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ru', 'ui-guide.md')
 
-test('PresetLibrary импортирует и рендерит PresetEditor и кнопку «новый пресет»', () => {
+test('PresetLibrary импортирует и рендерит PresetEditor; «новый пресет» — в строке заголовка страницы', () => {
   const src = read(LIBRARY)
   expect(importsModule(src, 'PresetEditor', 'PresetEditor.vue'), 'нет импорта PresetEditor').toBe(true)
   expect(rendersComponent(src, 'PresetEditor'), 'нет <PresetEditor в шаблоне').toBe(true)
-  expect(templateOf(src)).toContain(`t('preset.lib.new')`)
+  // кнопка — на странице (PageView, слот actions), библиотека отдаёт newPreset наружу
+  expect(src).toMatch(/defineExpose\(\{[^}]*newPreset/)
+  const page = templateOf(read(join(srcDir, 'components', 'PresetsPage.vue')))
+  expect(page).toContain(`t('preset.lib.new')`)
+  expect(page).toMatch(/#actions[\s\S]*newPreset\(\)/)
 })
 
 test('у встроенных — «Сохранить как свой», у своих — «редактор пресета»', () => {

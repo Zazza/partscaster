@@ -25,7 +25,7 @@ describe('ТК3 voiceFxChains — эффекты блока «Обработка
   })
 
   it('возвращает сами цепочки (с описанием и параметрами)', () => {
-    const m = ch('megaphone', 'voice', { voice: true, note: 'как у Летова', params: [{ id: 'mix' }] })
+    const m = ch('megaphone', 'voice', { voice: true, note: 'голос сквозь рупор', params: [{ id: 'mix' }] })
     expect(voiceFxChains([m])[0]).toEqual(m)
   })
 

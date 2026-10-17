@@ -24,6 +24,8 @@ const edit = ref(null)       // {id, name, note} правки своего
 const err = ref('')
 const msg = ref('')
 const editorPreset = ref(false)  // false — закрыт; null — новый; объект — правка/копия
+// «Новый пресет» — кнопка в строке заголовка страницы (PresetsPage)
+defineExpose({ newPreset: () => { editorPreset.value = null } })
 const demoBusy = ref(new Set())  // id пресетов, применяемых к демо (каждый — своя кнопка, параллельно)
 let disposed = false             // страницу закрыли — итог очереди не играет молча
 let demoUnwatch = null           // слежение за записью очереди текущего применения
@@ -114,11 +116,7 @@ async function playOnDemo(p) {
 </script>
 
 <template>
-  <div class="dsp-row">
-    <button class="primary small" :title="t('preset.lib.new.tip')" @click="editorPreset = null">
-      <AppIcon name="plus" /> {{ t('preset.lib.new') }}</button>
-    <span v-if="msg" class="muted">{{ msg }}</span>
-  </div>
+  <p v-if="msg" class="muted">{{ msg }}</p>
   <p v-if="!presets.length" class="muted">{{ t('preset.lib.empty') }}</p>
   <details v-for="f in tree" :key="f.family" class="preset-family" :open="f.family === ''">
     <summary><strong>{{ f.label }}</strong> <span class="muted">· {{ f.genres.length }}</span></summary>
