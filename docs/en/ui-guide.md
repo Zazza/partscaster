@@ -170,28 +170,53 @@ the "notes →" button in the form and with the "notes (ABC)" item in the track 
 
 ## Track list
 
-The main page: all tracks in a table of compact rows. Derived items (stretches for inserts, rebuilds, variants)
-are hidden under their track. In the title row — **"Import"** (a menu: "Your own track (audio file)" and "Track recipe")
-and "New track".
+The main page: all tracks as a table. At the top is a column header: "№", "Title", "Versions", "Folder", "Length",
+"Date". Derived items (versions, stretches for inserts, rebuilds) are hidden under their track. In the title row —
+**"Import"** (a menu: "Your own track (audio file)" and "Track recipe") and "New track".
 
-<!-- screenshot: track list with one expanded row — details, versions, buttons -->
+<!-- screenshot: track list with one expanded row — versions, details, buttons -->
 
 ### Filters
 
-The panel above the list sticks to the top: search "title · style · number" (first and wider), status ("in progress", "finished", "errors and canceled"), date
-("today", "7 days", "30 days"), length ("sample <1 min", "1–3 min", "3–6 min", ">6 min"), drafts ("drafts only",
-"no drafts"), folder ("Album" (Альбом), "Basics" (Основы), "Experiments" (Эксперименты), your own, "no folder"). Under the panel — "showing N of M", the page
-number and "Collapse all" if several rows are expanded. A long list is paged with the ← → arrows at the bottom.
+The panel above the list sticks to the top: search "title · style · number" (first and wider), status ("in progress",
+"finished", "errors and canceled"), date ("today", "7 days", "30 days"), length ("sample <1 min", "1–3 min",
+"3–6 min", ">6 min"), drafts ("drafts only", "no drafts"), folder ("Album" (Альбом), "Basics" (Основы),
+"Experiments" (Эксперименты), your own, "no folder"). In a narrow window the filters hide behind the **"Filters"**
+button (it shows how many are on). Under the panel — "showing N of M" and "Collapse all" if several rows are expanded.
+
+There are no pages: the first 50 tracks are shown, the next ones load by themselves when you scroll near the end of
+the list ("loading more…"). Search and filters work over all tracks; the matches are shown from the start.
 
 ### Track row
 
-Number, ▶/⏸ for a finished track (an unfinished one has a status dot), the title with marks ("draft", "unfinished work" — the studio has
-changes not applied yet, "queued", "error", ⚠ — a voice is heard in an instrumental; details in the tooltip), a progress bar during generation,
-✎ — rename (your own title instead of the number: the number changes when you move to another machine), a counter
-of versions and attachments, duration, creation date ("01.10 17:26", the year if it is not the current one),
-folder, ▸/▾. A click on the row expands the details.
+Number (a playing track shows a sound icon), ▶/⏸ for a finished track (an unfinished one has a status dot), the
+title with marks ("draft", "unfinished work" — the studio has changes not applied yet, "queued", "error", ⚠ — a
+voice is heard in an instrumental; details in the tooltip), a progress bar during generation, ✎ — rename (your own
+title instead of the number: the number changes when you move to another machine). Under the title, small — the
+track's style in short: genre, voice, guitars. A long title is cut with an ellipsis, the full one is in the tooltip.
+Then — the number of versions and attachments, folder, duration, creation date ("01.10 17:26", the year if it is
+not the current one). In a narrow window the date hides first, then the folder.
+
+On the right, a finished track always shows:
+
+- **"Studio →"** — open the main version in the [studio](#studio);
+- **"⋯"** — "Download flac", "Download mp3" (320 kbps), "Notes (abc)", "In browser" (a listening page with
+  seeking), "Notes (ABC)" (the notes window), "New track like this" (the form with the track's parameters),
+  "Replay in another style…", "Export recipe", "Delete" (with confirmation);
+- the arrow — expand the track (a click on the row does the same).
+
+### Versions and attachments
+
+An expanded track shows its versions first — as sub-rows right under it, in order of appearance: the original,
+versions (rebuilds, continuations, re-sings, "album voice", variant tracks), mixes with inserts and material
+(stretches for inserts, stretch checks). A row has: ▶ (under the track's ▶), ★ — the main version (you keep working
+with it: ▶ in the track row plays it and "Studio →" opens it), the others show ☆ "make main" on hover; number,
+title (a long one is cut with an ellipsis), role, duration. "Studio →", "↻ retry" (for failed ones) and ✕ appear on
+hover.
 
 ### Track details
+
+Under the versions:
 
 - **Info line**: "seed N", the yue2.cpp engine badge (experiment), "plan: melody only", character,
   "custom ABC", "main: #N" (if another version is chosen as the main one).
@@ -199,22 +224,9 @@ folder, ▸/▾. A click on the row expands the details.
   move together with it.
 - A track that is queued or in progress has "cancel". An unfinished one has ✕ "Delete the result" and ⟲ "Repeat
   with these parameters". An error shows the error text and "↻ retry".
-- A finished track has:
-  - **"studio →"** — open the main version in the [studio](#studio);
-  - **"⤓ download ▾"** — flac, mp3 (320 kbps), "notes (abc)";
-  - **"⋯"** — "in browser" (a listening page with seeking), "notes (ABC)" (the notes window), "new track
-    like this" (the form with the track's parameters), "replay in another style…", "Export recipe", "delete"
-    (with confirmation).
 - **Style** — by parts: language, genre, rhythm, guitars, voice, mood, sound and so on.
 - **Sound preset rows**, if they were ordered in the form: ⏳ waiting for the queue, ⟳ being applied, ✓ → version
   #N, ✕ reason. ↻ — retry.
-
-### Versions and attachments
-
-Under the details is a flat list: the original, versions (rebuilds, continuations, re-sings, "album voice",
-variant tracks), mixes with inserts and material (stretches for inserts, stretch checks). Each row has: ▶,
-☆ "make main" (you keep working with the main version: ▶ in the track row plays it and "studio →" opens it),
-number, title, role, "studio →", "↻ retry" (for failed ones), ✕.
 
 ### Replay in another style
 

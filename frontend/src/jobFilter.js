@@ -1,11 +1,19 @@
-// Фильтры и пейджер списка треков. Чистая логика: список приходит от воркера
-// уже упорядоченным от новых к старым, здесь только отсев и нарезка страниц.
-export const QUEUE_PAGE_SIZE = 20
+// Фильтры списка треков и догрузка порциями. Чистая логика: список приходит от воркера уже упорядоченным
+// от новых к старым, здесь только отсев. Страниц нет: показываются первые LIST_STEP найденных, следующие —
+// при прокрутке к концу (тысяча строк разом открывалась бы ~2 с).
+export const LIST_STEP = 50
 
 const DAY = 86_400_000
 
 export function defaultJobFilter() {
   return { status: 'all', period: 'all', dur: 'all', draft: 'all', folder: 'all', q: '' }
+}
+
+// Сколько фильтров списка включено (для кнопки «Фильтры» в узком окне); поиск не в счёт — он виден всегда.
+const FILTER_KEYS = ['status', 'period', 'dur', 'draft', 'folder']
+export function activeFilterCount(qf) {
+  const d = defaultJobFilter()
+  return FILTER_KEYS.filter((k) => qf && qf[k] !== undefined && qf[k] !== d[k]).length
 }
 
 // Папки песен: эти три есть всегда (даже пустые), свои — по именам у треков.
@@ -77,14 +85,9 @@ export function filterJobs(jobs, f, now = Date.now(), children = {}) {
   })
 }
 
-export function pageCount(total, size = QUEUE_PAGE_SIZE) {
-  return Math.max(1, Math.ceil((total || 0) / size))
-}
-
-// страница как по спецификации: выход за границы зажимается, размер — по умолчанию
-export function pageJobs(jobs, page, size = QUEUE_PAGE_SIZE) {
-  const p = Math.min(Math.max(1, page), pageCount(jobs.length, size))
-  return (jobs || []).slice((p - 1) * size, p * size)
+// сколько строк показывать после догрузки: на шаг больше, но не больше найденного и не меньше прежнего
+export function listMore(shown, total, step = LIST_STEP) {
+  return Math.max(shown, Math.min(total, shown + step))
 }
 
 // родитель производного трека: parent_id (кусок для вклейки, пересборка,

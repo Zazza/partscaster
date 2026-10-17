@@ -325,17 +325,34 @@ input[type="range"]:hover::-webkit-slider-thumb { border-color: var(--accent); }
 .voice-actions { margin-top: 10px; }
 .voice-actions .spacer { flex: 1; }
 
-/* вложения трека (производные: куски, пересборки, варианты) — отдельный блок:
-   рамка и фон, чтобы не сливался с карточкой; заголовок с кнопкой «свернуть» */
-.job-kids {
-  display: flex; flex-direction: column; gap: 4px; margin: 6px 0 4px; padding: 8px 10px;
-  border: 1px solid var(--border, #444); border-radius: 6px;
-  background: color-mix(in srgb, var(--panel, #2a2a2a) 55%, transparent);
-}
-/* версии трека — список в секции «Версии» разворота */
-.job-kid { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.92em; }
-
-.job-kid.current { padding: 4px 6px; border-radius: 6px; background: var(--accent-soft, rgba(120, 180, 255, 0.12)); }
+/* версии трека — подстроками в раскрытии списка треков, без своей рамки: оригинал, версии, миксы,
+   материал; основная отмечена фоном и звездой, кнопки версии («Студия →», ✕) — при наведении */
+.job-kids { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 6px; }
+.job-kid { display: flex; align-items: center; gap: 8px; min-width: 0; height: 28px; padding: 0 6px 0 0; border-radius: 4px; font-size: 0.92em; }
+/* версия — второстепенна треку: ▶ и ★ — значки без кругов; ▶ стоит под ▶ трека (колонка 32 px) */
+.job-kid .tl-play-cell { width: 32px; height: 28px; }
+.job-kid .tl-play, .job-kid .kid-star { box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.job-kid .tl-play { width: 24px; height: 24px; border: none; background: none; color: var(--accent); }
+.job-kid .tl-play:hover, .job-kid .tl-play.is-playing { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.job-kid .kid-star { width: 20px; height: 20px; border: none; background: none; color: var(--muted); }
+.job-kid .kid-star:not(.head) { visibility: hidden; }
+.job-kid:hover .kid-star { visibility: visible; }
+.job-kid .kid-star.head { background: none; color: var(--accent); }
+.job-kid .small-btn { height: 22px; padding: 0 8px; font-size: 11.5px; display: inline-flex; align-items: center; }
+.job-kid .del { border: none; background: none; box-shadow: none; padding: 0 4px; color: var(--muted); }
+.job-kid .del:hover { color: var(--err); background: none; }
+.job-kid:hover { background: color-mix(in srgb, var(--panel3) 60%, transparent); }
+.job-kids { min-width: 0; }
+.job-kid > * { flex: none; }
+/* название версии сжимается многоточием (полное — в подсказке): длинное не раздвигает строку */
+.job-kid > .kid-title { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-kid > .spacer { flex: 1 1 auto; }
+/* кнопки версии — колонкой одной ширины (длительности стоят ровно), видны при наведении */
+.job-kid .kid-actions { flex: none; width: 128px; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+.job-kid .kid-actions > * { opacity: 0; }
+/* у основной версии тоже при наведении: её открывает и «Студия →» в строке трека */
+.job-kid:hover .kid-actions > * { opacity: 1; }
+.job-kid.current { background: var(--accent-soft, color-mix(in srgb, var(--accent) 12%, transparent)); }
 .badge.current { background: var(--accent, #4a8cff); color: #fff; }
 .badge.exp { background: #b7791f; color: #fff; }
 .badge.warn { background: #b45309; color: #fff; }
@@ -348,7 +365,7 @@ input[type="range"]:hover::-webkit-slider-thumb { border-color: var(--accent); }
 /* что сейчас играет: полоса слева и мягкая подсветка у песни/версии,
    кнопка «■ стоп» — зелёная (--ok), видно издалека */
 .job.playing { box-shadow: inset 3px 0 0 var(--ok); }
-.job-kid.playing { padding: 4px 6px; border-radius: 6px; background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.job-kid.playing { background: color-mix(in srgb, var(--ok) 16%, transparent); }
 button.is-playing { background: var(--ok); border-color: var(--ok); color: #fff; }
 
 /* значки интерфейса (components/AppIcon.vue): размер от шрифта, цвет от текста */

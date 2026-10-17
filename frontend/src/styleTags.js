@@ -77,3 +77,18 @@ export function styleRows(style) {
   const tags = parseStyleTags(style)
   return styleTagOrder.filter((k) => tags[k]).map((k) => [k, tags[k]])
 }
+
+// Короткий стиль трека для строки списка: до n фраз по порядку полей формы (жанр раньше голоса),
+// без языка и темпа — они почти у всех одинаковые и в строке ничего не говорят.
+const SUMMARY_SKIP = new Set(['language', 'bpm'])
+export function styleSummary(style, n = 3) {
+  const out = []
+  for (const [slot, parts] of styleRows(style)) {
+    if (SUMMARY_SKIP.has(slot)) continue
+    for (const p of parts) {
+      if (out.length >= n) return out.join(' · ')
+      out.push(p)
+    }
+  }
+  return out.join(' · ')
+}

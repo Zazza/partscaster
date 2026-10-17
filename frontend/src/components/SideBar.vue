@@ -235,6 +235,9 @@ button.sb-q-res { color: var(--ok, #7ec16c); font-size: 10px; }
 .sb-q-pct { flex: none; color: var(--ok, #7ec16c); font-size: 11px; }
 .sb-q-more, .sb-q-empty { font-size: 12px; padding: 4px 8px; color: var(--muted); }
 /* нижняя строка: сворачивание, тема, язык — прижата вниз, без линии */
-.sb-foot { display: flex; gap: 4px; justify-content: center; padding-top: 6px; margin-top: auto; }
-.sidebar.collapsed .sb-foot { flex-direction: column; align-items: center; }
+.sb-foot { display: grid; grid-template-columns: 1fr auto auto 1fr; gap: 4px; align-items: center;
+  padding: 6px 6px 0; margin-top: auto; }
+/* «<<» (свернуть панель) — у левого края, тема и язык — парой по центру панели */
+.sb-foot > :first-child { justify-self: start; }
+.sidebar.collapsed .sb-foot { display: flex; flex-direction: column; align-items: center; padding: 6px 0 0; }
 </style>

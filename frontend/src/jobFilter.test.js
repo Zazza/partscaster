@@ -1,6 +1,6 @@
 // Тесты фильтров и пейджера списка треков — по спецификации отбора.
 import { describe, it, expect } from 'vitest'
-import { defaultJobFilter, filterJobs, pageJobs, pageCount, QUEUE_PAGE_SIZE, groupJobs, folderNames, DEFAULT_FOLDERS, FOLDER_NONE, DEMO_FOLDER } from './jobFilter.js'
+import { defaultJobFilter, filterJobs, listMore, LIST_STEP, groupJobs, folderNames, DEFAULT_FOLDERS, FOLDER_NONE, DEMO_FOLDER } from './jobFilter.js'
 
 const NOW = Date.parse('2026-09-28T12:00:00Z')
 const j = (over = {}) => ({
@@ -67,25 +67,29 @@ describe('фильтр по черновикам и поиск', () => {
   })
 })
 
-describe('пейджер', () => {
-  const many = Array.from({ length: 45 }, (_, i) => j({ id: i + 1 }))
-
-  it('страница по 20, последняя — остаток', () => {
-    expect(pageJobs(many, 1).length).toBe(QUEUE_PAGE_SIZE)
-    expect(pageJobs(many, 2).length).toBe(QUEUE_PAGE_SIZE)
-    expect(pageJobs(many, 3).length).toBe(5)
-    expect(pageJobs(many, 1)[0].id).toBe(1)
+describe('догрузка списка при прокрутке (listMore)', () => {
+  it('шаг по умолчанию — 50', () => {
+    expect(LIST_STEP).toBe(50)
   })
 
-  it('выход за границы зажимается, пустой список — пустая страница', () => {
-    expect(pageJobs(many, 99).length).toBe(5)
-    expect(pageJobs(many, 0).length).toBe(QUEUE_PAGE_SIZE)
-    expect(pageJobs([], 1)).toEqual([])
+  it('следующие 50 к уже показанным', () => {
+    expect(listMore(50, 830)).toBe(100)
   })
 
-  it('число страниц: 45 → 3, 0 → 1', () => {
-    expect(pageCount(45)).toBe(3)
-    expect(pageCount(0)).toBe(1)
+  it('не больше, чем найдено: хвост меньше шага', () => {
+    expect(listMore(800, 830)).toBe(830)
+  })
+
+  it('всё уже показано — без изменений', () => {
+    expect(listMore(830, 830)).toBe(830)
+  })
+
+  it('найдено меньше, чем показано — число не уменьшается', () => {
+    expect(listMore(50, 30)).toBe(50)
+  })
+
+  it('свой шаг', () => {
+    expect(listMore(50, 830, 20)).toBe(70)
   })
 })
 
