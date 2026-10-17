@@ -613,7 +613,7 @@ export default {
   'studio.dsp': 'Audio effects',
   'studio.dsp.solo': 'stem only',
   'studio.dsp.solo.tip': 'Hear the processed and original stem without the rest of the mix — in a dense mix the effect is masked',
-  'studio.dsp.sub': '— grouped effects on the track or a stem, preview in place, before / after; voice processing is in the “Voice” step',
+  'studio.dsp.sub': '— a group, then an effect on the track or a stem, preview in place, before / after; voice processing is in the “Voice” step',
   'studio.dsp.group.space': 'Space',
   'studio.dsp.group.pedals': 'Pedals',
   'studio.dsp.group.modulation': 'Modulation',
@@ -624,7 +624,8 @@ export default {
   'studio.dsp.group.other': 'Other',
   'studio.voicefx.title': 'Processing:',
   'studio.voicefx.sub': 'an effect on the vocal track: pick one and press “listen to a piece”; press again to deselect',
-  'studio.dsp.chain': 'effects chain…',
+  'studio.dsp.chain': 'effect…',
+  'studio.dsp.group.tip': 'Effect group; guitar pedals are in the “Pedals” block below',
   'studio.dsp.savefile.tip': 'Save this variant as a file (flac)',
   'studio.dsp.totrack.tip': 'Turn the variant into a separate track in the list: "title · effect". Stems and effects then work on it',
   'studio.dsp.del.tip': 'Delete the variant (file and metrics)',
@@ -666,6 +667,7 @@ export default {
   'studio.dsp.ab.dry': 'before ⇄',
   'studio.dsp.ab.tip': 'Switch before / after — the same slice without and with the effect, from the same second',
   'studio.dsp.metrics': 'track metrics',
+  'studio.dsp.metrics.tip': 'Loudness, brightness, dynamics and other measurements of the whole track',
 
 
   'plan.title': 'Track notation (ABC)',

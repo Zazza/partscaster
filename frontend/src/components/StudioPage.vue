@@ -17,7 +17,7 @@ import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
 import { isFlat, bumpRange, withEnvelope } from '../envelope.js'
 import { ONE_CLICK_LEVELS, oneClickParams } from '../oneClick.js'
-import { chainDefaults, chainGroupOptions, firstSungSec, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
+import { chainDefaults, effectGroups, effectsIn, groupOf, firstSungSec, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
@@ -1199,6 +1199,18 @@ function variantLabel(v) {
   return v.label || t('studio.trick.inst.variant', { id: mixChildId(file) })
 }
 
+// «Эффекты звука»: группа, потом эффект группы; показанная группа — группа выбранного эффекта
+const fxGroup = ref('')
+const fxGroups = computed(() => effectGroups(dspChains.value, dspSel.value))
+const shownGroup = computed(() => (curChain.value ? groupOf(curChain.value) : fxGroup.value || fxGroups.value[0] || ''))
+const fxGroupOptions = computed(() => fxGroups.value.map((g) => ({ value: g, label: t('studio.dsp.group.' + g) })))
+const fxOptions = computed(() => effectsIn(dspChains.value, shownGroup.value).map((c) => ({ value: c.id, label: c.name })))
+function selGroup(g) {
+  fxGroup.value = g
+  const first = effectsIn(dspChains.value, g)[0]
+  if (first) selChain(first.id)
+}
+
 function selChain(chainId) {
   dspSel.value = chainId
   const c = dspChains.value.find((c) => c.id === chainId)
@@ -1518,6 +1530,7 @@ function setWindowTitle() {
               </label>
               <button class="ghost small-btn" :class="{ on: envOn }" :title="t('studio.wave.env.tip')"
                       @click="envOn = !envOn"><AppIcon name="pencil" /> {{ t('studio.wave.env') }}</button>
+              <button class="ghost small-btn" :title="t('studio.dsp.metrics.tip')" @click="emit('open-metrics', job, null)">{{ t('studio.dsp.metrics') }}</button>
               <template v-if="envOn">
                 <VSelect :model-value="envTarget" :options="dspTargetOptions" style="max-width: 150px" @update:model-value="selectTarget" />
                 <button class="ghost small-btn" :disabled="envBusy || !envPts.length" @click="envPts = []">{{ t('studio.wave.env.reset') }}</button>
@@ -1753,16 +1766,18 @@ function setWindowTitle() {
             <details ref="fxBox" class="studio-box">
               <summary class="studio-box-head"><span>{{ t('studio.dsp') }}</span> <span class="muted studio-box-hint">{{ t('studio.dsp.sub') }}</span></summary>
               <div class="studio-box-body">
+              <!-- строка 1 — что и на что: группа (по разделам документации; голосовые — в шаге «Голос»,
+                   гитарные педали — в блоке «Педали»), эффект группы, дорожка -->
               <div class="dsp-row">
-                <!-- по группам документации; примочки только на голос — в шаге «Голос» -->
-                <VSelect :model-value="dspSel" :options="chainGroupOptions(dspChains, (g) => t('studio.dsp.group.' + g))"
-                         searchable :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
+                <VSelect :model-value="shownGroup" :options="fxGroupOptions" :title="t('studio.dsp.group.tip')" style="max-width: 210px"
+                         @update:model-value="selGroup" />
+                <VSelect :model-value="dspSel" :options="fxOptions" :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
                          @update:model-value="(v) => selChain(v)" />
                 <VSelect :model-value="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px"
                          @update:model-value="selectTarget" />
-                <button class="primary small" :disabled="!dspSel || dspBusy || (needsStem(curChain) && !dspTarget)" @click="applyDsp">
-                  {{ dspBusy ? t('studio.dsp.applying') : t('studio.dsp.apply') }}
-                </button>
+              </div>
+              <!-- строка 2 — прослушать и применить -->
+              <div class="dsp-row">
                 <button class="ghost small-btn" :disabled="!dspSel || dspBusy || needsStem(curChain)"
                         :title="t('studio.dsp.preview.tip')" @click="previewDsp">
                   {{ dspBusy ? '…' : t('studio.dsp.preview') }}
@@ -1774,7 +1789,10 @@ function setWindowTitle() {
                   <input v-model="fxSolo" type="checkbox" @change="playFxPrev(fxPrev.which, fxPrevPos())" /> {{ t('studio.dsp.solo') }}
                 </label>
                 <span v-if="fxPrev" class="muted">{{ fxPrev.label }} · {{ fmtDur(fxPrev.from) }}–{{ fmtDur(fxPrev.to) }}</span>
-                <button class="ghost" @click="emit('open-metrics', job, null)">{{ t('studio.dsp.metrics') }}</button>
+                <span class="spacer"></span>
+                <button class="primary small" :disabled="!dspSel || dspBusy || (needsStem(curChain) && !dspTarget)" @click="applyDsp">
+                  {{ dspBusy ? t('studio.dsp.applying') : t('studio.dsp.apply') }}
+                </button>
               </div>
               <p v-if="curChain" class="muted dsp-note">{{ curChain.note }}</p>
               <div v-if="dspSel === 'dewhistle'" class="dsp-row">

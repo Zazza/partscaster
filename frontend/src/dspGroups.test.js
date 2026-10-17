@@ -1,114 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { chainGroupOptions, voiceFxChains, firstSungSec, voicePreviewWindow } from './dspVoice.js'
+import { voiceFxChains, firstSungSec, voicePreviewWindow } from './dspVoice.js'
 import { previewWindow, PREVIEW_LEN } from './fxPreview.js'
 
-// internal-voice-fx: группы в общем списке эффектов «3 Звук» и блок
+// internal-voice-fx: блок
 // «Обработка голоса» в шаге «4 Голос». Цепочки — как из биндинга YueDspChains
 // (dsp.All): {id, name, group, voice?, for_voice?}.
 
 const ch = (id, group, over = {}) => ({ id, name: 'N-' + id, group, ...over })
-const LABELS = {
-  space: 'Пространство', pedals: 'Педали', modulation: 'Модуляция', filter: 'Фильтры',
-  dynamics: 'Динамика', time: 'Темп', lofi: 'Лоуфай', voice: 'Голос', other: 'прочее',
-}
-const label = g => LABELS[g] ?? ('?' + g)
-const headers = opts => opts.filter(o => o.header)
-const items = opts => opts.filter(o => !o.header)
-
-describe('ТК2 chainGroupOptions — опции общего списка с заголовками групп', () => {
-  // вход намеренно перемешан по группам: порядок групп — по разделам документации
-  const chains = [
-    ch('tape', 'lofi'),
-    ch('megaphone', 'voice', { voice: true }),
-    ch('reverb-hall', 'space', { for_voice: true }),
-    ch('fuzz', 'pedals'),
-    ch('stutter', 'time'),
-    ch('comp', 'dynamics'),
-    ch('phone', 'voice', { voice: true }),
-    ch('lowpass', 'filter'),
-    ch('chorus', 'modulation'),
-    ch('reverb-room', 'space', { for_voice: true }),
-    ch('crush', 'lofi'),
-  ]
-
-  it('голосовых цепочек (группа voice) в списке нет', () => {
-    const vals = chainGroupOptions(chains, label).map(o => o.value)
-    expect(vals).not.toContain('megaphone')
-    expect(vals).not.toContain('phone')
-    expect(headers(chainGroupOptions(chains, label)).map(h => h.label)).not.toContain('Голос')
-  })
-
-  it('заголовки групп — в порядке space, pedals, modulation, filter, dynamics, time, lofi', () => {
-    expect(headers(chainGroupOptions(chains, label)).map(h => h.label)).toEqual([
-      'Пространство', 'Педали', 'Модуляция', 'Фильтры', 'Динамика', 'Темп', 'Лоуфай',
-    ])
-  })
-
-  it('заголовок стоит перед пунктами своей группы; пункты внутри группы — в порядке входа', () => {
-    const opts = chainGroupOptions(chains, label)
-    const seq = opts.map(o => (o.header ? '#' + o.label : o.value))
-    expect(seq).toEqual([
-      '#Пространство', 'reverb-hall', 'reverb-room',
-      '#Педали', 'fuzz',
-      '#Модуляция', 'chorus',
-      '#Фильтры', 'lowpass',
-      '#Динамика', 'comp',
-      '#Темп', 'stutter',
-      '#Лоуфай', 'tape', 'crush',
-    ])
-  })
-
-  it('заголовок только у непустой группы', () => {
-    const opts = chainGroupOptions([ch('fuzz', 'pedals'), ch('tape', 'lofi')], label)
-    expect(headers(opts).map(h => h.label)).toEqual(['Педали', 'Лоуфай'])
-  })
-
-  it('заголовок — header и disabled, подпись от label(group), value уникален и не совпадает с id', () => {
-    const tricky = [...chains, ch('space', 'pedals'), ch('lofi', 'lofi'), ch('header-space', 'space')]
-    const opts = chainGroupOptions(tricky, label)
-    const hs = headers(opts)
-    expect(hs.length).toBe(7)
-    for (const h of hs) {
-      expect(h.header).toBe(true)
-      expect(h.disabled).toBe(true)
-      expect(h.value).not.toBeUndefined()
-      expect(h.value).not.toBeNull()
-    }
-    const ids = new Set(tricky.map(c => c.id))
-    for (const h of hs) expect(ids.has(h.value)).toBe(false)
-    const allVals = opts.map(o => o.value)
-    expect(new Set(allVals).size).toBe(allVals.length)
-  })
-
-  it('пункт — {value: id, label: name}, не заголовок и не отключён', () => {
-    const it0 = items(chainGroupOptions([ch('fuzz', 'pedals')], label))
-    expect(it0).toHaveLength(1)
-    expect(it0[0].value).toBe('fuzz')
-    expect(it0[0].label).toBe('N-fuzz')
-    expect(it0[0].header).toBeFalsy()
-    expect(it0[0].disabled).toBeFalsy()
-  })
-
-  it('цепочки без известной группы — в группе other («прочее») последней', () => {
-    const opts = chainGroupOptions([
-      ch('weird', 'nope'), ch('fuzz', 'pedals'), ch('nogroup', undefined), ch('tape', 'lofi'),
-    ], label)
-    const seq = opts.map(o => (o.header ? '#' + o.label : o.value))
-    expect(seq).toEqual(['#Педали', 'fuzz', '#Лоуфай', 'tape', '#прочее', 'weird', 'nogroup'])
-  })
-
-  it('пустой вход — пустой список; только голосовые — тоже пусто', () => {
-    expect(chainGroupOptions([], label)).toEqual([])
-    expect(chainGroupOptions([ch('megaphone', 'voice', { voice: true })], label)).toEqual([])
-  })
-
-  it('label вызывается с именем группы', () => {
-    const seen = []
-    chainGroupOptions([ch('fuzz', 'pedals'), ch('x', 'zzz')], g => { seen.push(g); return g })
-    expect(seen).toContain('pedals')
-    expect(seen).toContain('other')
-  })
-})
 
 describe('ТК3 voiceFxChains — эффекты блока «Обработка голоса»', () => {
   it('сначала голосовые, потом for_voice, порядок входа; остальных нет', () => {

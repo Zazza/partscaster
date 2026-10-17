@@ -278,6 +278,8 @@ For a drum part (kick, snare…) the wave shows the part, but edits apply to all
 - "color ▾" — wave color;
 - the plan's bars and sections are drawn over the wave.
 
+**"track metrics"** — a window with sound measurements of the whole track (loudness, brightness, dynamics).
+
 **"volume"** (pencil icon) — a volume line over the wave for the whole track or one stem. This shows a
 "what to apply to" list, "reset", "section ▲ / ▼" (with a selection), "▶ listen"
 (the track with all edits and this line, not added to the list) and "Apply". Click — a point on the
@@ -389,17 +391,17 @@ sound and effects", "▶ after / ▶ part alone / ▶ before", "Apply". Several 
 **Quick effects (ffmpeg)** — a different tool: an effect on the whole track or a stretch, preview in place. It is
 easier to change the sound of a single stem in the "Stems" desk. Two collapsed blocks:
 
-- **Audio effects** — effects in groups ("Space", "Pedals", "Modulation", "Filters and tone", "Loudness and
-  dynamics", "Tempo, pitch and glitch", "Tape, dirt and lo-fi"), the list has a search by name; vocal effects
-  are in the ["4 Voice"](#4-voice) step. "effects chain…" → "what to apply to" (whole track, vocals, drums, bass,
-  guitars/synths, and with detailed separation — guitar, keys, kick, snare, toms, hi-hat, ride, crash) → knobs →
-  "apply". On a stem the effect applies only in the selected spot (no selection — to the whole stem) and
+- **Audio effects** — two lists: a group ("Space", "Modulation", "Filters and tone", "Loudness and dynamics",
+  "Tempo, pitch and glitch", "Tape, dirt and lo-fi", "Other") and an effect of that group (changing the group picks
+  its first effect); guitar pedals are in the "Pedals" block below, vocal effects are in the ["4 Voice"](#4-voice)
+  step. The first row is the group, "effect…", "what to apply to" (whole track, vocals, drums, bass,
+  guitars/synths, and with detailed separation — guitar, keys, kick, snare, toms, hi-hat, ride, crash); the second
+  is listening and "Apply"; the knobs are below. On a stem the effect applies only in the selected spot (no selection — to the whole stem) and
   accumulates in "Track changes"; on the whole track — also in "Track changes" (applied to the assembled mix before the master). "preview spot" — the effect on the
   selected stretch (no selection — 15 s from the cursor), it is not added to the variants; "▶ after ⇄ / ▶ before ⇄"
   — the same stretch with and without the effect, from the same second; "stem only" — the stem without the rest of
   the mix. "De-whistle" (Убрать свист) has "find whistle" (looks for narrow tones in the selection and fills in the
-  frequency), the delay, stutter and rhythm gate have "find grid" (tempo and downbeat). "track metrics" — a window
-  with sound measurements. All effects and their knobs — [effects.md](effects.md).
+  frequency), the delay, stutter and rhythm gate have "find grid" (tempo and downbeat). All effects and their knobs — [effects.md](effects.md).
 - **Pedals** — guitar effects in order: "what to apply to" (usually the guitar — chosen automatically), "preset…"
   ("Hendrix" (Хендрикс), "Shoegaze" (Шугейз), "Surf" (Сёрф)…), "+ pedal", ●/○ — on/off, ← → — order, ✕; a click
   on a pedal — its knobs. "preview spot", "▶ after ⇄ / before ⇄", "apply". "compare presets" — the current board and

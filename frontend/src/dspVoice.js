@@ -36,23 +36,25 @@ export function chainDefaults(chain) {
 // в общем списке не показываются: они в «Обработке голоса» шага «Голос»
 export const CHAIN_GROUPS = ['space', 'pedals', 'modulation', 'filter', 'dynamics', 'time', 'lofi']
 
-// Опции селекта эффектов по группам: заголовок группы (не выбирается) и её цепочки в
-// порядке входа; цепочки без известной группы — в «прочее» последними. label(group) — подпись.
-export function chainGroupOptions(chains, label) {
-  const order = [...CHAIN_GROUPS, 'other']
-  const by = Object.fromEntries(order.map((g) => [g, []]))
-  for (const c of chains || []) {
-    if (c.group === 'voice') continue
-    by[CHAIN_GROUPS.includes(c.group) ? c.group : 'other'].push(c)
-  }
-  const out = []
-  for (const g of order) {
-    if (!by[g].length) continue
-    // value заголовка — с префиксом, которого нет у id цепочек (id — латиница и дефис)
-    out.push({ value: '#group:' + g, label: label(g), header: true, disabled: true })
-    for (const c of by[g]) out.push({ value: c.id, label: c.name })
-  }
-  return out
+// «Эффекты звука» — два списка: группа, потом эффекты группы. Цепочка без известной группы — «прочее».
+export function groupOf(chain) {
+  return chain && CHAIN_GROUPS.includes(chain.group) ? chain.group : 'other'
+}
+const isVoice = (c) => !!(c.voice || c.group === 'voice')
+
+// Группы списка в порядке документации, только непустые. Гитарные педали — в блоке «Педали», здесь их
+// группы нет; исключение — текущий выбор из «Педалей» (сохранён с прошлого раза), чтобы он не пропал.
+export function effectGroups(chains, currentId = '') {
+  const list = (chains || []).filter((c) => !isVoice(c))
+  const cur = list.find((c) => c.id === currentId)
+  const keepPedals = !!cur && groupOf(cur) === 'pedals'
+  return [...CHAIN_GROUPS, 'other'].filter((g) => (g !== 'pedals' || keepPedals)
+    && list.some((c) => groupOf(c) === g))
+}
+
+// Эффекты группы в порядке входа (без голосовых)
+export function effectsIn(chains, group) {
+  return (chains || []).filter((c) => !isVoice(c) && groupOf(c) === group)
 }
 
 // Эффекты блока «Обработка голоса»: сначала только голосовые, потом общие, уместные на голосе

@@ -47,7 +47,7 @@ interface in detail — [ui-guide.md](ui-guide.md)).
 
 Everything applied accumulates in the track draft — the "Done" step, the "Track changes" box; the final track is "apply all".
 
-1. **Pick a chain** in the "effects chain…" list. Under the list is a short description, below it are knobs with default values.
+1. **Pick a group and an effect** — two lists (guitar pedals are in the "Pedals" block). Under the list is a short description, below it are knobs with default values.
 2. **Pick the target**: the whole track or one stem — vocals, drums, bass, "guitars/synths".
    - **Whole track** — processes the whole assembled mix (after the stem edits, before the master, in the order applied).
    - **Stem** — processes only this stem. The difference "processed − original" goes into the track. The other
