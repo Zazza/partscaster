@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // ТК13: имя файла экспорта по умолчанию — «<название>.<расширение файла на воркере>»,
 // без названия — «Partscaster <номер>», недопустимые символы — «_», пробелы по краям убираются.
@@ -44,5 +47,33 @@ func TestRecipeFileNameKeepsBehaviour(t *testing.T) {
 		if got := recipeFileName(c.title, c.id); got != c.want {
 			t.Errorf("recipeFileName(%q, %d) = %q, want %q", c.title, c.id, got, c.want)
 		}
+	}
+}
+
+// ТК15: имя варианта эффекта по умолчанию — «<название> — <подпись варианта>.<расширение>»;
+// без подписи — имя файла варианта без расширения, подпись длиннее 60 символов обрезается до 60
+// (по символам), пробелы по краям убираются, недопустимые символы — «_», без названия — «Partscaster <номер>».
+func TestExportVariantFileName(t *testing.T) {
+	cases := []struct {
+		name  string
+		title string
+		id    int64
+		file  string
+		label string
+		want  string
+	}{
+		{"по подписи варианта", "Warm Wire", 9, "dsp-fx-a.flac", "голос через Plexi", "Warm Wire — голос через Plexi.flac"},
+		{"без подписи — имя файла без расширения", "Warm Wire", 9, "dsp-fx-a.flac", "", "Warm Wire — dsp-fx-a.flac"},
+		{"без названия — по номеру", "", 9, "dsp-x.flac", "реверб", "Partscaster 9 — реверб.flac"},
+		{"недопустимые символы подписи — «_»", "A", 1, "v.flac", "a/b: c", "A — a_b_ c.flac"},
+		{"подпись из 70 символов — обрезана до 60", "A", 1, "v.flac", strings.Repeat("ж", 70), "A — " + strings.Repeat("ж", 60) + ".flac"},
+		{"пробелы по краям подписи убраны", "A", 1, "v.flac", "  зал  ", "A — зал.flac"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := exportVariantFileName(c.title, c.id, c.file, c.label); got != c.want {
+				t.Errorf("exportVariantFileName(%q, %d, %q, %q) = %q, want %q", c.title, c.id, c.file, c.label, got, c.want)
+			}
+		})
 	}
 }

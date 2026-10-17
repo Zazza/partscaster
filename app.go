@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -365,18 +366,8 @@ func (a *App) YueSaveAudio(id int64, file string) (string, error) {
 	}
 	defer func() { _ = body.Close() }()
 
-	// имя по умолчанию — название трека (список треков — ради названия; не нашёлся — по номеру)
-	title := ""
-	if jobs, jerr := a.yue.Jobs(a.ctx); jerr == nil {
-		for _, j := range jobs {
-			if j.ID == id {
-				title = j.Title
-				break
-			}
-		}
-	}
 	target, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		DefaultFilename: exportFileName(title, id, file),
+		DefaultFilename: a.saveName(id, file),
 	})
 	if err != nil {
 		return "", err
@@ -394,6 +385,49 @@ func (a *App) YueSaveAudio(id int64, file string) (string, error) {
 	}
 	return target, nil
 }
+
+// saveName — имя по умолчанию в окне сохранения: название трека (из списка треков; не нашёлся — по
+// номеру); файл не основной (вариант эффекта из студии) — с подписью варианта, чтобы варианты не
+// предлагались под одним именем.
+func (a *App) saveName(id int64, file string) string {
+	title, main := "", false
+	if jobs, err := a.yue.Jobs(a.ctx); err == nil {
+		for _, j := range jobs {
+			if j.ID == id {
+				title = j.Title
+				main = file == j.AudioFile || file == j.Mp3File || file == j.WavFile || file == j.AbcFile || file == "audio.mp3"
+				break
+			}
+		}
+	}
+	if main {
+		return exportFileName(title, id, file)
+	}
+	if vs, err := a.yue.JobDspVariants(a.ctx, id); err == nil {
+		for _, v := range vs {
+			if v.File == file {
+				return exportVariantFileName(title, id, file, v.Label)
+			}
+		}
+	}
+	return exportFileName(title, id, file)
+}
+
+// exportVariantFileName — имя варианта: «<название> — <подпись>.<расширение>»; без подписи — имя файла
+// варианта; подпись — не длиннее variantLabelMax символов.
+func exportVariantFileName(title string, id int64, file, label string) string {
+	what := strings.TrimSpace(label)
+	if what == "" {
+		what = strings.TrimSuffix(file, filepath.Ext(file))
+	}
+	if r := []rune(what); len(r) > variantLabelMax {
+		what = strings.TrimSpace(string(r[:variantLabelMax]))
+	}
+	return strings.TrimSuffix(exportFileName(title, id, file), filepath.Ext(file)) + " — " + safeFileName(what) + filepath.Ext(file)
+}
+
+// variantLabelMax — сколько символов подписи варианта попадает в имя файла
+const variantLabelMax = 60
 
 // exportFileName — имя файла по умолчанию при скачивании flac/mp3/нот: «<название>.<расширение>»,
 // без названия — «Partscaster <номер>»; расширение — от файла на воркере.
