@@ -9,11 +9,12 @@ import {
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
-  YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused, YueSetWindowTitle,
+  YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
   YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
 } from './wailsjs/go/main/App'
+import { setWindowTitle } from './composables/useWindowFrame.js'
 
 export const api = {
   status: () => YueStatus(),
@@ -35,7 +36,8 @@ export const api = {
   queueMove: (id, dir) => YueQueueMove(id, dir),
   queueCancel: (id) => YueQueueCancel(id),
   queueSetPaused: (v) => YueQueueSetPaused(v),
-  setWindowTitle: (title) => YueSetWindowTitle(title),
+  // заголовок — и в своей полосе окна, и системный
+  setWindowTitle: (title) => setWindowTitle(title),
   plan: (p) => YuePlan(p),
   cancel: (id) => YueCancelJob(id),
   deleteJob: (id) => YueDeleteJob(id),

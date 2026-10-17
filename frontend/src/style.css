@@ -28,6 +28,9 @@
   /* бейджи «черновик»/«свой ABC» */
   --badge-bg: rgba(120,140,255,.15);
   --badge-fg: #9aa5ff;
+  /* своя рамка окна: полоса заголовка и края — цвет левой панели; ползунок скроллбара */
+  --frame: var(--panel);
+  --scroll-thumb: #4a4a5c;
 }
 [data-theme="light"] {
   /* тёплая бумага вместо серого: панели белые, контур — светлый,
@@ -61,8 +64,16 @@
   /* бейджи — читаемый синий вместо светло-голубого на белом */
   --badge-bg: rgba(63,81,181,.10);
   --badge-fg: #4a5ac9;
+  --scroll-thumb: #c4c7c0;
 }
 * { box-sizing: border-box; }
+/* скроллбары под тему — один вид во всём приложении: ползунок 8 px на прозрачной дорожке,
+   на наведении — акцент. Нарисованная полоса под волной (.wave-scroll) повторяет его. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border: 1px solid transparent;
+  background-clip: padding-box; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 body {
   margin: 0;
   background: var(--bg);

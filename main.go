@@ -31,12 +31,18 @@ func main() {
 	app := NewApp(client, NewPlayer())
 
 	if err := wails.Run(&options.App{
-		Title:     "Partscaster",
-		Width:     1200,
-		Height:    800,
-		Frameless: false,
+		Title:  "Partscaster",
+		Width:  1200,
+		Height: 800,
+		// своя рамка и заголовок во Vue (TitleBar.vue); края растягивает рантайм Wails
+		Frameless: true,
 		MinWidth:  900,
 		MinHeight: 600,
+		// без явного максимума GTK может не дать развернуть окно на весь экран
+		MaxWidth:  7680,
+		MaxHeight: 4320,
+		// углы скругляет CSS — под ними фон окна прозрачный (см. frame_linux.go)
+		BackgroundColour: windowBackground(),
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: &audioProxy{client: client},
@@ -48,7 +54,9 @@ func main() {
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyAlways,
-			Icon:             appIcon,
+			// прозрачность под скруглёнными углами; без композитора Wails её не включает
+			WindowIsTranslucent: true,
+			Icon:                appIcon,
 		},
 	}); err != nil {
 		log.Fatalf("Error: %v", err)

@@ -41,6 +41,7 @@ import { WELCOME_KEY, welcomeTab, welcomeClosed } from './welcome.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
 import logoUrl from './assets/logo.png'
 import ConfirmModal from './components/ConfirmModal.vue'
+import TitleBar from './components/TitleBar.vue'
 import MetricsModal from './components/MetricsModal.vue'
 import PlanModal from './components/PlanModal.vue'
 
@@ -840,6 +841,7 @@ function onWindowClick(e) {
 </script>
 
 <template>
+  <TitleBar />
   <div v-if="compat.warning.value" class="compat-banner">
     <AppIcon name="alert" /> {{ compat.warning.value }}
     <button class="ghost icon" :title="t('common.close')" @click="compat.dismiss"><AppIcon name="x" /></button>
@@ -1952,16 +1954,15 @@ details.studio-box[open] > .studio-box-head { margin-bottom: 0; }
 .wave-empty { position: absolute; inset: 0; }
 .wave-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .wave-zoom { position: absolute; top: 4px; right: 6px; display: inline-flex; gap: 4px; align-items: center; font-size: 11px; }
-.wave-scroll { position: relative; height: 10px; margin-top: 3px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); cursor: grab; user-select: none; touch-action: none; }
-.wave-thumb { position: absolute; top: 1px; bottom: 1px; border-radius: 4px; background: var(--accent); opacity: .55; }
-.wave-scroll:active .wave-thumb, .wave-scroll:hover .wave-thumb { opacity: .85; }
+/* полоса прокрутки окна волны нарисована (волна не прокручивается как содержимое), но выглядит
+   как общий скроллбар из style.css: ползунок 8 px на прозрачной дорожке, на наведении — акцент */
+.wave-scroll { position: relative; height: 10px; margin-top: 3px; cursor: grab; user-select: none; touch-action: none; }
+.wave-thumb { position: absolute; top: 1px; bottom: 1px; border-radius: 4px; background: var(--scroll-thumb); }
+.wave-scroll:active .wave-thumb, .wave-scroll:hover .wave-thumb { background: var(--accent); }
 
-/* прокрутка ролла: только вокруг сетки тактов — скроллбар прямо под ней;
-   нативный скроллбар webkit тонет в тёмной теме — стилизуем явно */
-.roll-scroll { overflow-x: auto; }
-.roll-scroll::-webkit-scrollbar { height: 10px; }
-.roll-scroll::-webkit-scrollbar-track { background: var(--panel); border-radius: 5px; }
-.roll-scroll::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 5px; }
+/* прокрутка ролла: только вокруг сетки тактов — скроллбар прямо под ней (вид — общий, style.css);
+   отступ до него — как у полосы под волной (.wave-scroll margin-top) */
+.roll-scroll { overflow-x: auto; padding-bottom: 3px; }
 
 .od-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .od-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

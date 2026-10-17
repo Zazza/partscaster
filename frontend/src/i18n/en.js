@@ -13,6 +13,11 @@ export default {
   'common.empty': 'Nothing yet. Generate a track with “New track” or bring your own — “import track”.',
 
   'app.title': 'Partscaster',
+  // кнопки окна в своей полосе заголовка
+  'window.minimise': 'minimise',
+  'window.maximise': 'maximise',
+  'window.restore': 'restore size',
+  'window.close': 'close the app',
   'app.health.up': 'server: ready',
   'app.health.model': ' (model in memory)',
   'app.health.down': 'server unavailable',

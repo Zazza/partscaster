@@ -10,6 +10,11 @@ On the left is a fixed panel: the section menu and the job queue. On the right i
 studio. At the bottom is the player. There is no header: sections open from the menu on the left, and you also
 leave the studio with a menu item.
 
+The window frame is the app's own, in the theme colours. At the top is a bar with the title: "Partscaster" outside
+the studio, the track number and name in the studio. Drag the bar to move the window; double-click it to maximise.
+On the right of the bar are "minimise", "maximise" and "close". Resize by the frame on the left, right and bottom.
+The window does not get smaller than 900×600.
+
 <!-- screenshot: the whole window — left panel with menu and queue, track list, player at the bottom -->
 
 ### Left panel

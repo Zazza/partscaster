@@ -13,6 +13,11 @@ export default {
   'common.empty': 'Пока пусто. Сгенерируйте трек кнопкой «Новый трек» или загрузите свой — «импорт трека».',
 
   'app.title': 'Partscaster',
+  // кнопки окна в своей полосе заголовка
+  'window.minimise': 'свернуть',
+  'window.maximise': 'развернуть',
+  'window.restore': 'восстановить размер',
+  'window.close': 'закрыть приложение',
   'app.health.up': 'сервер: готов',
   'app.health.model': ' (модель в памяти)',
   'app.health.down': 'сервер недоступен',
