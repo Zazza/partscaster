@@ -25,6 +25,7 @@
 - Чистая цепочка «КИНО» — ровно четыре блока eq, comp, delay, reverb с параметрами из условия
   («delay 420 мс 0,25» — time_ms 420, feedback 0.25); перегруза (drive/amp) нет.
 """
+import copy
 import json
 import unittest
 from pathlib import Path
@@ -239,12 +240,16 @@ class TestGuitaristInGenrePresets(unittest.TestCase):
                 self.assertFalse({"drive", "amp"} & {b.get("type") for b in rest}, "в чистой цепочке перегруз")
 
     def test_notes_variants_unchanged(self):
-        # варианты, где гитарист уже стоял (guitar-notes-*), — как были
+        # варианты, где гитарист уже стоял (guitar-notes-*), — как были; второй дубль — по манере
+        # (internal-guitar-double, условие 6: авто, бой, квинты — double=1)
         notes = [p for p in self.built if GTR_ID[p["slug"]].startswith("guitar-notes-")]
         self.assertEqual(len(notes), 4)
         for p in notes:
             with self.subTest(slug=p["slug"]):
-                self.assertEqual(_guitar(p), self.fx[GTR_ID[p["slug"]]]["chain"])
+                want = copy.deepcopy(self.fx[GTR_ID[p["slug"]]]["chain"])
+                if int(want[0].get("style", 0)) in (0, 1, 4):
+                    want[0]["double"] = 1
+                self.assertEqual(_guitar(p), want)
 
     def test_electronic_keeps_yue_guitar(self):
         # «Электроника» — гитара YuE2 через цепочку варианта как в fx_presets, без gtrnotes; кроме 8-бит и гитар

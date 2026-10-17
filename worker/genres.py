@@ -1750,6 +1750,16 @@ GUITARIST_KEEP = {("chiptune", "guitars")}
 GUITARIST_SHIFT = -3.0   # гитарист тише цели гитары YuE2: чистые сэмплы с атакой слышнее при той же громкости (#979)
 TAPE_SOFT = {"wow": 0.15, "flutter": 0.1}   # лента на чистых сэмплах сильнее «трясёт и плывёт» (#986)
 GUITARIST_NOTE = " Гитара — гитарист по аккордам плана в ритме гитары трека (нужен план — транскрипция)."
+# второй дубль (две гитары слева и справа, опыт #1088 — «шире») — у ритм-стены: авто, бой, квинты; перебор и
+# «бас + аккорд» тихие и прозрачные — второй дубль их мутит; «как в КИНО» — тоже без него
+GUITARIST_DOUBLE_STYLES = {0, 1, 4}
+
+
+def _double(chain: list) -> list:
+    """Гитаристу ритм-стены — второй дубль."""
+    if chain and chain[0].get("type") == "gtrnotes" and int(chain[0].get("style", 0)) in GUITARIST_DOUBLE_STYLES:
+        chain[0]["double"] = 1
+    return chain
 
 
 def _soft_tape(chain: list) -> list:
@@ -1771,7 +1781,7 @@ def _guitar(fx: dict, family: str, gslug: str, vslug: str, gtr: str) -> tuple[li
     """Цепочка гитары варианта → (цепочка, играет ли гитарист)."""
     chain = copy.deepcopy(fx[gtr]["chain"])
     if chain and chain[0].get("type") == "gtrnotes":   # вариант уже с гитаристом (guitar-notes-*)
-        return _soft_drive(_soft_tape(chain)), True
+        return _double(_soft_drive(_soft_tape(chain))), True
     if gtr not in GUITARIST or (family in GUITARIST_SKIP_FAMILIES and (gslug, vslug) not in GUITARIST_KEEP):
         return chain, False
     kit, style, prefix = GUITARIST[gtr]
@@ -1779,7 +1789,7 @@ def _guitar(fx: dict, family: str, gslug: str, vslug: str, gtr: str) -> tuple[li
     head = [dict(type="gtrnotes", style=style, **kit)]
     if gslug in CINEMA_GENRES or (gslug, vslug) in CINEMA_VARIANTS:
         return [dict(type="gtrnotes", style=4, **_EMILY)] + copy.deepcopy(CINEMA_CHAIN), True
-    return _soft_drive(_soft_tape(head + copy.deepcopy(prefix) + chain)), True
+    return _double(_soft_drive(_soft_tape(head + copy.deepcopy(prefix) + chain))), True
 
 
 def _drums(fx: dict, kit: str, treat: str, levels: tuple, hh: float) -> list:

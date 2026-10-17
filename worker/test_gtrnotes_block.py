@@ -612,8 +612,9 @@ class TestBlocksJson(unittest.TestCase):
 
     def test_params(self):
         p = {x["id"]: x for x in self.b.get("params", [])}
-        self.assertEqual(set(p), {"strum", "spread_ms", "output_db", "style"})
-        want = {"strum": (0, 1, 1), "spread_ms": (2, 25, 8), "output_db": (-24, 12, 0), "style": (0, 4, 0)}
+        self.assertEqual(set(p), {"strum", "spread_ms", "output_db", "style", "double"})
+        want = {"strum": (0, 1, 1), "spread_ms": (2, 25, 8), "output_db": (-24, 12, 0), "style": (0, 4, 0),
+                "double": (0, 1, 0)}
         for k, (lo, hi, d) in want.items():
             with self.subTest(param=k):
                 self.assertEqual((p[k]["min"], p[k]["max"], p[k]["default"]), (lo, hi, d))

@@ -1772,6 +1772,12 @@ GTR_UP_GAIN = 0.8        # удар вверх тише
 GTR_MUTE_S = 0.035       # глушёный удар без набора глушения — обрывок ноты
 GTR_PALM_DECAY_S = 0.08  # глушение ладонью: спад
 GTR_PALM_LP_HZ = 1200.0  # … и темнее
+# второй дубль (double=1): та же партия ещё раз, как сыграл бы человек повторно; дубли — по краям (опыт #1088)
+GTR_DOUBLE_SEED = 7919         # сдвиг выбора сэмпла: другой сэмпл того же слоя
+GTR_DOUBLE_JITTER_MS = 6.0     # удар второго дубля раньше/позже не дальше этого
+GTR_DOUBLE_TUNE_CENTS = 4.0    # строй второго дубля выше — дубли не сливаются в один
+GTR_DOUBLE_SPREAD = 1.4        # разбег по струнам шире
+GTR_DOUBLE_BLEED = 0.1         # доля дубля в чужом канале
 # имя сэмпла → (MIDI, слой силы 0…3 или None — все слои)
 _GTR_KAR = re.compile(r"^([a-g]b?)(\d)_(p|mp|mf|f|vl(\d))(?:_|$)")        # Karoryfer: «a2_f_rr1», «eb3_vl2_rr3_1»
 _GTR_FSBS = re.compile(r"^([A-G]#?)(\d)_s\d(_soft)?_\d+$")                 # FreePats FSBS: «A#2_s2_soft_01»
@@ -1876,6 +1882,19 @@ def _gtr_palm(y: np.ndarray, sr: int) -> np.ndarray:
     return lfilter(b, a, y)
 
 
+def _gtr_shift(groups: list, t0_abs: float) -> list:
+    """Удары второго дубля: каждый удар целиком (все его ноты) сдвинут на ±GTR_DOUBLE_JITTER_MS; сдвиг — от места
+    удара в треке (t0_abs + t), поэтому кусок превью и полный трек дают один и тот же дубль."""
+    out = []
+    for st in groups:
+        key = int(round((t0_abs + float(st["t"])) * 1000))
+        u = ((key * 2654435761) % 4294967296) / 4294967295.0      # 0…1, детерминированно от места удара
+        dt = (2.0 * u - 1.0) * GTR_DOUBLE_JITTER_MS / 1000
+        out.append(dict(st, t=max(0.0, float(st["t"]) + dt),
+                        notes=[[max(0.0, r[0] + dt), r[1] + dt, *r[2:]] for r in st["notes"]]))
+    return out
+
+
 def _gtrnotes(x, sr, p, res):
     """Гитарист по аккордам: ноты (партию трека «по аккордам плана» или готовые ноты фразы — ставит воркер) играются
     сэмплами другой гитары. Вход — старая гитара: в выход не идёт, задаёт громкость (сила удара — к _ref_rms,
@@ -1904,96 +1923,115 @@ def _gtrnotes(x, sr, p, res):
         r = _rms(mono[max(0, i):max(0, i) + vw]) if i < n else 0.0
         return float(np.clip(0.5 + 20 * np.log10(max(r, EPS) / ref) / GTR_VEL_RANGE_DB, 0.0, 1.0))
 
-    y = np.zeros(n)
-    ringing: list = []   # [начало, конец звучания (индексы), голос, громкость, высота]
-
-    def flush(item, stop=None):
-        start, end, v, g, _m = item
-        if stop is not None and stop < end:
-            end = max(start, stop)
-            fade = min(int(GTR_CHOKE_S * sr), end - start)
-        else:
-            fade = min(int(GTR_RELEASE_S * sr), end - start)
-        a, b = max(0, start), min(n, end)
-        if b <= a:
-            return
-        seg = v[a - start:b - start].copy()
-        if fade > 0 and end <= n:
-            k = min(fade, len(seg))
-            seg[-k:] *= np.linspace(1, 0, k)
-        y[a:b] += g * seg
-
-    def play(t, m, length_s, layer, gain, mode=None):
-        seed = int(round((t0_abs + t) * 1000)) * 131 + int(m)
-        if mode == "mute":
-            smp, ksr, base = _gtr_pick(mute, m, layer, seed)
-            v = _gtr_voice(smp, ksr, sr, 0.0 if base is None else (m - base) + tune / 100)
-        else:
-            smp, ksr, base = _gtr_pick(kit, m, layer, seed)
-            v = _gtr_voice(smp, ksr, sr, (m - base) + tune / 100 if base is not None else tune / 100)
-            if mode == "frag":
-                k = min(len(v), int(GTR_MUTE_S * sr))
-                v = v[:k] * np.linspace(1, 0, k) if k else v[:0]
-            elif mode == "palm":
-                v = _gtr_palm(v, sr)
-        start = int(round(t * sr))
-        length = len(v) if mode in ("mute", "frag") else min(len(v), int((max(length_s, GTR_RING_S)
-                                                                           + GTR_RELEASE_S) * sr))
-        return [start, start + length, v[:length], gain, m]
-
     strum = int(p.get("strum", 1)) == 1
     rows = [[nt["t"], nt["t"] + nt["d"], nt["midi"][0], nt.get("vel", 0.8)] for nt in notes if nt["t"] < until]
     if strum:
         groups = guitarnotes.strikes(rows, p.get("_beats") or [])
     else:   # каждая нота — сама по себе
         groups = [{"t": r[0], "notes": [r], "dir": "single", "muted": False, "palm": False} for r in rows]
-    for st in groups:
-        t = float(st["t"])
-        v = vel(t)
-        layer = min(3, int(v * 4))
-        many = len(st["notes"]) > 1
-        if strum and many:   # новый удар по струнам — звенящие ноты прежнего глохнут
-            stop = int(round(t * sr))
-            for item in ringing:
-                flush(item, stop)
-            ringing = []
-        elif strum:          # одиночная нота глушит ту же высоту
-            keep = []
-            for item in ringing:
-                if item[4] == st["notes"][0][2]:
-                    flush(item, int(round(t * sr)))
-                else:
-                    keep.append(item)
-            ringing = keep
-        ns = st["notes"]
-        sg = (GTR_STRIKE_N / max(1, len(ns))) ** 0.5   # удар одинаково громок: одна струна твёрже, аккорд легче
-        if not strum:
-            for s0, e0, m, _v in ns:
-                ringing.append(play(s0, m, e0 - s0, layer, 1.0))
-            continue
-        if st["muted"]:
-            if mute:   # глушёный удар — один «чук» набора, не по числу струн
-                ringing.append(play(t, ns[0][2], 0.0, layer, 1.0, "mute"))
+
+    def take(second: bool) -> np.ndarray:
+        """Один проход партии; second — второй дубль (другие сэмплы, удары вразнобой, строй выше)."""
+        tn = tune + (GTR_DOUBLE_TUNE_CENTS if second else 0.0)
+        y = np.zeros(n)
+        ringing: list = []   # [начало, конец звучания (индексы), голос, громкость, высота]
+
+        def flush(item, stop=None):
+            start, end, v, g, _m = item
+            if stop is not None and stop < end:
+                end = max(start, stop)
+                fade = min(int(GTR_CHOKE_S * sr), end - start)
             else:
-                for k, (_s0, _e0, m, _v) in enumerate(ns):
-                    ringing.append(play(t + k * 0.002, m, 0.0, layer, 1.0, "frag"))
-            continue
-        if st["palm"]:
-            s0, e0, m, _v = ns[0]
-            ringing.append(play(s0, m, e0 - s0, layer, sg, "palm"))
-            continue
-        if st["dir"] == "single":
-            s0, e0, m, _v = ns[0]
-            ringing.append(play(s0, m, e0 - s0, layer, sg))
-            continue
-        spread = float(p.get("spread_ms", 8.0)) / 1000 * (0.5 + (1.0 - v))
-        order = ns if st["dir"] == "down" else list(reversed(ns))
-        gain = (1.0 if st["dir"] == "down" else GTR_UP_GAIN) * sg
-        for k, (s0, e0, m, _v) in enumerate(order):
-            ringing.append(play(t + k * spread, m, e0 - s0, layer, gain))
-    for item in ringing:
-        flush(item)
-    y *= (ref / GTR_STRIKE_RMS) * _gtr_env(mono, sr, ref) * _db(p.get("output_db", 0.0))
+                fade = min(int(GTR_RELEASE_S * sr), end - start)
+            a, b = max(0, start), min(n, end)
+            if b <= a:
+                return
+            seg = v[a - start:b - start].copy()
+            if fade > 0 and end <= n:
+                k = min(fade, len(seg))
+                seg[-k:] *= np.linspace(1, 0, k)
+            y[a:b] += g * seg
+
+        def play(t, m, length_s, layer, gain, mode=None):
+            seed = int(round((t0_abs + t) * 1000)) * 131 + int(m) + (GTR_DOUBLE_SEED if second else 0)
+            if mode == "mute":
+                smp, ksr, base = _gtr_pick(mute, m, layer, seed)
+                v = _gtr_voice(smp, ksr, sr, 0.0 if base is None else (m - base) + tn / 100)
+            else:
+                smp, ksr, base = _gtr_pick(kit, m, layer, seed)
+                v = _gtr_voice(smp, ksr, sr, (m - base) + tn / 100 if base is not None else tn / 100)
+                if mode == "frag":
+                    k = min(len(v), int(GTR_MUTE_S * sr))
+                    v = v[:k] * np.linspace(1, 0, k) if k else v[:0]
+                elif mode == "palm":
+                    v = _gtr_palm(v, sr)
+            start = int(round(t * sr))
+            length = len(v) if mode in ("mute", "frag") else min(len(v), int((max(length_s, GTR_RING_S)
+                                                                               + GTR_RELEASE_S) * sr))
+            return [start, start + length, v[:length], gain, m]
+
+        for st in (_gtr_shift(groups, t0_abs) if second else groups):
+            t = float(st["t"])
+            v = vel(t)
+            layer = min(3, int(v * 4))
+            many = len(st["notes"]) > 1
+            if strum and many:   # новый удар по струнам — звенящие ноты прежнего глохнут
+                stop = int(round(t * sr))
+                for item in ringing:
+                    flush(item, stop)
+                ringing = []
+            elif strum:          # одиночная нота глушит ту же высоту
+                keep = []
+                for item in ringing:
+                    if item[4] == st["notes"][0][2]:
+                        flush(item, int(round(t * sr)))
+                    else:
+                        keep.append(item)
+                ringing = keep
+            ns = st["notes"]
+            sg = (GTR_STRIKE_N / max(1, len(ns))) ** 0.5   # удар одинаково громок: одна струна твёрже, аккорд легче
+            if not strum:
+                for s0, e0, m, _v in ns:
+                    ringing.append(play(s0, m, e0 - s0, layer, 1.0))
+                continue
+            if st["muted"]:
+                if mute:   # глушёный удар — один «чук» набора, не по числу струн
+                    ringing.append(play(t, ns[0][2], 0.0, layer, 1.0, "mute"))
+                else:
+                    for k, (_s0, _e0, m, _v) in enumerate(ns):
+                        ringing.append(play(t + k * 0.002, m, 0.0, layer, 1.0, "frag"))
+                continue
+            if st["palm"]:
+                s0, e0, m, _v = ns[0]
+                ringing.append(play(s0, m, e0 - s0, layer, sg, "palm"))
+                continue
+            if st["dir"] == "single":
+                s0, e0, m, _v = ns[0]
+                ringing.append(play(s0, m, e0 - s0, layer, sg))
+                continue
+            spread = float(p.get("spread_ms", 8.0)) / 1000 * (0.5 + (1.0 - v))
+            if second:
+                spread *= GTR_DOUBLE_SPREAD
+            order = ns if st["dir"] == "down" else list(reversed(ns))
+            gain = (1.0 if st["dir"] == "down" else GTR_UP_GAIN) * sg
+            for k, (s0, e0, m, _v) in enumerate(order):
+                ringing.append(play(t + k * spread, m, e0 - s0, layer, gain))
+        for item in ringing:
+            flush(item)
+        return y
+
+    scale = (ref / GTR_STRIKE_RMS) * _gtr_env(mono, sr, ref) * _db(p.get("output_db", 0.0))
+    y = take(False)
+    if int(p.get("double", 0)) == 1 and ch >= 2:
+        # два дубля по краям: первый слева, второй справа, в другой канал — по GTR_DOUBLE_BLEED;
+        # мощность канала — как у одного дубля
+        b = take(True)
+        h = 1.0 / np.hypot(1.0 - GTR_DOUBLE_BLEED, GTR_DOUBLE_BLEED)
+        out = np.empty((n, ch))
+        out[:, 0] = h * ((1.0 - GTR_DOUBLE_BLEED) * y + GTR_DOUBLE_BLEED * b) * scale
+        out[:, 1:] = (h * (GTR_DOUBLE_BLEED * y + (1.0 - GTR_DOUBLE_BLEED) * b) * scale)[:, None]
+        return out
+    y *= scale
     return np.repeat(y[:, None], ch, axis=1)
 
 

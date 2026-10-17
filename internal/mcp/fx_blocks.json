@@ -1537,6 +1537,18 @@
     }
    },
    {
+    "id": "double",
+    "default": 0,
+    "min": 0,
+    "max": 1,
+    "step": 1,
+    "integer": true,
+    "label": {
+     "ru": "второй дубль: партия сыграна ещё раз, дубли слева и справа (1 — да)",
+     "en": "second take: the part played again, takes left and right (1 — on)"
+    }
+   },
+   {
     "id": "output_db",
     "default": 0,
     "min": -24,

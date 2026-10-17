@@ -120,8 +120,11 @@ class TestGuitaristDrive(unittest.TestCase):
             with self.subTest(slug=p["slug"], chain=gid):
                 eng = _guitar(p)
                 if gid.startswith("guitar-notes-"):
-                    # готовая цепочка гитариста целиком (guitar-notes-fuzz — уже с 18 по условию 5)
+                    # готовая цепочка гитариста целиком (guitar-notes-fuzz — уже с 18 по условию 5); второй дубль —
+                    # по манере (internal-guitar-double, условие 6: авто, бой, квинты)
                     want = _capped(self.fx[gid]["chain"])
+                    if int(want[0].get("style", 0)) in (0, 1, 4):
+                        want[0] = dict(want[0], double=1)
                     self._assert_chain(eng, want, p["slug"])
                     continue
                 rest = eng[1:]

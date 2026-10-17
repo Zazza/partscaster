@@ -415,6 +415,13 @@ bottom to top with a `spread_ms` spread, a quiet hit is wider), between beats an
 drums follows the beat grid extended past the edge. A muted hit is a sample of the `mute_kit` kit. A new hit mutes the
 ringing strings of the previous one.
 
+**Second take** (`double` 1) — the part is played again, the way a guitarist would record it a second time: other
+samples of the same notes, each hit a few milliseconds earlier or later (up to 6 ms), tuning 4 cents higher, a wider
+strum spread. The first take sounds on the left, the second on the right (10 % into the other channel): the guitars get
+wider and the middle stays free for the vocals. Each channel is as loud as a single take. In the built-in genre presets
+the second take is on for the rhythm guitar (manners "auto", "strumming", "fifths"); fingerpicking, "bass + chord" and
+"cinematic" do not get it. A mono input gets one take.
+
 The part is computed without a GPU in seconds and cached with the track (`guitar-part.json`; a new guitar stem or a new
 plan — recalculation). To see it: `GET /jobs/{id}/guitar_part`, MCP `guitar_part`. Limit: if the YuE2 guitar went into
 another stem during separation (Demucs on metal — into the bass), the new guitar sounds only where the guitar stem has
@@ -584,7 +591,7 @@ against it; the page and MCP get a copy through `make mcp-data`).
 | `glue` | bus glue (master): a stereo-linked RMS detector, a 6 dB soft knee, a parallel share | threshold_db −18 · ratio 2 · attack_ms 10 · release_ms 250 · makeup_db 0 · mix 1 |
 | `limiter` | true-peak master limiter; with `target_lufs` — loudness to the target over the whole input | ceiling_db −1 (dBTP) · release_ms 100 · target_lufs 0 (off; −24…−6) |
 | `air` | air: rebuilds the top end above 16 kHz that YuE2 cuts — second harmonics of the 8–11.5 kHz band, only above 16 kHz; the level is `tilt_db` below the neighboring 12–16 kHz band (as in live records). Where the top end already exists (or the band itself is missing), the sound does not change; below 15 kHz it does not change. `only` 1 — the output is only the air (to add on top of the track) | tilt_db −10 (−30…0) · only 0 |
-| `gtrnotes` | guitarist by chords: a part (the worker sets `notes` — the plan chords in the hits of the old guitar; on the "Instruments" page — the phrase notes) with samples of another guitar; the input is the old guitar: it does not go to the output, it sets the hit strength and the volume over time | kit (req.) · mute_kit "" · style 0 · strum 1 · spread_ms 8 · output_db 0 |
+| `gtrnotes` | guitarist by chords: a part (the worker sets `notes` — the plan chords in the hits of the old guitar; on the "Instruments" page — the phrase notes) with samples of another guitar; the input is the old guitar: it does not go to the output, it sets the hit strength and the volume over time | kit (req.) · mute_kit "" · style 0 · strum 1 · spread_ms 8 · double 0 · output_db 0 |
 | `level` | volume by a line: points `points` [{t, db}] in track seconds (up to 200, dB −30…+12, ascending t), linear in dB between them, before the first and after the last — their dB; a window preview uses the place in the track; the sound is not shifted. It is not shown in the block palette — the "live sound" layer adds it ("drums forward") | points (req.) |
 
 "Req." — a parameter without a default value: without it the worker answers 422 "parameter … is required" (нужен
