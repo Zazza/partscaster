@@ -392,5 +392,165 @@ class TestBlocksJsonDouble(unittest.TestCase):
         self.assertTrue(lab.get("ru", "").strip() and lab.get("en", "").strip(), f"подпись: {lab}")
 
 
+# ---------------------------------------------------------------- ТК5б, условие 3 (аккорд до окна превью)
+
+@unittest.skipUnless(gb._HAS_DEPS, gb._SKIP)
+class TestDoubleWindowRingingChord(unittest.TestCase):
+    """Аккорд начат ДО окна (9,8 с, длина 1 с) и ещё звенит в окне [_t0 = 10 с]; следующий удар — 10,5 с.
+    Ноты до окна воркер передаёт с отрицательным временем (gtrnotes_window: t − frm). Первые 0,5 с окна —
+    как то же место полного трека, в обоих каналах."""
+
+    T0, END = 10.0, 12.0
+
+    def _full_and_window(self, double):
+        track_notes = _chord(9.8, d=1.0) + _chord(10.5, d=0.4)
+        beats = [round(0.5 * i, 3) for i in range(int(self.END * 2))]
+        x = gb._input(sec=self.END)
+        full = _run(gb._blk(track_notes, kit="rr/notes", _beats=beats, _t0=0.0, double=double), x=x)
+        a = int(self.T0 * SR)
+        win_notes = [dict(n, t=round(n["t"] - self.T0, 6)) for n in track_notes]
+        win_beats = [round(b - self.T0, 6) for b in beats if -2.0 < b - self.T0 < self.END - self.T0 + 2.0]
+        win = _run(gb._blk(win_notes, kit="rr/notes", _beats=win_beats, _t0=self.T0, double=double),
+                   x=x[a:].copy())
+        return full[a:], win
+
+    def _check(self, double):
+        full, win = self._full_and_window(double)
+        for ch in (0, 1):
+            with self.subTest(channel=ch):
+                f, w = _seg(full[:, ch], 0.0, 0.5), _seg(win[:, ch], 0.0, 0.5)
+                self.assertGreater(float(np.abs(f).max()), 1e-4, "опора: аккорд до окна звенит в окне")
+                err = float(np.abs(f - w).max())
+                self.assertLess(err, 1e-3 * float(np.abs(f).max()),
+                                f"канал {ch}: начало окна ≠ то же место трека: {err:.2e}")
+
+    def test_window_start_matches_full_double0(self):
+        # опора: первый проход доигрывает аккорд до окна так же, как полный трек
+        self._check(0)
+
+    def test_window_start_matches_full_double1(self):
+        self._check(1)
+
+
+# ---------------------------------------------------------------- ТК9, условие 3 (другой сэмпл слоя)
+
+def _rr_id(x, f0):
+    """Какой круговой сэмпл rr1…rr3 сыграл — ближайший профиль гармоник (2-я, 3-я к основному тону)."""
+    p = _harm_profile(x, f0)
+    want = {i: (h[1] ** 2, h[2] ** 2) for i, h in RR_HARM.items()}
+    return min(want, key=lambda i: (p[0] - want[i][0]) ** 2 + (p[1] - want[i][1]) ** 2), p
+
+
+@unittest.skipUnless(gb._HAS_DEPS, gb._SKIP)
+class TestSecondTakeOtherSample(unittest.TestCase):
+    """Слой из трёх сэмплов (rr1…rr3, различимы по тембру): у КАЖДОЙ ноты B сыграл не тот сэмпл, что A."""
+
+    def test_each_note_other_sample(self):
+        m, d = 57, 0.6
+        times = (0.501, 1.25, 2.0, 2.75, 3.5, 4.25, 5.003, 5.75)
+        notes = [gb._note(t, d, m) for t in times]
+        y = _run(gb._blk(notes, kit="rr/notes", strum=0, double=1), x=gb._input(sec=6.5))
+        a, b = _takes(y)
+        f0 = gb._hz(m)
+        for t in times:
+            with self.subTest(t=t):
+                ia, pa = _rr_id(_seg(a, t + 0.05, t + 0.55), f0)
+                ib, pb = _rr_id(_seg(b, t + 0.05, t + 0.55), f0)
+                self.assertNotEqual(ia, ib, f"тот же сэмпл rr{ia} в обоих дублях: A {pa}, B {pb}")
+
+
+# ---------------------------------------------------------------- ТК10, условие 3 (тот же слой силы)
+
+# слои mp и mf по два сэмпла: слой виден по гармонике (mp — 2-я, mf — 3-я), сэмпл в слое — по её доле
+LAYER_HARM = {("mp", 1): (1.0, 0.4, 0.0), ("mp", 2): (1.0, 0.8, 0.0),
+              ("mf", 1): (1.0, 0.0, 0.4), ("mf", 2): (1.0, 0.0, 0.8)}
+
+
+class LayerRes(gb.GtrRes):
+    """GtrRes + набор «lay/notes»: a3 в двух слоях силы (mp, mf), по два круговых сэмпла в слое."""
+
+    def __init__(self):
+        super().__init__()
+        self.kits["lay/notes"] = [(f"a3_{lay}_rr{i}", _rr_sample(gb._hz(57), h))
+                                  for (lay, i), h in LAYER_HARM.items()]
+
+
+def _layer_of(x, f0):
+    h2, h3 = _harm_profile(x, f0)
+    return ("mp" if h2 > h3 else "mf"), (h2, h3)
+
+
+@unittest.skipUnless(gb._HAS_DEPS, gb._SKIP)
+class TestSecondTakeSameLayer(unittest.TestCase):
+    """Вход молчит до 0,5 с, потом звучит; нота в 0,5 с. Слой силы B — тот же, что у A. Громкость входа
+    перебирается около средней (_ref_rms) — там проходит граница слоёв mp/mf, и там сдвиг удара B на
+    миллисекунды раньше начала звука не должен перекидывать его в другой слой."""
+
+    def test_b_layer_equals_a_layer(self):
+        m, t = 57, 0.5
+        f0 = gb._hz(m)
+        seen = set()
+        for k in range(0, 11):
+            db = 0.1 * k
+            with self.subTest(input_db=db):
+                x = gb._input(sec=2.0, amp=gb.IN_AMP * 10 ** (db / 20), amps=[(0.0, 0.5, 0.0)])
+                y = _run(gb._blk([gb._note(t, 1.0, m)], kit="lay/notes", strum=0, double=1),
+                         x=x, res=LayerRes())
+                a, b = _takes(y)
+                la, pa = _layer_of(_seg(a, t + 0.05, t + 0.9), f0)
+                lb, pb = _layer_of(_seg(b, t + 0.05, t + 0.9), f0)
+                seen.add(la)
+                self.assertEqual(lb, la, f"слой B {lb} ≠ слой A {la}: A {pa}, B {pb}")
+        self.assertIn("mf", seen, "опора: при громком входе A играет слой mf")
+
+
+# ---------------------------------------------------------------- ТК9б, условие 3 (другой сэмпл слоя, бой)
+
+@unittest.skipUnless(gb._HAS_DEPS, gb._SKIP)
+class TestSecondTakeOtherSampleStrum(unittest.TestCase):
+    """Игра боем (strum=1), аккорды из 4 струн, набор rr/notes (три сэмпла слоя на высоту), разные spread_ms:
+    у КАЖДОЙ струны каждого аккорда B сыграл не тот сэмпл, что A.
+
+    Струны аккорда звучат одновременно и по тембру не разделяются (2-я гармоника a2 = основной тон a3), поэтому
+    тест наблюдает за выбором: обёртка над fx_engine._gtr_pick (настоящая функция вызывается, результат не
+    меняется) записывает, какую высоту просили и какой объект-сэмпл вернулся. Порядок вызовов: сначала весь
+    проход A, затем весь проход B — проверяется опорой: первые N вызовов при double=1 совпадают с N вызовами
+    при double=0 (A = проход double=0, условие 3), и B просит те же высоты в том же порядке."""
+
+    SPREADS = (4, 5, 6, 10, 12)
+
+    def _calls(self, notes, spread, double):
+        fx = gb._fx()
+        real = fx._gtr_pick
+        log = []
+
+        def spy(kit, midi, layer, seed):
+            out = real(kit, midi, layer, seed)
+            log.append((round(float(midi), 3), out[0]))
+            return out
+
+        with mock.patch.object(fx, "_gtr_pick", spy):
+            _run(gb._blk(notes, kit="rr/notes", _beats=gb.BEATS, strum=1, spread_ms=spread, double=double))
+        return log
+
+    def test_each_string_other_sample(self):
+        notes = _strums()
+        n_strings = len(notes)
+        for spread in self.SPREADS:
+            with self.subTest(spread_ms=spread):
+                c0 = self._calls(notes, spread, 0)
+                c1 = self._calls(notes, spread, 1)
+                n = len(c0)
+                self.assertEqual(n, n_strings, f"опора: каждая струна каждого аккорда — один выбор сэмпла ({n})")
+                self.assertEqual(len(c1), 2 * n, "опора: при double=1 сэмпл выбирается дважды на струну")
+                a, b = c1[:n], c1[n:]
+                self.assertEqual([m for m, _ in a], [m for m, _ in c0], "опора: первые вызовы — проход A")
+                self.assertTrue(all(np.array_equal(x, y) for (_, x), (_, y) in zip(a, c0, strict=True)),
+                                "опора: A выбрал те же сэмплы, что проход double=0")
+                self.assertEqual([m for m, _ in b], [m for m, _ in a], "опора: B играет те же струны")
+                same = [(i, m) for i, ((m, sa), (_, sb)) in enumerate(zip(a, b, strict=True)) if sa is sb]
+                self.assertEqual(same, [], f"тот же сэмпл у A и B (номер струны в партии, высота): {same}")
+
+
 if __name__ == "__main__":
     unittest.main()

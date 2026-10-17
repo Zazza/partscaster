@@ -1890,8 +1890,8 @@ def _gtr_shift(groups: list, t0_abs: float) -> list:
         key = int(round((t0_abs + float(st["t"])) * 1000))
         u = ((key * 2654435761) % 4294967296) / 4294967295.0      # 0…1, детерминированно от места удара
         dt = (2.0 * u - 1.0) * GTR_DOUBLE_JITTER_MS / 1000
-        out.append(dict(st, t=max(0.0, float(st["t"]) + dt),
-                        notes=[[max(0.0, r[0] + dt), r[1] + dt, *r[2:]] for r in st["notes"]]))
+        # без зажима в 0: удар до окна превью (отрицательное время) доигрывается хвостом, как у первого дубля
+        out.append(dict(st, t=float(st["t"]) + dt, dt=dt, notes=[[r[0] + dt, r[1] + dt, *r[2:]] for r in st["notes"]]))
     return out
 
 
@@ -1935,6 +1935,7 @@ def _gtrnotes(x, sr, p, res):
         tn = tune + (GTR_DOUBLE_TUNE_CENTS if second else 0.0)
         y = np.zeros(n)
         ringing: list = []   # [начало, конец звучания (индексы), голос, громкость, высота]
+        shift = [0.0]        # сдвиг текущего удара: сэмпл и слой силы выбираются по несдвинутому месту, как у первого
 
         def flush(item, stop=None):
             start, end, v, g, _m = item
@@ -1952,8 +1953,10 @@ def _gtrnotes(x, sr, p, res):
                 seg[-k:] *= np.linspace(1, 0, k)
             y[a:b] += g * seg
 
-        def play(t, m, length_s, layer, gain, mode=None):
-            seed = int(round((t0_abs + t) * 1000)) * 131 + int(m) + (GTR_DOUBLE_SEED if second else 0)
+        def play(t, m, length_s, layer, gain, mode=None, key=None):
+            # key — место ноты у первого дубля: по нему выбирается сэмпл (у второго — со сдвигом GTR_DOUBLE_SEED)
+            at = t - shift[0] if key is None else key
+            seed = int(round((t0_abs + at) * 1000)) * 131 + int(m) + (GTR_DOUBLE_SEED if second else 0)
             if mode == "mute":
                 smp, ksr, base = _gtr_pick(mute, m, layer, seed)
                 v = _gtr_voice(smp, ksr, sr, 0.0 if base is None else (m - base) + tn / 100)
@@ -1972,7 +1975,8 @@ def _gtrnotes(x, sr, p, res):
 
         for st in (_gtr_shift(groups, t0_abs) if second else groups):
             t = float(st["t"])
-            v = vel(t)
+            shift[0] = float(st.get("dt", 0.0))
+            v = vel(t - shift[0])
             layer = min(3, int(v * 4))
             many = len(st["notes"]) > 1
             if strum and many:   # новый удар по струнам — звенящие ноты прежнего глохнут
@@ -2010,12 +2014,13 @@ def _gtrnotes(x, sr, p, res):
                 ringing.append(play(s0, m, e0 - s0, layer, sg))
                 continue
             spread = float(p.get("spread_ms", 8.0)) / 1000 * (0.5 + (1.0 - v))
+            spread_a = spread   # разбег первого дубля — для выбора сэмпла
             if second:
                 spread *= GTR_DOUBLE_SPREAD
             order = ns if st["dir"] == "down" else list(reversed(ns))
             gain = (1.0 if st["dir"] == "down" else GTR_UP_GAIN) * sg
             for k, (s0, e0, m, _v) in enumerate(order):
-                ringing.append(play(t + k * spread, m, e0 - s0, layer, gain))
+                ringing.append(play(t + k * spread, m, e0 - s0, layer, gain, key=t - shift[0] + k * spread_a))
         for item in ringing:
             flush(item)
         return y
