@@ -1122,6 +1122,54 @@ def voice_job(job_id: int, req: VoiceIn):
     return {"id": new_id}
 
 
+class VoicePreviewIn(BaseModel):
+    model_config = {"populate_by_name": True}
+    ref_job_id: int                                  # трек-образец: чей голос
+    from_: float = Field(alias="from", ge=0)         # кусок трека, с
+    to: float
+    ref_from: float | None = Field(default=None, ge=0)
+    ref_dur: float = Field(default=25, ge=voicevc.REF_MIN_SEC, le=voicevc.REF_MAX_SEC)
+    steps: int = Field(default=50, ge=voicevc.STEPS_MIN, le=voicevc.STEPS_MAX)
+
+
+VOICE_PREVIEW_MIN_SEC = 3.0
+VOICE_PREVIEW_MAX_SEC = 30.0
+VOICE_PREVIEW_KEEP = 3   # последних кусков в папке трека
+
+
+@app.post("/jobs/{job_id}/voice_preview")
+def voice_preview(job_id: int, req: VoicePreviewIn):
+    """«Голос альбома», прослушать кусок: тот же перевод голоса тембром образца (Seed-VC), но
+    только на куске [from, to) трека → preview-vc-*.flac в папке трека (версии не создаёт).
+    Идёт в общей очереди видеокарты; ответ — когда кусок готов."""
+    if not VOICE_PREVIEW_MIN_SEC <= req.to - req.from_ <= VOICE_PREVIEW_MAX_SEC:
+        raise HTTPException(422, f"кусок {VOICE_PREVIEW_MIN_SEC:.0f}–{VOICE_PREVIEW_MAX_SEC:.0f} с")
+    if not voicevc.available():
+        raise HTTPException(503, f"Seed-VC не установлен ({voicevc.SEEDVC_DIR}): worker/seedvc_install.sh")
+    for jid in (job_id, req.ref_job_id):
+        r = _job_row(jid)
+        if r is None or r["status"] != "done" or not r["audio_file"]:
+            raise HTTPException(404, f"job {jid} not found or not done")
+    src = _ensure_stems(job_id)
+    ref = _ensure_stems(req.ref_job_id)
+    row = _job_row(job_id)
+    key = f"{req.ref_job_id}:{req.from_:.2f}:{req.to:.2f}:{req.ref_from}:{req.ref_dur}:{req.steps}:{time.time()}"
+    fname = f"preview-vc-{hashlib.sha1(key.encode()).hexdigest()[:8]}.flac"
+    try:
+        with gpu_queue(f"voice-preview {job_id}"):
+            voicevc.run(src, row["audio_file"], ref, src, req.ref_from, req.ref_dur, req.steps,
+                        src_from=req.from_, src_to=req.to, out_name=fname)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.exception("voice preview %s failed", job_id)
+        raise HTTPException(500, f"voice preview failed: {friendly_error(e)}") from e
+    olds = sorted(src.glob("preview-vc-*.flac"), key=_mtime_or_zero, reverse=True)
+    for old in olds[VOICE_PREVIEW_KEEP:]:
+        old.unlink(missing_ok=True)
+    return {"file": fname, "from": req.from_, "to": req.to}
+
+
 def _queue_job(job_id: int, title: str) -> None:
     """Новая (или повторённая) генерация — в конец общей очереди; место и источник — в строку джобы.
     Вызывать после записи строки (вне db_lock: колбэк места пишет в БД)."""

@@ -26,7 +26,12 @@ export function editsBySteps(list) {
 const copy = (x) => JSON.parse(JSON.stringify(x))
 
 // gen — изменения, которым нужен рендер: {specs: [приёмы плана], voice: {params, name} | null, instrumental}
-export const isEmptyGen = (g) => !g || (!(g.specs || []).length && !g.voice && !g.instrumental)
+export const isEmptyGen = (g) => !g || (!(g.specs || []).length && !g.voice && !g.instrumental && !g.timbre)
+// нужен ли рендер YuE2: приёмы плана, новый голос, «без голоса»; тембр песни («Голос альбома») — перевод голоса
+// Seed-VC, без рендера
+export const genNeedsRender = (g) => !!g && (!!(g.specs || []).length || !!g.voice || !!g.instrumental)
+// тембр к применению: при «без голоса» переводить нечего
+export const genTimbre = (g) => (g && g.timbre && !g.instrumental ? g.timbre : null)
 
 // Состояние черновика трека: его записи, ожидающие рендеры (без поля parent — трек и так известен), gen и ход
 // «применить всё» с рендером (applying: {job_id, title, …})

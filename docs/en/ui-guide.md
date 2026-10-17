@@ -432,15 +432,18 @@ track, so listen to a piece before the full render.
 - For a track without lyrics or without a score the step explains why the voice render is unavailable.
 
 **Album voice** (collapsed, "experiment") — the voice of this track is sung with the timbre of another song's
-voice, the music and melody stay the same: choose a "reference song" (search by title or number) → "sing". In a
-few minutes — a new version "album voice (exp.)". The voice is recognizable, but it wobbles, and the music
+voice, the music and melody stay the same: choose a "reference song" (search by title or number) → "▶ listen to a
+piece" (Seed-VC converts only a piece — the selection or from the first sung bar, up to a couple of minutes; next to it
+is "▶ before") → "Apply": the timbre goes into "Track changes" as a "song timbre: …" line (group "4 · Voice").
+"Apply all" makes the version with the timbre: after the render of a new voice or plan tricks, if there are any — on
+it, and the other edits are carried over to the result. With "play without vocals" the timbre is not applied. The voice is recognizable, but it wobbles, and the music
 suffers a little inside phrases. It needs the optional Seed-VC component on the worker
 ([deployment.md](deployment.md)); without it the block says it is unavailable.
 
 ### 5 Done
 
 **Track changes** — everything you applied in the steps above, listed by step ("2 · Edit", "3 · Sound",
-"4 · Voice", "5 · Done"). Changes that need a render (plan tricks, a new voice, "no vocals") are a line each.
+"4 · Voice", "5 · Done"). Changes that need a render (plan tricks, a new voice, "no vocals") and the song timbre from "Album voice" are a line each.
 Overlaid edits (inserts, mutes, effects and pedals on a stem, volume lines, sound chains, parts, stereo placement,
 master) come with controls, and the track is rebuilt right away:
 
@@ -458,7 +461,9 @@ restarts, and the track in the list shows the "unfinished work" mark. **"apply a
 "<title> · final" from all enabled changes, then the list is cleared; while pieces render ("waiting for render: N")
 or the mix is being built, the button is unavailable. If the list has changes that need a render (a new voice, plan
 tricks, "no vocals"), first one render with all of them goes to the shared queue ("Applying: render #N"); you can
-close the studio and the app — the progress is kept on the worker and continues. When it is ready the edits go onto
+close the studio and the app — the progress is kept on the worker and continues. The song timbre from "Album voice"
+is the next step: the voice of the render (or of the track itself if there is no render) is converted with this
+timbre. When it is ready the edits go onto
 the new version and the final is built; if it fails, the reason is shown here and the changes stay. **"reset draft"** — remove all changes (the track itself and
 finished versions do not change).
 

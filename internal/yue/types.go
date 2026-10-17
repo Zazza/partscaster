@@ -103,6 +103,9 @@ type Service interface {
 	// VoiceConvert — «голос альбома»: новая версия трека, голос спет тембром
 	// образца (Seed-VC на воркере), музыка прежняя; ответ — id джобы в очереди
 	VoiceConvert(ctx context.Context, jobID int64, p VoiceParams) (int64, error)
+	// VoicePreview — «голос альбома», прослушать кусок: тот же перевод только на куске трека,
+	// файл куска в папке трека; версии не создаёт
+	VoicePreview(ctx context.Context, jobID int64, p VoicePreviewParams) (*VoicePreview, error)
 	DspVariantDelete(ctx context.Context, id int64, fname string) (bool, error)
 	AudioURL(id int64, file string) string
 	FetchAudio(ctx context.Context, id int64, file string) (io.ReadCloser, string, error)
@@ -457,6 +460,23 @@ type PlanCeiling struct {
 // голоса [RefFrom, RefFrom+RefDur) (3–30 с), шаги диффузии Steps (10–100).
 // Нули — значения воркера по умолчанию: окно 25 с там, где голос звучит
 // плотнее всего (RefFrom 0 = подобрать само), 50 шагов.
+// VoicePreviewParams — кусок трека [From, To) (3–30 с) и образец, как у VoiceParams.
+type VoicePreviewParams struct {
+	RefJobID int64   `json:"ref_job_id"`
+	From     float64 `json:"from"`
+	To       float64 `json:"to"`
+	RefFrom  float64 `json:"ref_from,omitempty"`
+	RefDur   float64 `json:"ref_dur,omitempty"`
+	Steps    int     `json:"steps,omitempty"`
+}
+
+// VoicePreview — файл куска (preview-vc-*.flac в папке трека) и его окно в треке.
+type VoicePreview struct {
+	File string  `json:"file"`
+	From float64 `json:"from"`
+	To   float64 `json:"to"`
+}
+
 type VoiceParams struct {
 	RefJobID int64   `json:"ref_job_id"`
 	RefFrom  float64 `json:"ref_from,omitempty"`

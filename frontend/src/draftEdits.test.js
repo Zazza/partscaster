@@ -469,3 +469,109 @@ describe('gen в черновике трека (ТК2)', () => {
     })
   })
 })
+
+// «Голос альбома» в черновике: тембр песни (internal-album-voice-draft, условие 1; ТК1).
+// Новые функции берутся через пространство имён: пока их нет, падают только тесты ниже, а не весь файл.
+import * as draftMod from './draftEdits.js'
+
+describe('тембр песни в gen (internal-album-voice-draft, ТК1)', () => {
+  const TB = { ref_job_id: 9, name: 'X' }
+  const oct = { kind: 'octave', dir: 'up', label: 'октава вверх', targets: [{ voice: 'Vocal', bar: 0 }] }
+  const voice = { params: { register: 'female', delivery: 1 }, name: 'Эфир' }
+  const EMPTY = { specs: [], voice: null, instrumental: false }
+  const remoteOf = (jobId, state) => ({ job_id: jobId, state: { v: 1, edits: [], queue: [], ts: 1, ...state } })
+
+  describe('isEmptyGen', () => {
+    it('gen только с тембром — не пустой', () => {
+      expect(isEmptyGen({ timbre: TB })).toBe(false)
+      expect(isEmptyGen({ ...EMPTY, timbre: TB })).toBe(false)
+    })
+
+    it('тембр null при прочих пустых полях — пусто', () => {
+      expect(isEmptyGen({ ...EMPTY, timbre: null })).toBe(true)
+    })
+  })
+
+  describe('genNeedsRender', () => {
+    it('экспортируется функцией', () => {
+      expect(typeof draftMod.genNeedsRender).toBe('function')
+    })
+
+    it('приёмы плана, новый голос или «без голоса» → нужен рендер (с тембром и без)', () => {
+      const f = draftMod.genNeedsRender
+      expect(f({ ...EMPTY, specs: [oct] })).toBe(true)
+      expect(f({ ...EMPTY, voice })).toBe(true)
+      expect(f({ ...EMPTY, instrumental: true })).toBe(true)
+      expect(f({ ...EMPTY, specs: [oct], timbre: TB })).toBe(true)
+      expect(f({ ...EMPTY, voice, timbre: TB })).toBe(true)
+      expect(f({ ...EMPTY, instrumental: true, timbre: TB })).toBe(true)
+    })
+
+    it('только тембр → рендер не нужен', () => {
+      const f = draftMod.genNeedsRender
+      expect(f({ timbre: TB })).toBe(false)
+      expect(f({ ...EMPTY, timbre: TB })).toBe(false)
+    })
+
+    it('нет gen / пустой gen → рендер не нужен', () => {
+      const f = draftMod.genNeedsRender
+      expect(f(null)).toBe(false)
+      expect(f(undefined)).toBe(false)
+      expect(f({})).toBe(false)
+      expect(f(EMPTY)).toBe(false)
+    })
+  })
+
+  describe('genTimbre', () => {
+    it('экспортируется функцией', () => {
+      expect(typeof draftMod.genTimbre).toBe('function')
+    })
+
+    it('есть тембр → он и отдаётся (с приёмами и голосом тоже)', () => {
+      const f = draftMod.genTimbre
+      expect(f({ timbre: TB })).toEqual(TB)
+      expect(f({ ...EMPTY, specs: [oct], voice, timbre: TB })).toEqual(TB)
+    })
+
+    it('«без голоса» → тембра к применению нет', () => {
+      expect(draftMod.genTimbre({ ...EMPTY, instrumental: true, timbre: TB }) ?? null).toBe(null)
+    })
+
+    it('тембра нет / gen нет → null', () => {
+      const f = draftMod.genTimbre
+      expect(f({ ...EMPTY, specs: [oct] }) ?? null).toBe(null)
+      expect(f({ ...EMPTY, timbre: null }) ?? null).toBe(null)
+      expect(f(null) ?? null).toBe(null)
+      expect(f(undefined) ?? null).toBe(null)
+    })
+  })
+
+  describe('draftState / mergeDrafts переносят gen с тембром', () => {
+    it('draftState: gen трека с тембром попадает в состояние как есть; черновик не пуст', () => {
+      const G = { ...EMPTY, timbre: TB }
+      const st = draftState(7, {}, [], 1, { 7: G })
+      expect(st.gen).toEqual(G)
+      expect(isEmptyDraft(st)).toBe(false)
+    })
+
+    it('mergeDrafts: gen с тембром с воркера восстанавливается', () => {
+      const G = { ...EMPTY, specs: [oct], timbre: TB }
+      const r = mergeDrafts({ applied: {}, pending: [], gens: {} }, {}, [remoteOf(9, { gen: G, ts: 800 })])
+      expect(r.gens[9]).toEqual(G)
+    })
+
+    it('draftState → mergeDrafts: тембр переживает круг через воркер', () => {
+      const G = { ...EMPTY, timbre: TB }
+      const st = draftState(7, {}, [], 77, { 7: G })
+      const r = mergeDrafts({ applied: {}, pending: [], gens: {} }, {}, [{ job_id: 7, state: st }])
+      expect(r.gens[7]).toEqual(G)
+    })
+
+    it('локальный трек только с тембром → остаётся и уходит на воркер (push)', () => {
+      const G = { ...EMPTY, timbre: TB }
+      const r = mergeDrafts({ applied: {}, pending: [], gens: { 7: G } }, { 7: 500 }, [])
+      expect(r.gens[7]).toEqual(G)
+      expect(r.push.map(Number)).toEqual([7])
+    })
+  })
+})

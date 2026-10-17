@@ -533,6 +533,38 @@ func RegisterStudioTools(s *Server) {
 	})
 
 	s.Register(Tool{
+		Name: "voice_preview",
+		Description: "ЭКСПЕРИМЕНТ «голос альбома», прослушать кусок: голос куска трека [from, to) (3–30 с) тембром " +
+			"образца ref_job_id (Seed-VC, как voice_convert) → файл preview-vc-*.flac в папке трека; версии не создаёт. " +
+			"Ответ — когда кусок готов (очередь видеокарты, минуты). Без Seed-VC — ошибка 503.",
+		InputSchema: props(map[string]any{
+			"job_id":     prop("ID трека, чей голос перевести", "integer"),
+			"ref_job_id": prop("ID трека-образца (чей голос)", "integer"),
+			"from":       prop("начало куска в треке, с", "number"),
+			"to":         prop("конец куска в треке, с (кусок 3–30 с)", "number"),
+			"ref_from":   prop("начало окна образца, с (не задано — самый плотный кусок пения)", "number"),
+			"ref_dur":    prop("длина окна образца, с (3–30, по умолчанию 25)", "number"),
+			"steps":      prop("шаги диффузии (10–100, по умолчанию 50)", "integer"),
+		}, "job_id", "ref_job_id", "from", "to"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			// from может быть 0 — обязательность проверяем по наличию ключа
+			_, hasFrom := args["from"]
+			from, to := argFloat(args, "from"), argFloat(args, "to")
+			if argInt(args, "job_id") <= 0 || argInt(args, "ref_job_id") <= 0 || !hasFrom || to <= from {
+				return "", fmt.Errorf("нужны job_id, ref_job_id и кусок from < to")
+			}
+			r, err := s.client.VoicePreview(context.Background(), argInt(args, "job_id"), yue.VoicePreviewParams{
+				RefJobID: argInt(args, "ref_job_id"), From: from, To: to, RefFrom: argFloat(args, "ref_from"),
+				RefDur: argFloat(args, "ref_dur"), Steps: int(argInt(args, "steps")),
+			})
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("кусок %.1f–%.1f с: файл %s в папке трека #%d", r.From, r.To, r.File, argInt(args, "job_id")), nil
+		},
+	})
+
+	s.Register(Tool{
 		Name: "overdub",
 		Description: "Овердаб: партия поверх трека джобы по его партитуре с новым стилем + микс (gain 0.1–1). " +
 			"lyrics — текст голосовой партии: без него модель импровизирует вокализ (часто несуразный).",

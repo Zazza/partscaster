@@ -81,3 +81,20 @@ export function voicePreviewWindow(sel, sungAt, cursorSec, durSec) {
   if (sel && sel.to > sel.from) return previewWindow(sel, cursorSec, durSec)
   return previewWindow(null, sungAt != null ? sungAt : cursorSec, durSec)
 }
+
+// «Голос альбома», прослушать кусок: воркер переводит кусок 3–30 с — окно студии подгоняется под эти границы
+// (длинное выделение — первые 30 с, короткое — растягивается до 3 с, у конца трека — назад)
+export const TIMBRE_MIN_SEC = 3
+export const TIMBRE_MAX_SEC = 30
+export function timbreWindow(w, durSec) {
+  const end = durSec > 0 ? durSec : Infinity
+  if (end < TIMBRE_MIN_SEC) return { from: 0, to: end }
+  const from = Math.max(0, w.from)
+  const len = w.to - from
+  if (len > TIMBRE_MAX_SEC) return { from, to: from + TIMBRE_MAX_SEC }
+  if (len < TIMBRE_MIN_SEC) {
+    const to = Math.min(end, from + TIMBRE_MIN_SEC)
+    return { from: Math.max(0, to - TIMBRE_MIN_SEC), to }
+  }
+  return { from, to: w.to }
+}

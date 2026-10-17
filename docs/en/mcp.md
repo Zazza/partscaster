@@ -159,6 +159,7 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 | `overdub` | **job_id**, **style**, lyrics, seed, gain, abc | A part over the track from its score with a new style. `gain` 0.1–1 (0.5); 0 — a cover as a new track without mixing. `abc` — your own plan for the part. Without `lyrics` — a vocalise |
 | `guitar_part` | **job_id**, style | What the guitarist will play "from the plan chords" (block `gtrnotes`): bars, strikes with notes. `style` 0–4: auto, strumming, fingerpicking, bass + chord, fifths |
 | `voice_convert` | **job_id**, **ref_job_id**, ref_from, ref_dur, steps, title | EXPERIMENT "Album voice": the track's voice with the timbre of a sample (Seed-VC on the worker). The voice is recognizable but it wobbles — see [deployment.md](deployment.md). Without Seed-VC — error 503 |
+| `voice_preview` | **job_id**, **ref_job_id**, **from**, **to**, ref_from, ref_dur, steps | EXPERIMENT "Album voice", listen to a piece: the voice of the `[from, to)` piece of the track (3–30 s) with the sample's timbre → the file `preview-vc-*.flac` in the track folder; it does not create a version |
 | `analyze_job` | **job_id** | Track measurements: tempo, crest factor, dynamics, spectrum — to compare variants |
 | `job_peaks` | **job_id**, file, bins | Loudness envelope as numbers: find a drop, an entry, a place to edit |
 | `job_spectrum` | **job_id**, file | Spectrogram PNG to the downloads directory. Needs ffmpeg on the worker |

@@ -37,6 +37,8 @@ const T = 7        // трек, над которым идёт работа
 const OTHER = 8    // соседний трек
 const NEW = 901    // джоба рендера «применить всё»
 const TITLE = 'Песня · итог'
+const VC = 950      // джоба перевода голоса в тембр песни («Голос альбома»)
+const TB = { ref_job_id: 33, name: 'Ref' }   // тембр песни в черновике
 
 // изменения с рендером
 const S1 = { kind: 'octave', dir: 'up', label: 'октава вверх', targets: [{ voice: 'Vocal', bar: 0 }] }
@@ -56,7 +58,7 @@ const setJob = (id, status, extra = {}) => {
   jobsNow.list = jobsNow.list.filter(j => j.id !== id).concat([{ id, status, parent_id: T, role: 'rebuild', title: TITLE, ...extra }])
 }
 
-function mockApi({ drafts = [], draftPut, applyEdits, submit, rebuildSections } = {}) {
+function mockApi({ drafts = [], draftPut, applyEdits, submit, rebuildSections, voiceConvert } = {}) {
   for (const k of Object.keys(apiMock)) delete apiMock[k]
   apiMock.jobs = vi.fn(async () => JSON.parse(JSON.stringify(jobsNow.list)))
   apiMock.rebuildSections = rebuildSections || vi.fn(async (_p, specs) => report(specs))
@@ -71,6 +73,8 @@ function mockApi({ drafts = [], draftPut, applyEdits, submit, rebuildSections } 
   apiMock.applyEdits = applyEdits || vi.fn(async () => 501)
   apiMock.submit = submit || vi.fn(async () => NEW)
   apiMock.renameJob = vi.fn(async () => undefined)
+  // перевод голоса в тембр песни (Seed-VC): ставит джобу перевода, отдаёт её id
+  apiMock.voiceConvert = voiceConvert || vi.fn(async () => VC)
 }
 
 async function boot() {
@@ -617,5 +621,229 @@ describe('ТК11: «сбросить черновик» снимает заст�
     expect(ins.applyingFor(T)).toMatchObject({ job_id: NEW })
     expect(ins.genFor(T)).toMatchObject({ specs: [S1] })
     expect(ids(ins.appliedFor(T))).toEqual([-11])
+  })
+})
+
+// «Голос альбома» в «применить всё» (internal-album-voice-draft, условие 3; ТК2): тембр песни переводится
+// после рендера (или вместо него), правки едут на последний шаг — перевод голоса.
+describe('internal-album-voice-draft ТК2: тембр песни в «применить всё»', () => {
+  // gen совсем пуст: нет приёмов, голоса, «без голоса» и тембра
+  const noGen = (g) => genEmpty(g) && !(g && g.timbre)
+  const vcCalls = () => apiMock.voiceConvert.mock.calls
+
+  describe('а) только тембр — сразу перевод голоса, без рендера', () => {
+    async function startTimbre({ edits = [E1, E2], genCtx, voiceConvert, applyEdits } = {}) {
+      const ins = await load({ drafts: edits.length ? [remote(T, edits)] : [], voiceConvert, applyEdits })
+      if (edits.length) await vi.waitFor(() => expect(ins.appliedFor(T)?.length || 0).toBe(edits.length), WAIT)
+      await ins.setGen(T, { timbre: TB })
+      expect(ins.genFor(T)?.timbre).toEqual(TB)
+      setJob(VC, 'queued')
+      return { ins, run: () => attempt(() => ins.applyAll(T, TITLE, genCtx)) }
+    }
+
+    for (const [label, genCtx] of [['без genCtx', undefined], ['genCtx = {}', {}]]) {
+      it(`${label}: voiceConvert(трек, {ref_job_id}) один раз, submit не зовётся; ход {job_id: перевод, title, queued}; вернул id перевода`, async () => {
+        const { ins, run } = await startTimbre({ genCtx })
+        const id = await run()
+        expect(Number(id)).toBe(VC)
+        expect(vcCalls().length).toBe(1)
+        expect(Number(vcCalls()[0][0])).toBe(T)
+        expect(vcCalls()[0][1]).toEqual({ ref_job_id: TB.ref_job_id })
+        expect(apiMock.submit).not.toHaveBeenCalled()
+        expect(ins.applyingFor(T)).toMatchObject({ job_id: VC, title: TITLE, status: 'queued' })
+        // пока перевод в очереди — ничего не переносится и не применяется
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(ids(ins.appliedFor(T))).toEqual([-12, -11])
+        expect(apiMock.applyEdits).not.toHaveBeenCalled()
+        expect(vcCalls().length).toBe(1)
+      })
+    }
+
+    it('пока идёт перевод, правки и gen трека отклоняются', async () => {
+      const { ins, run } = await startTimbre()
+      await run()
+      await expect(attempt(() => ins.addStemFx(T, fx()))).rejects.toThrow()
+      await expect(attempt(() => ins.setGen(T, { timbre: { ref_job_id: 44, name: 'Другая' } }))).rejects.toThrow()
+      expect(ins.genFor(T).timbre).toEqual(TB)
+    })
+
+    it('перевод готов → правки трека на версии перевода, у трека правки и gen очищены, ход снят; applyEdits(перевод, …, title)', async () => {
+      let finish
+      const applyEdits = vi.fn(() => new Promise((resolve) => { finish = resolve }))
+      const { ins, run } = await startTimbre({ applyEdits })
+      await run()
+      setJob(VC, 'done')
+      await until(() => expect(applyEdits).toHaveBeenCalled())
+      expect(chains(ins.appliedFor(VC))).toEqual(['dewhistle', 'soften'])
+      expect(ins.appliedFor(T) || []).toEqual([])
+      expect(noGen(ins.genFor(T))).toBe(true)
+      expect(ins.applyingFor(T) ?? null).toBe(null)
+      const [parent, specs, title] = applyEdits.mock.calls[0]
+      expect(Number(parent)).toBe(VC)
+      expect(specs.map(s => s.chain).sort()).toEqual(['dewhistle', 'soften'])
+      expect(title).toBe(TITLE)
+      expect(apiMock.submit).not.toHaveBeenCalled()
+      expect(vcCalls().length).toBe(1)
+      finish(501)
+      await until(() => expect(deletesFor(T).length).toBeGreaterThan(0))
+    })
+
+    it('правок нет (только тембр) → перевод готов: renameJob(перевод, title), applyEdits не зовётся, gen очищен', async () => {
+      const { ins, run } = await startTimbre({ edits: [] })
+      await run()
+      setJob(VC, 'done')
+      await until(() => expect(apiMock.renameJob).toHaveBeenCalled())
+      const [id, title] = apiMock.renameJob.mock.calls[0]
+      expect(Number(id)).toBe(VC)
+      expect(title).toBe(TITLE)
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+      expect(noGen(ins.genFor(T))).toBe(true)
+      expect(ins.applyingFor(T) ?? null).toBe(null)
+    })
+
+    it('в) сбой voiceConvert → ход {title, error}, тембр и правки на месте, трек разблокирован', async () => {
+      const voiceConvert = vi.fn(async () => { throw new Error('seed-vc unavailable') })
+      const { ins, run } = await startTimbre({ voiceConvert })
+      await run().catch(() => {})   // наружу или в ход — условие требует ход с причиной
+      await until(() => expect(ins.applyingFor(T)?.error).toBeTruthy())
+      expect(ins.applyingFor(T)).toMatchObject({ title: TITLE })
+      expect(String(ins.applyingFor(T).error)).toContain('seed-vc unavailable')
+      expect(ins.applyingFor(T).job_id ?? null).toBe(null)
+      expect(ins.genFor(T).timbre).toEqual(TB)
+      expect(ids(ins.appliedFor(T))).toEqual([-12, -11])
+      expect(apiMock.submit).not.toHaveBeenCalled()
+      await ins.setGen(T, { timbre: { ref_job_id: 44, name: 'Другая' } })   // не бросает
+      expect(ins.genFor(T).timbre).toEqual({ ref_job_id: 44, name: 'Другая' })
+      await ins.addStemFx(T, fx())
+      expect(ins.appliedFor(T).some(x => x.from === 176)).toBe(true)
+    })
+
+    it('в) джоба перевода error → ход с причиной, тембр и правки на месте, трек разблокирован', async () => {
+      const { ins, run } = await startTimbre()
+      await run()
+      setJob(VC, 'error', { error: 'Seed-VC crashed' })
+      await until(() => expect(ins.applyingFor(T)?.error).toBeTruthy())
+      expect(String(ins.applyingFor(T).error)).toContain('Seed-VC crashed')
+      expect(ins.genFor(T).timbre).toEqual(TB)
+      expect(ids(ins.appliedFor(T))).toEqual([-12, -11])
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+      expect(apiMock.renameJob).not.toHaveBeenCalled()
+      await ins.addStemFx(T, fx())
+    })
+  })
+
+  describe('б) рендер + тембр — сначала рендер, потом перевод его голоса', () => {
+    const GEN_TB = { ...GEN, timbre: TB }
+
+    async function startBoth({ edits = [E1, E2], voiceConvert, applyEdits } = {}) {
+      const ins = await load({ drafts: [remote(T, edits, { gen: GEN_TB })], voiceConvert, applyEdits })
+      await vi.waitFor(() => expect(ins.genFor(T)?.timbre).toEqual(TB), WAIT)
+      await vi.waitFor(() => expect(ins.appliedFor(T)?.length || 0).toBe(edits.length), WAIT)
+      setJob(NEW, 'queued')
+      setJob(VC, 'queued')
+      await ins.applyAll(T, TITLE, { request: REQUEST })
+      return ins
+    }
+
+    it('submit(тело студии); ход помнит тембр (и в черновике воркера); перевод пока не зовётся', async () => {
+      const ins = await startBoth()
+      expect(apiMock.submit).toHaveBeenCalledTimes(1)
+      expect(apiMock.submit.mock.calls[0][0]).toEqual(REQUEST)
+      expect(ins.applyingFor(T)).toMatchObject({ job_id: NEW, title: TITLE, timbre: TB })
+      await vi.waitFor(() => expect(lastPut(T)?.[1]?.applying).toMatchObject({ job_id: NEW, timbre: TB }), WAIT)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(apiMock.voiceConvert).not.toHaveBeenCalled()
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+    })
+
+    it('рендер готов → voiceConvert(рендер, {ref_job_id}) один раз; ход {job_id: перевод, title, queued} без тембра; правки и gen остаются на треке', async () => {
+      const ins = await startBoth()
+      setJob(NEW, 'done')
+      await until(() => expect(apiMock.voiceConvert).toHaveBeenCalled())
+      expect(Number(vcCalls()[0][0])).toBe(NEW)
+      expect(vcCalls()[0][1]).toEqual({ ref_job_id: TB.ref_job_id })
+      await until(() => expect(ins.applyingFor(T)?.job_id).toBe(VC))
+      expect(ins.applyingFor(T)).toMatchObject({ job_id: VC, title: TITLE, status: 'queued' })
+      expect(ins.applyingFor(T).timbre ?? null).toBe(null)
+      // на рендер ничего не переехало: последний шаг — перевод
+      expect(ids(ins.appliedFor(T))).toEqual([-12, -11])
+      expect(ins.appliedFor(NEW) || []).toEqual([])
+      expect(ins.genFor(T)).toMatchObject({ specs: [S1], voice: VOICE, timbre: TB })
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+      expect(apiMock.renameJob).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(vcCalls().length).toBe(1)
+      expect(apiMock.submit).toHaveBeenCalledTimes(1)
+    })
+
+    it('перевод готов → правки на версии перевода, у трека правки и gen очищены; applyEdits(перевод, …, title)', async () => {
+      const applyEdits = vi.fn(() => new Promise(() => {}))   // итог висит — смотрим реестры до его конца
+      const ins = await startBoth({ applyEdits })
+      setJob(NEW, 'done')
+      await until(() => expect(ins.applyingFor(T)?.job_id).toBe(VC))
+      setJob(VC, 'done')
+      await until(() => expect(apiMock.applyEdits).toHaveBeenCalled())
+      expect(chains(ins.appliedFor(VC))).toEqual(['dewhistle', 'soften'])
+      expect(ins.appliedFor(NEW) || []).toEqual([])
+      expect(ins.appliedFor(T) || []).toEqual([])
+      expect(noGen(ins.genFor(T))).toBe(true)
+      expect(ins.applyingFor(T) ?? null).toBe(null)
+      const [parent, , title] = apiMock.applyEdits.mock.calls[0]
+      expect(Number(parent)).toBe(VC)
+      expect(title).toBe(TITLE)
+      expect(vcCalls().length).toBe(1)
+      expect(apiMock.submit).toHaveBeenCalledTimes(1)
+    })
+
+    it('правок нет → перевод готов: renameJob(перевод, title)', async () => {
+      const ins = await startBoth({ edits: [] })
+      setJob(NEW, 'done')
+      await until(() => expect(ins.applyingFor(T)?.job_id).toBe(VC))
+      setJob(VC, 'done')
+      await until(() => expect(apiMock.renameJob).toHaveBeenCalled())
+      expect(Number(apiMock.renameJob.mock.calls[0][0])).toBe(VC)
+      expect(apiMock.renameJob.mock.calls[0][1]).toBe(TITLE)
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+      expect(noGen(ins.genFor(T))).toBe(true)
+    })
+
+    it('в) сбой voiceConvert после рендера → ход {title, error}, gen с тембром и правки на треке, трек разблокирован', async () => {
+      const voiceConvert = vi.fn(async () => { throw new Error('ref not done') })
+      const ins = await startBoth({ voiceConvert })
+      setJob(NEW, 'done')
+      await until(() => expect(voiceConvert).toHaveBeenCalled())
+      await until(() => expect(ins.applyingFor(T)?.error).toBeTruthy())
+      expect(ins.applyingFor(T)).toMatchObject({ title: TITLE })
+      expect(String(ins.applyingFor(T).error)).toContain('ref not done')
+      expect(ins.genFor(T)).toMatchObject({ specs: [S1], timbre: TB })
+      expect(ids(ins.appliedFor(T))).toEqual([-12, -11])
+      expect(ins.appliedFor(NEW) || []).toEqual([])
+      expect(apiMock.applyEdits).not.toHaveBeenCalled()
+      expect(apiMock.renameJob).not.toHaveBeenCalled()
+      await ins.setGen(T, { timbre: { ref_job_id: 44, name: 'Другая' } })   // не бросает
+      await ins.addStemFx(T, fx())
+      expect(ins.appliedFor(T).some(x => x.from === 176)).toBe(true)
+    })
+  })
+
+  describe('д) «без голоса» + тембр — тембр игнорируется', () => {
+    it('submit; рендер готов → перевода нет, правки на рендере, gen очищен', async () => {
+      const applyEdits = vi.fn(() => new Promise(() => {}))   // итог висит — смотрим реестры до его конца
+      const ins = await load({ applyEdits, drafts: [remote(T, [E1, E2], { gen: { specs: [], voice: null, instrumental: true, timbre: TB } })] })
+      await vi.waitFor(() => expect(ins.genFor(T)?.instrumental).toBe(true), WAIT)
+      await vi.waitFor(() => expect(ins.appliedFor(T)?.length || 0).toBe(2), WAIT)
+      setJob(NEW, 'queued')
+      await ins.applyAll(T, TITLE, { request: REQUEST })
+      expect(apiMock.submit).toHaveBeenCalledTimes(1)
+      expect(apiMock.voiceConvert).not.toHaveBeenCalled()
+      setJob(NEW, 'done')
+      await until(() => expect(apiMock.applyEdits).toHaveBeenCalled())
+      expect(Number(apiMock.applyEdits.mock.calls[0][0])).toBe(NEW)
+      expect(chains(ins.appliedFor(NEW))).toEqual(['dewhistle', 'soften'])
+      expect(ins.appliedFor(T) || []).toEqual([])
+      expect(noGen(ins.genFor(T))).toBe(true)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(apiMock.voiceConvert).not.toHaveBeenCalled()
+    })
   })
 })

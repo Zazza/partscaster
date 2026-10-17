@@ -12,12 +12,13 @@ import { useRevoice } from '../composables/useRevoice.js'
 import { vocalEndsQuiet, voiceSource } from '../vocalParts.js'
 import { INSERT_DEFAULT_DB, INSERT_MAX_DB, INSERT_MIN_DB } from '../insertMix.js'
 import { insertTitle, insertWindow, mixChildId, mixLabel } from '../insertLabels.js'
-import { EDIT_STEPS, editsBySteps, isEmptyGen } from '../draftEdits.js'
+import { EDIT_STEPS, editsBySteps, isEmptyGen, genNeedsRender, genTimbre } from '../draftEdits.js'
+import { useWindowPlay } from '../composables/useWindowPlay.js'
 import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
 import { isFlat, bumpRange, withEnvelope } from '../envelope.js'
 import { ONE_CLICK_LEVELS, oneClickParams } from '../oneClick.js'
-import { chainDefaults, effectGroups, effectsIn, groupOf, firstSungSec, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
+import { chainDefaults, effectGroups, effectsIn, groupOf, firstSungSec, voicePreviewWindow, timbreWindow, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
@@ -820,6 +821,8 @@ const finalGroups = computed(() => {
   if (g.specs && g.specs.length) genBy.edit.push(t('studio.final.gen.plan', { list: g.specs.map((x) => x.label).join(', ') }))
   if (g.instrumental) genBy.edit.push(t('studio.final.gen.instrumental'))
   else if (g.voice) genBy.voice.push(t('studio.final.gen.voice', { name: g.voice.name }))
+  const tb = genTimbre(g)
+  if (tb) genBy.voice.push(t('studio.final.gen.timbre', { name: tb.name }))
   const items = Object.fromEntries(editGroups.value.map((x) => [x.step, x.items]))
   return EDIT_STEPS.map((step) => ({ step, gen: genBy[step], items: items[step] || [] }))
     .filter((x) => x.gen.length || x.items.length)
@@ -834,14 +837,17 @@ async function applyAll() {
   try {
     const title = t('studio.final.title', { title: props.job.title || t('common.track') })
     let genCtx
-    if (hasGen.value) {
-      // один рендер со всеми изменениями с рендером: план с приёмами, голос, «без голоса»
+    if (genNeedsRender(gen.value)) {
+      // один рендер со всеми изменениями с рендером: план с приёмами, голос, «без голоса»; тембр песни —
+      // переводом голоса после рендера (или сразу, если рендер не нужен) — ход ведёт useInserts
       await ensureBaseAbc()
       genCtx = { request: genRequest(genJob.value, { baseAbc: baseAbc.value, gen: gen.value,
         vocals: vocalVoices(rollData.value && rollData.value.voice_order), title }) }
     }
     const id = await inserts.applyAll(props.job.id, title, genCtx)
-    applyAllMsg.value = genCtx ? t('studio.final.rendering', { id }) : t('studio.final.done', { id })
+    // только тембр — в очереди перевод голоса, а не рендер и не готовый итог
+    applyAllMsg.value = genCtx ? t('studio.final.rendering', { id })
+      : genTimbre(gen.value) ? t('studio.final.converting', { id }) : t('studio.final.done', { id })
   } catch (e) {
     applyAllMsg.value = String(e)
   } finally { applyAllBusy.value = false }
@@ -1163,21 +1169,58 @@ const importTip = (key) => (isImport.value ? t('studio.import.noTokens') : t(key
 // ЭКСПЕРИМЕНТ «голос альбома» (Seed-VC на воркере):
 // голос этого трека поётся тембром голоса другой песни; кусок образца воркер
 // подбирает сам. Без Seed-VC на воркере блок виден с подписью «недоступно».
+// Как все блоки: «▶ прослушать кусок» (перевод только куска) → «Применить» (тембр — в черновик, gen.timbre);
+// новую версию с тембром делает «применить всё»
 const seedvcOk = ref(false)
 const vcRef = ref('')
 const vcBusy = ref(false)
+const vcMsg = ref('')
+const vcErr = ref('')
+const vcAfter = useWindowPlay('vc-after', () => t('instr.after'))
+const vcBefore = useWindowPlay('vc-before', () => t('instr.before'))
+const vcWin = ref(null)   // окно последнего куска — «было» играет тот же кусок трека
+watch(() => props.job.id, () => {
+  const tb = gen.value && gen.value.timbre
+  vcRef.value = tb ? String(tb.ref_job_id) : ''
+  vcMsg.value = ''
+  vcErr.value = ''
+  vcWin.value = null
+}, { immediate: true })
 const vcRefOptions = computed(() => allJobs.value
   .filter((j) => !j.parent_id && j.id !== props.job.id && j.status === 'done' && j.audio_file)
   .map((j) => ({ value: String(j.id), label: `#${j.id} ${j.title || ''}` })))
-async function submitVoice() {
+const vcRefName = () => {
+  const o = vcRefOptions.value.find((x) => x.value === vcRef.value)
+  return o ? o.label : '#' + vcRef.value
+}
+// кусок: выделение, без него — от первого спетого такта; Seed-VC переводит только его (до пары минут)
+async function previewTimbre() {
   if (!Number(vcRef.value)) return
+  vcErr.value = ''
+  vcMsg.value = ''
+  const jobId = props.job.id
+  const w = timbreWindow(voicePreviewWindow(selRange.value, sungAt.value, waveCursor.value || null, props.job.duration_sec),
+    props.job.duration_sec)
   vcBusy.value = true
   try {
-    await api.voiceConvert(props.job.id, { ref_job_id: Number(vcRef.value) })
-    emit('close')
-  } catch (e) {
-    rollErr.value = String(e)
-  } finally { vcBusy.value = false }
+    const r = await api.voicePreview(jobId, { ref_job_id: Number(vcRef.value), from: w.from, to: w.to })
+    vcWin.value = { from: r.from, to: r.to }
+    await vcAfter.play({ jobId, file: r.file, dur: r.to - r.from, from: 0, to: r.to - r.from })
+  } catch (e) { vcErr.value = String(e) } finally { vcBusy.value = false }
+}
+function playTimbreBefore() {
+  const w = vcWin.value
+  if (!w) return
+  vcBefore.play({ jobId: props.job.id, file: inserts.mixFile(props.job.id) || props.job.audio_file,
+    dur: props.job.duration_sec, from: w.from, to: w.to })
+}
+function applyTimbre() {
+  if (!Number(vcRef.value)) return
+  vcErr.value = ''
+  try {
+    inserts.setGen(props.job.id, { timbre: { ref_job_id: Number(vcRef.value), name: vcRefName() } })
+    vcMsg.value = t('studio.vc.applied')
+  } catch (e) { vcErr.value = String(e) }
 }
 
 // подпись варианта: эффект целиком — по цепочке, микс — по реестру вклеек,
@@ -1838,10 +1881,18 @@ function setWindowTitle() {
               <p v-if="!seedvcOk" class="muted">{{ t('studio.vc.unavailable') }}</p>
               <div v-else class="od-row">
                 <VSelect v-model="vcRef" :options="vcRefOptions" searchable :placeholder="t('studio.vc.ref')" style="width:320px" />
-                <button class="primary small" :disabled="vcBusy || !vcRef" @click="submitVoice">
-                  {{ vcBusy ? '…' : t('studio.vc.go') }}
-                </button>
+                <button class="ghost small-btn" :disabled="vcBusy || !vcRef" :title="t('studio.vc.listen.tip')" @click="previewTimbre">
+                  <template v-if="vcBusy">{{ t('studio.vc.busy') }}</template>
+                  <template v-else>{{ playBtn('vc-after') }} {{ t('studio.vc.listen') }}</template></button>
+                <button v-if="vcWin" class="ghost small-btn" :title="t('instr.before.tip')" @click="playTimbreBefore">
+                  {{ playBtn('vc-before') }} {{ t('instr.before') }}</button>
+                <span class="spacer"></span>
+                <button class="primary small" :disabled="vcBusy || !vcRef || (gen && gen.instrumental)"
+                        :title="t('studio.vc.apply.tip')" @click="applyTimbre">{{ t('studio.dsp.apply') }}</button>
               </div>
+              <p v-if="seedvcOk && gen && gen.instrumental" class="muted">{{ t('studio.vc.instrumental') }}</p>
+              <p v-if="vcMsg" class="muted">{{ vcMsg }}</p>
+              <p v-if="vcErr" class="error">{{ vcErr }}</p>
               </div>
             </details>
           </div>

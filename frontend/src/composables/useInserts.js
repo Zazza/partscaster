@@ -9,7 +9,7 @@ import { sectionRequest, TRICK_INSTRUMENTS } from '../abcEdit.js'
 import { renderJob } from '../requests.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
-import { draftState, isEmptyDraft, isEmptyGen, mergeDrafts } from '../draftEdits.js'
+import { draftState, isEmptyDraft, isEmptyGen, genNeedsRender, genTimbre, mergeDrafts } from '../draftEdits.js'
 
 const { t } = useI18n()
 const KEY = 'yue_insert_queue'
@@ -562,6 +562,16 @@ async function advanceApplying() {
         if (row.status !== a.status) setApplying(pid, { ...a, status: row.status })
         continue
       }
+      if (a.timbre) {
+        // рендер готов, следом — тембр песни: голос рендера переводится Seed-VC; правки и gen пока на исходном
+        try {
+          const vc = await api.voiceConvert(Number(a.job_id), { ref_job_id: a.timbre.ref_job_id })
+          setApplying(pid, { job_id: vc, title: a.title, status: 'queued' })
+        } catch (e) {
+          setApplying(pid, { title: a.title, error: String((e && e.message) || e) })
+        }
+        continue
+      }
       const newId = Number(a.job_id)
       const from = Number(pid)
       // правки трека — на новую версию (как у пересборки), у исходного трека — чисто
@@ -604,13 +614,30 @@ function applyAll(parentId, title, genCtx) {
 }
 // без проверки хода — для шага итога самого хода (finalize): отметка {finalize} стоит, пока он не закончится
 function applyAllOwn(parentId, title, genCtx) {
-  if (genCtx && genCtx.request && !isEmptyGen(genFor(parentId))) {
-    // изменения с рендером: один рендер со всеми ними; ход — в черновике (переживает закрытие студии)
+  const g = genFor(parentId)
+  const tb = genTimbre(g)
+  if (genNeedsRender(g) && genCtx && genCtx.request) {
+    // изменения с рендером: один рендер со всеми ними; ход — в черновике (переживает закрытие студии);
+    // тембр песни ход помнит — переводом голоса после рендера
     applying.add(Number(parentId))
     return (async () => {
       const id = await api.submit(genCtx.request)
-      setApplying(parentId, { job_id: id, title, status: 'queued' })
+      setApplying(parentId, { job_id: id, title, status: 'queued', ...(tb ? { timbre: { ...tb } } : {}) })
       return id
+    })().finally(() => applying.delete(Number(parentId)))
+  }
+  if (!genNeedsRender(g) && tb) {
+    // только тембр: голос самого трека — тембром песни (Seed-VC), новая версия; дальше — как после рендера
+    applying.add(Number(parentId))
+    return (async () => {
+      try {
+        const id = await api.voiceConvert(Number(parentId), { ref_job_id: tb.ref_job_id })
+        setApplying(parentId, { job_id: id, title, status: 'queued' })
+        return id
+      } catch (e) {
+        setApplying(parentId, { title, error: String((e && e.message) || e) })
+        throw e
+      }
     })().finally(() => applying.delete(Number(parentId)))
   }
   applying.add(Number(parentId))

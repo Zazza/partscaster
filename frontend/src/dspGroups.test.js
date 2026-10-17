@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { voiceFxChains, firstSungSec, voicePreviewWindow } from './dspVoice.js'
+import { voiceFxChains, firstSungSec, voicePreviewWindow, timbreWindow, TIMBRE_MIN_SEC, TIMBRE_MAX_SEC } from './dspVoice.js'
 import { previewWindow, PREVIEW_LEN } from './fxPreview.js'
 
 // internal-voice-fx: блок
@@ -125,5 +125,77 @@ describe('ТК6 voicePreviewWindow — кусок превью эффекта н
     expect(voicePreviewWindow(null, undefined, 100, 200)).toEqual(previewWindow(null, 100, 200))
     expect(voicePreviewWindow(null, null, null, 200)).toEqual(previewWindow(null, null, 200))
     expect(voicePreviewWindow(null, null, 195, 200)).toEqual(previewWindow(null, 195, 200))
+  })
+})
+
+// internal-album-voice-draft: окно куска, который «Голоса альбома» отдаёт воркеру.
+// Воркер принимает только куски длиной 3–30 с; timbreWindow приводит выбор студии
+// к этим границам. durSec = длина трека (0/undefined — неизвестна, верхней границы нет).
+describe('internal-album-voice-draft: окно куска «Голоса альбома»', () => {
+  it('границы воркера: 3 и 30 секунд', () => {
+    expect(TIMBRE_MIN_SEC).toBe(3)
+    expect(TIMBRE_MAX_SEC).toBe(30)
+  })
+
+  it('кусок 3–30 с не меняется (включая ровно 3 и ровно 30)', () => {
+    expect(timbreWindow({ from: 10, to: 20 }, 200)).toEqual({ from: 10, to: 20 })
+    expect(timbreWindow({ from: 10, to: 13 }, 200)).toEqual({ from: 10, to: 13 })
+    expect(timbreWindow({ from: 10, to: 40 }, 200)).toEqual({ from: 10, to: 40 })
+  })
+
+  it('длиннее 30 с — начало сохраняется, конец = начало + 30', () => {
+    expect(timbreWindow({ from: 15, to: 120 }, 200)).toEqual({ from: 15, to: 45 })
+    expect(timbreWindow({ from: 0, to: 30.5 }, 200)).toEqual({ from: 0, to: 30 })
+  })
+
+  it('короче 3 с — растягивается до 3 с вперёд', () => {
+    expect(timbreWindow({ from: 50, to: 51 }, 200)).toEqual({ from: 50, to: 53 })
+  })
+
+  it('кусок нулевой длины — тоже 3 с', () => {
+    expect(timbreWindow({ from: 50, to: 50 }, 200)).toEqual({ from: 50, to: 53 })
+  })
+
+  it('короткий кусок у конца трека — сдвигается назад, конец = длина трека', () => {
+    expect(timbreWindow({ from: 198.5, to: 199.5 }, 200)).toEqual({ from: 197, to: 200 })
+  })
+
+  it('растянутый кусок ровно до конца трека — не сдвигается', () => {
+    expect(timbreWindow({ from: 197, to: 198 }, 200)).toEqual({ from: 197, to: 200 })
+  })
+
+  it('длина трека неизвестна (0 или undefined) — верхней границы нет', () => {
+    expect(timbreWindow({ from: 198.5, to: 199 }, 0)).toEqual({ from: 198.5, to: 201.5 })
+    expect(timbreWindow({ from: 198.5, to: 199 }, undefined)).toEqual({ from: 198.5, to: 201.5 })
+    expect(timbreWindow({ from: 100, to: 500 }, 0)).toEqual({ from: 100, to: 130 })
+  })
+
+  it('отрицательное начало считается нулём до остальных правил', () => {
+    expect(timbreWindow({ from: -5, to: 10 }, 200)).toEqual({ from: 0, to: 10 })
+    // после обрезки до 0 кусок короче 3 с — растягивается
+    expect(timbreWindow({ from: -5, to: 1 }, 200)).toEqual({ from: 0, to: 3 })
+    // после обрезки до 0 кусок длиннее 30 с — режется
+    expect(timbreWindow({ from: -10, to: 35 }, 200)).toEqual({ from: 0, to: 30 })
+  })
+
+  it('трек короче 3 с — весь трек', () => {
+    expect(timbreWindow({ from: 0.5, to: 1 }, 2)).toEqual({ from: 0, to: 2 })
+    expect(timbreWindow({ from: 0, to: 2 }, 2)).toEqual({ from: 0, to: 2 })
+  })
+
+  it('вход не меняется, возвращается новый объект', () => {
+    const cases = [
+      [{ from: 10, to: 20 }, 200],
+      [{ from: 15, to: 120 }, 200],
+      [{ from: 198.5, to: 199.5 }, 200],
+      [{ from: -5, to: 1 }, 200],
+      [{ from: 0.5, to: 1 }, 2],
+    ]
+    for (const [w, dur] of cases) {
+      const snap = { ...w }
+      const out = timbreWindow(w, dur)
+      expect(out).not.toBe(w)
+      expect(w).toEqual(snap)
+    }
   })
 })

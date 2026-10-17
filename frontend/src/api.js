@@ -7,7 +7,7 @@ import {
   YueJobPeaks, YueJobSpectrumPNG,
   YueMakeStems, YueJobStems, YueApplyFx, YueFxAssets, YueUploadFxAsset, YueInstallFxKit, YueFxPhrases, YueFxPhrase, YueGuitarPart, YuePlayLoop, YueFxKitProgress, YueInstallEngineModel, YueEngineModelProgress,
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
-  YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
+  YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueVoicePreview, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPreset, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
@@ -145,6 +145,8 @@ export const api = {
   setJobFolder: (id, folder) => YueSetJobFolder(id, folder || ''),
   // «голос альбома»: { ref_job_id, ref_from?, ref_dur?, steps?, title? } → id джобы
   voiceConvert: (id, params) => YueVoiceConvert(id, params),
+  // «голос альбома», прослушать кусок: {ref_job_id, from, to} → {file, from, to}
+  voicePreview: (id, params) => YueVoicePreview(id, params),
   playFile: (id, file, dur) => YuePlayFile(id, file, dur),
   playAudio: (id) => YuePlayAudio(id),
   stopAudio: () => YueStopAudio(),

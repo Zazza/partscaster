@@ -186,16 +186,22 @@ def convert(source_wav: Path, ref_wav: Path, out_wav: Path, steps: int, timeout:
 
 
 def run(src_dir: Path, audio_name: str, ref_dir: Path, out_dir: Path, ref_from: float | None, ref_dur: float,
-        steps: int) -> Path:
+        steps: int, src_from: float | None = None, src_to: float | None = None,
+        out_name: str = "audio.flac") -> Path:
     """Голос трека src_dir (микс audio_name и дорожка stem-vocals.flac уже есть) —
-    тембром голоса из ref_dir в окне [ref_from, ref_from + ref_dur) → out_dir/audio.flac.
-    ref_from None — окно подбирается само (best_window)."""
+    тембром голоса из ref_dir в окне [ref_from, ref_from + ref_dur) → out_dir/out_name.
+    ref_from None — окно подбирается само (best_window). src_from/src_to — только кусок
+    трека [src_from, src_to) («прослушать кусок»): голос и микс обрезаются до перевода."""
     import soundfile as sf
 
     vocals, sr = sf.read(str(src_dir / "stem-vocals.flac"), dtype="float32", always_2d=True)
     mix, msr = sf.read(str(src_dir / audio_name), dtype="float32", always_2d=True)
     if msr != sr:
         mix = resample(mix, msr, sr)
+    if src_from is not None or src_to is not None:
+        a = int(max(0.0, src_from or 0.0) * sr)
+        b = len(vocals) if src_to is None else int(src_to * sr)
+        vocals, mix = vocals[a:b], mix[a:b]
     ref, rsr = sf.read(str(ref_dir / "stem-vocals.flac"), dtype="float32", always_2d=True)
     if ref_from is None:
         ref_from = best_window(ref, rsr, ref_dur)
@@ -213,6 +219,6 @@ def run(src_dir: Path, audio_name: str, ref_dir: Path, out_dir: Path, ref_from: 
     # «озвучивает» утечки гитар в паузах дорожки голоса; вне фраз — исходный микс
     out = replace_vocal(mix, vocals, vc, activity_mask(vocals, sr), match_gain(vocals, vc))
     out_dir.mkdir(parents=True, exist_ok=True)
-    dst = out_dir / "audio.flac"
+    dst = out_dir / out_name
     sf.write(str(dst), out, sr)
     return dst

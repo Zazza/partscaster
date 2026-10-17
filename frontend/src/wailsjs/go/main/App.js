@@ -214,10 +214,6 @@ export function YueJobs() {
   return window['go']['main']['App']['YueJobs']();
 }
 
-export function YueMakeMinus(arg1, arg2) {
-  return window['go']['main']['App']['YueMakeMinus'](arg1, arg2);
-}
-
 export function YueMakeStems(arg1) {
   return window['go']['main']['App']['YueMakeStems'](arg1);
 }
@@ -416,6 +412,10 @@ export function YueVoiceCreate(arg1, arg2, arg3, arg4) {
 
 export function YueVoiceDelete(arg1) {
   return window['go']['main']['App']['YueVoiceDelete'](arg1);
+}
+
+export function YueVoicePreview(arg1, arg2) {
+  return window['go']['main']['App']['YueVoicePreview'](arg1, arg2);
 }
 
 export function YueVoices() {
