@@ -94,7 +94,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 ### Очередь воркера
 
 Та же очередь, что человек видит в приложении. Долгие инструменты (генерации, `plan`, `job_preview`,
-`make_stems`, `make_minus`, `rebuild_sections`, `sound_preset_apply`, `revoice_apply`, распознавание текста и
+`make_stems`, `rebuild_sections`, `sound_preset_apply`, `revoice_apply`, распознавание текста и
 нот, движок эффектов с усилителем и т. п.) встают в неё с пометкой «ИИ» и ждут своей очереди. Если человек
 отменил операцию, инструмент вернёт ошибку «отменено человеком».
 
@@ -155,7 +155,6 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 | Инструмент | Параметры | Что делает |
 |---|---|---|
 | `make_stems` | **job_id**, model | Разделить трек: основные дорожки drums/bass/other/vocals, подробные guitar/piano и (только RoFormer) части барабанов kick/snare/toms/hh/ride/crash. `model` — `htdemucs` (быстро) или `roformer` (чище, в ~4,5 раза дольше) разово; пусто — настройка `stems_model` |
-| `make_minus` | **job_id**, **exclude** | Минус: микс основных дорожек без выбранных (например, `vocals` для караоке) |
 | `overdub` | **job_id**, **style**, lyrics, seed, gain, abc | Партия поверх трека по его партитуре с новым стилем. `gain` 0.1–1 (0.5); 0 — кавер новым треком без смешивания. `abc` — свой план партии. Без `lyrics` — вокализ |
 | `guitar_part` | **job_id**, style | Что сыграет гитарист «по аккордам плана» (блок `gtrnotes`): такты, удары с нотами. `style` 0–4: авто, бой, перебор, бас + аккорд, квинты |
 | `voice_convert` | **job_id**, **ref_job_id**, ref_from, ref_dur, steps, title | ЭКСПЕРИМЕНТ «голос альбома»: голос трека тембром образца (Seed-VC на воркере). Голос узнаётся, но дрожит — см. [deployment.md](deployment.md). Без Seed-VC — ошибка 503 |
@@ -248,7 +247,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 | Инструмент | Параметры | Что делает |
 |---|---|---|
 | `config_get` | — | Адрес воркера, пути данных и движки воркера |
-| `config_set` | server_url, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент: меньше видеопамяти, тот же сид даёт другую песню), `cpp_model`, `cpp_low_vram` — со следующей генерации |
+| `config_set` | server_url, stems_auto, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; `stems_auto` — когда делать дорожки: `studio` (при открытии студии) / `always` (сразу у каждого готового трека) / `manual`; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент: меньше видеопамяти, тот же сид даёт другую песню), `cpp_model`, `cpp_low_vram` — со следующей генерации |
 | `engine_model_install` | **name** | Скачать модель yue2.cpp: `bf16` (7,2 ГБ), `q8` (3,8 ГБ), `q6` (2,9 ГБ), `q5` (2,6 ГБ). Ждёт конца загрузки; потом — `config_set engine=cpp cpp_model=<имя>` |
 
 ### Установка и диагностика
@@ -263,7 +262,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 **Минус без вокала.** «Поставь трек в стиле "70s analog reggae, 75 BPM" инструменталом» → `submit`; агент
 ждёт по `jobs`, пока трек не станет `done`; «скачай mp3» → `artifacts` → путь к файлу; «сделай минус без
-вокала» → `make_stems` + `make_minus` → `artifacts`.
+вокала» → `make_stems` + `rebuild_sections` с заглушенной дорожкой `vocals` → `artifacts`.
 
 **Синт по аккордам.** `chord_grid` (аккорды по тактам звука) → блок `synth` с нотами в секундах трека →
 `rebuild_sections` с записью `{child_id: 0, stems: ["mix"], add: true, engine: [synth…, эффекты…]}`.

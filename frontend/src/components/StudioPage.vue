@@ -7,7 +7,7 @@ import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useInserts } from '../composables/useInserts.js'
-import { applyTrick, beatSecAt, pickTargets, vocalCeiling, sectionRequest, sectionWindows, sliceAbc, sliceLeadSec, TRICK_INSTRUMENTS, TRICK_MUTES } from '../abcEdit.js'
+import { applyTrick, beatSecAt, pickTargets, vocalCeiling, sectionRequest, sectionWindows, sliceLeadSec, TRICK_INSTRUMENTS, TRICK_MUTES } from '../abcEdit.js'
 import { useRevoice } from '../composables/useRevoice.js'
 import { vocalEndsQuiet, voiceSource } from '../vocalParts.js'
 import { INSERT_DEFAULT_DB, INSERT_MAX_DB, INSERT_MIN_DB } from '../insertMix.js'
@@ -15,14 +15,15 @@ import { insertTitle, insertWindow, mixChildId, mixLabel } from '../insertLabels
 import { EDIT_STEPS, editsBySteps, isEmptyGen } from '../draftEdits.js'
 import { isPlaceRecord, placeLabel } from '../mixDesk.js'
 import { applyFoundTones } from '../dspTones.js'
-import { isFlat, bumpRange } from '../envelope.js'
+import { isFlat, bumpRange, withEnvelope } from '../envelope.js'
 import { ONE_CLICK_LEVELS, oneClickParams } from '../oneClick.js'
 import { chainDefaults, chainGroupOptions, firstSungSec, hasGrid, needsStem, voiceTarget } from '../dspVoice.js'
 import { previewWindow } from '../fxPreview.js'
 import { sectionLabel } from '../sectionNames.js'
 import { cursorSec as cursorInterp, gridMarks, posEdges, secToPosRange } from '../waveLogic.js'
 import { targetFor, targetChoice } from '../activeTrack.js'
-import { continueRequest, fragmentRequest, fragmentWindow, genRequest, renderJob, revoicePlan, revoiceRecord, stemFxRequest, trickStyle as trickStyleOf, vocalBars, vocalVoices } from '../requests.js'
+import { CONT_HINTS, CONT_HINT_GROUPS, contStyleAdd } from '../contHints.js'
+import { continueRequest, fragmentRequest, fragmentWindow, genRequest, renderJob, revoicePlan, revoiceRecord, stemFxRequest, hasCyrillic, vocalBars, vocalVoices } from '../requests.js'
 import { resultTitle, resultsOrder, resultDate, playFragment as playFragmentJob } from '../results.js'
 import { jobWatchStep } from '../jobWatch.js'
 import { readFlag, writeFlag } from '../prefs.js'
@@ -57,8 +58,11 @@ const studioReady = computed(() => !!rollData.value || (!abcFile.value && !rollB
 const rollBusy = ref(false)
 const rollErr = ref('')
 const rollSel = ref(null)      // {a: barIdx, b: barIdx}
-const stemMute = ref({})       // {drums: true, ...} — что выкинуть из минуса
 const stemsList = ref([])
+// раскрыты блоки «Синт по аккордам» / «Перкуссия по сетке»: сетка тактов разбирается при раскрытии
+const synthOpen = ref(false)
+const percOpen = ref(false)
+const stemsLoaded = ref(false)   // список дорожек прочитан: пустой — дорожек правда нет (пульт делит трек сам)
 const previewBusy = ref(false)
 let rollDrag = false
 
@@ -84,7 +88,6 @@ const waveMode = ref('amp')         // 'amp' | 'spectrum'
 const waveSnap = ref(true)          // прилипание границ выделения к тактам
 const waveSelPrecise = ref(null)    // {from, to} — точные секунды выделения по волне
 const waveCursor = ref(0)           // позиция воспроизведения по артефакту волны
-const minusReady = ref(false)       // минус.flac уже собран — доступен в селекторе волны
 const spectrumUrl = ref('')
 const spectrumCache = new Map()     // file → data:URL
 let waveSeekBusy = false            // перемотка = ffmpeg-перекодировка на ПК
@@ -135,7 +138,6 @@ const waveFiles = computed(() => {
   }
   for (const v of dspVariants.value) add(v.file, variantLabel(v))
   for (const s of stemsList.value) add(s.file, t('studio.wave.stem', { name: stemLabel(s.name) || s.file }))
-  if (minusReady.value) add('minus.flac', t('studio.wave.minus'))
   return out
 })
 
@@ -225,7 +227,7 @@ onMounted(async () => {
   waveRafId = requestAnimationFrame(waveCursorLoop)
   loadWave()
   await openRoll()
-  try { stemsList.value = (await api.jobStems(props.job.id)) || [] } catch {}
+  try { stemsList.value = (await api.jobStems(props.job.id)) || []; stemsLoaded.value = true } catch {}
   try { dspChains.value = (await api.dspChains()) || [] } catch {}
   // для подписей вклеек из старых файлов (рендер куска → инструмент)
   try { allJobs.value = (await api.jobs()) || [] } catch { /* без списка — подпись по номеру */ }
@@ -237,7 +239,6 @@ onMounted(async () => {
   try {
     const st = JSON.parse(localStorage.getItem('yue_studio_state') || '{}')
     const per = st.jobs && st.jobs[props.job.id] || {}
-    if (per.stemMute) stemMute.value = per.stemMute
     // примочки только на голос в общем списке больше нет (они в шаге «Голос») — такой выбор не восстанавливаем
     if (per.dspSel && !dspChains.value.some((c) => c.id === per.dspSel && c.voice)) dspSel.value = per.dspSel
     if (per.dspParams) dspParams.value = per.dspParams
@@ -258,7 +259,6 @@ function saveStudioState() {
     const st = JSON.parse(localStorage.getItem(key) || '{}')
     st.jobs = st.jobs || {}
     st.jobs[props.job.id] = {
-      stemMute: stemMute.value,
       dspSel: dspSel.value, dspParams: dspParams.value,
       trickV: 2,
       trickMarks: sentMarks.value,
@@ -720,45 +720,6 @@ function unpickSelection() {
     : ''
 }
 
-// модель следует плану приблизительно: регистр голоса и инструменты план
-// держит слабо — такие приёмы дублируются припиской в стиль (trickStyleSuffix);
-// тот же двойной ход, что у драматургии «взрыв»
-function trickStyle(base) {
-  return trickStyleOf(base, pendingSpecs.value)
-}
-
-// пересборка: одна кнопка на все накопленные приёмы; тот же стиль/лирика/seed,
-// план с поломками (req_abc). Черновик — быстрая проба начала, список не сбрасывает.
-// черновик-проба плана («✦»): короткий рендер начала с накопленными приёмами — тот же стиль/лирика/seed,
-// план с поломками (req_abc). Полную пересборку по плану делает «применить всё» (приёмы — в черновике, gen.specs)
-async function redraft() {
-  trickBusy.value = true
-  rollErr.value = ''
-  trickMsg.value = ''
-  try {
-    await ensureBaseAbc()
-    // План режем по фактической длительности аудио: аудио могло обрезаться лимитом токенов, а полный план длиннее
-    const full = planDraft.value || baseAbc.value
-    const dur = Number(props.job.duration_sec) || 0
-    const abc = dur > 0 ? sliceAbc(full, 0, dur + 1, 0) : full
-    const id = await api.submit({
-      title: (props.job.title || t('common.track')) + ' · ✦',
-      style: trickStyle(genJob.value.style),
-      lyrics: genJob.value.lyrics,
-      seed: genJob.value.seed || 0,   // тот же seed = тот же голос; 0 — воркер возьмёт сид родителя
-      cot: genJob.value.cot === 'off' ? 'melody' : genJob.value.cot,   // abc требует full|melody
-      abc,
-      draft: true,
-      parent_id: props.job.id, role: 'fragment',
-    })
-    trickMsg.value = t('studio.trick.drafted', { id })
-  } catch (e) {
-    rollErr.value = String(e)
-  } finally {
-    trickBusy.value = false
-  }
-}
-
 // откат: план — исходный, метки с ролла убираются все (отображение;
 // готовые версии уже отрендерены и не меняются)
 function resetDraft() {
@@ -1063,6 +1024,12 @@ async function pickAlt(it, alt) {
 // что изменить в звучании с места: приписка к стилю трека (инструменты и
 // характер в план не записать — «electric guitar enters and builds»)
 const contStyle = ref('')
+// подсказки — подпись на языке интерфейса, модели уходит en (contHints.js); свой текст — как есть
+const contHints = ref([])
+const hintsOf = (g) => CONT_HINTS.filter((h) => h.group === g)
+function toggleContHint(id) {
+  contHints.value = contHints.value.includes(id) ? contHints.value.filter((x) => x !== id) : [...contHints.value, id]
+}
 async function continueFromSel() {
   const r = selTimeRange()
   if (!r) return
@@ -1070,7 +1037,7 @@ async function continueFromSel() {
   rollErr.value = ''
   try {
     if (pendingSpecs.value.length) await ensureBaseAbc()   // приёмы — ровно по разу поверх исходного плана
-    const q = continueRequest(props.job, r, baseAbc.value, pendingSpecs.value, contStyle.value)
+    const q = continueRequest(props.job, r, baseAbc.value, pendingSpecs.value, contStyleAdd(contHints.value, contStyle.value))
     const id = await api.continueJob(q.jobId, q.from, q.seed, q.abc, q.styleAdd)
     buildJob.value = { id, status: 'queued' }
     trickMsg.value = t('studio.cont.done', { id })
@@ -1186,22 +1153,6 @@ async function renderFragment() {
   } finally {
     trickBusy.value = false
   }
-}
-
-async function makeMinus() {
-  const exclude = Object.keys(stemMute.value).filter((k) => stemMute.value[k])
-  if (!exclude.length) return
-  rollBusy.value = true
-  try {
-    const r = await api.makeMinus(props.job.id, exclude)
-    if (r && r.file) {
-      minusReady.value = true
-      toggleArtifact(`m${props.job.id}:minus`, t('studio.minusLabel', { stems: exclude.join(', '), id: props.job.id }),
-        () => api.playFile(props.job.id, r.file, props.job.duration_sec))
-    }
-  } catch (e) {
-    rollErr.value = String(e)
-  } finally { rollBusy.value = false }
 }
 
 // импорт внешнего трека: у него нет токенов модели — продолжить и перепеть нельзя
@@ -1334,26 +1285,34 @@ function bumpSel(delta) {
 // ровная линия на весь трек применима, только чтобы снять уже записанную (иначе применять нечего)
 const envCanApply = computed(() => !envBusy.value
   && (envTarget.value ? true : !isFlat(envPts.value) || !!envRecord()))
+// «▶ прослушать»: трек со всеми правками и этой линией вместо прежней; в «Изменения трека» не пишется
+async function previewEnvelope() {
+  waveErr.value = ''
+  envBusy.value = true
+  const jobId = props.job.id
+  try {
+    const res = await inserts.previewWith(jobId, (list) => withEnvelope(list, envTarget.value, envPts.value))
+    if (res && res.variant) await api.playFile(jobId, res.variant.file, props.job.duration_sec)
+    else await api.playAudio(jobId)
+  } catch (e) {
+    waveErr.value = String(e)
+  } finally { envBusy.value = false }
+}
 async function applyEnvelope() {
+  waveErr.value = ''
   envBusy.value = true
   try {
     const pts = envPts.value.map(({ t, db }) => ({ t, db }))
-    let v
     if (envTarget.value) {
       const res = await inserts.addStemEnvelope(props.job.id, { stem: envTarget.value, envelope: pts })
-      v = res && res.variant
       // пустая линия убрала единственную запись реестра — пересобирать нечего
-      if (!v) waveErr.value = t('studio.wave.env.nothing')
+      if (!(res && res.variant)) waveErr.value = t('studio.wave.env.nothing')
     } else {
       // весь трек: линия — запись черновика на собранный микс (одна на трек), отдельной версии нет
       // ровная линия — снять записанную (пустая линия убирает запись)
-      const res = await inserts.setMixEnvelope(props.job.id, isFlat(pts) ? [] : pts)
-      v = res && res.variant
-      // правок не осталось (сняли единственную линию) — слушать оригинал, а не прежний микс с линией
-      if (res && res.empty) await api.playAudio(props.job.id)
+      await inserts.setMixEnvelope(props.job.id, isFlat(pts) ? [] : pts)
     }
     await reloadVariants()
-    if (v) await api.playFile(props.job.id, v.file, props.job.duration_sec)
   } catch (e) {
     waveErr.value = String(e)
   } finally { envBusy.value = false }
@@ -1568,6 +1527,8 @@ function setWindowTitle() {
                   <button class="ghost small-btn" :disabled="envBusy" :title="t('studio.wave.env.bump.tip')"
                           @click="bumpSel(-ENV_BUMP_DB)">{{ t('studio.wave.env.down') }}</button>
                 </template>
+                <button class="ghost small-btn" :disabled="!envCanApply" :title="t('studio.wave.env.listen.tip')" @click="previewEnvelope">
+                  ▶ {{ t('studio.wave.env.listen') }}</button>
                 <button class="primary small" :disabled="!envCanApply" :title="t('studio.wave.env.apply.tip')" @click="applyEnvelope">
                   {{ envBusy ? '…' : t('studio.wave.env.apply') }}</button>
               </template>
@@ -1622,14 +1583,6 @@ function setWindowTitle() {
             <div class="studio-box-body">
           <div class="trick-bar">
             <div class="trick-group">
-              <span class="trick-cap">{{ t('studio.group.listen') }}</span>
-              <div class="trick-btns">
-                <button class="primary small" :disabled="!selRange || previewBusy" @click="makePreview">
-                  <template v-if="previewBusy">{{ t('studio.preview.busy') }}</template><template v-else><AppIcon name="play" /> {{ t('studio.preview') }}</template>
-                </button>
-              </div>
-            </div>
-            <div class="trick-group">
               <span class="trick-cap">{{ t('studio.group.harmony') }}</span>
               <div class="trick-btns">
                 <button class="ghost small-btn" :disabled="!hasSel || trickBusy"
@@ -1649,6 +1602,8 @@ function setWindowTitle() {
                         :title="t('studio.trick.cut.tip')" @click="runTrick('cut')">{{ t('studio.trick.cut') }}</button>
                 <button class="ghost small-btn" :disabled="trickBusy || !rollData"
                         :title="t('studio.sparse.tip')" @click="sparseVerses">{{ t('studio.sparse') }}</button>
+                <button class="toggle small-btn" :class="{ on: gen && gen.instrumental }" :disabled="!hasVocals || trickBusy"
+                        :title="t('studio.novocal.tip')" @click="toggleInstrumental">{{ t('studio.novocal') }}</button>
               </div>
             </div>
             <div class="trick-group">
@@ -1685,27 +1640,34 @@ function setWindowTitle() {
                         :title="t('studio.trick.inst.tip')" @click="runTrick('instrument', { inst: instSel })">{{ t('studio.trick.inst.add') }}</button>
               </div>
             </div>
-            <div class="trick-group">
+            <!-- продолжение — на всю ширину: своё поле и подсказки по группам -->
+            <div class="trick-group cont">
               <span class="trick-cap">{{ t('studio.group.continue') }}</span>
               <div class="trick-btns">
                 <input v-model="contStyle" class="cont-style" :placeholder="t('studio.cont.style.ph')" :title="t('studio.cont.style.tip')" />
                 <button class="ghost small-btn" :disabled="!hasSel || trickBusy || isImport"
                         :title="importTip('studio.cont.tip')" @click="continueFromSel">{{ t('studio.cont') }}</button>
               </div>
+              <p v-if="hasCyrillic(contStyle)" class="cont-cyr">{{ t('form.style.cyr') }}</p>
+              <div v-for="g in CONT_HINT_GROUPS" :key="g" class="cont-hints">
+                <span class="muted">{{ t('studio.cont.hintgroup.' + g) }}</span>
+                <button v-for="h in hintsOf(g)" :key="h.id" class="toggle" :class="{ on: contHints.includes(h.id) }"
+                        :title="h.en" @click="toggleContHint(h.id)">{{ t('studio.cont.hint.' + h.id) }}</button>
+              </div>
             </div>
             <!-- сборка — на всю ширину: финальные действия над треком -->
             <div class="trick-group assemble">
               <span class="trick-cap">{{ t('studio.group.assemble') }}</span>
               <div class="trick-btns">
+                <!-- было/стало рядом: оригинал выделения и кусок с правками -->
+                <button class="ghost small-btn" :disabled="!selRange || previewBusy" @click="makePreview">
+                  <template v-if="previewBusy">{{ t('studio.preview.busy') }}</template><template v-else><AppIcon name="play" /> {{ t('studio.preview') }}</template>
+                </button>
                 <button class="ghost small-btn" :disabled="trickBusy || !(selTimeRange() || pendingSpecs.length)"
                         :title="t('studio.trick.fragment.tip')" @click="renderFragment">
                   <template v-if="trickBusy">…</template><template v-else><AppIcon name="play" /> {{ t('studio.trick.fragment') }}</template></button>
                 <button class="primary small" :disabled="trickBusy || !(pendingSpecs.length || (gen && gen.specs && gen.specs.length))"
                         :title="t('studio.trick.apply.tip')" @click="applyPlan">{{ t('studio.trick.apply') }}</button>
-                <button class="ghost small-btn" :disabled="trickBusy"
-                        :title="t('studio.trick.redraft.tip')" @click="redraft">{{ t('studio.trick.redraft') }}</button>
-                <button class="toggle small-btn" :class="{ on: gen && gen.instrumental }" :disabled="!hasVocals || trickBusy"
-                        :title="t('studio.novocal.tip')" @click="toggleInstrumental">{{ t('studio.novocal') }}</button>
                 <span class="spacer"></span>
                 <button class="ghost small-btn" :disabled="!pickableCount || trickBusy"
                         :title="t('studio.trick.unpick.tip')" @click="unpickSelection"><AppIcon name="x" /> {{ t('studio.trick.unpick') }}</button>
@@ -1761,241 +1723,228 @@ function setWindowTitle() {
           </p>
             </div>
           </div>
-          <div class="studio-box">
-            <div class="studio-box-head">
-              <span>{{ t('studio.edits.title') }}</span>
-              <span v-if="mixFile && activeEdits.length" class="studio-box-tools">
-                <button class="ghost small-btn" :class="{ stop: isPlaying('v' + job.id + ':' + mixFile) }"
-                        :disabled="mixBuilding || playBusy['v' + job.id + ':' + mixFile]" :title="t('studio.edits.mix.tip')" @click="playMix">
-                  {{ playBtn('v' + job.id + ':' + mixFile) }} {{ t('studio.edits.mix') }}</button>
-              </span>
-            </div>
-            <div class="studio-box-body insert-list">
-            <p v-if="!activeEdits.length" class="muted">{{ t('studio.edits.none') }}</p>
-            <div v-for="it in appliedInserts" :key="it.childId" class="insert-row" :class="{ off: it.off }">
-              <input type="checkbox" :checked="!it.off" :disabled="dbBusy" :title="t('studio.edits.on.tip')" @change="toggleEdit(it)" />
-              <strong>{{ insertTitle(it, insertNames) }}</strong>
-              <span class="muted">{{ insertWindow(it, insertWin) }}</span>
-              <PlaceControls v-if="it.add || isPlaceRecord(it)" :model-value="it.place" :disabled="dbBusy || it.off"
-                             @update:model-value="(p) => onPlace(it, p)" />
-              <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master" class="od-gain">{{ t('studio.inserts.db') }}
-                <input type="range" :min="INSERT_MIN_DB" :max="INSERT_MAX_DB" step="1" :value="it.db"
-                       :disabled="dbBusy || it.off" @change="onInsertDb(it, $event.target.value)" />
-                {{ it.db > 0 ? '+' : '' }}{{ it.db }} {{ t('studio.inserts.dbUnit') }}
-              </label>
-              <span v-if="it.aligned === true" class="muted" :title="t('studio.inserts.aligned.tip')">✓ {{ t('studio.inserts.aligned') }}</span>
-              <span v-else-if="it.aligned === false" class="error" :title="t('studio.inserts.plan.tip')"><AppIcon name="alert" /> {{ t('studio.inserts.plan') }}</span>
-              <template v-if="(it.alts || []).length > 1">
-                <button v-for="(alt, n) in it.alts" :key="alt" class="ghost small-btn" :class="{ on: alt === it.childId }"
-                        :disabled="dbBusy || it.off" :title="t('studio.inserts.alt.tip')" @click="pickAlt(it, alt)">{{ n + 1 }}</button>
-              </template>
-              <button v-if="it.childId > 0" class="ghost small-btn" :disabled="dbBusy || trickBusy || it.off" :title="t('studio.inserts.more.tip')"
-                      @click="moreVariant(it)">↻ {{ t('studio.inserts.more') }}</button>
-              <button v-if="it.engine && !it.add" class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.edit.tip')"
-                      @click="editEngine(it)">{{ t('studio.edits.edit') }}</button>
-              <span class="spacer"></span>
-              <button class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.del.tip')" @click="removeEdit(it)"><AppIcon name="x" /></button>
-            </div>
-            </div>
-          </div>
-
-          <details class="studio-box">
-            <summary class="studio-box-head"><span><AppIcon name="flask" /> {{ t('studio.vc') }}</span> <span class="badge exp">{{ t('studio.vc.exp') }}</span> <span class="muted studio-box-hint">{{ t('studio.vc.sub') }}</span></summary>
-            <div class="studio-box-body">
-            <p class="muted">{{ t('studio.vc.desc') }}</p>
-            <p v-if="!seedvcOk" class="muted">{{ t('studio.vc.unavailable') }}</p>
-            <div v-else class="od-row">
-              <VSelect v-model="vcRef" :options="vcRefOptions" searchable :placeholder="t('studio.vc.ref')" style="width:320px" />
-              <button class="primary small" :disabled="vcBusy || !vcRef" @click="submitVoice">
-                {{ vcBusy ? '…' : t('studio.vc.go') }}
-              </button>
-            </div>
-            </div>
-          </details>
 
           <h3 id="st-sound" class="studio-step">3 · {{ t('studio.step.sound') }} <span class="muted">{{ t('studio.step.sound.sub') }}</span></h3>
-          <div ref="deskBox" class="studio-box">
-            <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('desk.title') }}</span> <span class="muted studio-box-hint">{{ t('desk.sub') }}</span></div>
-            <div class="studio-box-body">
-              <TrackDesk ref="deskRef" :job="job" :stems="stemsList" :active="activeStem" :sel="selRange" :cursor="waveCursor"
-                         :names="insertNames" :win="insertWin" @applied="reloadVariants" @stems="reloadStems" @select="selectStem" />
-              <div class="stems-inline">
-                <span class="muted">{{ t('studio.stems.minus') }}</span>
-                <label v-for="nm in ['drums', 'bass', 'other', 'vocals']" :key="nm" class="stem-toggle">
-                  <button class="toggle" :class="{ on: !stemMute[nm] }"
-                         :title="stemMute[nm] ? t('studio.stem.off') : t('studio.stem.on')"
-                         @click="stemMute = { ...stemMute, [nm]: !stemMute[nm] }">
-                    {{ stemLabel(nm) }}
-                  </button>
-                </label>
-                <button class="primary small" :disabled="rollBusy || !Object.values(stemMute).some(Boolean)"
-                        :title="t('studio.minus.tip')" @click="makeMinus">
-                  {{ rollBusy ? '…' : t('studio.minus') }}
-                </button>
-                <span class="muted">{{ t('studio.minus.hint') }}</span>
+          <!-- шаг одной рамкой, блоки — карточками внутри (как группы приёмов в «Править») -->
+          <div class="studio-box studio-step-box">
+            <div ref="deskBox" class="studio-box">
+              <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('desk.title') }}</span> <span class="muted studio-box-hint">{{ t('desk.sub') }}</span></div>
+              <div class="studio-box-body">
+                <TrackDesk ref="deskRef" :job="job" :stems="stemsList" :stems-loaded="stemsLoaded" :active="activeStem" :sel="selRange" :cursor="waveCursor"
+                           :names="insertNames" :win="insertWin" @applied="reloadVariants" @stems="reloadStems" @select="selectStem" />
               </div>
             </div>
-          </div>
-          <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
-          <details class="studio-box">
-            <summary class="studio-box-head"><span>{{ t('synth.title') }}</span> <span class="muted studio-box-hint">{{ t('synth.sub') }}</span></summary>
-            <div class="studio-box-body">
-              <StudioSynth :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
-            </div>
-          </details>
-          <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
-          <details class="studio-box">
-            <summary class="studio-box-head"><span>{{ t('perc.title') }}</span> <span class="muted studio-box-hint">{{ t('perc.sub') }}</span></summary>
-            <div class="studio-box-body">
-              <StudioPerc :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
-            </div>
-          </details>
-          <!-- старые эффекты ffmpeg и педали — другой инструмент: быстрые правки на трек или кусок (движок — пульт выше) -->
-          <p class="muted quick-fx-head"><strong>{{ t('studio.quickfx') }}</strong> — {{ t('studio.quickfx.sub') }}</p>
-          <details ref="fxBox" class="studio-box">
-            <summary class="studio-box-head"><span>{{ t('studio.dsp') }}</span> <span class="muted studio-box-hint">{{ t('studio.dsp.sub') }}</span></summary>
-            <div class="studio-box-body">
-            <div class="dsp-row">
-              <!-- по группам документации; примочки только на голос — в шаге «Голос» -->
-              <VSelect :model-value="dspSel" :options="chainGroupOptions(dspChains, (g) => t('studio.dsp.group.' + g))"
-                       searchable :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
-                       @update:model-value="(v) => selChain(v)" />
-              <VSelect :model-value="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px"
-                       @update:model-value="selectTarget" />
-              <button class="primary small" :disabled="!dspSel || dspBusy || (needsStem(curChain) && !dspTarget)" @click="applyDsp">
-                {{ dspBusy ? t('studio.dsp.applying') : t('studio.dsp.apply') }}
-              </button>
-              <button class="ghost small-btn" :disabled="!dspSel || dspBusy || needsStem(curChain)"
-                      :title="t('studio.dsp.preview.tip')" @click="previewDsp">
-                {{ dspBusy ? '…' : t('studio.dsp.preview') }}
-              </button>
-              <button v-if="fxPrev" class="ghost small-btn" :title="t('studio.dsp.ab.tip')" @click="toggleFxPrev">
-                <AppIcon name="play" /> {{ fxPrev.which === 'wet' ? t('studio.dsp.ab.wet') : t('studio.dsp.ab.dry') }}
-              </button>
-              <label v-if="fxPrev && fxPrev.wet_solo" class="muted" :title="t('studio.dsp.solo.tip')">
-                <input v-model="fxSolo" type="checkbox" @change="playFxPrev(fxPrev.which, fxPrevPos())" /> {{ t('studio.dsp.solo') }}
-              </label>
-              <span v-if="fxPrev" class="muted">{{ fxPrev.label }} · {{ fmtDur(fxPrev.from) }}–{{ fmtDur(fxPrev.to) }}</span>
-              <button class="ghost" @click="emit('open-metrics', job, null)">{{ t('studio.dsp.metrics') }}</button>
-            </div>
-            <p v-if="curChain" class="muted dsp-note">{{ curChain.note }}</p>
-            <div v-if="dspSel === 'dewhistle'" class="dsp-row">
-              <button class="ghost small-btn" :disabled="toneBusy || dspBusy" :title="t('studio.dsp.tones.tip')"
-                      @click="findWhistle"><template v-if="toneBusy">…</template><template v-else><AppIcon name="search" /> {{ t('studio.dsp.tones') }}</template></button>
-              <span v-if="toneMsg" class="muted">{{ toneMsg }}</span>
-            </div>
-            <div v-if="hasGrid(curChain)" class="dsp-row">
-              <button class="ghost small-btn" :disabled="gridBusy || dspBusy" :title="t('studio.dsp.grid.tip')"
-                      @click="findGrid"><template v-if="gridBusy">…</template><template v-else><AppIcon name="target" /> {{ t('studio.dsp.grid') }}</template></button>
-              <span v-if="gridMsg" class="muted">{{ gridMsg }}</span>
-            </div>
-            <div v-if="curChain" class="dsp-params">
-              <label v-for="p in curChain.params" :key="p.id">
-                <span class="dsp-plabel">{{ p.label }}</span>
-                <input type="range" :min="p.min" :max="p.max" :step="p.step"
-                       v-model.number="dspParams[p.id]" :disabled="dspBusy" />
-                <span class="dsp-pval">{{ dspParams[p.id] }}</span>
-              </label>
-            </div>
-            </div>
-          </details>
+            <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
+            <details class="studio-box" @toggle="synthOpen = $event.target.open">
+              <summary class="studio-box-head"><span>{{ t('synth.title') }}</span> <span class="muted studio-box-hint">{{ t('synth.sub') }}</span></summary>
+              <div class="studio-box-body">
+                <StudioSynth :job="job" :sel="selRange" :cursor="waveCursor" :open="synthOpen" @applied="reloadVariants" />
+              </div>
+            </details>
+            <!-- нужна редко — свёрнута (раскрыть по заголовку) -->
+            <details class="studio-box" @toggle="percOpen = $event.target.open">
+              <summary class="studio-box-head"><span>{{ t('perc.title') }}</span> <span class="muted studio-box-hint">{{ t('perc.sub') }}</span></summary>
+              <div class="studio-box-body">
+                <StudioPerc :job="job" :sel="selRange" :cursor="waveCursor" :open="percOpen" @applied="reloadVariants" />
+              </div>
+            </details>
+            <!-- старые эффекты ffmpeg и педали — другой инструмент: быстрые правки на трек или кусок (движок — пульт выше) -->
+            <p class="muted quick-fx-head"><strong>{{ t('studio.quickfx') }}</strong> — {{ t('studio.quickfx.sub') }}</p>
+            <details ref="fxBox" class="studio-box">
+              <summary class="studio-box-head"><span>{{ t('studio.dsp') }}</span> <span class="muted studio-box-hint">{{ t('studio.dsp.sub') }}</span></summary>
+              <div class="studio-box-body">
+              <div class="dsp-row">
+                <!-- по группам документации; примочки только на голос — в шаге «Голос» -->
+                <VSelect :model-value="dspSel" :options="chainGroupOptions(dspChains, (g) => t('studio.dsp.group.' + g))"
+                         searchable :placeholder="t('studio.dsp.chain')" style="max-width: 220px"
+                         @update:model-value="(v) => selChain(v)" />
+                <VSelect :model-value="dspTarget" :options="fxTargetOptions" :title="t('studio.dsp.target.tip')" style="max-width: 150px"
+                         @update:model-value="selectTarget" />
+                <button class="primary small" :disabled="!dspSel || dspBusy || (needsStem(curChain) && !dspTarget)" @click="applyDsp">
+                  {{ dspBusy ? t('studio.dsp.applying') : t('studio.dsp.apply') }}
+                </button>
+                <button class="ghost small-btn" :disabled="!dspSel || dspBusy || needsStem(curChain)"
+                        :title="t('studio.dsp.preview.tip')" @click="previewDsp">
+                  {{ dspBusy ? '…' : t('studio.dsp.preview') }}
+                </button>
+                <button v-if="fxPrev" class="ghost small-btn" :title="t('studio.dsp.ab.tip')" @click="toggleFxPrev">
+                  <AppIcon name="play" /> {{ fxPrev.which === 'wet' ? t('studio.dsp.ab.wet') : t('studio.dsp.ab.dry') }}
+                </button>
+                <label v-if="fxPrev && fxPrev.wet_solo" class="muted" :title="t('studio.dsp.solo.tip')">
+                  <input v-model="fxSolo" type="checkbox" @change="playFxPrev(fxPrev.which, fxPrevPos())" /> {{ t('studio.dsp.solo') }}
+                </label>
+                <span v-if="fxPrev" class="muted">{{ fxPrev.label }} · {{ fmtDur(fxPrev.from) }}–{{ fmtDur(fxPrev.to) }}</span>
+                <button class="ghost" @click="emit('open-metrics', job, null)">{{ t('studio.dsp.metrics') }}</button>
+              </div>
+              <p v-if="curChain" class="muted dsp-note">{{ curChain.note }}</p>
+              <div v-if="dspSel === 'dewhistle'" class="dsp-row">
+                <button class="ghost small-btn" :disabled="toneBusy || dspBusy" :title="t('studio.dsp.tones.tip')"
+                        @click="findWhistle"><template v-if="toneBusy">…</template><template v-else><AppIcon name="search" /> {{ t('studio.dsp.tones') }}</template></button>
+                <span v-if="toneMsg" class="muted">{{ toneMsg }}</span>
+              </div>
+              <div v-if="hasGrid(curChain)" class="dsp-row">
+                <button class="ghost small-btn" :disabled="gridBusy || dspBusy" :title="t('studio.dsp.grid.tip')"
+                        @click="findGrid"><template v-if="gridBusy">…</template><template v-else><AppIcon name="target" /> {{ t('studio.dsp.grid') }}</template></button>
+                <span v-if="gridMsg" class="muted">{{ gridMsg }}</span>
+              </div>
+              <div v-if="curChain" class="dsp-params">
+                <label v-for="p in curChain.params" :key="p.id">
+                  <span class="dsp-plabel">{{ p.label }}</span>
+                  <input type="range" :min="p.min" :max="p.max" :step="p.step"
+                         v-model.number="dspParams[p.id]" :disabled="dspBusy" />
+                  <span class="dsp-pval">{{ dspParams[p.id] }}</span>
+                </label>
+              </div>
+              </div>
+            </details>
 
-          <details class="studio-box">
-            <summary class="studio-box-head"><span><AppIcon name="pedal" /> {{ t('pedals') }}</span> <span class="muted studio-box-hint">{{ t('pedals.sub') }}</span></summary>
-            <div class="studio-box-body">
-              <PedalBoard :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :active="dspTarget"
-                          @stem="selectTarget" @applied="reloadVariants" />
-            </div>
-          </details>
+            <details class="studio-box">
+              <summary class="studio-box-head"><span><AppIcon name="pedal" /> {{ t('pedals') }}</span> <span class="muted studio-box-hint">{{ t('pedals.sub') }}</span></summary>
+              <div class="studio-box-body">
+                <PedalBoard :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :active="dspTarget"
+                            @stem="selectTarget" @applied="reloadVariants" />
+              </div>
+            </details>
+          </div>
 
           <h3 id="st-voice" class="studio-step">4 · {{ t('studio.step.voice') }} <span class="muted">{{ t('studio.step.voice.sub') }}</span></h3>
-          <StudioVoice :job="genJob" :abc-file="abcFile" :chains="dspChains" :sel="selRange" :cursor="waveCursor"
-                       :sung-at="sungAt" @applied="reloadVariants" />
+          <!-- шаг одной рамкой, блоки — карточками внутри -->
+          <div class="studio-box studio-step-box">
+            <StudioVoice :job="genJob" :abc-file="abcFile" :chains="dspChains" :sel="selRange" :cursor="waveCursor"
+                         :sung-at="sungAt" @applied="reloadVariants" />
+
+            <details class="studio-box">
+              <summary class="studio-box-head"><span><AppIcon name="flask" /> {{ t('studio.vc') }}</span> <span class="badge exp">{{ t('studio.vc.exp') }}</span> <span class="muted studio-box-hint">{{ t('studio.vc.sub') }}</span></summary>
+              <div class="studio-box-body">
+              <p class="muted">{{ t('studio.vc.desc') }}</p>
+              <p v-if="!seedvcOk" class="muted">{{ t('studio.vc.unavailable') }}</p>
+              <div v-else class="od-row">
+                <VSelect v-model="vcRef" :options="vcRefOptions" searchable :placeholder="t('studio.vc.ref')" style="width:320px" />
+                <button class="primary small" :disabled="vcBusy || !vcRef" @click="submitVoice">
+                  {{ vcBusy ? '…' : t('studio.vc.go') }}
+                </button>
+              </div>
+              </div>
+            </details>
+          </div>
 
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
-          <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
-          <div class="studio-box">
-            <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span></div>
-            <div class="studio-box-body">
-              <p v-if="!finalGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
-              <p v-if="applying && !applying.error && applying.job_id" class="muted"><span class="pulse">⟳</span>
-                {{ t('studio.final.progress', { id: applying.job_id, status: applyingStatus }) }}</p>
-              <p v-if="applying && !applying.error && applying.finalize" class="muted"><span class="pulse">⟳</span>
-                {{ t('studio.final.finalizing') }}</p>
-              <p v-if="applying && applying.error" class="error">{{ t('studio.final.applyError', { error: applying.error }) }}</p>
-              <div v-for="g in finalGroups" :key="g.step" class="final-group">
-                <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
-                <ul>
-                  <!-- изменения с рендером: «применить всё» сделает их одним рендером, потом наложит правки -->
-                  <li v-for="line in g.gen" :key="line" class="final-gen">{{ line }}</li>
-                  <li v-for="it in g.items" :key="it.childId" :class="{ off: it.off }">
-                    {{ insertTitle(it, insertNames) }}<template v-if="it.off"> · {{ t('studio.final.off') }}</template>
-                  </li>
-                </ul>
-              </div>
-              <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
-              <div class="dsp-row final-actions">
-                <button v-if="finalGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
-                  <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
-                <span class="spacer"></span>
-                <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">
-                  {{ applyAllBusy ? t('studio.final.applying') : t('studio.final.apply') }}</button>
-              </div>
-              <p v-if="applyAllMsg" class="muted">{{ applyAllMsg }}</p>
-            </div>
-          </div>
-          <div ref="masterBox" class="studio-box">
-            <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
-            <div class="studio-box-body">
-              <StudioMaster ref="masterRef" :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
-            </div>
-          </div>
-          <div class="studio-box">
-            <div class="studio-box-head"><span>{{ t('preset.title') }}</span> <span class="muted studio-box-hint">{{ t('preset.sub') }}</span></div>
-            <div class="studio-box-body">
-              <StudioPresets :job="job" @applied="reloadVariants" />
-            </div>
-          </div>
-          <!-- готово: мастеринг одним кликом, громкость альбома и все результаты (варианты) с ▶ / ⤓ / → в треки -->
-          <div class="studio-box">
-            <div class="studio-box-head"><span>{{ t('studio.done') }}</span></div>
-            <div class="studio-box-body">
-            <div class="dsp-row">
-              <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.master.tip')" @click="applyOneClick('master')">
-                <template v-if="dspBusy">…</template><template v-else><AppIcon name="disc" /> {{ t('studio.dsp.master') }}</template>
-              </button>
-              <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.breathe.tip')" @click="applyOneClick('breathe')">
-                <template v-if="dspBusy">…</template><template v-else><AppIcon name="wind" /> {{ t('studio.dsp.breathe') }}</template>
-              </button>
-              <VSelect v-model="oneClickLevel" :title="t('studio.dsp.level.tip')" style="max-width: 130px"
-                       :options="ONE_CLICK_LEVELS.map((l) => ({ value: l, label: t('studio.dsp.level.' + l) }))" />
-              <button class="ghost" :title="t('studio.done.level.tip')" @click="goChain('level')">{{ t('studio.done.level') }}</button>
-            </div>
-            <p v-if="!dspVariants.length" class="muted">{{ t('studio.done.empty') }}</p>
-            <label v-else class="muted done-details"><input v-model="showDeltas" type="checkbox" /> {{ t('studio.done.details') }}</label>
-            <!-- все версии трека — промежуточные тоже: новые сверху, понятное название, полная подпись — в подсказке -->
-            <div v-for="v in resultsOrder(dspVariants)" :key="v.file" class="dsp-variant">
-              <button class="ghost play-mini" :class="{ stop: isPlaying('v' + job.id + ':' + v.file) }"
-                      :disabled="playBusy['v' + job.id + ':' + v.file]" @click="playVariant(v)">
-                {{ playBtn('v' + job.id + ':' + v.file) }}
-              </button>
-              <strong :title="resultTitle(v, chainNameOf).detail">{{ resultTitle(v, chainNameOf).title }}</strong>
-              <span class="muted">{{ resultDate(v.created_at) }}</span>
-              <template v-if="showDeltas">
-                <span v-if="v.metrics" class="muted deltas">
-                  {{ t('studio.delta.line', { crest: vDelta(v, 'crest_db'), dyn: vDelta(v, 'dyn_range_db'), high: vDelta(v, 'bands.high'), flat: vDelta(v, 'flatness_median', 3) }) }}
+          <!-- шаг одной рамкой, блоки — карточками внутри -->
+          <div class="studio-box studio-step-box">
+            <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
+            <div class="studio-box">
+              <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span>
+                <span v-if="mixFile && activeEdits.length" class="studio-box-tools">
+                  <button class="ghost small-btn" :class="{ stop: isPlaying('v' + job.id + ':' + mixFile) }"
+                          :disabled="mixBuilding || playBusy['v' + job.id + ':' + mixFile]" :title="t('studio.edits.mix.tip')" @click="playMix">
+                    {{ playBtn('v' + job.id + ':' + mixFile) }} {{ t('studio.edits.mix') }}</button>
                 </span>
-                <span v-else class="muted">{{ t('studio.delta.none') }}</span>
-                <button class="ghost" @click="openVariantMetrics(v)">{{ t('studio.delta.full') }}</button>
-              </template>
-              <span class="spacer"></span>
-              <button class="ghost" :title="t('studio.dsp.savefile.tip')"
-                      @click="api.saveAudio(job.id, v.file)">⤓</button>
-              <button class="primary small" :disabled="dspBusy" :title="t('studio.dsp.totrack.tip')"
-                      @click="variantToTrack(v)">{{ t('studio.dsp.totrack') }}</button>
-              <button class="ghost small-btn" :title="t('studio.dsp.del.tip')" :disabled="dspBusy"
-                      @click="delVariant(v)"><AppIcon name="x" /></button>
+              </div>
+              <div class="studio-box-body">
+                <p v-if="!finalGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
+                <p v-if="applying && !applying.error && applying.job_id" class="muted"><span class="pulse">⟳</span>
+                  {{ t('studio.final.progress', { id: applying.job_id, status: applyingStatus }) }}</p>
+                <p v-if="applying && !applying.error && applying.finalize" class="muted"><span class="pulse">⟳</span>
+                  {{ t('studio.final.finalizing') }}</p>
+                <p v-if="applying && applying.error" class="error">{{ t('studio.final.applyError', { error: applying.error }) }}</p>
+                <div v-for="g in finalGroups" :key="g.step" class="final-group">
+                  <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
+                  <!-- изменения с рендером: «применить всё» сделает их одним рендером, потом наложит правки -->
+                  <ul v-if="g.gen.length">
+                    <li v-for="line in g.gen" :key="line" class="final-gen">{{ line }}</li>
+                  </ul>
+                  <!-- наложенные правки — с ручками: вкл/выкл, громкость, дубли, удалить (трек пересобирается сразу) -->
+                  <div v-if="g.items.length" class="insert-list">
+                    <div v-for="it in g.items" :key="it.childId" class="insert-row" :class="{ off: it.off }">
+                      <input type="checkbox" :checked="!it.off" :disabled="dbBusy" :title="t('studio.edits.on.tip')" @change="toggleEdit(it)" />
+                      <strong>{{ insertTitle(it, insertNames) }}</strong>
+                      <span class="muted">{{ insertWindow(it, insertWin) }}</span>
+                      <PlaceControls v-if="it.add || isPlaceRecord(it)" :model-value="it.place" :disabled="dbBusy || it.off"
+                                     @update:model-value="(p) => onPlace(it, p)" />
+                      <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master" class="od-gain">{{ t('studio.inserts.db') }}
+                        <input type="range" :min="INSERT_MIN_DB" :max="INSERT_MAX_DB" step="1" :value="it.db"
+                               :disabled="dbBusy || it.off" @change="onInsertDb(it, $event.target.value)" />
+                        {{ it.db > 0 ? '+' : '' }}{{ it.db }} {{ t('studio.inserts.dbUnit') }}
+                      </label>
+                      <span v-if="it.aligned === true" class="muted" :title="t('studio.inserts.aligned.tip')">✓ {{ t('studio.inserts.aligned') }}</span>
+                      <span v-else-if="it.aligned === false" class="error" :title="t('studio.inserts.plan.tip')"><AppIcon name="alert" /> {{ t('studio.inserts.plan') }}</span>
+                      <template v-if="(it.alts || []).length > 1">
+                        <button v-for="(alt, n) in it.alts" :key="alt" class="ghost small-btn" :class="{ on: alt === it.childId }"
+                                :disabled="dbBusy || it.off" :title="t('studio.inserts.alt.tip')" @click="pickAlt(it, alt)">{{ n + 1 }}</button>
+                      </template>
+                      <button v-if="it.childId > 0" class="ghost small-btn" :disabled="dbBusy || trickBusy || it.off" :title="t('studio.inserts.more.tip')"
+                              @click="moreVariant(it)">↻ {{ t('studio.inserts.more') }}</button>
+                      <button v-if="it.engine && !it.add" class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.edit.tip')"
+                              @click="editEngine(it)">{{ t('studio.edits.edit') }}</button>
+                      <span class="spacer"></span>
+                      <button class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.del.tip')" @click="removeEdit(it)"><AppIcon name="x" /></button>
+                    </div>
+                  </div>
+                </div>
+                <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
+                <div class="dsp-row final-actions">
+                  <button v-if="finalGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
+                    <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
+                  <span class="spacer"></span>
+                  <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">
+                    {{ applyAllBusy ? t('studio.final.applying') : t('studio.final.apply') }}</button>
+                </div>
+                <p v-if="applyAllMsg" class="muted">{{ applyAllMsg }}</p>
+              </div>
             </div>
+            <div ref="masterBox" class="studio-box">
+              <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
+              <div class="studio-box-body">
+                <StudioMaster ref="masterRef" :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
+              </div>
+            </div>
+            <div class="studio-box">
+              <div class="studio-box-head"><span>{{ t('preset.title') }}</span> <span class="muted studio-box-hint">{{ t('preset.sub') }}</span></div>
+              <div class="studio-box-body">
+                <StudioPresets :job="job" @applied="reloadVariants" />
+              </div>
+            </div>
+            <!-- готово: мастеринг одним кликом, громкость альбома и все результаты (варианты) с ▶ / ⤓ / → в треки -->
+            <div class="studio-box">
+              <div class="studio-box-head"><span>{{ t('studio.done') }}</span></div>
+              <div class="studio-box-body">
+              <div class="dsp-row">
+                <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.master.tip')" @click="applyOneClick('master')">
+                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="disc" /> {{ t('studio.dsp.master') }}</template>
+                </button>
+                <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.breathe.tip')" @click="applyOneClick('breathe')">
+                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="wind" /> {{ t('studio.dsp.breathe') }}</template>
+                </button>
+                <VSelect v-model="oneClickLevel" :title="t('studio.dsp.level.tip')" style="max-width: 130px"
+                         :options="ONE_CLICK_LEVELS.map((l) => ({ value: l, label: t('studio.dsp.level.' + l) }))" />
+                <button class="ghost" :title="t('studio.done.level.tip')" @click="goChain('level')">{{ t('studio.done.level') }}</button>
+              </div>
+              <p v-if="!dspVariants.length" class="muted">{{ t('studio.done.empty') }}</p>
+              <label v-else class="muted done-details"><input v-model="showDeltas" type="checkbox" /> {{ t('studio.done.details') }}</label>
+              <!-- все версии трека — промежуточные тоже: новые сверху, понятное название, полная подпись — в подсказке -->
+              <div v-for="v in resultsOrder(dspVariants)" :key="v.file" class="dsp-variant">
+                <button class="ghost play-mini" :class="{ stop: isPlaying('v' + job.id + ':' + v.file) }"
+                        :disabled="playBusy['v' + job.id + ':' + v.file]" @click="playVariant(v)">
+                  {{ playBtn('v' + job.id + ':' + v.file) }}
+                </button>
+                <strong :title="resultTitle(v, chainNameOf).detail">{{ resultTitle(v, chainNameOf).title }}</strong>
+                <span class="muted">{{ resultDate(v.created_at) }}</span>
+                <template v-if="showDeltas">
+                  <span v-if="v.metrics" class="muted deltas">
+                    {{ t('studio.delta.line', { crest: vDelta(v, 'crest_db'), dyn: vDelta(v, 'dyn_range_db'), high: vDelta(v, 'bands.high'), flat: vDelta(v, 'flatness_median', 3) }) }}
+                  </span>
+                  <span v-else class="muted">{{ t('studio.delta.none') }}</span>
+                  <button class="ghost" @click="openVariantMetrics(v)">{{ t('studio.delta.full') }}</button>
+                </template>
+                <span class="spacer"></span>
+                <button class="ghost" :title="t('studio.dsp.savefile.tip')"
+                        @click="api.saveAudio(job.id, v.file)">⤓</button>
+                <button class="primary small" :disabled="dspBusy" :title="t('studio.dsp.totrack.tip')"
+                        @click="variantToTrack(v)">{{ t('studio.dsp.totrack') }}</button>
+                <button class="ghost small-btn" :title="t('studio.dsp.del.tip')" :disabled="dspBusy"
+                        @click="delVariant(v)"><AppIcon name="x" /></button>
+              </div>
+              </div>
             </div>
           </div>
         </template>

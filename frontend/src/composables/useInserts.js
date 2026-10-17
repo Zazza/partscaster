@@ -193,6 +193,16 @@ function previewSpecs(parentId, extra) {
     return r
   })
 }
+// «▶ стало» правки, которой ещё нет в списке: пересборка с ней (transform — список включённых правок →
+// список с новой), в «Изменения трека» ничего не пишется
+function previewWith(parentId, transform) {
+  try { notApplying(parentId) } catch (e) { return Promise.reject(e) }
+  return queued(parentId, async () => {
+    const list = transform(appliedFor(parentId).filter((it) => !it.off))
+    if (!list.length) return { empty: true }
+    return api.rebuildSections(parentId, list.map(specOf))
+  })
+}
 function queued(parentId, fn) {
   building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
   const run = chain.then(fn).finally(() => {
@@ -304,9 +314,11 @@ async function addMute(parentId, item) {
 let muteSeq = 0
 async function addMutes(parentId, items) {
   notApplying(parentId)
-  const added = items.map(({ instId, from, to, stems, db = -100 }) => ({
+  const added = items.map(({ instId, from, to, stems, db = -100, step = '' }) => ({
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId, from, to, lead: 0, beat: 0, db, stems,
     fadeIn: 0, fadeOut: 0, keepHighHz: 0,
+    // шаг студии для списка «Изменения трека» («убрать» из «Дорожек» — sound); без него — по виду записи
+    ...(step ? { step } : {}),
   }))
   applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), ...added] }
   save()
@@ -725,5 +737,5 @@ setInterval(tick, 3000)
 setInterval(advanceApplying, 3000)
 
 export function useInserts() {
-  return { pending, applied, applyAll, clearDraft, genFor, setGen, applyingFor, register, byParent, appliedFor, rebuild, previewSpecs, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, applyAll, clearDraft, genFor, setGen, applyingFor, register, byParent, appliedFor, rebuild, previewSpecs, previewWith, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }

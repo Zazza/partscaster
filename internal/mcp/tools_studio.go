@@ -39,10 +39,12 @@ func RegisterStudioTools(s *Server) {
 	s.Register(Tool{
 		Name: "config_set",
 		Description: "Настройки: server_url — адрес воркера (сохраняется и в settings приложения); " +
+			"stems_auto — когда делать дорожки трека (studio — при открытии студии | always — сразу у каждого готового трека | manual — вручную); " +
 			"stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
 			"engine — движок генерации (torch | cpp — yue2.cpp, ЭКСПЕРИМЕНТ), cpp_model, cpp_low_vram — со следующей генерации.",
 		InputSchema: props(map[string]any{
 			"server_url":  prop("адрес воркера, напр. http://gpu-host:8091", "string"),
+			"stems_auto":  prop("когда делать дорожки: studio (при открытии студии) | always (сразу у каждого готового трека) | manual (вручную)", "string"),
 			"stems_model": prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
 			"fx_engine":   prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
 			"engine": prop("движок генерации: torch — основной | cpp — yue2.cpp, ЭКСПЕРИМЕНТ (меньше видеопамяти; "+
@@ -56,6 +58,9 @@ func RegisterStudioTools(s *Server) {
 				config.SaveSettings(config.Settings{ServerURL: s.client.GetURL()})
 			}
 			cfg := map[string]any{}
+			if v := argString(args, "stems_auto"); v != "" {
+				cfg["stems_auto"] = v
+			}
 			if v := argString(args, "stems_model"); v != "" {
 				cfg["stems_model"] = v
 			}
@@ -524,23 +529,6 @@ func RegisterStudioTools(s *Server) {
 				return "", err
 			}
 			return fmt.Sprintf("джоба «голос» #%d в очереди (статус: jobs)", id), nil
-		},
-	})
-
-	s.Register(Tool{
-		Name:        "make_minus",
-		Description: "Минус-трек: микс стемов без выбранных групп (напр. vocals для караоке).",
-		InputSchema: props(map[string]any{
-			"job_id": prop("ID джобы", "integer"),
-			"exclude": prop("что убрать: drums/bass/other/vocals", "array",
-				map[string]any{"items": map[string]any{"type": "string"}}),
-		}, "job_id", "exclude"),
-		Handler: func(s *Server, args map[string]any) (string, error) {
-			out, err := s.client.MakeMinus(context.Background(), argInt(args, "job_id"), argStringSlice(args, "exclude"))
-			if err != nil {
-				return "", err
-			}
-			return toJSON(out), nil
 		},
 	})
 

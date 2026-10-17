@@ -1,6 +1,7 @@
 // Пульт дорожек студии — чистая логика без DOM: строки дорожек с их правками, окно «было/стало»,
 // окно записи в трек, готовые цепочки для дорожки. Компонент — components/TrackDesk.vue.
 import { DRUM_KITS, DRUM_TREATMENTS, PART_NAMES, ROOM, kitSampler } from './drumKits.js'
+import { withStemPlace } from './mixDesk.js'
 
 // порядок строк: голос, барабаны и их части, бас, гитара, клавиши, «прочее»
 export const DESK_ORDER = ['vocals', 'drums', 'kick', 'snare', 'toms', 'hh', 'ride', 'crash', 'bass', 'guitar', 'piano', 'other']
@@ -30,6 +31,28 @@ export function previewWindow(sel, cursor, dur, len = 15) {
   const to = Math.min(from + len, dur)
   if (dur - from < PREVIEW_MIN) return { from: Math.max(0, dur - Math.min(len, dur)), to: dur }
   return { from: Math.min(from, dur), to }
+}
+
+// когда делать дорожки (настройка воркера stems_auto): при открытии студии, сразу у каждого трека, вручную
+export const STEMS_AUTO = ['studio', 'always', 'manual']
+
+/** Делить ли трек на дорожки при открытии студии: список дорожек прочитан и пуст, режим не «вручную».
+ *  «сразу» — тоже: воркер мог не успеть, а второй запрос дождётся идущего разделения. */
+export function shouldAutoSplit(loaded, stems, mode) {
+  return !!loaded && !(stems || []).length && mode !== 'manual'
+}
+
+/** Запись «убрать дорожку»: дорожка глушится в выделении или на весь трек; шаг «Звук». */
+export function removeRecord(stem, sel) {
+  return { instId: 'remove', ...applyWindow(sel), stems: [stem], db: -100, step: 'sound' }
+}
+
+/** Список правок с несохранёнными правками строки дорожки (место в стерео, «убрать») — для «▶ стало».
+ *  pend: {place?, remove?}; place заменяет место дорожки, remove добавляет «убрать» в окне sel. */
+export function withPending(list, stem, pend, sel) {
+  let out = pend && pend.place ? withStemPlace(list || [], stem, pend.place) : [...(list || [])]
+  if (pend && pend.remove) out = [...out, removeRecord(stem, sel)]
+  return out
 }
 
 /** Окно записи в трек: выделение или весь трек ({0, 0}). */

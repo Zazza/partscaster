@@ -566,18 +566,7 @@ func (r *RecipeRunner) apply(ctx context.Context, rec *Recipe, st *recipeState, 
 		}
 		file(v.File)
 	case "minus":
-		var p struct {
-			Exclude []string `json:"exclude"`
-		}
-		if err := decode(op, st, &p); err != nil {
-			return 0, err
-		}
-		out, err := svc.MakeMinus(ctx, target, p.Exclude)
-		if err != nil {
-			return 0, err
-		}
-		f, _ := out["file"].(string)
-		file(f)
+		// минус-трек убран: его файл ничего не менял в треке — шаг старого рецепта пропускается
 	case "update":
 		var p struct {
 			Title  *string `json:"title"`

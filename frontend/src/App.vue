@@ -1403,7 +1403,12 @@ h2 {
   color: var(--muted); user-select: none; white-space: nowrap;
 }
 .trick-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.trick-btns .cont-style { min-width: 170px; flex: 0 1 220px; }
+.trick-btns .cont-style { min-width: 170px; flex: 1 1 220px; }
+/* продолжение с места — строкой на всю ширину: поле тянется, подсказки строками по группам */
+.trick-group.cont { flex-basis: 100%; }
+.cont-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; }
+.cont-hints > .muted { min-width: 72px; }
+.cont-cyr { font-size: 12px; margin: 0; color: var(--err); }
 .trick-group.assemble { flex-basis: 100%; flex-direction: row; align-items: center; gap: 10px; }
 .trick-group.assemble .trick-btns { flex: 1; }
 .trick-hint { font-size: 11px; margin: 4px 0 0; }
@@ -1901,12 +1906,16 @@ details.studio-box > summary::-webkit-details-marker { display: none; }
 details.studio-box > summary::before { content: '▸'; color: var(--muted); transition: transform .15s; }
 details.studio-box[open] > summary::before { transform: rotate(90deg); }
 details.studio-box[open] > .studio-box-head { margin-bottom: 0; }
+/* шаг студии («Звук», «Голос», «Готово») одной рамкой, его блоки — карточками внутри, как группы приёмов
+   в «Править»: глазу проще разделять шаги и блоки */
+.studio-step-box { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.studio-step-box > .studio-box, .studio-step-box > details.studio-box { margin-top: 0; background: var(--panel2); }
+.studio-step-box > .studio-box > .studio-box-head { background: transparent; box-shadow: none; }
+.studio-step-box > .quick-fx-head { margin: 4px 2px 0; }
 .abc-help { margin-bottom: 8px; font-size: 12px; }
 .abc-help summary { cursor: pointer; color: var(--muted); }
 .abc-help p { margin: 6px 0 0; line-height: 1.6; }
 .roll-voice-edit { display: flex; align-items: center; gap: 4px; }
-.stems-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
-.stem-toggle { display: inline-flex; }
 .roll-meta { margin: 0 0 8px; font-size: 12px; }
 .roll-grid { display: grid; gap: 2px; font-size: 10px; user-select: none; }
 .roll-grid + .roll-grid { margin-top: 8px; }

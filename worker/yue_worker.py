@@ -9,6 +9,7 @@ import json
 import math
 import shutil
 from collections.abc import Iterator
+from concurrent.futures import Future
 from contextlib import contextmanager
 import logging
 import os
@@ -866,6 +867,7 @@ def _run_job(job_id: int):
             with db_lock, db() as conn:
                 conn.execute("UPDATE jobs SET status='done', finished_at=? WHERE id=?",
                              (time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
+            _auto_stems_later(job_id)
             return
     finally:
         with _state_lock:
@@ -1304,6 +1306,7 @@ class PlanIn(BaseModel):
 
 class ConfigIn(BaseModel):
     auto_stems_instrumental: bool | None = None
+    stems_auto: str | None = None    # когда делать дорожки: studio | always | manual
     stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
     # движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим (~4,5 ГБ)
@@ -1359,6 +1362,17 @@ def cpp_low_vram_pref() -> bool:
     return bool(_load_settings().get("cpp_low_vram", False))
 
 
+# когда делать дорожки трека: при открытии студии (решает клиент), сразу после готовности трека, вручную
+STEMS_AUTO_CHOICES = ("studio", "always", "manual")
+# роли полных треков: черновик, кусок для вклейки, партия и проба — без дорожек
+AUTO_STEMS_ROLES = ("", "variant", "rebuild", "continue")
+
+
+def stems_auto_pref() -> str:
+    v = _load_settings().get("stems_auto", "studio")
+    return v if v in STEMS_AUTO_CHOICES else "studio"
+
+
 def auto_stems_instrumental() -> bool:
     """У треков «без голоса» сразу делать дорожки и проверять голос (по умолчанию да)."""
     return bool(_load_settings().get("auto_stems_instrumental", True))
@@ -1400,6 +1414,7 @@ def get_config():
         "seedvc_dir": str(voicevc.SEEDVC_DIR),
         "seedvc_available": voicevc.available(),
         "auto_stems_instrumental": auto_stems_instrumental(),
+        "stems_auto": stems_auto_pref(),
         # выбор пользователя и чем дорожки будут делаться на деле (RoFormer — если выбран и установлен)
         "stems_pref": stems_pref(),
         "stems_model": MODEL_ROFORMER if roformer_enabled(stems_pref()) else MODEL_DEMUCS,
@@ -1421,6 +1436,12 @@ def set_config(req: ConfigIn):
     if req.auto_stems_instrumental is not None:
         st = _load_settings()
         st["auto_stems_instrumental"] = bool(req.auto_stems_instrumental)
+        _save_settings(st)
+    if req.stems_auto is not None:
+        if req.stems_auto not in STEMS_AUTO_CHOICES:
+            raise HTTPException(422, f"stems_auto must be one of {', '.join(STEMS_AUTO_CHOICES)}")
+        st = _load_settings()
+        st["stems_auto"] = req.stems_auto
         _save_settings(st)
     if req.stems_model is not None:
         if req.stems_model not in STEMS_CHOICES:
@@ -2849,6 +2870,7 @@ async def tracks_import(request: Request, transcribe: bool = True, title: str = 
         conn.execute(
             "UPDATE jobs SET duration_sec=?, audio_file=?, abc_file=? WHERE id=?",
             (_audio_duration(audio), audio.name, abc_file, jid))
+    _auto_stems_later(jid)
     return {"id": jid, "duration_sec": _audio_duration(audio), "abc_file": abc_file,
             "transcribe_error": transcribe_error}
 
@@ -2921,20 +2943,82 @@ def job_stems(job_id: int, model: str | None = None):
     row = _job_row(job_id)
     if row is None or not row["audio_file"]:
         raise HTTPException(404, "job or audio not found")
-    job_dir = JOBS_DIR / str(job_id)
     try:
-        result = _separate(job_id, job_dir / row["audio_file"], job_dir, model)
+        return _split_job(job_id, row, model)
+    except (opqueue.OpCanceled, opqueue.OpGone) as e:
+        # ждали авторазделение, а его сняли в очереди: поток авторазделения вне запроса — 409 здесь
+        raise HTTPException(409, opqueue.CANCELED_TEXT if isinstance(e, opqueue.OpCanceled) else str(e)) from e
     except Exception as e:  # noqa: BLE001
         log.exception("stems failed")
         raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
+
+
+# разделение трека, которое уже идёт или ждёт очереди: второй запрос того же трека той же моделью
+# (студия открылась, пока шло авторазделение) ждёт его итога, а не делит трек ещё раз
+_splits: dict[int, tuple[str, Future]] = {}
+_splits_guard = threading.Lock()
+
+
+def _split_job(job_id: int, row, model: str | None = None) -> dict:
+    """Дорожки трека и их метрики (уровень для пульта «Дорожки»)."""
+    want = model or stems_pref()
+    mine = None
+    with _splits_guard:
+        running = _splits.get(job_id)
+        # внутри своей операции очереди чужой итог не ждём: он ждёт видеокарту, которую держит эта операция;
+        # другая модель — свой итог (очередь всё равно разделит по одному)
+        join = running is not None and running[0] == want and not opqueue.current_op.get()
+        if running is None:
+            mine = Future()
+            _splits[job_id] = (want, mine)
+    if join:
+        return running[1].result()
+    if mine is None:
+        return _split_job_now(job_id, row, model)
+    try:
+        result = _split_job_now(job_id, row, model)
+    except BaseException as e:
+        mine.set_exception(e)
+        raise
+    else:
+        mine.set_result(result)
+        return result
+    finally:
+        with _splits_guard:
+            if _splits.get(job_id, (None, None))[1] is mine:
+                _splits.pop(job_id)
+
+
+def _split_job_now(job_id: int, row, model: str | None) -> dict:
+    job_dir = JOBS_DIR / str(job_id)
+    result = _separate(job_id, job_dir / row["audio_file"], job_dir, model)
     for f in result["stems"]:
         try:
             m = analyze_file(job_dir / f)
             (job_dir / f"{f}.metrics.json").write_text(
                 json.dumps({"file": f, "metrics": m}))
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - без метрик пульт покажет дорожку без уровня
             pass
     return result
+
+
+def _auto_stems_later(job_id: int) -> None:
+    """Настройка «сразу у каждого трека»: готовый полный трек делится на дорожки отдельной
+    операцией очереди (своим потоком — «готово» трека не ждёт разделения, генерации впереди
+    не обгоняются). Черновики, куски вклеек и треки с дорожками — без разделения."""
+    row = _job_row(job_id)
+    if (stems_auto_pref() != "always" or row is None or row["draft"]
+            or (row["role"] or "") not in AUTO_STEMS_ROLES or not row["audio_file"]
+            or (JOBS_DIR / str(job_id) / "stem-vocals.flac").is_file()):
+        return
+
+    def run():
+        try:
+            _split_job(job_id, row)
+        except Exception:  # noqa: BLE001 - трек готов; дорожки сделает студия при открытии
+            log.exception("auto stems failed for job %s", job_id)
+
+    threading.Thread(target=run, name=f"auto-stems-{job_id}", daemon=True).start()
 
 
 GUITAR_PART_CACHE = "guitar-part.json"
@@ -3098,50 +3182,6 @@ def job_mp3(job_id: int):
         with db_lock, db() as conn:
             conn.execute("UPDATE jobs SET mp3_file=? WHERE id=?", ("audio.mp3", job_id))
     return {"file": "audio.mp3"}
-
-
-class MinusIn(BaseModel):
-    exclude: list[str] = Field(default_factory=list)  # drums/bass/other/vocals
-
-
-@app.post("/jobs/{job_id}/minus")
-def job_minus(job_id: int, req: MinusIn):
-    """Минус-трек: микс стемов без исключённых групп (честное смешивание, без
-    перегенерации). Стемы разделяются при необходимости. → minus.flac."""
-    row = _job_row(job_id)
-    if row is None or not row["audio_file"]:
-        raise HTTPException(404, "job or audio not found")
-    job_dir = JOBS_DIR / str(job_id)
-    # только основные дорожки: гитара/клавиши уже внутри «прочего»
-    def main_stems():
-        return [p for n in MAIN_STEMS if (p := job_dir / f"stem-{n}.flac").is_file()]
-    stems = main_stems()
-    if not stems:
-        try:
-            _separate(job_id, job_dir / row["audio_file"], job_dir)
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
-        stems = main_stems()
-        if not stems:
-            raise HTTPException(500, "no stems after separation")
-    keep = [p for p in stems if p.stem.replace("stem-", "") not in req.exclude]
-    if not keep:
-        raise HTTPException(422, "cannot exclude every stem")
-    import numpy as np
-    import soundfile as sf
-    mix = None
-    sr = None
-    for p in keep:
-        data, sr = sf.read(str(p), always_2d=True, dtype="float32")
-        mix = data if mix is None else mix[:len(data)] + data[:len(mix)]
-    if mix is None:
-        raise HTTPException(500, "no stems to mix")
-    peak = float(np.max(np.abs(mix))) if mix.size else 0.0
-    if peak > 0.99:
-        mix = mix / peak * 0.99
-    sf.write(str(job_dir / "minus.flac"), mix, sr)
-    return {"file": "minus.flac", "excluded": req.exclude,
-            "kept": [p.stem.replace("stem-", "") for p in keep]}
 
 
 @app.get("/jobs/{job_id}/stems")

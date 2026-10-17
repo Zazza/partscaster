@@ -190,16 +190,6 @@ func (j *journaled) ApplyFx(ctx context.Context, id int64, req FxRequest) (*DspV
 	return v, nil
 }
 
-func (j *journaled) MakeMinus(ctx context.Context, id int64, exclude []string) (map[string]any, error) {
-	out, err := j.Service.MakeMinus(ctx, id, exclude)
-	if err != nil {
-		return out, err
-	}
-	file, _ := out["file"].(string)
-	j.record(ctx, id, "minus", map[string]any{"exclude": exclude}, file)
-	return out, nil
-}
-
 func (j *journaled) UpdateJob(ctx context.Context, jobID int64, title, folder *string) (*Job, error) {
 	job, err := j.Service.UpdateJob(ctx, jobID, title, folder)
 	if err != nil {

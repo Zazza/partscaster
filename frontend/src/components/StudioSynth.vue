@@ -16,7 +16,8 @@ import { useInstruments } from '../composables/useInstruments.js'
 import { fromWorkerChain, toWorkerChain } from '../fxChain.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { groupPresets } from '../presetGroups.js'
-import { partNotes, synthLevel } from '../synthPart.js'
+import { partNotes, partRegister, synthLevel } from '../synthPart.js'
+import { chordGridOnce } from '../trackGrid.js'
 import { previewWindow, applyWindow } from '../trackDesk.js'
 import { normPlace } from '../mixDesk.js'
 
@@ -24,6 +25,7 @@ const props = defineProps({
   job: { type: Object, required: true },
   sel: { type: Object, default: null },
   cursor: { type: Number, default: 0 },
+  open: { type: Boolean, default: false },   // блок раскрыт: сетка разбирается сама, кнопка не нужна
 })
 const emit = defineEmits(['applied'])
 const { t, locale } = useI18n()
@@ -80,11 +82,15 @@ watch(presetId, () => {
 watch(() => props.job.id, () => { grid.value = null; sections.value = []; msg.value = '' })
 onMounted(() => { msg.value = '' })
 
-async function loadGrid() {
+// регистр партии: в полосе гитар синт сливается с ними — подсказка рядом с «октавой»
+const register = computed(() => partRegister(style.value, octave.value))
+watch(() => [props.open, props.job.id], () => { if (props.open && !grid.value && !busy.value) loadGrid() }, { immediate: true })
+
+async function loadGrid(fresh = false) {
   busy.value = 'grid'
   err.value = ''
   try {
-    grid.value = await api.chordGrid(props.job.id)
+    grid.value = await chordGridOnce(api, props.job.id, { fresh })
     sections.value = [...allSections.value]
     msg.value = t('synth.grid.done', { bars: grid.value.bars.length, bpm: grid.value.bpm })
   } catch (e) { err.value = String(e) } finally { busy.value = '' }
@@ -142,9 +148,10 @@ async function apply() {
 
 <template>
   <div class="dsp-row">
-    <button class="ghost small-btn" :disabled="!!busy" :title="t('synth.grid.tip')" @click="loadGrid">
-      {{ busy === 'grid' ? t('instr.busy') : grid ? t('synth.grid.again') : t('synth.grid') }}</button>
-    <span v-if="msg" class="muted">{{ msg }}</span>
+    <span v-if="busy === 'grid'" class="muted"><span class="pulse">⟳</span> {{ t('synth.grid.busy') }}</span>
+    <span v-else-if="msg" class="muted">{{ msg }}</span>
+    <button v-if="grid || err" class="ghost small-btn" :disabled="!!busy" :title="t('synth.grid.tip')" @click="loadGrid(true)">
+      {{ grid ? t('synth.grid.again') : t('synth.grid') }}</button>
   </div>
   <template v-if="grid">
     <div class="voice-presets">
@@ -156,6 +163,7 @@ async function apply() {
       <VSelect v-model="style" :options="styleOptions" style="max-width: 170px" />
       <label class="muted">{{ t('synth.octave') }}
         <input v-model.number="octave" type="number" min="-2" max="2" step="1" style="width: 3.5em" /></label>
+      <span class="muted" :class="{ error: register.guitars }" :title="t('synth.register.tip')">{{ register.range }}<template v-if="register.guitars"> · {{ t('synth.register.guitars') }}</template></span>
       <label class="muted">{{ t('synth.level') }}
         <input v-model.number="db" type="range" min="-30" max="6" step="1" :title="t('synth.level.tip')" /> {{ db }} {{ t('studio.inserts.dbUnit') }}</label>
     </div>

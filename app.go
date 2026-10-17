@@ -678,11 +678,6 @@ func (a *App) YueEnsureMp3(id int64) (map[string]any, error) {
 	return a.yue.EnsureMp3(a.ctx, id)
 }
 
-// YueMakeMinus — минус-трек: микс стемов без выбранных групп.
-func (a *App) YueMakeMinus(id int64, exclude []string) (map[string]any, error) {
-	return a.yue.MakeMinus(a.ctx, id, exclude)
-}
-
 func (a *App) YueJobStems(id int64) ([]map[string]any, error) {
 	return a.yue.JobStems(a.ctx, id)
 }

@@ -232,10 +232,10 @@ You can also import a track through MCP (the `import_track` tool).
 
 - Choose a file (flac, mp3, wav, ogg, m4a) — the track is uploaded to the worker, the app takes the score right
   away, and the track opens in the studio. While the import runs, the button shows "importing…".
-- Stems, minus, effects and notes work with the track. The track itself does not change, everything goes into new
+- Stems, effects and notes work with the track. The track itself does not change, everything goes into new
   versions.
-- If there is not enough video memory for the score, the track is still imported and the app says so. Stems,
-  minus and effects work; you can make the score later with the "Create score" button in the studio.
+- If there is not enough video memory for the score, the track is still imported and the app says so. Stems
+  and effects work; you can make the score later with the "Create score" button in the studio.
 
 ## Studio
 
@@ -265,7 +265,7 @@ For a drum part (kick, snare…) the wave shows the part, but edits apply to all
 
 - click — listen from this spot, drag — select a stretch, wheel — zoom at the cursor,
   shift+wheel or horizontal scroll — move, "⟲" — fit the whole track in the window;
-- the file list — "main track", track variants, stems, "minus";
+- the file list — "main track", track variants, stems;
 - "amplitude" (volume: you see hits, dips, entries) or "spectrum" (a frequency picture from the worker, needs
   ffmpeg on the GPU machine);
 - "snap to bars" (on) — selection edges snap to the plan's bars;
@@ -274,11 +274,12 @@ For a drum part (kick, snare…) the wave shows the part, but edits apply to all
 - the plan's bars and sections are drawn over the wave.
 
 **"volume"** (pencil icon) — a volume line over the wave for the whole track or one stem. This shows a
-"what to apply to" list, "reset", "section ▲ / ▼" (with a selection) and "apply line". Click — a point on the
+"what to apply to" list, "reset", "section ▲ / ▼" (with a selection), "▶ listen"
+(the track with all edits and this line, not added to the list) and "Apply". Click — a point on the
 line, drag a point — bend the line, double or right click — delete a point. Dragging across the wave selects a
 stretch; "section ▲/▼" raises or lowers it by 2 dB with smooth edges, the rest of the line does not change.
-Limits: +12 dB, −30 dB, the dashed line is 0 dB. Whole track — a new track variant; a stem — an entry in "Track
-edits" (a new line for the same stem replaces the old one, an empty one removes it).
+Limits: +12 dB, −30 dB, the dashed line is 0 dB. Whole track and a stem — an entry in "Track
+changes" (a new line for the same stem replaces the old one, an empty one removes it).
 
 **Plan** ("plan · bars × voices, chords") — one scrollable row of bars: voice and instruments, note density,
 chords, sections. "− / +" — bar width. Dragging the mouse across bars selects them (the same as selecting on the
@@ -292,10 +293,11 @@ never changes.
 
 Trick groups:
 
-- **listen** — "▶ original selection": how this stretch sounds now.
 - **harmony** — "darker", "brighter", "tenser": a different chord in the selected bars.
 - **arrangement** — "drop-out (silence)" (the bars go silent for all voices), "cut bars", "sparser verses" (in
-  all verses guitars and keys −6 dB, drums −3 dB — the chorus opens up more).
+  all verses guitars and keys −6 dB, drums −3 dB — the chorus opens up more), "play without vocals" — a toggle: the
+  track is played anew without the vocal part (a new performance, the music may change a little), into "Track
+  changes", press again to undo; the same music without vocals — "remove" on the vocals in "Stems".
 - **tempo** — "↑ faster" / "↓ slower": from the selected spot ±10 %, it accumulates.
 - **voice** (if the selection has singing):
   - "vocal ↑ oct." / "vocal ↓ oct.";
@@ -314,81 +316,70 @@ Trick groups:
   and only the stem of this instrument is inserted into the track. Volume without generation: "drums only",
   "drums louder", "guitars quieter", "bass quieter", "voice: stop" (the voice in the selection is silent, the music
   goes on).
-- **continue from here** — the field "what to change in the sound" (in English, optional) and "↻ redo from here":
-  the track before the selection stays the same, after it the model plays anew. Volume edits and effects of this
+- **continue from here** — a full-width row: your own field (in English, optional; Russian words are sent as is,
+  with a warning under the field) and "↻ redo from here": the track before the selection stays the same, after it
+  the model plays anew. Under the field — hints grouped as "energy", "sound", "mood" (more energetic, no drums,
+  clean guitar, guitar solo, dreamy, blissful…): several can be picked, a second press removes one; the model gets
+  their English phrase (shown on hover), then your own words. The model follows the overall character of the
+  sound, not events ("a fill at 1:20" will not work). Volume edits and effects of this
   version do not carry over to the continuation.
 - **build**:
+  - "▶ original selection" — how this stretch sounds now (before), next to the edited piece (after);
   - "▶ stretch with edits" — the selected spot with edits in the context of the track: the model continues the
     track from the start of the selection following the edited plan and plays to the end of the selection (+2 s);
     playback starts 4 s before the edit and begins automatically;
   - **"Apply"** — the plan tricks go into "Track changes" (the "Done" step); "apply all" rebuilds with them (the
     same style, lyrics and seed) in one render together with a new voice; without tricks — removes them from the list;
-  - "✦ draft" — a quick test of the track's start with edits (~18 s);
-  - "⟳ instrumental (no vocals)" — a toggle: the same music without the vocal part, also into "Track changes" (press
-    again to undo);
   - "remove in selection" and "reset edits" — remove the marks and plan edits.
 
 Trick marks carry over to new versions.
-
-**Track edits** — everything that accumulates into a rebuild without generation: inserts, mutes, effects and
-pedals on a stem, volume lines, sound chains, parts, stereo placement, master. Each edit has:
-
-- a checkbox — turn on/off (a turned-off edit stays in the list, the track is rebuilt without it);
-- the edit's "volume" slider;
-- "✓ in time" (the part is aligned to the track's kick) or "by plan" (alignment failed, a shift of up to ~0.1 s is
-  possible);
-- render variants 1…N and "↻ another take" — the same stretch with a different seed;
-- stereo placement — for parts;
-- "edit" on a sound chain — opens it in "Stems", where the button becomes "replace";
-- ✕ — delete (with confirmation).
-
-The block header has "▶ mix with edits". With no edits — "No edits — the original plays."
-
-**Album voice** (collapsed, "experiment") — the voice of this track is sung with the timbre of another song's
-voice, the music and melody stay the same: choose a "reference song" (search by title or number) → "sing". In a
-few minutes — a new version "album voice (exp.)". The voice is recognizable, but it wobbles, and the music
-suffers a little inside phrases. It needs the optional Seed-VC component on the worker
-([deployment.md](deployment.md)); without it the block says it is unavailable.
 
 ### 3 Sound
 
 **Stems** — a desk: one row for each stem of the track (voice, drums and their parts, bass, guitar, keys,
 "other").
 
-- No stems — "make stems" (the separation model comes from the settings). If the track is split into only 4
+- No stems — the track is split into stems by itself when the Studio opens (the "track stems" setting;
+  "manually" — the "make stems" button). While it splits, a line replaces the desk: what is happening and how long
+  to wait (Demucs — about 20 s, RoFormer — about a minute and a half; if the GPU is busy it waits in the queue).
+  The separation model comes from the settings. If the track is split into only 4
   stems — "split in more detail": again with the model from the settings (RoFormer gives drum parts, guitar and
   keys), edits stay.
 - **"rhythm section from kits"** — all drum parts and the bass with samples from one kit, in one rebuild (toms —
   by pitch); the window is the selection, with no selection — the whole track. Next to it are the kit ("Live
   acoustic", "808 drum machine", "909 drum machine", "80s sample machine (Linn)", "Early rhythm box (CR-78)",
   "80s electronic drums (Simmons)") and the drum part treatment ("dry", "room", "80s gated reverb", "tight",
-  "lo-fi").
+  "lo-fi"). **"▶ listen"** — the track with the kits on a piece (the selection or 15 s from the cursor), not
+  added to the list; **"Apply"** — the rhythm section edits go into "Track changes".
 - In a stem row: ▶ — the stem alone; the name (click — make it active, tooltip — what this sound is:
   hi-hat — small cymbals "ts-ts", ride — a big ringing cymbal…); the loudness of the loud parts relative to the
   track, marked "quiet" or "barely audible" (moving or processing such a stem is useless — listen to it first);
-  icons of the stem's edits (a turned-off one is crossed out); **stereo placement** — "pan", "width", "center"
-  (when you release the slider, the track is rebuilt); **"sound ▾"**.
+  icons of the stem's edits (a turned-off one is crossed out); **"remove"** — mute the stem in the selected
+  spot (no selection — on the whole track; this is how a backing track is made: "remove" on the vocals); **stereo
+  placement** — "pan", "width", "center"; **"sound ▾"**. "Remove" and the placement do not go into the track at
+  once: under the row a line "not applied: ▶ after / ▶ before / Apply / cancel" appears — "Apply" puts the edit
+  into "Track changes", where it can be turned off or deleted.
 - "sound ▾" opens the sound choice: "Instrument" → "Kind" → "Sound (type to search)" (extra lists are hidden),
   "fine-tune" — chain blocks with knobs (as on the ["Instruments"](#instruments) page), "stem only",
-  "▶ after" / "▶ before" on the selection (no selection — 15 s from the cursor) and **"into track"** — an entry in
-  "Track edits", the track is rebuilt without a shift.
-- **Minus**: "in the minus:" — turn off the stems you do not need (drums, bass, other, voice) → "minus track":
-  the rest are mixed into a new file without regeneration.
+  "▶ after" / "▶ before" on the selection (no selection — 15 s from the cursor) and **"Apply"** — an entry in
+  "Track changes", the track is rebuilt without a shift.
 
 <!-- screenshot: the "Stems" desk — stem rows, "sound ▾" open on the bass -->
 
 **Synth over chords** (collapsed) — a new part played by a vintage synth on top of the track, following the plan's
-chords in time with the sound. "read chords" → "parts:" (song parts as buttons), synth (Solina, Juno, Moog, CS-80,
+chords in time with the sound. When the block is opened, the track bars and chords are read by themselves (one
+reading for this block and "Percussion on the grid"; "read again" — after new stems or a new plan) → "parts:" (song parts as buttons), synth (Solina, Juno, Moog, CS-80,
 Farfisa, Vox Continental, VL-Tone and your own), style ("pad (chords)", "arpeggio", "pulse (eighth bass)", "drone
-(held)"), "octave", "level", stereo placement, "synth sound and effects" (blocks), "▶ after", "▶ part alone" (hear
-what to look for in the mix), "▶ before", "into track". Stem separation is not needed. If you cannot hear the
+(held)"), "octave" (next to it — where the part sounds, for example "C5–B5"; in the guitar register, below C5, a warning
+"in the guitar register — it will blend in, raise the octave"), "level", stereo placement, "synth sound and effects" (blocks), "▶ after", "▶ part alone" (hear
+what to look for in the mix), "▶ before", "Apply". Stem separation is not needed. If you cannot hear the
 synth — raise the octave: in the guitar register the part blends with them.
 
 **Percussion on the grid** (collapsed) — hi-hat, shaker, tambourine, claps, cowbell or a doubled kick on top of the
-track. "find the grid" (with a plan — bars and song parts; without a plan — bars from the tempo, and then "bar
+track. The grid is read by itself when the block is opened (with a plan — bars and song parts; without a plan — bars from the tempo, and then "bar
 starts at beat": if "on 2 and 4" landed on 1 and 3 — shift it), song parts, sound, pattern ("every beat",
 "eighths", "sixteenths", "on 2 and 4", "off-beats"), "swing", "accent", "level", stereo placement, "percussion
-sound and effects", "▶ after / ▶ part alone / ▶ before", "into track". Several parts — several edits.
+sound and effects", "▶ after / ▶ part alone / ▶ before", "Apply". Several parts — several edits.
 
 **Quick effects (ffmpeg)** — a different tool: an effect on the whole track or a stretch, preview in place. It is
 easier to change the sound of a single stem in the "Stems" desk. Two collapsed blocks:
@@ -398,7 +389,7 @@ easier to change the sound of a single stem in the "Stems" desk. Two collapsed b
   are in the ["4 Voice"](#4-voice) step. "effects chain…" → "what to apply to" (whole track, vocals, drums, bass,
   guitars/synths, and with detailed separation — guitar, keys, kick, snare, toms, hi-hat, ride, crash) → knobs →
   "apply". On a stem the effect applies only in the selected spot (no selection — to the whole stem) and
-  accumulates in "Track edits"; on the whole track — also in "Track edits" (applied to the assembled mix before the master). "preview spot" — the effect on the
+  accumulates in "Track changes"; on the whole track — also in "Track changes" (applied to the assembled mix before the master). "preview spot" — the effect on the
   selected stretch (no selection — 15 s from the cursor), it is not added to the variants; "▶ after ⇄ / ▶ before ⇄"
   — the same stretch with and without the effect, from the same second; "stem only" — the stem without the rest of
   the mix. "De-whistle" (Убрать свист) has "find whistle" (looks for narrow tones in the selection and fills in the
@@ -433,10 +424,29 @@ track, so listen to a piece before the full render.
   the track in the new voice in one render (together with the plan tricks), the track's edits go onto it.
 - For a track without lyrics or without a score the step explains why the voice render is unavailable.
 
+**Album voice** (collapsed, "experiment") — the voice of this track is sung with the timbre of another song's
+voice, the music and melody stay the same: choose a "reference song" (search by title or number) → "sing". In a
+few minutes — a new version "album voice (exp.)". The voice is recognizable, but it wobbles, and the music
+suffers a little inside phrases. It needs the optional Seed-VC component on the worker
+([deployment.md](deployment.md)); without it the block says it is unavailable.
+
 ### 5 Done
 
 **Track changes** — everything you applied in the steps above, listed by step ("2 · Edit", "3 · Sound",
-"4 · Voice", "5 · Done"; disabled ones are pale). The list is kept on the worker: it survives closing the app and
+"4 · Voice", "5 · Done"). Changes that need a render (plan tricks, a new voice, "no vocals") are a line each.
+Overlaid edits (inserts, mutes, effects and pedals on a stem, volume lines, sound chains, parts, stereo placement,
+master) come with controls, and the track is rebuilt right away:
+
+- a checkbox — turn on/off (a turned-off edit stays in the list struck through, the track is rebuilt without it);
+- the edit's "volume" slider;
+- "✓ in time" (the part is aligned to the track's kick) or "by plan" (alignment failed, a shift of up to ~0.1 s is
+  possible);
+- render variants 1…N and "↻ another take" — the same stretch with a different seed;
+- stereo placement — for parts;
+- "edit" on a sound chain — opens it in "Stems", where the button becomes "replace";
+- ✕ — delete (with confirmation).
+
+The block header has "▶ mix with edits" (the track with all enabled edits). The list is kept on the worker: it survives closing the app and
 restarts, and the track in the list shows the "unfinished work" mark. **"apply all"** — one new track
 "<title> · final" from all enabled changes, then the list is cleared; while pieces render ("waiting for render: N")
 or the mix is being built, the button is unavailable. If the list has changes that need a render (a new voice, plan
@@ -448,7 +458,7 @@ finished versions do not change).
 **Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS",
 "Master: loud −11 LUFS", "Master: soft glue"; "loudness" and "to target" (LUFS is the perceived loudness of the
 track: −14 — like streaming services, −11 — loud), "limiter", peak "ceiling" (dBTP), "master chain" (blocks),
-"▶ after / ▶ before" on the mix with edits, "into track" — one "Master" edit (a new one replaces the old one,
+"▶ after / ▶ before" on the mix with edits, "Apply" — one "Master" edit (a new one replaces the old one,
 "now:" shows the current one). After the rebuild — the line "After master: −14.0 LUFS, peak −1.0 dBTP".
 
 **Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"apply to
@@ -611,6 +621,9 @@ The "settings" menu item. Everything is applied with the "Save" button at the bo
 - **"Worker connection"** — "Worker address". "Check" — check the address in the field without saving.
   You can enter just an IP: port 8091 is added. Both the app and the MCP server use this address.
 - **"Checks"**:
+  - "track stems" — when to split a track into stems: "when the Studio opens" (default: only opened tracks are
+    split), "right away for every track" (a finished track goes next into the GPU queue; 70–170 MB per track;
+    drafts and insert pieces are not split) or "manually (a button in "Stems")";
   - "Split instrumental tracks into stems right away" — an instrumental is split into stems after generation
     (~7 s of GPU), and if something sounds in the voice stem, the track gets ⚠ "voice in instrumental";
   - "stem separation" — "fast — Demucs (~20 s per track)" or "cleaner — RoFormer (~1.5 min per track)".

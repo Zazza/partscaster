@@ -16,6 +16,16 @@ export function chordPcs(name) {
 }
 
 const BASE = { pad: 60, arp: 60, drone: 60, pulse: 36 }   // нижняя нота регистра: C4 или C2
+const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const noteName = (midi) => NOTE[midi % 12] + (Math.floor(midi / 12) - 1)
+// выше этой ноты пэд слышен в плотном треке: ниже — полоса гитар, партия сливается с ними даже громкой (#683–#687)
+export const GUITAR_TOP = 72   // C5
+
+/** Регистр партии: «C4–B4» и guitars — партия (кроме синт-баса pulse) в полосе гитар, её не будет слышно. */
+export function partRegister(style = 'pad', octave = 0) {
+  const base = (BASE[style] ?? 60) + 12 * Math.max(-2, Math.min(2, Math.round(octave || 0)))
+  return { range: `${noteName(base)}–${noteName(base + 11)}`, guitars: style !== 'pulse' && base < GUITAR_TOP }
+}
 
 /** Ноты партии: style pad|arp|pulse|drone, octave −2…2, sections — список секций (null — все). */
 export function partNotes(bars, { style = 'pad', octave = 0, sections = null } = {}) {

@@ -1232,3 +1232,63 @@ func TestRecipeRunnerResaveClaimedSkipsStep(t *testing.T) {
 		t.Errorf("вызовы %v: в тике с ErrClaimed шаг выполнен", f.calls)
 	}
 }
+
+// Старый рецепт со шагом «minus» (минус убран из приложения): импорт не падает, шаг «minus»
+// ничего не вызывает у воркера, шаги до и после него воспроизводятся как обычно.
+func TestRecipeRunnerOldMinusStepSkipped(t *testing.T) {
+	t.Parallel()
+	root := rcDefaultRoot()
+	var rec map[string]any
+	if err := json.Unmarshal(rcMainRecipe(t, root), &rec); err != nil {
+		t.Fatal(err)
+	}
+	ops := rec["ops"].([]any)
+	if len(ops) != 3 {
+		t.Fatalf("основной рецепт: %d шагов, want 3", len(ops))
+	}
+	// минус старого экспорта — на продолжении n2, между continue и fx
+	minus := map[string]any{"op": "minus", "node": "n2", "params": map[string]any{"job_id": "n2"},
+		"result": "", "refs": []any{"n2"}}
+	rec["ops"] = []any{ops[0], minus, ops[1], ops[2]}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newRcNew(t, nil, raw, "seed")
+	rcTicks(t, f, 40)
+
+	if f.status() != "done" {
+		t.Fatalf("сессия %v (error %q), want done; вызовы %v", f.sess["status"], f.sess["error"], f.calls)
+	}
+	var gen []string
+	for _, c := range f.calls {
+		if c != "set_head" && c != "update" {
+			gen = append(gen, c)
+		}
+	}
+	if want := []string{"submit", "continue", "fx", "variant_track"}; !reflect.DeepEqual(gen, want) {
+		t.Fatalf("вызовы %v, want %v (minus ничего не вызывает)", gen, want)
+	}
+	// ни разделения, ни загрузок, ни удалений, ни правок эффектами движка от шага minus
+	if len(f.splits) != 0 || len(f.stemsCalls) != 0 || len(f.uploads) != 0 || len(f.deleted) != 0 ||
+		len(f.log) != 0 || len(f.engFake.calls) != 0 {
+		t.Errorf("minus обратился к воркеру: splits %v stems %v uploads %d deleted %v log %v eng %d",
+			f.splits, f.stemsCalls, len(f.uploads), f.deleted, f.log, len(f.engFake.calls))
+	}
+	if want := (rcCont{100, 95.2, 5151, "X:cont", "louder"}); len(f.conts) != 1 || f.conts[0] != want {
+		t.Errorf("ContinueJob %+v, want [%+v]", f.conts, want)
+	}
+	from := 30.0
+	if len(f.fxs) != 1 || f.fxs[0].jobID != 101 || !reflect.DeepEqual(f.fxs[0].req, rcFxReq(&from, "")) {
+		t.Errorf("ApplyFx %+v, want один на продолжении 101", f.fxs)
+	}
+	if want := (rcVar{101, "dsp-fx-new1.flac", "Тёплый провод · вариант", 0}); len(f.variants) != 1 || f.variants[0] != want {
+		t.Errorf("VariantToTrack %+v, want [%+v]", f.variants, want)
+	}
+	if len(f.heads) != 1 || f.heads[0] != [2]int64{100, 102} {
+		t.Errorf("SetHead %v, want [(100, 102)]", f.heads)
+	}
+	if e, _ := f.sess["error"].(string); e != "" {
+		t.Errorf("текст ошибки %q, want пусто", e)
+	}
+}

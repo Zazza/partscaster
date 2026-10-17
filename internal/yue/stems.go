@@ -104,13 +104,3 @@ func (c *Client) JobStems(ctx context.Context, id int64) ([]map[string]any, erro
 	}
 	return out, nil
 }
-
-// MakeMinus — минус-трек: микс стемов без исключённых групп.
-func (c *Client) MakeMinus(ctx context.Context, id int64, exclude []string) (map[string]any, error) {
-	var out map[string]any
-	body := map[string]any{"exclude": exclude}
-	if err := c.postJSON(ctx, fmt.Sprintf("/jobs/%d/minus", id), body, planTimeout, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}

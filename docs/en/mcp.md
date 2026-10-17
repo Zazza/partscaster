@@ -95,7 +95,7 @@ default; installation — `dry_run=false` and `confirm=true`).
 ### Worker queue
 
 The same queue that a person sees in the app. Long tools (generations, `plan`, `job_preview`, `make_stems`,
-`make_minus`, `rebuild_sections`, `sound_preset_apply`, `revoice_apply`, lyrics and note recognition, the
+`rebuild_sections`, `sound_preset_apply`, `revoice_apply`, lyrics and note recognition, the
 effects engine with an amp, etc.) enter it with the "AI" mark and wait for their turn. If a person canceled the
 operation, the tool returns the error "canceled by a person" ("отменено человеком").
 
@@ -156,7 +156,6 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 | Tool | Parameters | What it does |
 |---|---|---|
 | `make_stems` | **job_id**, model | Split the track: main stems drums/bass/other/vocals, detailed guitar/piano and (only RoFormer) drum parts kick/snare/toms/hh/ride/crash. `model` — `htdemucs` (fast) or `roformer` (cleaner, ~4.5 times longer) for one time; empty — the `stems_model` setting |
-| `make_minus` | **job_id**, **exclude** | Minus: a mix of the main stems without the selected ones (for example, `vocals` for karaoke) |
 | `overdub` | **job_id**, **style**, lyrics, seed, gain, abc | A part over the track from its score with a new style. `gain` 0.1–1 (0.5); 0 — a cover as a new track without mixing. `abc` — your own plan for the part. Without `lyrics` — a vocalise |
 | `guitar_part` | **job_id**, style | What the guitarist will play "from the plan chords" (block `gtrnotes`): bars, strikes with notes. `style` 0–4: auto, strumming, fingerpicking, bass + chord, fifths |
 | `voice_convert` | **job_id**, **ref_job_id**, ref_from, ref_dur, steps, title | EXPERIMENT "Album voice": the track's voice with the timbre of a sample (Seed-VC on the worker). The voice is recognizable but it wobbles — see [deployment.md](deployment.md). Without Seed-VC — error 503 |
@@ -164,7 +163,7 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 | `job_peaks` | **job_id**, file, bins | Loudness envelope as numbers: find a drop, an entry, a place to edit |
 | `job_spectrum` | **job_id**, file | Spectrogram PNG to the downloads directory. Needs ffmpeg on the worker |
 | `draft_list` | — | Studio drafts (unfinished work) of all tracks: `[{job_id, state, updated_at}]` |
-| `draft_get` | **job_id** | The track's draft: `state` — `{v, edits, queue, ts, gen?, applying?}` ("Track edits", pending renders, changes that need a render — voice/plan tricks/no vocals, the "apply all" progress); none — empty |
+| `draft_get` | **job_id** | The track's draft: `state` — `{v, edits, queue, ts, gen?, applying?}` ("Track changes", pending renders, changes that need a render — voice/plan tricks/no vocals, the "apply all" progress); none — empty |
 | `draft_set` | **job_id**, **state** | Write the track's draft (a JSON object). The studio picks it up on its next start |
 | `draft_clear` | **job_id**, **confirm** | Delete the track's draft — the studio edits are lost. Only with `confirm=true` after the human agrees |
 
@@ -250,7 +249,7 @@ edit log after each successful change.
 | Tool | Parameters | What it does |
 |---|---|---|
 | `config_get` | — | Worker address, worker data paths and engines |
-| `config_set` | server_url, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment: less video memory, the same seed gives a different song), `cpp_model`, `cpp_low_vram` — from the next generation |
+| `config_set` | server_url, stems_auto, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment: less video memory, the same seed gives a different song), `cpp_model`, `cpp_low_vram` — from the next generation |
 | `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set engine=cpp cpp_model=<name>` |
 
 ### Installation and diagnostics
@@ -265,7 +264,7 @@ edit log after each successful change.
 
 **Minus without vocals.** "Queue a track in the style "70s analog reggae, 75 BPM" as an instrumental" → `submit`;
 the agent waits with `jobs` until the track becomes `done`; "download the mp3" → `artifacts` → path to the file;
-"make a minus without vocals" → `make_stems` + `make_minus` → `artifacts`.
+"make a minus without vocals" → `make_stems` + `rebuild_sections` with the `vocals` stem muted → `artifacts`.
 
 **Synth by chords.** `chord_grid` (chords by the bars of the audio) → a `synth` block with notes in track seconds →
 `rebuild_sections` with the entry `{child_id: 0, stems: ["mix"], add: true, engine: [synth…, effects…]}`.

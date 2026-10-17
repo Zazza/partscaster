@@ -443,7 +443,7 @@ class TestRoformerAvailability(unittest.TestCase):
 
 @unittest.skipUnless(_WORKER_OK, _WORKER_SKIP)
 class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
-    """POST /jobs/{id}/stems, /minus, GET/POST /config поверх выбора модели."""
+    """POST /jobs/{id}/stems, GET/POST /config поверх выбора модели."""
 
     def setUp(self):
         super().setUp()
@@ -477,11 +477,6 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         params = {} if model is None else {"model": model}
         return self.client.post(f"/jobs/{jid}/stems", params=params)
 
-    def _minus(self, jid, exclude):
-        r = self.client.post(f"/jobs/{jid}/minus", json={"exclude": exclude})
-        self.assertLess(r.status_code, 300, r.text)
-        return r
-
     def _config(self):
         r = self.client.get("/config")
         self.assertEqual(r.status_code, 200, r.text)
@@ -493,52 +488,6 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
         r = self._stems(jid, RF)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json().get("model"), "bs-roformer-sw")
-
-    # минус при подробных дорожках: guitar/piano уже внутри «прочего» и в минус
-    # не добавляются (иначе гитара удвоится); kept — только основные имена
-    def _six_stems_job(self):
-        import numpy as np
-        import soundfile as sf
-        jid = self._job(duration=DUR, semantic=False)
-        d = self.jobs_dir / str(jid)
-        d.mkdir(parents=True, exist_ok=True)
-        for name, hz in HZ.items():
-            sf.write(str(d / f"stem-{name}.flac"), _tone(hz), SR)
-        sf.write(str(d / "audio.flac"), np.sum([_tone(HZ[n]) for n in MAIN], axis=0), SR)
-        with self._conn() as c:
-            c.execute("UPDATE jobs SET audio_file='audio.flac' WHERE id=?", (jid,))
-        return jid, d
-
-    def test_minus_is_sum_of_main_stems_only(self):
-        for exclude in ("vocals", "other"):
-            with self.subTest(exclude=exclude):
-                jid, d = self._six_stems_job()
-                r = self._minus(jid, [exclude])
-                kept = sorted(set(MAIN) - {exclude})
-                self.assertEqual(sorted(r.json().get("kept", [])), kept)
-                x = _read(d / "minus.flac")
-                ref = _tone_amp(x, HZ["drums"])
-                self.assertGreater(ref, 0.01, "в минусе нет барабанов")
-                for n in kept:
-                    self.assertAlmostEqual(_tone_amp(x, HZ[n]) / ref, 1.0, delta=0.05,
-                                           msg=f"{n} не на своём уровне")
-                for n in (exclude,) + DETAIL:
-                    self.assertLess(_tone_amp(x, HZ[n]) / ref, 0.02, f"{n} попал в минус без {exclude}")
-
-    def test_minus_without_drums_has_no_drum_parts(self):
-        self._setup_sep(Path(self._td.name))
-        jid, d = self._audio_job()
-        self.assertEqual(self._stems(jid, RF).status_code, 200)
-        for n in PARTS:
-            self.assertTrue((d / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
-        r = self._minus(jid, ["drums"])
-        self.assertEqual(sorted(r.json().get("kept", [])), ["bass", "other", "vocals"])
-        x = _read(d / "minus.flac")
-        ref = _tone_amp(x, HZ["bass"])
-        self.assertGreater(ref, 0.01)
-        self.assertLess(_tone_amp(x, HZ["drums"]) / ref, 0.02, "барабаны в минусе без барабанов")
-        for n in PARTS:
-            self.assertLess(_tone_amp(x, PART_HZ[n]) / ref, 0.02, f"часть {n} вернула ударные в минус")
 
     def test_no_sep_python_response_htdemucs(self):
         self._setup_sep(Path(self._td.name), sep_py_exists=False)

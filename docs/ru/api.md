@@ -44,8 +44,8 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 |---|---|---|
 | GET | `/health` | `{status, model_loaded, load_error}` — жив ли воркер, загружена ли модель, ошибка загрузки |
 | GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: версия сборки (файл `VERSION` архива, без него `dev`), версия API (клиенты сверяют её со своей), отпечаток кода, модель генерации, движок (`torch` или `cpp-q8` и т. п.), что установлено |
-| GET | `/config` | Текущие настройки: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}` |
-| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` без программы или без скачанной модели — 422. Смена движка — со следующей генерации |
+| GET | `/config` | Текущие настройки: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `stems_auto`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}` |
+| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `stems_auto` — когда делать дорожки: `studio` (при открытии студии, по умолчанию; делит клиент), `always` (сразу у каждого готового полного трека и импорта — отдельной операцией очереди после генерации; черновики и куски вклеек — нет), `manual` (иное — 422); `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` без программы или без скачанной модели — 422. Смена движка — со следующей генерации |
 | GET | `/stats` | Сводка для строки состояния: `{model_loaded, vram_total, vram_used (МБ), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}` |
 | POST | `/engine/models/install?name=` | Скачать модель yue2.cpp и VAE (`bf16` / `q8` / `q6` / `q5`), закреплённые файлы с проверкой sha256; уже скачанная — без сети. Ждёт конца загрузки → `{name, installed, cpp_models}`. Неизвестное имя — 422, сумма не сошлась или сбой сети — 502 |
 | GET | `/engine/models/progress` | Идущая загрузка модели `{name, file, done, total}` или `{}` |
@@ -77,7 +77,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 | POST | `/jobs/{id}/continue` | «Продолжение с места» → `{id}`. Тело `{from_sec, seed?, abc?, style_add?, to_sec?, title?}`: новый трек = шаги модели исходника до `from_sec` + продолжение (другой сид — другой вариант; `abc` — изменённый план; `style_add` — приписка к стилю: что изменить в звучании). С `to_sec` — «кусок» (`role=fragment`): модель играет только до `to_sec` (не дальше конца трека) + 2 с хвоста. Новый трек — вложение исходника (`parent_id`, `role=continue`, `cont_from`). 422 — у трека нет шагов модели (импорт) или `from_sec` за концом |
 | POST | `/jobs/{id}/head` | `{head_id?}` — основная версия песни: `{id}` — корень, `head_id` — он сам или его потомок (иначе 422); `null`/0 — основной снова сам трек |
 | POST | `/jobs/{id}/overdub` | `{style, lyrics?, seed?, gain?, abc?}` → `{id}` — партия поверх трека: новый рендер по партитуре трека (или своему плану `abc` — так инструмент звучит только в выделенном куске) с новым стилем. Готовая партия подмешивается к оригиналу с громкостью `gain` (по умолчанию 0.5) в файл `overdub-<id>.flac`; `gain=0` — без смешивания (кавер новым треком). Сид родителя — та же интерпретация. Без `lyrics` модель поёт вокализ. Нет партитуры — 404 |
-| POST | `/jobs/{id}/variant_track` | `{file, title?, voice_src?}` → `{id}` — вариант эффекта (`dsp-*.flac` и др.) отдельным готовым треком: копия звука и партитура исходника, дальше работают дорожки, минус, эффекты (`parent_id` = исходник, `role=variant`). `voice_src` — трек, чей голос подставлен в версию (после «перепеть»); несуществующий — 422 |
+| POST | `/jobs/{id}/variant_track` | `{file, title?, voice_src?}` → `{id}` — вариант эффекта (`dsp-*.flac` и др.) отдельным готовым треком: копия звука и партитура исходника, дальше работают дорожки и эффекты (`parent_id` = исходник, `role=variant`). `voice_src` — трек, чей голос подставлен в версию (после «перепеть»); несуществующий — 422 |
 | POST | `/jobs/{id}/voice` | ЭКСПЕРИМЕНТ «голос альбома»: `{ref_job_id, ref_from?, ref_dur?, steps?, title?}` → `{id}` — новая версия, где голос спет тембром образца (Seed-VC), музыка и мелодия прежние. Образец — окно дорожки голоса трека `ref_job_id`: `ref_from` (не задано — самый плотный кусок пения), `ref_dur` 3–30 с (25), `steps` 10–100 (50). Голос узнаётся, но дрожит. Seed-VC не установлен — 503 |
 | POST | `/tracks/import?transcribe=&title=` | Импорт своего трека (байты + `X-Filename`) → `{id, duration_sec, abc_file, transcribe_error}`. `transcribe` (по умолчанию да) — сразу снять партитуру для ролла и овердаба; её сбой трек не отменяет |
 | POST | `/jobs/{id}/preview` | `{from_sec, to_sec}` (не короче 1 с) → `{file, from_sec, to_s, duration_sec}` — быстрый кусок трека из сохранённых латентов (без новой генерации), файл `preview-<от>-<до>.flac` |
@@ -127,7 +127,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| GET | `/audio/{id}/{файл}` | Любой файл из папки трека: `audio.flac` / `.mp3` / `.wav`, `score.abc`, `request.abc`, `minus.flac`, `stem-*.flac`, `dsp-*.flac`, `overdub-*.flac`, `preview-*.flac`, `metrics.json` и т. д. |
+| GET | `/audio/{id}/{файл}` | Любой файл из папки трека: `audio.flac` / `.mp3` / `.wav`, `score.abc`, `request.abc`, `stem-*.flac`, `dsp-*.flac`, `overdub-*.flac`, `preview-*.flac`, `metrics.json` и т. д. |
 | GET | `/listen/{id}?f=` | HTML-страница прослушивания; `f` — вариант (`dsp-*`, `overdub-*`, `preview-*`, `stem-*`) |
 
 ## Партитура и разбор звука
@@ -167,13 +167,12 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 | POST | `/references` | Эталонная запись (байты + `X-Filename`) → `{id, metrics}` — замеры для сравнения с треками. Не разбирается — 422 |
 | GET | `/references` | Список эталонов `[{id, created_at, metrics, size}]`, новые первыми |
 
-## Дорожки и минус
+## Дорожки
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| POST | `/jobs/{id}/stems?model=` | Разделить трек → `{stems, seconds, model}`. Основные дорожки `stem-drums/bass/other/vocals.flac` в сумме дают трек. Подробные — `guitar`, `piano` (внутри «прочего») и, только у RoFormer, части барабанов `kick`, `snare`, `toms`, `hh`, `ride`, `crash` — в сумму не входят. `model` — `roformer` или `htdemucs` разово (иное — 422), без параметра — настройка `stems_model`. Сбой RoFormer — запасной путь htdemucs |
+| POST | `/jobs/{id}/stems?model=` | Разделить трек → `{stems, seconds, model}`. Основные дорожки `stem-drums/bass/other/vocals.flac` в сумме дают трек. Подробные — `guitar`, `piano` (внутри «прочего») и, только у RoFormer, части барабанов `kick`, `snare`, `toms`, `hh`, `ride`, `crash` — в сумму не входят. `model` — `roformer` или `htdemucs` разово (иное — 422), без параметра — настройка `stems_model`. Сбой RoFormer — запасной путь htdemucs. Повторный запрос, пока трек уже делится, ждёт идущего разделения и отдаёт его итог |
 | GET | `/jobs/{id}/stems` | Дорожки трека `[{file, name, created_at, metrics}]` |
-| POST | `/jobs/{id}/minus` | `{exclude: [drums/bass/other/vocals]}` → `{file: "minus.flac", excluded, kept}` — микс основных дорожек без выбранных; дорожек нет — сначала делит сам. Исключить всё — 422 |
 
 ## Варианты эффектов
 
@@ -277,7 +276,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 
 ## Черновик студии
 
-Незаконченная работа над треком: правки студии («Правки трека»: вклейки, эффекты на дорожки, педали, движок,
+Незаконченная работа над треком: правки студии («Изменения трека»: вклейки, эффекты на дорожки, педали, движок,
 громкости, место, мастер) и ожидающие рендеры кусков. Пишет приложение; содержимое `state` воркер не разбирает
 (JSON-объект до 1 МБ). Черновик удаляется вместе с треком и после «применить всё» в студии.
 
@@ -296,7 +295,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| POST | `/jobs/{id}/ops` | `{op, params, result, refs}` → `{id}` — запись журнала. `op`: `submit`, `continue`, `fragment`, `overdub`, `variant_track`, `fx`, `minus`, `update`, `set_head`, `rebuild_sections`, `envelope`, `splice`, `dsp_apply`, `pedals`, `sound_preset`; иное — 422, нет трека — 404 |
+| POST | `/jobs/{id}/ops` | `{op, params, result, refs}` → `{id}` — запись журнала. `op`: `submit`, `continue`, `fragment`, `overdub`, `variant_track`, `fx`, `minus` (старые рецепты: при импорте шаг пропускается), `update`, `set_head`, `rebuild_sections`, `envelope`, `splice`, `dsp_apply`, `pedals`, `sound_preset`; иное — 422, нет трека — 404 |
 | GET | `/jobs/{id}/ops` | Журнал трека по порядку `[{id, job_id, op, params, result, refs, created_at}]` |
 | GET | `/jobs/{id}/recipe` | Рецепт всей песни трека (от корня). 422 — цепочка версий оборвана удалённой версией или в песне есть то, что рецептом не переносится (черновик, импорт чужого аудио, «голос альбома») |
 | POST | `/recipes/import` | `{recipe, mode: seed/plan}` → `{id}` — новая сессия импорта; чужой формат — 422 |

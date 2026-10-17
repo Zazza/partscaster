@@ -34,13 +34,13 @@ version. Details — [ui-guide.md](ui-guide.md).
 - **Listen** — waveform, spectrum and the plan's piano roll; a click plays from that point, a drag selects a stretch.
 - **Tricks on a selection** — "wrong chord" (darker / brighter / more tense), "drop-out (silence)", "cut bars",
   "vocal ↑/↓ oct.", tempo. The tricks collect in the plan, "Apply" puts them into the draft, they sound after "apply all" in "Done"; for a quick listen —
-  "stretch with edits" or "✦ draft".
+  "stretch with edits".
 - **Voice by sections** — "voice higher", "voice: variations", "voice: hold phrase ends", "voice: stop", then
   "↻ re-sing from here": two new vocal takes only in the selected part; the music does not change.
 - **Rebuilding sections by continuation** — the model re-renders the selected stretch in the context of the track, and only the
   needed stem goes into the track (guitars/keys, bass or drums); "continue from here" — the same performance up to the mark,
   new after it.
-- **Instrumental** — "⟳ instrumental (no vocals)": the same music with the vocal part removed.
+- **Without vocals** — "play without vocals": the track is played anew without the vocal part; the same music without vocals — "remove" on the vocals in "Stems".
 - **Replay in another style…** (track menu) — the model plays the track again from its notes in a new genre: a cover as a new
   version or a layer over the original.
 

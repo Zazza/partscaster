@@ -61,7 +61,7 @@ Everything applied accumulates in the track draft — the "Done" step, the "Trac
    guitars) the effect is masked, solo you hear it. The preview is stored on the PC and does not go into the variant
    list. The first preview of a track downloads the audio and the stems; the next ones take a couple of seconds.
 4. **Apply** — the edit goes into "Track changes" (the "Done" step), "▶ mix" plays the track with all edits. Disable or
-   remove it there or in "Track edits".
+   remove it there or in "Track changes".
 5. All done — **"apply all"** in the "Done" step: one new track "<title> · final". Older variants in the "results"
    list (with the metric difference and "→ to tracks") stay as they were.
 
@@ -432,8 +432,8 @@ Ready-made guitarists (the "Guitarist fits in by chords" section):
 
 ### Synth, keys and orchestra over the track
 
-**Synth over chords.** In the studio (the "Sound" step, "Synth over chords") — a new part on top of the track: "read
-chords" (chords and song parts from the plan, locked to the audio bars: beats from the drums, the plan offset from the
+**Synth over chords.** In the studio (the "Sound" step, "Synth over chords") — a new part on top of the track: when the
+block is opened, the chords are read by themselves (chords and song parts from the plan, locked to the audio bars: beats from the drums, the plan offset from the
 guitar and bass notes), a ready-made instrument, a style (pad — a chord per bar, arpeggio — eighths over the triad,
 pulse — the root in eighths, drone — the root and the fifth), octave, song parts, volume relative to the track
 (`rel_db`, default −8 — 8 dB quieter than the track where the synth plays; the volume "by ear" uses the A curve, at the
@@ -475,7 +475,8 @@ for the first time (~5…100 MB). 33 ready-made chains in three roles:
 ### Percussion over the track
 
 In the studio ("Percussion on the grid", next to the synth) — hi-hat, shaker, tambourine, claps, cowbell, rimshot,
-ride or kick doubling on top of the track. "find the grid": with a plan — bars and song parts (as for the synth),
+ride or kick doubling on top of the track. The grid is read by itself when the block is opened (the same reading as
+the synth): with a plan — bars and song parts (as for the synth),
 without a plan — bars from the tempo and downbeat of the whole track. Pattern (every beat, eighths, sixteenths, on 2
 and 4, between beats), swing (the second eighths/sixteenths later: 33 % — triplets), accent (0 — all hits even, 100 % —
 beats louder, in-betweens quieter), volume relative to the track. This is an addition, not a replacement: replacing the

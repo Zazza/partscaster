@@ -46,7 +46,6 @@ type Service interface {
 	MakeStemsWith(ctx context.Context, id int64, model string) (map[string]any, error)
 	// GuitarPart — партия гитариста «по аккордам плана» в манере style → {style, bars, strikes, beats, tune_cents}
 	GuitarPart(ctx context.Context, id int64, style int) (map[string]any, error)
-	MakeMinus(ctx context.Context, id int64, exclude []string) (map[string]any, error)
 	// звуковой движок воркера: цепочка блоков на трек/дорожку → вариант; захваты NAM и IR
 	ApplyFx(ctx context.Context, id int64, req FxRequest) (*DspVariant, error)
 	FxAssets(ctx context.Context) (map[string]any, error)

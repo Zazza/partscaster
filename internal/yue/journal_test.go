@@ -17,7 +17,7 @@ import (
 //   Submit с ParentID → submit (params — заявка, сид фактический, result job:<id>),
 //   ContinueJob → continue, FragmentJob → fragment, SubmitOverdub → overdub,
 //   VariantToTrack → variant_track (params file, title, voice_src; result job:<id>),
-//   ApplyFx не-превью → fx (result — файл), MakeMinus → minus, UpdateJob → update,
+//   ApplyFx не-превью → fx (result — файл), UpdateJob → update,
 //   SetHead → set_head.
 // Не пишут: ошибка вызова, превью fx, Submit без родителя, контекст WithoutJournal.
 // Сбой записи не роняет вызов. yue.Record пишет через OpRecorder, если контекст не «без журнала».
@@ -110,13 +110,6 @@ func (f *jnFake) ApplyFx(_ context.Context, _ int64, req FxRequest) (*DspVariant
 		return &DspVariant{File: "preview-fx-1.flac"}, nil
 	}
 	return &DspVariant{File: f.fxFile}, nil
-}
-
-func (f *jnFake) MakeMinus(_ context.Context, _ int64, _ []string) (map[string]any, error) {
-	if err := f.call("minus"); err != nil {
-		return nil, err
-	}
-	return map[string]any{"file": "minus-vocals.flac"}, nil
 }
 
 func (f *jnFake) MakeStems(_ context.Context, _ int64) (map[string]any, error) {
@@ -307,14 +300,13 @@ func TestJournaledApplyFx(t *testing.T) {
 	}
 }
 
-// minus / update / set_head — запись у трека вызова.
-func TestJournaledMinusUpdateSetHead(t *testing.T) {
+// update / set_head — запись у трека вызова.
+func TestJournaledUpdateSetHead(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		op string
 		do func(Service) error
 	}{
-		{"minus", func(s Service) error { _, err := s.MakeMinus(context.Background(), 5, []string{"vocals"}); return err }},
 		{"update", func(s Service) error {
 			_, err := s.UpdateJob(context.Background(), 5, strp("Новое имя"), nil)
 			return err
@@ -357,7 +349,6 @@ func TestJournaledErrorNotRecorded(t *testing.T) {
 			_, err := s.ApplyFx(context.Background(), 5, FxRequest{Source: "mix"})
 			return err
 		},
-		"minus":    func(s Service) error { _, err := s.MakeMinus(context.Background(), 5, nil); return err },
 		"update":   func(s Service) error { _, err := s.UpdateJob(context.Background(), 5, strp("x"), nil); return err },
 		"set_head": func(s Service) error { return s.SetHead(context.Background(), 5, 9) },
 	}

@@ -63,6 +63,8 @@ export function insertTitle(it, { chainName, stemName, instName, placeName }) {
     const what = it.label || it.steps.filter((s) => !s.off).map((s) => chainName(s.chain)).join(' → ')
     return `${what} · ${(it.stems || []).map(stemName).join(', ')}`
   }
+  // «убрать» из пульта «Дорожки» — какая дорожка
+  if (it.instId === 'remove') return `${t('insert.remove')} · ${(it.stems || []).map(stemName).join(', ')}`
   return instName(it.instId)
 }
 

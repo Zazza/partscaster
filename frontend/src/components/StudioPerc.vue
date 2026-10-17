@@ -19,12 +19,14 @@ import { fromWorkerChain, toWorkerChain } from '../fxChain.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { percHits, barsFromBeat, PERC_PATTERNS } from '../percPart.js'
 import { previewWindow, applyWindow } from '../trackDesk.js'
+import { chordGridOnce } from '../trackGrid.js'
 import { normPlace } from '../mixDesk.js'
 
 const props = defineProps({
   job: { type: Object, required: true },
   sel: { type: Object, default: null },
   cursor: { type: Number, default: 0 },
+  open: { type: Boolean, default: false },   // блок раскрыт: сетка разбирается сама, кнопка не нужна
 })
 const emit = defineEmits(['applied'])
 const { t, locale } = useI18n()
@@ -79,12 +81,14 @@ watch(() => props.job.id, () => { bars.value = null; beat.value = null; shift.va
 watch(shift, () => { if (beat.value) bars.value = barsFromBeat(beat.value, props.job.duration_sec, shift.value) })
 const shiftOptions = computed(() => [0, 1, 2, 3].map((k) => ({ value: k, label: t('perc.shift.n', { n: k + 1 }) })))
 
-async function loadGrid() {
+watch(() => [props.open, props.job.id], () => { if (props.open && !bars.value && !busy.value) loadGrid() }, { immediate: true })
+
+async function loadGrid(fresh = false) {
   busy.value = 'grid'
   err.value = ''
   try {
     try {
-      const g = await api.chordGrid(props.job.id)
+      const g = await chordGridOnce(api, props.job.id, { fresh })
       beat.value = null
       bars.value = g.bars
       msg.value = t('perc.grid.done', { bars: g.bars.length, bpm: g.bpm })
@@ -149,9 +153,10 @@ async function apply() {
 
 <template>
   <div class="dsp-row">
-    <button class="ghost small-btn" :disabled="!!busy" :title="t('perc.grid.tip')" @click="loadGrid">
-      {{ busy === 'grid' ? t('instr.busy') : bars ? t('synth.grid.again') : t('perc.grid') }}</button>
-    <span v-if="msg" class="muted">{{ msg }}</span>
+    <span v-if="busy === 'grid'" class="muted"><span class="pulse">⟳</span> {{ t('synth.grid.busy') }}</span>
+    <span v-else-if="msg" class="muted">{{ msg }}</span>
+    <button v-if="bars || err" class="ghost small-btn" :disabled="!!busy" :title="t('perc.grid.tip')" @click="loadGrid(true)">
+      {{ bars ? t('synth.grid.again') : t('perc.grid') }}</button>
     <label v-if="beat" class="muted" :title="t('perc.shift.tip')">{{ t('perc.shift') }}
       <VSelect v-model="shift" :options="shiftOptions" style="max-width: 110px" /></label>
   </div>

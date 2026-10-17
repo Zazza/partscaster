@@ -1,10 +1,8 @@
 // Части барабанов в студии.
 // Подписи частей (ru/en) — ключи studio.dsp.target.<часть>; паритет словарей
 // в целом проверяет i18n.test.js, здесь — что ключи частей есть в обоих и
-// русские подписи ожидаемые. Переключатели «минуса» — только
-// основные дорожки: части барабанов в сумму трека не входят.
+// русские подписи ожидаемые.
 import { expect, test } from 'vitest'
-import { templateAst, findElements, dir, attr } from './testkit/sfc.js'
 import RU from './i18n/ru.js'
 import EN from './i18n/en.js'
 
@@ -38,13 +36,4 @@ test('русские подписи частей', () => {
 test('английские подписи частей различимы между собой', () => {
   const en = PARTS.map((p) => EN[`studio.dsp.target.${p}`].toLowerCase())
   expect(new Set(en).size).toBe(PARTS.length)
-})
-
-test('переключатели «минуса» — только основные дорожки, без частей барабанов', () => {
-  const toggles = findElements(templateAst('components/StudioPage.vue'), (n) => /\bstem-toggle\b/.test(attr(n, 'class') || ''))
-  expect(toggles.length, 'не найден список переключателей stem-toggle').toBeGreaterThan(0)
-  for (const { node } of toggles) {
-    const list = (dir(node, 'for') || '').split(/\s+in\s+/)[1]
-    expect(JSON.parse(list.replace(/'/g, '"'))).toEqual(['drums', 'bass', 'other', 'vocals'])
-  }
 })

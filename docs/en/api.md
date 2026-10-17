@@ -46,8 +46,8 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 |---|---|---|
 | GET | `/health` | `{status, model_loaded, load_error}` — is the worker alive, is the model loaded, the load error |
 | GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: build version (the `VERSION` file of the archive, without it `dev`), API version (clients compare it with their own), code fingerprint, generation model, engine (`torch` or `cpp-q8` etc.), what is installed |
-| GET | `/config` | Current settings: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `auto_stems_instrumental`, `stems_pref` (user choice), `stems_model` (what actually makes the stems), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (the yue2.cpp program runs), `cpp_models` `{name: {file, size, installed}}` |
-| POST | `/config` | Changes the given fields, responds like GET. Fields: `auto_stems_instrumental` — for tracks without vocals, make stems right away and check whether a voice slipped in (yes by default); `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` without the program or without a downloaded model — 422. An engine change applies from the next generation |
+| GET | `/config` | Current settings: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `stems_auto`, `auto_stems_instrumental`, `stems_pref` (user choice), `stems_model` (what actually makes the stems), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (the yue2.cpp program runs), `cpp_models` `{name: {file, size, installed}}` |
+| POST | `/config` | Changes the given fields, responds like GET. Fields: `stems_auto` — when to make stems: `studio` (when the studio opens, default; the client splits), `always` (right away for every finished full track and import — a separate queue operation after the generation; drafts and insert pieces — no), `manual` (other values — 422); `auto_stems_instrumental` — for tracks without vocals, make stems right away and check whether a voice slipped in (yes by default); `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` without the program or without a downloaded model — 422. An engine change applies from the next generation |
 | GET | `/stats` | Summary for the status bar: `{model_loaded, vram_total, vram_used (MB), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}` |
 | POST | `/engine/models/install?name=` | Download a yue2.cpp model and the VAE (`bf16` / `q8` / `q6` / `q5`), pinned files with a sha256 check; an already downloaded one — no network. Waits for the download to finish → `{name, installed, cpp_models}`. Unknown name — 422, checksum mismatch or network failure — 502 |
 | GET | `/engine/models/progress` | The model download in progress `{name, file, done, total}` or `{}` |
@@ -79,7 +79,7 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 | POST | `/jobs/{id}/continue` | "redo from here" → `{id}`. Body `{from_sec, seed?, abc?, style_add?, to_sec?, title?}`: new track = the source's model steps up to `from_sec` + continuation (another seed — another take; `abc` — a changed plan; `style_add` — an addition to the style: what to change in the sound). With `to_sec` — a "part" (`role=fragment`): the model plays only up to `to_sec` (not past the end of the track) + 2 s of tail. The new track is attached to the source (`parent_id`, `role=continue`, `cont_from`). 422 — the track has no model steps (import) or `from_sec` is past the end |
 | POST | `/jobs/{id}/head` | `{head_id?}` — the main version of the song: `{id}` is the root, `head_id` is the root itself or its descendant (otherwise 422); `null`/0 — the track itself is main again |
 | POST | `/jobs/{id}/overdub` | `{style, lyrics?, seed?, gain?, abc?}` → `{id}` — a part over the track: a new render from the track's score (or from your own plan `abc` — then the instrument sounds only in the selected part) with a new style. The finished part is mixed into the original at volume `gain` (0.5 by default) into the file `overdub-<id>.flac`; `gain=0` — no mixing (a cover as a new track). The parent's seed gives the same interpretation. Without `lyrics` the model sings a vocalise. No score — 404 |
-| POST | `/jobs/{id}/variant_track` | `{file, title?, voice_src?}` → `{id}` — an effect variant (`dsp-*.flac` and others) as a separate finished track: a copy of the audio and the source's score, after that stems, minus and effects work (`parent_id` = source, `role=variant`). `voice_src` — the track whose voice is put into the version (after "re-sing"); a non-existent one — 422 |
+| POST | `/jobs/{id}/variant_track` | `{file, title?, voice_src?}` → `{id}` — an effect variant (`dsp-*.flac` and others) as a separate finished track: a copy of the audio and the source's score, after that stems and effects work (`parent_id` = source, `role=variant`). `voice_src` — the track whose voice is put into the version (after "re-sing"); a non-existent one — 422 |
 | POST | `/jobs/{id}/voice` | EXPERIMENT "Album voice": `{ref_job_id, ref_from?, ref_dur?, steps?, title?}` → `{id}` — a new version where the voice is sung with the timbre of a sample (Seed-VC), the music and melody stay the same. The sample is a window of the vocal stem of track `ref_job_id`: `ref_from` (not set — the densest part of singing), `ref_dur` 3–30 s (25), `steps` 10–100 (50). The voice is recognizable but it wobbles. Seed-VC not installed — 503 |
 | POST | `/tracks/import?transcribe=&title=` | Import your own track (bytes + `X-Filename`) → `{id, duration_sec, abc_file, transcribe_error}`. `transcribe` (yes by default) — take the score right away for the piano roll and overdub; its failure does not cancel the track |
 | POST | `/jobs/{id}/preview` | `{from_sec, to_sec}` (not shorter than 1 s) → `{file, from_sec, to_s, duration_sec}` — a quick part of the track from the saved latents (no new generation), file `preview-<from>-<to>.flac` |
@@ -129,7 +129,7 @@ Main: `id`, `title`, `status` (`queued` / `running` / `done` / `error` / `cancel
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/audio/{id}/{file}` | Any file from the track folder: `audio.flac` / `.mp3` / `.wav`, `score.abc`, `request.abc`, `minus.flac`, `stem-*.flac`, `dsp-*.flac`, `overdub-*.flac`, `preview-*.flac`, `metrics.json` etc. |
+| GET | `/audio/{id}/{file}` | Any file from the track folder: `audio.flac` / `.mp3` / `.wav`, `score.abc`, `request.abc`, `stem-*.flac`, `dsp-*.flac`, `overdub-*.flac`, `preview-*.flac`, `metrics.json` etc. |
 | GET | `/listen/{id}?f=` | HTML listening page; `f` — a variant (`dsp-*`, `overdub-*`, `preview-*`, `stem-*`) |
 
 ## Score and audio analysis
@@ -169,13 +169,12 @@ Main: `id`, `title`, `status` (`queued` / `running` / `done` / `error` / `cancel
 | POST | `/references` | A reference recording (bytes + `X-Filename`) → `{id, metrics}` — measurements to compare with tracks. Cannot be decoded — 422 |
 | GET | `/references` | List of references `[{id, created_at, metrics, size}]`, newest first |
 
-## Stems and minus
+## Stems
 
 | Method | Path | What it does |
 |---|---|---|
-| POST | `/jobs/{id}/stems?model=` | Split the track → `{stems, seconds, model}`. The main stems `stem-drums/bass/other/vocals.flac` add up to the track. Detailed ones — `guitar`, `piano` (inside "other") and, only with RoFormer, drum parts `kick`, `snare`, `toms`, `hh`, `ride`, `crash` — are not part of the sum. `model` — `roformer` or `htdemucs` for one time (other values — 422), without the parameter — the `stems_model` setting. RoFormer failure — fallback to htdemucs |
+| POST | `/jobs/{id}/stems?model=` | Split the track → `{stems, seconds, model}`. The main stems `stem-drums/bass/other/vocals.flac` add up to the track. Detailed ones — `guitar`, `piano` (inside "other") and, only with RoFormer, drum parts `kick`, `snare`, `toms`, `hh`, `ride`, `crash` — are not part of the sum. `model` — `roformer` or `htdemucs` for one time (other values — 422), without the parameter — the `stems_model` setting. RoFormer failure — fallback to htdemucs. A repeated request while the track is already being split waits for that split and returns its result |
 | GET | `/jobs/{id}/stems` | The track's stems `[{file, name, created_at, metrics}]` |
-| POST | `/jobs/{id}/minus` | `{exclude: [drums/bass/other/vocals]}` → `{file: "minus.flac", excluded, kept}` — a mix of the main stems without the selected ones; if there are no stems, it splits first. Excluding everything — 422 |
 
 ## Effect variants
 
@@ -281,7 +280,7 @@ changed through the API.
 
 ## Studio draft
 
-Unfinished work on a track: studio edits ("Track edits": splices, effects on stems, pedals, engine, volumes,
+Unfinished work on a track: studio edits ("Track changes": splices, effects on stems, pedals, engine, volumes,
 placement, master) and pending piece renders. The app writes it; the worker does not parse `state` (a JSON object
 up to 1 MB). The draft is deleted with the track and after "apply all" in the studio.
 
@@ -300,7 +299,7 @@ step; the worker only stores the state.
 
 | Method | Path | What it does |
 |---|---|---|
-| POST | `/jobs/{id}/ops` | `{op, params, result, refs}` → `{id}` — a log entry. `op`: `submit`, `continue`, `fragment`, `overdub`, `variant_track`, `fx`, `minus`, `update`, `set_head`, `rebuild_sections`, `envelope`, `splice`, `dsp_apply`, `pedals`, `sound_preset`; other values — 422, no track — 404 |
+| POST | `/jobs/{id}/ops` | `{op, params, result, refs}` → `{id}` — a log entry. `op`: `submit`, `continue`, `fragment`, `overdub`, `variant_track`, `fx`, `minus` (old recipes: skipped on import), `update`, `set_head`, `rebuild_sections`, `envelope`, `splice`, `dsp_apply`, `pedals`, `sound_preset`; other values — 422, no track — 404 |
 | GET | `/jobs/{id}/ops` | The track's log in order `[{id, job_id, op, params, result, refs, created_at}]` |
 | GET | `/jobs/{id}/recipe` | Recipe of the whole song of the track (from the root). 422 — the chain of versions is broken by a deleted version, or the song has something a recipe cannot carry (a draft, an import of someone else's audio, "Album voice") |
 | POST | `/recipes/import` | `{recipe, mode: seed/plan}` → `{id}` — a new import session; a foreign format — 422 |

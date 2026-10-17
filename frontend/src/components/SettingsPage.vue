@@ -1,5 +1,6 @@
 <script setup>
 // Страница настроек: воркер, дорожки, движок генерации, пути воркера.
+import { STEMS_AUTO } from '../trackDesk.js'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
@@ -27,6 +28,7 @@ const saved = ref(false)
 const workerProbe = ref('') // статус проверки воркера
 // у треков «без голоса» сразу делать дорожки — метка, если в инструментал пролез голос
 const autoStems = ref(true)
+const stemsAuto = ref('studio')        // когда делать дорожки трека: studio | always | manual
 const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
 const roformerOk = ref(false)           // окружение RoFormer установлено на воркере
 // движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим
@@ -118,6 +120,7 @@ async function downloadModel() {
   }
 }
 
+const stemsAutoOptions = computed(() => STEMS_AUTO.map((v) => ({ value: v, label: t('settings.stemsAuto.' + v) })))
 const stemsOptions = computed(() => [
   { value: 'htdemucs', label: t('settings.stemsModel.fast') },
   { value: 'roformer', label: t('settings.stemsModel.clean'), disabled: !roformerOk.value },
@@ -135,6 +138,7 @@ onMounted(async () => {
   try {
     const c = await api.workerConfig()
     autoStems.value = c.auto_stems_instrumental !== false
+    stemsAuto.value = c.stems_auto || 'studio'
     stemsModel.value = c.stems_pref || 'htdemucs'
     roformerOk.value = !!c.roformer_available
     applyEngine(c)
@@ -154,6 +158,7 @@ async function save() {
     try {
       await api.setWorkerConfig({
         auto_stems_instrumental: autoStems.value,
+        stems_auto: stemsAuto.value,
         stems_model: stemsModel.value,
       })
       const c = await api.workerConfig()
@@ -208,6 +213,11 @@ async function save() {
       <div class="set-hint muted">{{ t('settings.worker.hint') }}</div>
 
       <h3 class="set-h">{{ t('settings.checks') }}</h3>
+      <div class="set-row">
+        <span>{{ t('settings.stemsAuto') }}</span>
+        <VSelect v-model="stemsAuto" :options="stemsAutoOptions" />
+      </div>
+      <div class="set-hint muted">{{ t('settings.stemsAuto.hint') }}</div>
       <label class="set-row set-check">
         <input type="checkbox" v-model="autoStems" />
         <span>{{ t('settings.autoStems') }}</span>

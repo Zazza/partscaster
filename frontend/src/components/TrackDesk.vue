@@ -19,16 +19,17 @@ import { instrumentTree, familyOptions, subOptions, itemOptions, pathOf } from '
 import { DRUM_KITS, DRUM_TREATMENTS } from '../drumKits.js'
 import { applyEngine, ensureKits } from '../engineRun.js'
 import { insertTitle, insertWindow } from '../insertLabels.js'
-import { deskRows, previewWindow, applyWindow, presetsFor, rhythmSection, stemLevels, stemAudibility } from '../trackDesk.js'
+import { deskRows, previewWindow, applyWindow, presetsFor, removeRecord, rhythmSection, shouldAutoSplit, stemLevels, stemAudibility, withPending } from '../trackDesk.js'
 import { notesHint } from '../guitarNotesHint.js'
 import { stemPlace } from '../mixDesk.js'
 
 const props = defineProps({
   job: { type: Object, required: true },
   stems: { type: Array, default: () => [] },     // дорожки трека [{name, file}]
+  stemsLoaded: { type: Boolean, default: false }, // список дорожек прочитан (пустой — дорожек правда нет)
   sel: { type: Object, default: null },          // выделение на волне {from, to}
   cursor: { type: Number, default: 0 },          // курсор волны, с
-  names: { type: Object, required: true },       // подписи записей реестра (как в «Правках трека»)
+  names: { type: Object, required: true },       // подписи записей реестра (как в «Изменениях трека»)
   win: { type: Object, required: true },         // подписи окон записей
   active: { type: String, default: '' },         // выбранная дорожка: волна/спектр и правки громкости — по ней
 })
@@ -40,6 +41,9 @@ const { toggleArtifact, playBtn, isPlaying, playBusy } = usePlayer()
 // готовые цепочки и свои инструменты (страница «Инструменты»): свой — внизу своей группы с пометкой «(мой)»
 const { all: instruments } = useInstruments()
 const before = useWindowPlay('desk-before', () => t('instr.before'))
+const rowAfter = useWindowPlay('desk-row-after', () => t('instr.after'))
+const rowBefore = useWindowPlay('desk-row-before', () => t('instr.before'))
+const rhythmAfter = useWindowPlay('desk-rhythm-after', () => t('desk.rhythm.listen'))
 
 const open = ref('')             // раскрытая дорожка
 const fine = ref(false)          // «тонко настроить»: редактор блоков (по умолчанию — только выбор инструмента)
@@ -151,6 +155,70 @@ async function makeStems() {
   try { await api.makeStems(props.job.id); emit('stems') } catch (e) { err.value = String(e) } finally { busy.value = '' }
 }
 
+// дорожки при открытии студии (настройка «Дорожки трека»); старый воркер без настройки — как «при открытии»
+const stemsCfg = ref(null)   // {mode, model} — что делать и чем (RoFormer дольше)
+const autoTried = ref(0)     // трек, для которого разделение уже запускали: сбой не повторяется по кругу
+onMounted(async () => {
+  try {
+    const c = await api.workerConfig()
+    stemsCfg.value = { mode: c.stems_auto || 'studio', model: c.stems_model || '' }
+  } catch { stemsCfg.value = { mode: 'studio', model: '' } }   // воркер недоступен — разделение само упадёт с причиной
+})
+watch(() => [props.job.id, props.stemsLoaded, props.stems.length, stemsCfg.value], () => {
+  if (!stemsCfg.value || busy.value || autoTried.value === props.job.id) return
+  if (!shouldAutoSplit(props.stemsLoaded, props.stems, stemsCfg.value.mode)) return
+  autoTried.value = props.job.id
+  makeStems()
+}, { immediate: true })
+const splitTime = computed(() => t(stemsCfg.value && stemsCfg.value.model === 'bs-roformer-sw' ? 'desk.split.slow' : 'desk.split.fast'))
+
+// место в стерео и «убрать» у строки дорожки — как у всех блоков: поменяли → «▶ стало / ▶ было» → «Применить»
+// (в «Изменения трека»); до «Применить» правка висит у строки и в трек не идёт
+const pend = ref({})   // дорожка → {place?, remove?}
+const pendOf = (stem) => pend.value[stem] || {}
+const hasPend = (stem) => !!(pendOf(stem).place || pendOf(stem).remove)
+function setPend(stem, patch) {
+  const cur = { ...pendOf(stem), ...patch }
+  if (!cur.place) delete cur.place
+  if (!cur.remove) delete cur.remove
+  pend.value = { ...pend.value, [stem]: cur }
+}
+watch(() => props.job.id, () => { pend.value = {} })
+async function previewRow(stem) {
+  err.value = ''
+  const jobId = props.job.id
+  const w = listenWin.value
+  const p = pendOf(stem)
+  const sel = props.sel
+  busy.value = 'row'
+  try {
+    const r = await inserts.previewWith(jobId, (list) => withPending(list, stem, p, sel))
+    if (!r || !r.variant) throw new Error(t('studio.edits.none'))
+    await rowAfter.play({ jobId, file: r.variant.file, dur: props.job.duration_sec, from: w.from, to: w.to })
+  } catch (e) { err.value = String(e) } finally { busy.value = '' }
+}
+// «было» — трек со всеми правками без этой (нет правок — оригинал)
+function playRowBefore() {
+  const w = listenWin.value
+  rowBefore.play({ jobId: props.job.id, file: inserts.mixFile(props.job.id) || props.job.audio_file,
+    dur: props.job.duration_sec, from: w.from, to: w.to })
+}
+async function applyRow(stem) {
+  err.value = ''
+  msg.value = ''
+  const jobId = props.job.id
+  const p = pendOf(stem)
+  const sel = props.sel
+  busy.value = 'row'
+  try {
+    if (p.place) await inserts.setStemPlace(jobId, stem, p.place)
+    if (p.remove) await inserts.addMutes(jobId, [removeRecord(stem, sel)])
+    setPend(stem, { place: null, remove: false })
+    msg.value = t('desk.row.applied')
+    emit('applied')
+  } catch (e) { err.value = String(e) } finally { busy.value = '' }
+}
+
 // «стало»: превью воркера на окне прослушивания (повтор тех же настроек — тот же файл)
 async function playAfter() {
   err.value = ''
@@ -211,6 +279,29 @@ const rhythmWin = computed(() => applyWindow(props.sel))
 const rhythmCaption = computed(() => (rhythmWin.value.to > 0
   ? t('engine.window', { from: rhythmWin.value.from.toFixed(1), to: rhythmWin.value.to.toFixed(1) })
   : t('engine.whole')))
+// «▶ прослушать» ритм-секции: трек с наборами на кусок (выделение или 15 с от курсора), в список не пишется
+async function previewRhythm() {
+  err.value = ''
+  msg.value = ''
+  const jobId = props.job.id
+  const dur = props.job.duration_sec
+  const w = listenWin.value
+  const items = rhythm.value.map((r) => ({ ...r, ...rhythmWin.value }))
+  busy.value = 'rhythm'
+  try {
+    const recs = []
+    for (const it of items) {
+      recs.push(await applyEngine(api, { jobId, dur, src: it.stem, from: it.from, to: it.to, chain: it.chain, label: it.label },
+        { oldMsg: t('instr.engine.old'), onKit: () => { busy.value = 'kit' } }))
+      busy.value = 'rhythm'
+    }
+    const extra = recs.map((r) => ({ instId: 'engine', from: r.from, to: r.to, db: 0, stems: [r.stem], engine: r.chain }))
+    const res = await inserts.previewWith(jobId, (list) => [...list, ...extra])
+    if (!res || !res.variant) throw new Error(t('studio.edits.none'))
+    await rhythmAfter.play({ jobId, file: res.variant.file, dur, from: w.from, to: w.to })
+  } catch (e) { err.value = String(e) } finally { busy.value = ''; loadAssets() }
+}
+
 async function applyRhythm() {
   err.value = ''
   msg.value = ''
@@ -240,11 +331,6 @@ const levelMark = (stem) => (stem in levels.value ? stemAudibility(levels.value[
 
 // место дорожки в стерео: отпустил ползунок — запись «место» заменяется, трек пересобирается
 const placeOf = (stem) => stemPlace(inserts.appliedFor(props.job.id), stem)
-async function setPlace(stem, place) {
-  err.value = ''
-  busy.value = 'place'
-  try { await inserts.setStemPlace(props.job.id, stem, place); emit('applied') } catch (e) { err.value = String(e) } finally { busy.value = '' }
-}
 
 async function installKit(name) {
   err.value = ''
@@ -260,10 +346,12 @@ async function upload(kind) {
 </script>
 
 <template>
-  <div v-if="!stems.length" class="dsp-row">
+  <!-- дорожек нет: идёт разделение — что происходит и сколько ждать; иначе — кнопка -->
+  <p v-if="!stems.length && busy === 'stems'" class="desk-split"><span class="pulse">⟳</span>
+    {{ t('desk.split.busy', { time: splitTime }) }}</p>
+  <div v-else-if="!stems.length" class="dsp-row">
     <span class="muted">{{ t('desk.noStems') }}</span>
-    <button class="primary small" :disabled="!!busy" @click="makeStems">
-      {{ busy === 'stems' ? t('instr.stems.busy') : t('instr.stems.make') }}</button>
+    <button class="primary small" :disabled="!!busy" @click="makeStems">{{ t('instr.stems.make') }}</button>
   </div>
   <div v-if="noParts" class="dsp-row">
     <span class="muted">{{ t('desk.noParts') }}</span>
@@ -271,12 +359,17 @@ async function upload(kind) {
       {{ busy === 'stems' ? t('instr.stems.busy') : t('desk.resplit') }}</button>
   </div>
   <div v-if="stems.length" class="dsp-row">
-    <button class="primary small" :disabled="!!busy || !rhythm.length" :title="t('desk.rhythm.tip')" @click="applyRhythm">
-      {{ busy === 'rhythm' ? t('instr.busy') : busy === 'kit' ? t('instr.kit.busy') : t('desk.rhythm') }}</button>
+    <span class="muted">{{ t('desk.rhythm') }}:</span>
     <span :title="kitNote"><VSelect v-model="drumKit" :options="kitOptions" style="max-width: 260px" /></span>
     <span :title="t('desk.room.tip')"><VSelect v-model="treatment" :options="treatOptions" style="max-width: 190px" /></span>
     <span v-if="!rhythm.length" class="muted">{{ t('desk.rhythm.none') }}</span>
-    <span v-else class="muted">{{ rhythm.map((r) => stemName(r.stem)).join(', ') }} · {{ rhythmCaption }}</span>
+    <template v-else>
+      <span class="muted">{{ rhythm.map((r) => stemName(r.stem)).join(', ') }} · {{ rhythmCaption }}</span>
+      <button class="ghost small-btn" :disabled="!!busy" :title="t('desk.rhythm.listen.tip')" @click="previewRhythm">
+        <template v-if="busy === 'rhythm' || busy === 'kit'">{{ busy === 'kit' ? t('instr.kit.busy') : t('instr.busy') }}</template>
+        <template v-else>{{ playBtn('desk-rhythm-after') }} {{ t('desk.rhythm.listen') }}</template></button>
+      <button class="primary small" :disabled="!!busy" :title="t('desk.rhythm.tip')" @click="applyRhythm">{{ t('desk.apply') }}</button>
+    </template>
   </div>
   <p v-if="msg && !open" class="muted">{{ msg }}</p>
   <div v-for="row in rows" :key="row.stem" class="desk-row" :class="{ open: open === row.stem }">
@@ -291,9 +384,22 @@ async function upload(kind) {
       <span v-for="e in row.edits" :key="e.childId" class="desk-chip" :class="{ off: e.off }"
             :title="e.off ? t('desk.chip.off') : ''">{{ insertTitle(e, names) }} · {{ insertWindow(e, win) }}</span>
       <span class="spacer"></span>
-      <PlaceControls :model-value="placeOf(row.stem)" :disabled="!!busy" @update:model-value="(p) => setPlace(row.stem, p)" />
+      <button class="toggle small-btn" :class="{ on: pendOf(row.stem).remove }" :disabled="!!busy" :title="t('desk.remove.tip')"
+              @click="setPend(row.stem, { remove: !pendOf(row.stem).remove })">{{ t('desk.remove') }}</button>
+      <PlaceControls :model-value="pendOf(row.stem).place || placeOf(row.stem)" :disabled="!!busy"
+                     @update:model-value="(p) => setPend(row.stem, { place: p })" />
       <button class="ghost small-btn" :class="{ on: open === row.stem }" @click="toggleRow(row.stem)">
         {{ open === row.stem ? t('desk.close') : t('desk.sound') }}</button>
+    </div>
+    <div v-if="hasPend(row.stem)" class="dsp-row desk-pend">
+      <span class="muted">{{ t('desk.row.pending') }}</span>
+      <button class="ghost small-btn" :disabled="!!busy" :title="t('instr.after.tip')" @click="previewRow(row.stem)">
+        <template v-if="busy === 'row'">{{ t('instr.busy') }}</template><template v-else>{{ playBtn('desk-row-after') }} {{ t('instr.after') }}</template></button>
+      <button class="ghost small-btn" :title="t('instr.before.tip')" @click="playRowBefore">{{ playBtn('desk-row-before') }} {{ t('instr.before') }}</button>
+      <span class="muted">{{ t('desk.listen', { from: listenWin.from.toFixed(1), to: listenWin.to.toFixed(1) }) }}</span>
+      <span class="spacer"></span>
+      <button class="primary small" :disabled="!!busy" :title="t('desk.row.apply.tip')" @click="applyRow(row.stem)">{{ t('desk.apply') }}</button>
+      <button class="ghost small-btn" :disabled="!!busy" @click="setPend(row.stem, { place: null, remove: false })">{{ t('common.cancel') }}</button>
     </div>
     <div v-if="open === row.stem" class="desk-editor">
       <p v-if="editing" class="muted">{{ t('desk.editing') }}</p>
@@ -337,6 +443,8 @@ async function upload(kind) {
 </template>
 
 <style scoped>
+.desk-split { font-size: 13px; margin: 4px 0; }
+.desk-pend { margin: 2px 0 4px 28px; }
 .desk-row { border-bottom: 1px solid var(--line, #2a2a35); padding: 4px 0; }
 .desk-row.open { background: var(--panel-2, rgba(255, 255, 255, 0.02)); }
 .desk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -71,3 +71,15 @@ export function hitPoint(pts, px, py, toX, toY, r) {
 export function isFlat(pts) {
   return pts.every((p) => p.db === 0)
 }
+
+/** Черновик с линией вместо прежней — для «▶ прослушать» до «Применить».
+ * stem пустой — линия на весь трек (запись mix); ровная или пустая линия — прежняя просто убирается. */
+export function withEnvelope(list, stem, pts) {
+  const own = (x) => x.envelope && (stem ? !x.mix && (x.stems || [])[0] === stem : x.mix)
+  const rest = (list || []).filter((x) => !own(x))
+  if (!pts || !pts.length || (!stem && isFlat(pts))) return rest
+  const envelope = pts.map(({ t, db }) => ({ t, db }))
+  return [...rest, stem
+    ? { childId: 0, instId: 'env', from: 0, to: 0, db: 0, stems: [stem], envelope }
+    : { childId: 0, instId: 'env', from: 0, to: 0, db: 0, stems: ['mix'], mix: true, envelope }]
+}
