@@ -14,6 +14,9 @@ export const ICONS = {
   // раскрыть/свернуть строку (список треков)
   'chev-down': '<path d="m6 9 6 6 6-6"/>',
   'chev-up': '<path d="m6 15 6-6 6 6"/>',
+  // скопировать в буфер / скопировано (блоки кода)
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
   info: `<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1.1" ${F}/>`,
   plus: '<path d="M12 5v14M5 12h14"/>',
   alert: `<path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><circle cx="12" cy="17" r="1.1" ${F}/>`,

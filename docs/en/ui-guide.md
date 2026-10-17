@@ -646,7 +646,7 @@ A saved voice is chosen in the new track form — with the "saved voice — desc
 
 ## Settings
 
-The "Settings" menu item. Settings are laid out as blocks in two columns; everything is applied with the "Save"
+The "Settings" menu item. Settings are blocks in a single column; everything is applied with the "Save"
 button in the title row — "Saved" or an error shows next to it.
 
 - **"Worker connection"** — "Worker address". "Check" — check the address in the field without saving.
@@ -665,14 +665,14 @@ button in the title row — "Saved" or an error shows next to it.
   has "model", "Download" (download progress as a line; after it — "Save") and "Economy mode (8 GB)": ~4.5 GB of
   video memory, songs up to ~3.5 min. A different engine with the same seed gives a different song; notes and
   continuations carry over. Tracks from this engine are marked with a badge in the track details.
-- **"Worker (information only)"** — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), separation model;
+- **"Worker (information only)"** (at the bottom of the "Worker connection" block) — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), separation model;
   below — "App version".
 - **"For AI agents (Claude Code, Claude Desktop, Codex)"** — the MCP server partscaster-mcp gives an agent the
   app's tools: generation, studio, effects; it takes the worker address from these settings. The path to
   partscaster-mcp is shown (if not found — a hint to build it: `make mcp`). **"Connect to Claude Code"** — after
   confirmation it runs `claude mcp add` for all of the user's projects. Below are ready configuration snippets for
   Claude Code (a terminal command), Claude Desktop (`claude_desktop_config.json`) and Codex
-  (`~/.codex/config.toml`) with a "Copy" button. Details — [mcp.md](mcp.md).
+  (`~/.codex/config.toml`) — as code blocks; the icon in the top right corner copies the example. Details — [mcp.md](mcp.md).
 
 <!-- screenshot: settings — the "For AI agents" block -->
 

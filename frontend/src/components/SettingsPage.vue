@@ -45,6 +45,7 @@ const appVersion = ref('')
 const agents = ref(null)                // { mcp_path, mcp_found, url, snippets }
 const agentsMsg = ref('')
 const copied = ref('')
+const COPIED_MS = 2000   // сколько держится галочка «скопировано»
 
 // «Проверить» — воркер по адресу из поля, без сохранения настроек
 async function checkWorker() {
@@ -66,6 +67,8 @@ async function copySnippet(key) {
   try {
     await window.navigator.clipboard.writeText(agents.value.snippets[key])
     copied.value = key
+    // значок «скопировано» гаснет сам
+    setTimeout(() => { if (copied.value === key) copied.value = '' }, COPIED_MS)
   } catch (e) {
     agentsMsg.value = String(e)
   }
@@ -203,7 +206,7 @@ async function save() {
       <span v-else-if="saved" class="ok">{{ t('settings.saved') }}</span>
       <button class="primary" @click="save"><AppIcon name="save" /> {{ t('common.save') }}</button>
     </template>
-    <div class="page-tiles">
+
     <PageBox :title="t('settings.worker')">
       <div class="set-row">
         <span class="set-label">{{ t('settings.worker.url') }}</span>
@@ -213,6 +216,15 @@ async function save() {
       <div v-if="checkRes" class="set-hint" :class="checkRes.ok ? 'ok' : 'error'">{{ checkRes.text }}</div>
       <div v-else class="set-hint muted">{{ workerProbe }}</div>
       <div class="set-hint muted">{{ t('settings.worker.hint') }}</div>
+      <!-- сведения о воркере — в том же блоке, что адрес: про один и тот же воркер -->
+      <div class="set-sub">{{ t('settings.info') }} <span class="muted">{{ t('settings.info.readonly') }}</span></div>
+      <div v-if="info" class="set-info muted">
+        {{ t('settings.info.dataDir') }}: {{ info.data_dir }}<br />
+        whisper: {{ info.whisper_available ? info.whisper_py : t('settings.info.whisperMissing') }}<br />
+        <template v-if="info.stems_model">{{ t('settings.stemsModel') }}: {{ info.stems_model === 'bs-roformer-sw' ? 'BS-Roformer-SW' : t('settings.stemsModel.demucs') }}</template>
+      </div>
+      <div v-else class="set-info muted">{{ t('settings.info.workerDown') }}</div>
+      <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
     </PageBox>
 
     <PageBox :title="t('settings.checks')">
@@ -257,17 +269,7 @@ async function save() {
         <div v-if="engineMsg" class="set-hint">{{ engineMsg }}</div>
       </PageBox>
 
-    <PageBox :title="t('settings.info')" :hint="t('settings.info.readonly')">
-      <div v-if="info" class="set-info muted">
-        {{ t('settings.info.dataDir') }}: {{ info.data_dir }}<br />
-        whisper: {{ info.whisper_available ? info.whisper_py : t('settings.info.whisperMissing') }}<br />
-        <template v-if="info.stems_model">{{ t('settings.stemsModel') }}: {{ info.stems_model === 'bs-roformer-sw' ? 'BS-Roformer-SW' : t('settings.stemsModel.demucs') }}</template>
-      </div>
-      <div v-else class="set-info muted">{{ t('settings.info.workerDown') }}</div>
-      <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
-    </PageBox>
-
-    <PageBox class="page-wide" :title="t('settings.agents')" :hint="t('settings.agents.sub')">
+    <PageBox :title="t('settings.agents')" :hint="t('settings.agents.sub')">
       <div class="set-hint muted">{{ t('settings.agents.hint') }}</div>
       <template v-if="agents">
         <div class="set-hint" :class="agents.mcp_found ? 'muted' : 'error'">
@@ -278,14 +280,26 @@ async function save() {
         </div>
         <div v-if="agentsMsg" class="set-hint">{{ agentsMsg }}</div>
         <div v-for="k in ['claude_code', 'claude_desktop', 'codex']" :key="k" class="agent-snippet">
-          <div class="set-row">
-            <span class="muted">{{ t({ claude_code: 'settings.agents.claudeCode', claude_desktop: 'settings.agents.claudeDesktop', codex: 'settings.agents.codex' }[k]) }}</span>
-            <button class="ghost" @click="copySnippet(k)">{{ copied === k ? t('settings.agents.copied') : t('settings.agents.copy') }}</button>
+          <span class="muted">{{ t({ claude_code: 'settings.agents.claudeCode', claude_desktop: 'settings.agents.claudeDesktop', codex: 'settings.agents.codex' }[k]) }}</span>
+          <!-- пример конфига — блоком кода, «скопировать» — значком в углу -->
+          <div class="code-block">
+            <pre>{{ agents.snippets[k] }}</pre>
+            <button class="ghost icon code-copy" :title="copied === k ? t('settings.agents.copied') : t('settings.agents.copy')"
+                    @click="copySnippet(k)"><AppIcon :name="copied === k ? 'check' : 'copy'" /></button>
           </div>
-          <pre class="set-info" style="white-space: pre-wrap; word-break: break-all; user-select: text">{{ agents.snippets[k] }}</pre>
         </div>
       </template>
     </PageBox>
-    </div>
   </PageView>
 </template>
+
+<style>
+/* блок кода: моноширинно, с прокруткой вбок, «скопировать» — значком в правом верхнем углу */
+.code-block { position: relative; }
+.code-block pre { margin: 4px 0 0; padding: 10px 44px 10px 12px; overflow-x: auto; user-select: text;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  font: 12px/1.5 'DejaVu Sans Mono', 'Consolas', monospace; color: var(--text); }
+.code-copy { position: absolute; top: 8px; right: 8px; }
+/* подзаголовок внутри блока настроек */
+.set-sub { margin-top: 6px; font-size: 13px; font-weight: 600; }
+</style>
