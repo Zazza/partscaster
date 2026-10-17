@@ -72,11 +72,14 @@ If the app and worker versions do not match, a warning appears at the top of the
 
 ## New track
 
-The "New track" menu item opens the "New composition" page. After "Queue", "×5 seeds" or "✦ draft"
-the track list opens, and the track is already in the queue. The filled-in form stays as it is while the app is
-open. ✕ in the header or Esc — back to the track list.
+The "New track" menu item opens the "New track" page. On the left are three blocks: **"1 · Style"** (style library
+and name), **"2 · Sound"** (style slots, saved voice, rack, style as one line), **"3 · Lyrics"** (text, part tags,
+"No vocals", a ready note plan). On the right is the **"Send"** column: what goes to the model, sound presets, start
+buttons and "Advanced"; it stays in place while you scroll and moves under the form in a narrow window. After
+"Queue", "Variants" or "Draft" the track list opens, and the track is already in the queue. The filled-in form stays
+as it is while the app is open. Esc — back to the track list.
 
-<!-- screenshot: the "New composition" form — style library row, slots, lyrics, buttons at the bottom -->
+<!-- screenshot: the "New track" page — blocks 1–3 on the left, the "Send" column on the right -->
 
 ### Style library
 
@@ -94,7 +97,7 @@ The row above the form:
 ### Form fields
 
 - **"Title"** — your own track title; if empty, the track is shown by its number.
-- **"Import ABC"** — paste a ready note plan (ABC is a text notation for music) as the track skeleton: bars,
+- **"Import ABC"** (at the bottom of the "3 · Lyrics" block) — paste a ready note plan (ABC is a text notation for music) as the track skeleton: bars,
   chords and structure come from it, while genre, instruments, rhythm and delivery come from the form. An
   attached plan is shown as the line "plan attached · N lines", "detach" — remove it.
 - **Style slots** — "Song language", "Style", "Rhythm (drums and bass)", "Guitars", "Keys and more", "Voice",
@@ -102,13 +105,14 @@ The row above the form:
   On submit, known options are replaced with English wording (the model was trained on English tags);
   write your own words in English — Russian ones are not translated.
 - **"saved voice — descriptor + seed"** — a voice from the [voice lab](#voice-lab): it fills the "Voice" slot
-  and sets the card's seed.
+  and sets the card's seed. With no saved voices yet, there is a "Pick a voice in Voices →" button instead of the list.
 - **"Style as a single line"** (collapsed) — the line built from the slots and the rack. If you type your own,
   it wins over the slots ("· overridden manually"); "follow the slots" — return to automatic building.
 - **"Instrument rack (N)"** (collapsed) — instrument groups with checkboxes; a checked one has an effect choice.
   Checked items are added to the style automatically.
-- **Lyrics** — your own song lyrics; lines with `#` are your notes, they are not sung. Above the field:
-  - "no vocals" — instrumental: no lyrics needed, the voice in the slots changes to "no vocal" (turn it off and
+- **Lyrics** — your own song lyrics; lines with `#` are your notes, they are not sung. "No vocals" is in the
+  block header, the part tags are above the field:
+  - "No vocals" — instrumental: no lyrics needed, the voice in the slots changes to "no vocal" (turn it off and
     the style's voice comes back, unless you typed your own). For a "1:1" style, "Instrumental, no vocals" is
     added to the start of the line. A length option for the instrumental appears next to it: "by lyrics",
     "1–2 min", "2–5 min", "5–10 min", "10–30 min (needs more than 16 GB VRAM)"; the length is approximate;
@@ -145,9 +149,11 @@ A collapsed block; its header shows a summary of what is selected:
   GPU queue is free, the app itself makes versions with these presets; the raw version stays the main one.
   This works while the app is open. Presets are not applied to a draft.
 - **"Queue"** — one track.
-- **"×5 seeds"** — five tracks with neighboring seeds: pick the best one.
+- **"Variants: N"** — N tracks (2–5, the number is in the list next to it) with neighboring seeds: listen and pick
+  the best one. The chosen number is remembered.
 - **"notes →"** — the "Track notation (ABC)" window (below): the attached plan or a new plan from the style.
-- **"✦ draft"** — a short version of ~15–20 s: hear the style before the full render.
+- **"Draft ~18 s"** — only the first ~18 seconds in this style with these lyrics, about half a minute of GPU: hear
+  whether the style is right before the full render. It is marked "draft" in the track list.
 
 ### The "Track notation (ABC)" window
 

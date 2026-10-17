@@ -299,6 +299,13 @@ input[type="range"]:hover::-webkit-slider-thumb { border-color: var(--accent); }
 [data-theme="light"] .vselect-btn {
   background: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.3));
 }
+/* светлая: блоки (студия, «Новый трек») — светло-серая подложка, поля и списки на ней — сплошь белые:
+   белое поле на белом блоке сливалось, видна была только тонкая рамка */
+[data-theme="light"] .studio-box { background: var(--panel2); }
+[data-theme="light"] .studio-box-head { background: var(--panel3); }
+[data-theme="light"] .studio-box input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] .studio-box textarea,
+[data-theme="light"] .studio-box .vselect-btn { background: #ffffff; }
 [data-theme="light"] .vselect-drop,
 [data-theme="light"] .slot-drop {
   background: rgba(255,255,255,.94);
