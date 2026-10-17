@@ -7,6 +7,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
 import PageView from './PageView.vue'
+import PageBox from './PageBox.vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { ensureKits as ensureKitsOn, kitChain } from '../engineRun.js'
@@ -318,7 +319,10 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
         <p v-if="err" class="err">{{ err }}</p>
         <p v-if="note" class="muted">{{ note }}</p>
         <KitProgress />
-
+    <!-- слева — что играет и через что, справа — слушать (прилипает при прокрутке) -->
+    <div class="page-cols">
+    <div class="page-main">
+    <PageBox :title="'1 · ' + t('instr.step.pick')" :hint="t('instr.step.pick.sub')">
         <div class="instr-pick">
           <label>
             <span class="muted">{{ t('instr.family') }}</span>
@@ -355,8 +359,14 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
           </template>
         </div>
         <p v-if="phrasesKnown && phrases.length && !familyPhrases.length" class="muted">{{ t('instr.phrases.none') }}</p>
-
-        <div class="corpus-actions">
+    </PageBox>
+    <PageBox :title="'2 · ' + t('instr.step.chain')" :hint="t('instr.step.chain.sub')">
+        <ChainEditor v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
+    </PageBox>
+    </div>
+    <aside class="page-side">
+    <PageBox :title="t('instr.step.listen')" :hint="t('instr.step.listen.sub')">
+        <div class="instr-listen">
           <button class="primary" :disabled="!playing && !ready" :title="t('instr.loop.tip')"
                   @click="playing ? stopLoop() : startLoop()">
             <AppIcon :name="playing ? 'stop' : 'play'" /> {{ playing ? t('instr.loop.stop') : t('instr.loop.play') }}
@@ -370,15 +380,19 @@ watch([chain, phraseId, tempo, bypass], schedule, { deep: true })
           <span v-if="busy === 'loop'" class="muted">{{ t('instr.loop.busy') }}</span>
           <span v-else-if="busy === 'kit'" class="muted">{{ t('instr.kit.busy') }}</span>
         </div>
-
-        <ChainEditor v-model="chain" :assets="assets" :busy="busy" @upload="upload" @install-kit="installKit" />
         <p v-if="missing.length" class="err">{{ t('instr.needAmp') }}</p>
+    </PageBox>
+    </aside>
+    </div>
   </PageView>
 </template>
 
 <style scoped>
 .instr-on { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .instr-tempo { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.instr-tempo input { flex: 1; }
+/* колонка «Слушать»: кнопка во всю ширину, обработка и темп — строками под ней */
+.instr-listen { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .instr-phrases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
 .instr-pick { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
 .instr-name { min-width: 240px; }

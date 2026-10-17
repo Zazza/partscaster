@@ -4,6 +4,7 @@
 // Карточка = ручки + seed прослушивания; аудио копируется на воркере,
 // так что карточка переживает удаление исходной джобы из очереди.
 import PageView from './PageView.vue'
+import PageBox from './PageBox.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t } = useI18n()
@@ -147,7 +148,10 @@ function cleanProbes() {
 <template>
   <PageView :title="t('nav.voices')">
     <template #lead>{{ t('voicelab.desc') }}</template>
-
+    <!-- слева — характер голоса, справа — прослушать и сохранить (прилипает), ниже — карточки -->
+    <div class="page-cols">
+    <div class="page-main">
+    <PageBox :title="'1 · ' + t('voicelab.step.character')" :hint="t('voicelab.step.character.sub')">
       <VoiceKnobs v-model="params">
         <label>
           <span :title="t('voicelab.seed.tip')">{{ t('voicelab.seed') }}</span>
@@ -155,7 +159,10 @@ function cleanProbes() {
           <span></span>
         </label>
       </VoiceKnobs>
-
+    </PageBox>
+    </div>
+    <aside class="page-side">
+    <PageBox :title="'2 · ' + t('voicelab.step.listen')">
       <div class="corpus-actions">
         <button class="primary" :disabled="busy" :title="t('voicelab.audition.tip')" @click="runAudition">
           <template v-if="busy">{{ t('voicelab.audition.busy') }}</template><template v-else><AppIcon name="play" /> {{ t('voicelab.audition') }}</template>
@@ -180,11 +187,15 @@ function cleanProbes() {
         <button class="ghost" :disabled="busy || !canSave" @click="save"><AppIcon name="save" /> {{ t('voicelab.save') }}</button>
       </div>
       <p v-if="err" class="error">{{ err }}</p>
+    </PageBox>
+    </aside>
+    </div>
 
-      <h2>{{ t('voicelab.cards') }}
-        <button class="ghost small-btn" style="margin-left:10px" :disabled="cleaning"
+    <PageBox :title="t('voicelab.cards')">
+      <template #tools>
+        <button class="ghost small-btn" :disabled="cleaning"
                 :title="t('voicelab.clean.tip')" @click="cleanProbes"><AppIcon name="eraser" /> {{ t('voicelab.clean') }}</button>
-      </h2>
+      </template>
       <div v-for="v in voices" :key="v.id" class="corpus-item voice-card">
         <strong>{{ v.name }}</strong>
         <span class="muted voice-card-desc">{{ cardDescriptor(v) }}</span>
@@ -196,5 +207,6 @@ function cleanProbes() {
         <button class="ghost small-btn" @click="del(v)"><AppIcon name="x" /></button>
       </div>
       <p v-if="!voices.length" class="muted">{{ t('voicelab.empty') }}</p>
+    </PageBox>
   </PageView>
 </template>

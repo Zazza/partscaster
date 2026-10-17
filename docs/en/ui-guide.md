@@ -574,8 +574,10 @@ A preset row has:
 
 ## Instruments
 
-The "instruments" menu item. A short phrase plays in a loop through the worker's sound engine (pedals → amp →
-cabinet → space): turn the controls and hear at once what changes. No track is needed here — track processing is
+The "Instruments" menu item. A short phrase plays in a loop through the worker's sound engine (pedals → amp →
+cabinet → space): turn the controls and hear at once what changes. On the left are the "1 · Instrument" (what plays)
+and "2 · Sound chain" (what it plays through) blocks, on the right "Listen": "Play in a loop", processing and tempo;
+it stays in place while you scroll. No track is needed here — track processing is
 done in the studio, in the "Stems" desk.
 
 - **"Instrument", "Kind", "Sound (type to search)"** — three lists. Instruments: guitar, bass, drums, percussion,
@@ -612,8 +614,10 @@ done in the studio, in the "Stems" desk.
 
 ## Voice lab
 
-The "voices" menu item. Choosing the character of a voice: an audition of ~18 s on the same neutral backing track,
-so that voices are compared under equal conditions. A voice you like is saved as a card.
+The "Voices" menu item. Choosing the character of a voice: an audition of ~18 s on the same neutral backing track,
+so that voices are compared under equal conditions. A voice you like is saved as a card. On the left is the
+"1 · Voice character" block (presets, manner, knobs, seed), on the right "2 · Listen and save" (it stays in place
+while you scroll), below — "Voice cards".
 
 <!-- screenshot: voice lab — voice knobs, "manner:", voice cards -->
 
@@ -642,7 +646,8 @@ A saved voice is chosen in the new track form — with the "saved voice — desc
 
 ## Settings
 
-The "settings" menu item. Everything is applied with the "Save" button at the bottom of the page.
+The "Settings" menu item. Settings are laid out as blocks in two columns; everything is applied with the "Save"
+button in the title row — "Saved" or an error shows next to it.
 
 - **"Worker connection"** — "Worker address". "Check" — check the address in the field without saving.
   You can enter just an IP: port 8091 is added. Both the app and the MCP server use this address.

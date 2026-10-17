@@ -1,6 +1,7 @@
 <script setup>
 // Страница настроек: воркер, дорожки, движок генерации, пути воркера.
 import PageView from './PageView.vue'
+import PageBox from './PageBox.vue'
 import { STEMS_AUTO } from '../trackDesk.js'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../i18n/index.js'
@@ -196,8 +197,14 @@ async function save() {
 
 <template>
   <PageView :title="t('nav.settings')">
-
-      <h3 class="set-h">{{ t('settings.worker') }}</h3>
+    <!-- «Сохранить» — главное действие страницы, в строке заголовка; итог — рядом с ним -->
+    <template #actions>
+      <span v-if="err" class="error">{{ err }}</span>
+      <span v-else-if="saved" class="ok">{{ t('settings.saved') }}</span>
+      <button class="primary" @click="save"><AppIcon name="save" /> {{ t('common.save') }}</button>
+    </template>
+    <div class="page-tiles">
+    <PageBox :title="t('settings.worker')">
       <div class="set-row">
         <span class="set-label">{{ t('settings.worker.url') }}</span>
         <input v-model="serverURL" placeholder="http://localhost:8091" @keyup.enter="save" />
@@ -206,8 +213,9 @@ async function save() {
       <div v-if="checkRes" class="set-hint" :class="checkRes.ok ? 'ok' : 'error'">{{ checkRes.text }}</div>
       <div v-else class="set-hint muted">{{ workerProbe }}</div>
       <div class="set-hint muted">{{ t('settings.worker.hint') }}</div>
+    </PageBox>
 
-      <h3 class="set-h">{{ t('settings.checks') }}</h3>
+    <PageBox :title="t('settings.checks')">
       <div class="set-row">
         <span>{{ t('settings.stemsAuto') }}</span>
         <VSelect v-model="stemsAuto" :options="stemsAutoOptions" />
@@ -224,9 +232,9 @@ async function save() {
         <VSelect v-model="stemsModel" :options="stemsOptions" />
       </div>
       <div class="set-hint muted">{{ roformerOk ? t('settings.stemsModel.hint') : t('settings.stemsModel.missing') }}</div>
+    </PageBox>
 
-      <template v-if="engineSupported">
-        <h3 class="set-h">{{ t('settings.engine') }}</h3>
+      <PageBox v-if="engineSupported" :title="t('settings.engine')">
         <div class="set-row">
           <span>{{ t('settings.engine.choice') }}</span>
           <VSelect v-model="engine" :options="engineOptions" />
@@ -247,9 +255,9 @@ async function save() {
           </label>
         </template>
         <div v-if="engineMsg" class="set-hint">{{ engineMsg }}</div>
-      </template>
+      </PageBox>
 
-      <h3 class="set-h">{{ t('settings.info') }} <span class="muted">{{ t('settings.info.readonly') }}</span></h3>
+    <PageBox :title="t('settings.info')" :hint="t('settings.info.readonly')">
       <div v-if="info" class="set-info muted">
         {{ t('settings.info.dataDir') }}: {{ info.data_dir }}<br />
         whisper: {{ info.whisper_available ? info.whisper_py : t('settings.info.whisperMissing') }}<br />
@@ -257,8 +265,9 @@ async function save() {
       </div>
       <div v-else class="set-info muted">{{ t('settings.info.workerDown') }}</div>
       <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
+    </PageBox>
 
-      <h3 class="set-h">{{ t('settings.agents') }} <span class="muted">{{ t('settings.agents.sub') }}</span></h3>
+    <PageBox class="page-wide" :title="t('settings.agents')" :hint="t('settings.agents.sub')">
       <div class="set-hint muted">{{ t('settings.agents.hint') }}</div>
       <template v-if="agents">
         <div class="set-hint" :class="agents.mcp_found ? 'muted' : 'error'">
@@ -276,11 +285,7 @@ async function save() {
           <pre class="set-info" style="white-space: pre-wrap; word-break: break-all; user-select: text">{{ agents.snippets[k] }}</pre>
         </div>
       </template>
-
-      <div v-if="err" class="error">{{ err }}</div>
-      <div v-if="saved" class="ok">{{ t('settings.saved') }}</div>
-      <div class="set-actions">
-        <button @click="save"><AppIcon name="save" /> {{ t('common.save') }}</button>
-      </div>
+    </PageBox>
+    </div>
   </PageView>
 </template>

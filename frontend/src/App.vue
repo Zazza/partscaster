@@ -45,6 +45,7 @@ import TitleBar from './components/TitleBar.vue'
 import { keyAction } from './hotkeys.js'
 import { fanCount, FAN_DEFAULT } from './fanCount.js'
 import PageView from './components/PageView.vue'
+import PageBox from './components/PageBox.vue'
 import MetricsModal from './components/MetricsModal.vue'
 import PlanModal from './components/PlanModal.vue'
 
@@ -880,11 +881,9 @@ function onWindowClick(e) {
     <!-- форма нового трека — страница раздела «Новый трек»: слева блоки 1–3 (что за трек),
          справа «Отправка» (что уйдёт модели и запуск), прилипает при прокрутке -->
     <PageView v-if="section === 'new'" :title="t('nav.new')">
-      <div class="nt-grid">
-      <div class="nt-main">
-        <section class="studio-box nt-box">
-          <div class="studio-box-head"><span>1 · {{ t('nt.step.style') }}</span> <span class="muted studio-box-hint">{{ t('nt.step.style.sub') }}</span></div>
-          <div class="studio-box-body nt-body">
+      <div class="page-cols">
+      <div class="page-main">
+        <PageBox :title="'1 · ' + t('nt.step.style')" :hint="t('nt.step.style.sub')">
             <div class="lib-row" :title="t('form.lib.tip')">
               <VSelect v-model="libGroup" :options="libGroupOptions" :placeholder="t('form.lib.group')" searchable @update:model-value="onLibGroupChange()" />
               <VSelect v-model="libStyle" :options="libStyleOptions" :disabled="!libGroup" :placeholder="t('form.lib.style')" @update:model-value="onLibStyleChange()" />
@@ -893,12 +892,9 @@ function onWindowClick(e) {
               <button class="ghost small-btn" :title="t('my.list.tip')" @click="myStylesOpen = true">{{ t('my.list') }}</button>
             </div>
             <input v-model="title" :placeholder="t('form.name')" />
-          </div>
-        </section>
+        </PageBox>
 
-        <section class="studio-box nt-box">
-          <div class="studio-box-head"><span>2 · {{ t('nt.step.sound') }}</span> <span class="muted studio-box-hint">{{ t('nt.step.sound.sub') }}</span></div>
-          <div class="studio-box-body nt-body">
+        <PageBox :title="'2 · ' + t('nt.step.sound')" :hint="t('nt.step.sound.sub')">
             <div class="slots">
               <div v-for="key in slotKeys" :key="key" class="slot-box" :title="t('slot.' + key + '.tip')">
                 <span>{{ t('slot.' + key + '.label') }}</span>
@@ -952,19 +948,15 @@ function onWindowClick(e) {
                 </div>
               </div>
             </details>
-          </div>
-        </section>
+        </PageBox>
 
-        <section class="studio-box nt-box">
-          <div class="studio-box-head"><span>3 · {{ t('nt.step.lyrics') }}</span> <span class="muted studio-box-hint">{{ t('form.lyrics') }}</span>
-            <span class="studio-box-tools">
+        <PageBox :title="'3 · ' + t('nt.step.lyrics')" :hint="t('form.lyrics')">
+          <template #tools>
               <button class="toggle small-btn" :class="{ on: noLyrics }" :title="t('form.nowords.tip')" @click="noLyrics = !noLyrics">{{ t('form.nowords') }}</button>
               <select v-if="noLyrics" v-model="durMode" class="dur-select" :title="t('form.dur.tip')">
                 <option v-for="o in durOptions" :key="o.id" :value="o.id">{{ t('dur.' + o.id) }}</option>
               </select>
-            </span>
-          </div>
-          <div class="studio-box-body nt-body">
+          </template>
             <!-- теги секций: вставка в место курсора; без тегов YuE2 расставит части сама -->
             <div v-if="!noLyrics" class="lyrics-tags">
               <button v-for="s in SECTION_TAGS" :key="s.id" class="ghost small-btn" :title="s.tag"
@@ -983,14 +975,11 @@ function onWindowClick(e) {
             </div>
             <textarea v-if="abcOpen" v-model="customAbc" rows="8" class="abc" spellcheck="false"
                       :placeholder="t('form.abc.ph')"></textarea>
-          </div>
-        </section>
+        </PageBox>
       </div>
 
-      <aside class="nt-side">
-        <section class="studio-box nt-box">
-          <div class="studio-box-head"><span>{{ t('nt.send') }}</span> <span class="muted studio-box-hint">{{ t('nt.send.sub') }}</span></div>
-          <div class="studio-box-body nt-body">
+      <aside class="page-side">
+        <PageBox :title="t('nt.send')" :hint="t('nt.send.sub')">
             <!-- итоговая строка стиля, которая уйдёт модели; кириллица — предупреждение, не перевод -->
             <div class="row style-out">
               <span class="style-out-cap">{{ t('form.styleout') }}:</span>
@@ -1052,8 +1041,7 @@ function onWindowClick(e) {
                 <button class="ghost small-btn" :disabled="characterDefault" @click="characterReset">{{ t('character.reset') }}</button>
               </div>
             </details>
-          </div>
-        </section>
+        </PageBox>
       </aside>
       </div>
     </PageView>
@@ -1353,21 +1341,13 @@ body { overflow: hidden; }
 .ctx-view { flex: 1 1 auto; min-height: 0; overflow: auto; }
 /* форма нового трека: слева блоки 1–3, справа «Отправка» — прилипает при прокрутке;
    на узком окне колонка «Отправка» уходит под форму */
-.nt-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
-.nt-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.nt-side { position: sticky; top: 0; }
-.nt-main > .nt-box, .nt-side > .nt-box { margin-top: 0; overflow: visible; }
-.nt-body { display: flex; flex-direction: column; gap: 10px; }
-.nt-body .slots { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* поля звучания — в три колонки (раскладка страницы — PageView/PageBox) */
+.page-box-body .slots { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .nt-actions { display: flex; flex-direction: column; gap: 8px; }
 .nt-submit { padding: 9px 16px; font-size: 15px; }
 .nt-fan { display: flex; gap: 6px; align-items: center; }
 .nt-fan > :first-child { flex: 0 0 72px; }
 .nt-fan > button { flex: 1; }
-@media (max-width: 1180px) {
-  .nt-grid { grid-template-columns: minmax(0, 1fr); }
-  .nt-side { position: static; }
-}
 header { flex: 0 0 auto; }
 header {
   /* выше панелей main (стекинг-контексты из backdrop-filter), но ниже модалок (z-index 70) */
@@ -1486,7 +1466,6 @@ h2 {
 .nav-menu li:hover { background: var(--panel2); }
 /* колонка под иконку фиксированной ширины — подписи выровнены, эмодзи разной ширины не толкают текст */
 .nav-ico { flex: none; width: 20px; text-align: center; }
-.set-h { margin: 14px 0 2px; font-size: 13px; }
 .set-row { display: flex; align-items: center; gap: 10px; }
 .set-row input, .set-row select { flex: 1; min-width: 0; width: 100%; }
 /* галочки и переключатели в строке настроек не растягиваются в полосу */
