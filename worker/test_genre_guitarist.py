@@ -19,7 +19,8 @@
   mute_kit не проверяется.
 - «Собственная обработка варианта» — цепочка из fx_presets.json по id; у guitar-lofi в ней лента, и по
   условию 2 она мягче: у блоков tape сверяется всё, кроме wow/flutter (те — по условию 2).
-- Префикс фузза у guitar-lofi — блоки eq (highpass_hz 100) и drive (gain_db 34, mix 1); сверяются названные
+- Префикс фузза у guitar-lofi — блоки eq (highpass_hz 100) и drive (gain_db 18, mix 1; было 34 — карточка
+  internal-guitarist-drive, условие 2); сверяются названные
   параметры.
 - Чистая цепочка «КИНО» — ровно четыре блока eq, comp, delay, reverb с параметрами из условия
   («delay 420 мс 0,25» — time_ms 420, feedback 0.25); перегруза (drive/amp) нет.
@@ -95,7 +96,7 @@ GUITARIST = {
     "guitar-symphonic": (FSBS, 4, False),
 }
 STYLE_OVERRIDE = {ANGULAR: 2}   # исключение по слуху (дополнение карточки, условие 1)
-LOFI_PREFIX = [("eq", {"highpass_hz": 100}), ("drive", {"gain_db": 34, "mix": 1})]
+LOFI_PREFIX = [("eq", {"highpass_hz": 100}), ("drive", {"gain_db": 18, "mix": 1})]
 KINO_CHAIN = [
     ("eq", {"highpass_hz": 80}),
     ("comp", {"threshold_db": -24, "ratio": 3, "makeup_db": 3}),
@@ -196,7 +197,10 @@ class TestGuitaristInGenrePresets(unittest.TestCase):
                     for blk, (typ, params) in zip(rest, LOFI_PREFIX, strict=False):
                         _params_ok(self, blk, typ, params, f"{p['slug']} префикс фузза")
                     rest = rest[len(LOFI_PREFIX):]
-                _same_but_tape_wow(self, rest, self.fx[gid]["chain"], f"{p['slug']}: обработка варианта {gid}")
+                # перегруз гитариста — не сильнее 18 дБ (карточка internal-guitarist-drive, условие 1)
+                want = [dict(b, gain_db=min(b["gain_db"], 18)) if b["type"] == "drive" and "gain_db" in b else b
+                        for b in self.fx[gid]["chain"]]
+                _same_but_tape_wow(self, rest, want, f"{p['slug']}: обработка варианта {gid}")
 
     def test_angular_is_picking(self):
         # дополнение карточки: «Пост-панк · угловатый сухой» — перебор, а не бой guitar-jangle

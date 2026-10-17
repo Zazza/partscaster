@@ -123,6 +123,13 @@ describe('fxPresets: пять звуков гитариста по аккорд�
     expect(byId('guitar-notes-fsbs').chain.map((b) => b.type)).not.toContain('drive')
   })
 
+  // карточка internal-guitarist-drive, условие 5 / ТК7: фузз гитариста 18 дБ, фузз гитары YuE2 не тронут (34)
+  it('guitar-notes-fuzz — drive 18 дБ; готовая guitar-fuzz — прежние 34 дБ', () => {
+    const drives = (id) => byId(id).chain.filter((b) => b.type === 'drive').map((b) => b.gain_db)
+    expect(drives('guitar-notes-fuzz')).toEqual([18])
+    expect(drives('guitar-fuzz')).toEqual([34])
+  })
+
   it('пять звуков различаются цепочками (а не только названием)', () => {
     const chains = Object.keys(NOTE_PRESETS).map((id) => JSON.stringify(byId(id).chain))
     expect(new Set(chains).size).toBe(5)

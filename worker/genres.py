@@ -1711,11 +1711,14 @@ GTR_SHIFT = {"Рок": -2.5, "Тяжёлое": -4.5, "Поп и другое": -
 
 # гитарист «по аккордам плана» (блок gtrnotes) вместо гитары YuE2: удары — как у её дорожки, аккорды — из плана,
 # дальше — обработка варианта. Гитара и манера — по обработке варианта (style: 0 авто, 1 бой, 2 перебор, 3 бас +
-# аккорд, 4 квинты). Проверено на слух (2026-10-15): пост-панк перебором #990, панк квинтами через фузз #993,
-# симфо-метал чистыми квинтами «как в КИНО» #997
+# аккорд, 4 квинты). Проверено на слух (2026-10-15): пост-панк перебором #990, панк квинтами через фузз #993 (фузз 34 дБ
+# позже признан «противным» — см. GUITARIST_DRIVE_MAX), симфо-метал чистыми квинтами «как в КИНО» #997
 _FSBS = {"kit": "fsbsguitar/guitar"}
 _EMILY = {"kit": "emilyguitar/notes", "mute_kit": "emilyguitar/mute"}
-_FUZZ = [{"type": "eq", "highpass_hz": 100}, {"type": "drive", "gain_db": 34, "mix": 1}]
+# перегруз на чистых сэмплах гитариста: 34 дБ задирает затухание каждой ноты до полной громкости — в тишине
+# ровное гудение (#986/#993/#1096); 18 дБ — «нормально» (#1097), без перегруза — «приятнее» (#1098, #1069)
+GUITARIST_DRIVE_MAX = 18.0
+_FUZZ = [{"type": "eq", "highpass_hz": 100}, {"type": "drive", "gain_db": GUITARIST_DRIVE_MAX, "mix": 1}]
 GUITARIST = {   # id цепочки гитары варианта → (гитара, манера, префикс перед обработкой варианта)
     "guitar-postpunk": (_FSBS, 2, []),
     "guitar-jangle": (_FSBS, 1, []),
@@ -1757,11 +1760,18 @@ def _soft_tape(chain: list) -> list:
     return chain
 
 
+def _soft_drive(chain: list) -> list:
+    for b in chain:
+        if b.get("type") == "drive" and "gain_db" in b:
+            b["gain_db"] = min(float(b["gain_db"]), GUITARIST_DRIVE_MAX)
+    return chain
+
+
 def _guitar(fx: dict, family: str, gslug: str, vslug: str, gtr: str) -> tuple[list, bool]:
     """Цепочка гитары варианта → (цепочка, играет ли гитарист)."""
     chain = copy.deepcopy(fx[gtr]["chain"])
     if chain and chain[0].get("type") == "gtrnotes":   # вариант уже с гитаристом (guitar-notes-*)
-        return _soft_tape(chain), True
+        return _soft_drive(_soft_tape(chain)), True
     if gtr not in GUITARIST or (family in GUITARIST_SKIP_FAMILIES and (gslug, vslug) not in GUITARIST_KEEP):
         return chain, False
     kit, style, prefix = GUITARIST[gtr]
@@ -1769,7 +1779,7 @@ def _guitar(fx: dict, family: str, gslug: str, vslug: str, gtr: str) -> tuple[li
     head = [dict(type="gtrnotes", style=style, **kit)]
     if gslug in CINEMA_GENRES or (gslug, vslug) in CINEMA_VARIANTS:
         return [dict(type="gtrnotes", style=4, **_EMILY)] + copy.deepcopy(CINEMA_CHAIN), True
-    return _soft_tape(head + copy.deepcopy(prefix) + chain), True
+    return _soft_drive(_soft_tape(head + copy.deepcopy(prefix) + chain)), True
 
 
 def _drums(fx: dict, kit: str, treat: str, levels: tuple, hh: float) -> list:

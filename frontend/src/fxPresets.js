@@ -327,7 +327,8 @@ export const fxPresets = [
     chain: [
       { type: 'gtrnotes', kit: 'fsbsguitar/guitar', style: 4 },
       { type: 'eq', highpass_hz: 100 },
-      { type: 'drive', gain_db: 34, mix: 1 },
+      // на чистых сэмплах сильнее 18 дБ — гудение в тишине (#1096 против #1097)
+      { type: 'drive', gain_db: 18, mix: 1 },
       { type: 'eq', lowpass_hz: 6000, bands: [{ freq_hz: 900, gain_db: 4, q: 0.8 }] },
       { type: 'reverb', decay_s: 0.6, predelay_ms: 0, lowpass_hz: 6000, wet: 0.08 },
     ],
