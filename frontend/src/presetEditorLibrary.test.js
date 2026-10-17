@@ -197,10 +197,26 @@ describe('закрытие с несохранёнными правками', ()
     expect(emitted).toEqual([['close']])
   })
 
-  test('× и «Отмена» в шаблоне закрывают через close', () => {
+  // условие 28: Esc выходит из редактора и из поля ввода; в открытом выпадающем списке — нет (Esc закрывает список)
+  test('Esc: из поля ввода — выход, из выпадающего списка — нет', async () => {
+    const { b, emitted } = await editor()
+    // элемент-заглушка: closest находит предка, если в селекторе есть его тег или класс
+    const el = (...own) => ({ closest: (sel) => (sel.split(',').map((x) => x.trim()).some((x) => own.includes(x)) ? {} : null) })
+    const field = el('input')                    // поле ввода вне списка
+    b.onKey({ key: 'Escape', target: field })
+    expect(emitted).toEqual([['close']])
+    const inSelect = el('input', '.vselect')     // поле поиска внутри выпадающего списка
+    const second = await editor()
+    second.b.onKey({ key: 'Escape', target: inSelect })
+    expect(second.emitted).toEqual([])
+    second.b.onKey({ key: 'Enter', target: field })
+    expect(second.emitted).toEqual([])
+  })
+
+  // условие 28 (internal-window-frame): редактор — страница, выход — «← К пресетам» в строке заголовка
+  test('«← К пресетам» в шаблоне закрывает через close', () => {
     const closers = buttonsBy(EDITOR, 'close')
-    expect(closers.some(({ node }) => dir(node, 'bind', 'title') === "t('common.close')"), '×').toBe(true)
-    expect(closers.some(({ node }) => (node.children || []).some((c) => c.type === 5 && /common\.cancel/.test(c.content.content))), '«Отмена»').toBe(true)
+    expect(closers.some(({ node }) => (node.children || []).some((c) => c.type === 5 && /preset\.edit\.back/.test(c.content.content))), '«← К пресетам»').toBe(true)
   })
 })
 
@@ -283,11 +299,11 @@ describe('прослушивание', () => {
 describe('PresetLibrary', () => {
   const lib = () => mountSetup(PresetLibrary, {})
 
-  test('«Сохранить как свой» открывает копию в редакторе, на сервере ничего не создаёт', async () => {
-    const { b } = await lib()
+  test('«Сохранить как свой» просит страницу открыть копию в редакторе, на сервере ничего не создаёт', async () => {
+    const { b, emitted } = await lib()
     const p = { id: 3, name: 'Пост-панк', builtin: true, specs: [] }
     b.makeCopy(p)
-    expect(b.editorPreset.value).toEqual(p)
+    expect(emitted.filter(([e]) => e === 'edit')).toEqual([['edit', p]])
     expect(m.api.soundPresetCreate).not.toHaveBeenCalled()
   })
 

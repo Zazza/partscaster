@@ -1,11 +1,13 @@
 <script setup>
-// Редактор пресета звука (модалка из библиотеки). Встроенный пресет открывается
+// Редактор пресета звука — страница раздела «Пресеты звука» (PresetsPage). Встроенный пресет открывается
 // как копия (сохранение создаёт свой); recipe-поля без правок (parts) пробрасываются как есть.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import VSelect from '../VSelect.vue'
 import ChainEditor from './ChainEditor.vue'
+import PageView from './PageView.vue'
+import PageBox from './PageBox.vue'
 import PlaceControls from './PlaceControls.vue'
 import PresetCatalog from './PresetCatalog.vue'
 import { usePlayer } from '../composables/usePlayer.js'
@@ -366,125 +368,144 @@ function close() {
   askConfirm(t('preset.edit.unsaved.title'), t('preset.edit.unsaved.body'), () => emit('close'))
 }
 onBeforeUnmount(() => { closed = true; if (applyUnwatch) applyUnwatch() })
+
+// Esc — выход к библиотеке (несохранённое — подтверждение); открыт диалог поверх — Esc его
+// Esc в открытом выпадающем списке — его собственный (закрыть список); из полей ввода Esc выходит
+function onKey(e) {
+  if (e.key !== 'Escape') return
+  if (typeof document !== 'undefined' && document.querySelector('.modal-backdrop')) return
+  if (e.target?.closest?.('.vselect')) return
+  close()
+}
+// вне браузера (тесты на node) окна нет — слушать нечего
+const win = typeof window !== 'undefined' ? window : null
+onMounted(() => win?.addEventListener('keydown', onKey))
+onBeforeUnmount(() => win?.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="modal-backdrop">
-    <div class="modal preset-editor-modal">
-      <div class="modal-head">
-        <h2>{{ t('preset.edit.title') }} <span class="muted">{{ model.name || t('preset.edit.new') }}</span></h2>
-        <span class="spacer"></span>
-        <button class="ghost" :title="t('common.close')" @click="close"><AppIcon name="x" /></button>
-      </div>
-
-      <div class="dsp-row">
-        <input v-model="model.name" maxlength="80" :placeholder="t('preset.save.name')" style="max-width: 260px" />
-        <input v-model="model.note" maxlength="500" :placeholder="t('preset.save.note')" class="preset-note" />
-      </div>
-
-      <div class="dsp-row preset-ref">
-        <span class="muted" :title="t('preset.edit.ref.tip')">{{ t('preset.edit.ref') }}</span>
-        <template v-for="fam in PRESET_FAMILIES" :key="fam">
-          <button v-if="!ownJobId" class="ghost small-btn" :class="{ on: refFamily === fam }"
-                  :title="t('preset.edit.ref.demo', { family: familyLabel(fam, t) })" @click="refFamily = fam">{{ familyLabel(fam, t) }}</button>
-        </template>
-        <VSelect v-model="ownJobId" :options="[{ value: 0, label: '—' }, ...ownOptions]" searchable
-                 :title="t('preset.edit.ref.tip')" style="max-width: 260px" />
-        <label class="muted"><input v-model="solo" type="checkbox" /> {{ t('instr.solo') }}</label>
-        <button class="ghost small-btn" @click="playBefore">{{ playBtn('pe-before') }} {{ t('instr.before') }}</button>
-        <span class="muted">{{ t('preset.edit.window', { from: Math.floor(listenWin.from), to: Math.floor(listenWin.to) }) }}</span>
-      </div>
-      <p v-if="!ownJobId && demoState.status === 'cooking'" class="muted">{{ t('preset.edit.demo.cooking') }}</p>
-      <p v-else-if="!ownJobId && demoState.status === 'stems'" class="muted">{{ t('preset.edit.demo.stems') }}</p>
-      <p v-else-if="!ownJobId && demoState.status === 'error'" class="err">
-        {{ t('preset.edit.demo.err', { err: demoState.err }) }}
-        <button class="ghost small-btn" @click="demo.reset(refFamily); demo.ensure(refFamily)">{{ t('preset.edit.demo.again') }}</button>
-      </p>
-
-      <h3 class="muted">{{ t('preset.edit.tracks') }}</h3>
-      <p v-if="!model.specs.length" class="muted">{{ t('preset.edit.empty') }}</p>
-      <div v-for="sp in model.specs" :key="sp.uid" class="preset-spec">
+  <!-- редактор — страница: слева что делает пресет (1–3), справа — на чём слушать (прилипает) -->
+  <PageView :title="t('nav.presets') + ' › ' + (model.name || t('preset.edit.new'))">
+    <template #actions>
+      <button class="ghost" :title="t('common.close')" @click="close">{{ t('preset.edit.back') }}</button>
+      <button class="primary" :disabled="!canSave" @click="save">
+        {{ action === 'save' ? '…' : isCopy ? t('preset.edit.save.dup') : t('common.save') }}</button>
+    </template>
+    <div class="page-cols">
+    <div class="page-main">
+      <PageBox :title="'1 · ' + t('preset.edit.step.name')">
         <div class="dsp-row">
-          <span class="preset-spec-line">{{ specLine(sp) }}</span>
-          <button v-if="specKind(sp) === 'engine'" class="ghost small-btn" :disabled="refBusy"
-                  :title="t('instr.after')" @click="playAfter(sp.edit ? toWorkerChain(sp.edit) : sp.engine, sp.stems, 'pe:' + sp.uid, specLine(sp))">
-            {{ playBtn('pe:' + sp.uid) }}</button>
-          <button class="ghost small-btn" :title="t('preset.edit.spec.remove')" @click="model.specs = model.specs.filter((x) => x !== sp)"><AppIcon name="x" /></button>
+          <input v-model="model.name" maxlength="80" :placeholder="t('preset.save.name')" style="max-width: 260px" />
+          <input v-model="model.note" maxlength="500" :placeholder="t('preset.save.note')" class="preset-note" />
         </div>
-        <div class="dsp-row preset-spec-ctrl">
-          <button v-for="s in STEM_CHOICES" :key="s" class="ghost small-btn stem-chip" :class="{ on: sp.stems.includes(s) }"
-                  :title="stemName(s)" @click="sp.stems = toggleStem(sp.stems, s)">{{ stemName(s) }}</button>
-          <label class="muted" :title="t('preset.edit.level.tip')">
-            <input type="range" min="-24" max="24" step="0.5" v-model.number="sp.db" /> {{ sp.db > 0 ? '+' : '' }}{{ sp.db }} {{ t('studio.inserts.dbUnit') }}</label>
-          <label class="muted" :title="t('preset.edit.level.tip')">
-            <input type="checkbox" :checked="sp.levelDb != null"
-                   @change="sp.levelDb = $event.target.checked ? (sp.levelDb ?? 0) : null" /> {{ t('preset.edit.level') }}</label>
-          <input v-if="sp.levelDb != null" type="range" min="-40" max="6" step="1" v-model.number="sp.levelDb" />
-          <span v-if="sp.levelDb != null" class="muted">{{ sp.levelDb }}</span>
-          <PlaceControls v-model="sp.place" />
+      </PageBox>
+
+      <PageBox :title="'2 · ' + t('preset.edit.tracks')" :hint="t('preset.edit.step.tracks.sub')">
+        <p v-if="!model.specs.length" class="muted">{{ t('preset.edit.empty') }}</p>
+        <div v-for="sp in model.specs" :key="sp.uid" class="preset-spec">
+          <div class="dsp-row">
+            <span class="preset-spec-line">{{ specLine(sp) }}</span>
+            <button v-if="specKind(sp) === 'engine'" class="ghost small-btn" :disabled="refBusy"
+                    :title="t('instr.after')" @click="playAfter(sp.edit ? toWorkerChain(sp.edit) : sp.engine, sp.stems, 'pe:' + sp.uid, specLine(sp))">
+              {{ playBtn('pe:' + sp.uid) }}</button>
+            <button class="ghost small-btn" :title="t('preset.edit.spec.remove')" @click="model.specs = model.specs.filter((x) => x !== sp)"><AppIcon name="x" /></button>
+          </div>
+          <div class="dsp-row preset-spec-ctrl">
+            <button v-for="s in STEM_CHOICES" :key="s" class="ghost small-btn stem-chip" :class="{ on: sp.stems.includes(s) }"
+                    :title="stemName(s)" @click="sp.stems = toggleStem(sp.stems, s)">{{ stemName(s) }}</button>
+            <label class="muted" :title="t('preset.edit.level.tip')">
+              <input type="range" min="-24" max="24" step="0.5" v-model.number="sp.db" /> {{ sp.db > 0 ? '+' : '' }}{{ sp.db }} {{ t('studio.inserts.dbUnit') }}</label>
+            <label class="muted" :title="t('preset.edit.level.tip')">
+              <input type="checkbox" :checked="sp.levelDb != null"
+                     @change="sp.levelDb = $event.target.checked ? (sp.levelDb ?? 0) : null" /> {{ t('preset.edit.level') }}</label>
+            <input v-if="sp.levelDb != null" type="range" min="-40" max="6" step="1" v-model.number="sp.levelDb" />
+            <span v-if="sp.levelDb != null" class="muted">{{ sp.levelDb }}</span>
+            <PlaceControls v-model="sp.place" />
+          </div>
+          <details v-if="specKind(sp) === 'engine'" @toggle="toggleEdit(sp, $event.target.open)">
+            <summary class="muted">{{ t('preset.edit.spec.chain') }}</summary>
+            <ChainEditor v-model="sp.edit" :assets="assets" :busy="busy === 'kit' ? 'kit' : ''"
+                         @upload="uploadAsset" @install-kit="installKit" />
+          </details>
         </div>
-        <details v-if="specKind(sp) === 'engine'" @toggle="toggleEdit(sp, $event.target.open)">
-          <summary class="muted">{{ t('preset.edit.spec.chain') }}</summary>
-          <ChainEditor v-model="sp.edit" :assets="assets" :busy="busy === 'kit' ? 'kit' : ''"
+        <p v-if="kindIssues.length" class="err">{{ t('preset.edit.needRoformer') }}</p>
+        <!-- каталог обработок — в своей прокрутке: добавленное выше всегда на виду -->
+        <div class="preset-add-title">{{ t('preset.edit.addTitle') }}</div>
+        <div class="preset-catalog">
+          <PresetCatalog v-model:target="target" :groups="catalog" :assets="assets" :busy="refBusy || busy === 'preview'"
+                         @preview="previewItem" @add="addItem" @rhythm="addRhythm" />
+        </div>
+      </PageBox>
+
+      <PageBox :title="'3 · ' + t('preset.edit.master')">
+        <div class="dsp-row">
+          <button v-for="m in MASTERS" :key="m.id" class="ghost small-btn" :class="{ on: m.id === masterPicked }"
+                  :title="tr(m.note)" @click="pickMaster(m)">{{ tr(m.name) }}</button>
+        </div>
+        <div class="dsp-row">
+          <label class="muted" :title="t('mix.target.tip')">
+            <input type="checkbox" :checked="model.targetLufs != null"
+                   @change="model.targetLufs = $event.target.checked ? (model.targetLufs ?? -14) : null" /> {{ t('mix.target') }}</label>
+          <input v-if="model.targetLufs != null" type="range" min="-24" max="-6" step="0.5" v-model.number="model.targetLufs" />
+          <span v-if="model.targetLufs != null" class="muted">{{ model.targetLufs }} LUFS</span>
+          <button class="ghost small-btn" :disabled="(!masterEdit.length && model.targetLufs == null) || !!masterMissing.length || refBusy"
+                  :title="t('mix.master.after.tip')" @click="playMasterAfter">
+            {{ busy === 'preview' ? t('instr.busy') : playBtn('pe-master') + ' ' + t('instr.after') }}</button>
+        </div>
+        <details v-if="masterEdit.length || MASTERS.length">
+          <summary class="muted">{{ t('mix.master.edit') }}</summary>
+          <ChainEditor v-model="masterEdit" :assets="assets" :busy="busy === 'kit' ? 'kit' : ''"
                        @upload="uploadAsset" @install-kit="installKit" />
         </details>
-      </div>
-
-      <PresetCatalog v-model:target="target" :groups="catalog" :assets="assets" :busy="refBusy || busy === 'preview'"
-                     @preview="previewItem" @add="addItem" @rhythm="addRhythm" />
-
-      <h3 class="muted">{{ t('preset.edit.master') }}</h3>
-      <div class="dsp-row">
-        <button v-for="m in MASTERS" :key="m.id" class="ghost small-btn" :class="{ on: m.id === masterPicked }"
-                :title="tr(m.note)" @click="pickMaster(m)">{{ tr(m.name) }}</button>
-      </div>
-      <div class="dsp-row">
-        <label class="muted" :title="t('mix.target.tip')">
-          <input type="checkbox" :checked="model.targetLufs != null"
-                 @change="model.targetLufs = $event.target.checked ? (model.targetLufs ?? -14) : null" /> {{ t('mix.target') }}</label>
-        <input v-if="model.targetLufs != null" type="range" min="-24" max="-6" step="0.5" v-model.number="model.targetLufs" />
-        <span v-if="model.targetLufs != null" class="muted">{{ model.targetLufs }} LUFS</span>
-        <button class="ghost small-btn" :disabled="(!masterEdit.length && model.targetLufs == null) || !!masterMissing.length || refBusy"
-                :title="t('mix.master.after.tip')" @click="playMasterAfter">
-          {{ busy === 'preview' ? t('instr.busy') : playBtn('pe-master') + ' ' + t('instr.after') }}</button>
-      </div>
-      <details v-if="masterEdit.length || MASTERS.length">
-        <summary class="muted">{{ t('mix.master.edit') }}</summary>
-        <ChainEditor v-model="masterEdit" :assets="assets" :busy="busy === 'kit' ? 'kit' : ''"
-                     @upload="uploadAsset" @install-kit="installKit" />
-      </details>
-
-      <div class="dsp-row">
-        <span class="muted">{{ t('preset.save.final') }}</span>
-        <VSelect :model-value="finalFrom" :options="finalOptions" searchable style="max-width: 320px"
-                 @update:model-value="(v) => { finalFrom = v; pickFinal(v) }" />
-        <span v-if="finalLine" class="muted">{{ finalLine }}</span>
-      </div>
-      <p v-if="(model.parts || []).length" class="muted">{{ t('preset.edit.parts', { n: model.parts.length }) }}</p>
-      <p v-if="kindIssues.length" class="err">{{ t('preset.edit.needRoformer') }}</p>
-
-      <p v-if="msg" class="muted">{{ msg }}</p>
-      <p v-if="err" class="err">{{ err }}</p>
-      <div class="modal-actions">
-        <button class="primary" :disabled="!canSave" @click="save">
-          {{ action === 'save' ? '…' : isCopy ? t('preset.edit.save.dup') : t('common.save') }}</button>
-        <button class="ghost small" :disabled="busy !== '' || action !== '' || applyLive" :title="t('preset.edit.apply.tip')" @click="applyToRef">
-          {{ action === 'apply' ? '…' : applyLive ? t('instr.busy') : t('preset.edit.apply') }}</button>
-        <span class="spacer"></span>
-        <button class="ghost" @click="close">{{ t('common.cancel') }}</button>
-      </div>
+        <div class="dsp-row">
+          <span class="muted">{{ t('preset.save.final') }}</span>
+          <VSelect :model-value="finalFrom" :options="finalOptions" searchable style="max-width: 320px"
+                   @update:model-value="(v) => { finalFrom = v; pickFinal(v) }" />
+          <span v-if="finalLine" class="muted">{{ finalLine }}</span>
+        </div>
+        <p v-if="(model.parts || []).length" class="muted">{{ t('preset.edit.parts', { n: model.parts.length }) }}</p>
+      </PageBox>
     </div>
-  </div>
+
+    <aside class="page-side">
+      <PageBox :title="t('preset.edit.step.listen')" :hint="t('preset.edit.window', { from: Math.floor(listenWin.from), to: Math.floor(listenWin.to) })">
+        <div class="preset-ref">
+          <span class="muted" :title="t('preset.edit.ref.tip')">{{ t('preset.edit.ref') }}</span>
+          <template v-for="fam in PRESET_FAMILIES" :key="fam">
+            <button v-if="!ownJobId" class="ghost small-btn" :class="{ on: refFamily === fam }"
+                    :title="t('preset.edit.ref.demo', { family: familyLabel(fam, t) })" @click="refFamily = fam">{{ familyLabel(fam, t) }}</button>
+          </template>
+        </div>
+        <VSelect v-model="ownJobId" :options="[{ value: 0, label: t('preset.edit.ref.own') }, ...ownOptions]" searchable
+                 :title="t('preset.edit.ref.tip')" />
+        <p v-if="!ownJobId && demoState.status === 'cooking'" class="muted">{{ t('preset.edit.demo.cooking') }}</p>
+        <p v-else-if="!ownJobId && demoState.status === 'stems'" class="muted">{{ t('preset.edit.demo.stems') }}</p>
+        <p v-else-if="!ownJobId && demoState.status === 'error'" class="err">
+          {{ t('preset.edit.demo.err', { err: demoState.err }) }}
+          <button class="ghost small-btn" @click="demo.reset(refFamily); demo.ensure(refFamily)">{{ t('preset.edit.demo.again') }}</button>
+        </p>
+        <div class="dsp-row">
+          <label class="muted"><input v-model="solo" type="checkbox" /> {{ t('instr.solo') }}</label>
+          <button class="ghost small-btn" @click="playBefore">{{ playBtn('pe-before') }} {{ t('instr.before') }}</button>
+        </div>
+        <button class="ghost" :disabled="busy !== '' || action !== '' || applyLive" :title="t('preset.edit.apply.tip')" @click="applyToRef">
+          {{ action === 'apply' ? '…' : applyLive ? t('instr.busy') : t('preset.edit.apply') }}</button>
+        <p v-if="msg" class="muted">{{ msg }}</p>
+        <p v-if="err" class="err">{{ err }}</p>
+      </PageBox>
+    </aside>
+    </div>
+  </PageView>
 </template>
 
 <style scoped>
-.preset-editor-modal { width: min(880px, 94vw); overflow-y: auto; }
 .preset-note { flex: 1; min-width: 200px; }
-.preset-ref { flex-wrap: wrap; align-items: center; gap: 8px; }
+.preset-ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .preset-spec { border-left: 2px solid var(--line, #2a2a35); padding-left: 10px; display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
 .preset-spec-line { flex: 1; font-size: 13px; }
 .preset-spec-ctrl { flex-wrap: wrap; align-items: center; gap: 6px; }
 .stem-chip.on { border-color: var(--accent, #7aa2f7); }
-h3 { margin: 8px 0 2px; font-size: 13px; text-transform: none; }
-.spacer { flex: 1; }
+.preset-add-title { margin-top: 6px; font-size: 13px; font-weight: 600; }
+/* каталог — своя прокрутка: длинный список обработок не уводит со страницы */
+.preset-catalog { max-height: 460px; overflow-y: auto; }
 </style>

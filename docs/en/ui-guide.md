@@ -531,15 +531,16 @@ What is inside presets and how to edit them — the ["Sound presets"](#sound-pre
 
 ## Sound presets
 
-The "sound presets" menu item. A sound preset is a recipe for processing the whole track: stem processing, drum
+The "Sound presets" menu item. A sound preset is a recipe for processing the whole track: stem processing, drum
 replacement, balance, parts and a final chain → a new version of the track. Presets are applied not here but in
 the new track form and in the studio (the "Done" step).
 
-<!-- screenshot: the "Sound presets" page — an expanded family and an expanded preset -->
+<!-- screenshot: the "Sound presets" page — search and family chips, the "Mine" and "Rock" blocks -->
 
-**Library.** Presets are grouped by family — "Rock" (Рок), "Heavy" (Тяжёлое), "Electronic" (Электроника), "Pop
-and more" (Поп и другое), "Mine" (Мои); a family expands on click, and the number of movements is shown next to
-it. There are 109 built-in presets: 34 movements (post-punk, cold wave, goth, indie, shoegaze, metal, synth-pop,
+**Library.** Presets are laid out as blocks by family, nothing is collapsed: "Mine" (Мои) first, then "Rock" (Рок),
+"Heavy" (Тяжёлое), "Electronic" (Электроника), "Pop and more" (Поп и другое); inside a family the movements are
+subheadings. At the top are a search (name, description, movement) and the chips "All · Mine · Rock …" with the
+number of presets: a chip keeps one family, search and chip work together. There are 109 built-in presets: 34 movements (post-punk, cold wave, goth, indie, shoegaze, metal, synth-pop,
 trip-hop, house, soul…) with 3 variants each, plus 7 more. Each built-in preset replaces the drums with a kit,
 changes the bass and guitar, sets the stem balance by measurement, like in real recordings, adds parts and a
 master; it does not touch the voice. Except for electronic music, the guitar is played by the guitarist following
@@ -548,7 +549,7 @@ preset sets the loudness of the result itself: most built-in presets target −1
 
 A preset row has:
 
-- ▸ — what is inside: stem edits, "final:", "result loudness: N LUFS", "tuned on track #N";
+- the arrow on the left — what is inside: stem edits, "final:", "result loudness: N LUFS", "tuned on track #N";
 - ▶ "listen on the demo" — apply the preset to the demo and play the result at once (a few minutes; progress is
   shown as a line at the top of the page);
 - a built-in preset has "Save as my own": it opens the editor with a copy (the built-in preset itself does not
@@ -556,9 +557,12 @@ A preset row has:
 - your own preset has "preset editor", a pencil (rename and edit the description), ✕ (delete, with
   confirmation).
 
-**"new preset"** — the editor with an empty recipe.
+**"New preset"** (in the title row) — the editor with an empty recipe.
 
-**Preset editor** — a window for full editing of the recipe:
+**Preset editor** — a separate page "Sound presets › name". On the left are the blocks "1 · Name and description",
+"2 · Track processing" (added entries and the catalog in its own scroll area), "3 · Master — the whole track"; on
+the right — "Listening" (it stays in place while you scroll). In the title row — "Save" (for a copy and a new one —
+"Save as my own") and "← To presets"; Esc also goes back to the library. On the page:
 
 - title and description ("what the sound is like");
 - **"reference:"** — what to listen on: the family demo ("Rock", "Heavy", "Electronic", "Pop and more") or your own
@@ -574,9 +578,8 @@ A preset row has:
 - "Parts (N) — carried over unchanged" — synth and percussion parts from the source preset;
 - drum parts are heard only with the RoFormer stem model — without it the editor warns you, and the entry stays
   in the preset;
-- at the bottom — "Save" (for a copy — "Save as my own"), **"Apply to the reference"** (a full run of the preset
-  on the reference, a few minutes; the finished version plays at once) and "Cancel". Closing with unsaved edits
-  asks for confirmation.
+- in the "Listening" block — **"Apply to the reference"** (a full run of the preset on the reference, a few minutes;
+  the finished version plays at once), progress and errors. Leaving with unsaved edits asks for confirmation.
 
 **Demo reference** — a short genre draft for each family. The app creates it the first time you listen
 ("preparing the demo track…", then "splitting the demo into stems…") and keeps it in the hidden folder "Demo"

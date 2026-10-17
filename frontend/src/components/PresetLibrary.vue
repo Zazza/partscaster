@@ -1,6 +1,6 @@
 <script setup>
 // Библиотека пресетов звука (страница «Пресеты звука»): что внутри (дорожки и финал), свои —
-// переименовать, поправить описание, удалить; редактор (PresetEditor) — полноценная правка рецепта
+// переименовать, поправить описание, удалить; редактор (PresetEditor, отдельной страницей) — полноценная правка рецепта
 // с предпрослушиванием на демо-эталоне жанра; «▶ на демо» — применить пресет к демо и послушать.
 // Встроенные не меняются: копия («Сохранить как свой») открывается в редакторе.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -11,21 +11,27 @@ import { usePlayer } from '../composables/usePlayer.js'
 import { usePresetDemo } from '../composables/usePresetDemo.js'
 import { watchQueueItem } from '../composables/useProcQueue.js'
 import { presetTree, PRESET_FAMILIES } from '../soundPresets.js'
-import PresetEditor from './PresetEditor.vue'
+import { minesFirst, familyCounts, filterPresetTree } from '../presetFilter.js'
+import PageBox from './PageBox.vue'
 
 const { t } = useI18n()
 const { askConfirm } = useConfirm()
 const demo = usePresetDemo()
 const { toggleArtifact } = usePlayer()
 const presets = ref([])
-const tree = computed(() => presetTree(presets.value, t))   // по семьям: Рок, Тяжёлое, Электроника, Поп и другое, Мои
+// по семьям: «Мои» первыми, дальше Рок, Тяжёлое, Электроника, Поп и другое; ничего не свёрнуто
+const tree = computed(() => minesFirst(presetTree(presets.value, t)))
+// поиск и фишка семьи (null — все) — отбор того, что видно
+const query = ref('')
+const family = ref(null)
+const chips = computed(() => familyCounts(tree.value))
+const shown = computed(() => filterPresetTree(tree.value, { q: query.value, family: family.value }))
 const open = ref(null)       // id раскрытого
 const edit = ref(null)       // {id, name, note} правки своего
 const err = ref('')
 const msg = ref('')
-const editorPreset = ref(false)  // false — закрыт; null — новый; объект — правка/копия
-// «Новый пресет» — кнопка в строке заголовка страницы (PresetsPage)
-defineExpose({ newPreset: () => { editorPreset.value = null } })
+// редактор — отдельная страница (PresetsPage): библиотека только просит открыть пресет
+const emit = defineEmits(['edit'])
 const demoBusy = ref(new Set())  // id пресетов, применяемых к демо (каждый — своя кнопка, параллельно)
 let disposed = false             // страницу закрыли — итог очереди не играет молча
 let demoUnwatch = null           // слежение за записью очереди текущего применения
@@ -65,7 +71,7 @@ function remove(p) {
 // только по «Сохранить» — отмена не оставляет лишней «(копия)», двойной клик не плодит дублей
 function makeCopy(p) {
   err.value = ''
-  editorPreset.value = p
+  emit('edit', p)
 }
 
 // «послушать на демо»: приготовить демо-эталон → пресет через очередь обработки
@@ -116,50 +122,62 @@ async function playOnDemo(p) {
 </script>
 
 <template>
-  <p v-if="msg" class="muted">{{ msg }}</p>
-  <p v-if="!presets.length" class="muted">{{ t('preset.lib.empty') }}</p>
-  <details v-for="f in tree" :key="f.family" class="preset-family" :open="f.family === ''">
-    <summary><strong>{{ f.label }}</strong> <span class="muted">· {{ f.genres.length }}</span></summary>
-  <div v-for="p in f.genres.flatMap((g) => g.items)" :key="p.id" class="preset-row">
-    <div class="preset-head">
-      <button class="ghost small-btn" @click="open = open === p.id ? null : p.id">{{ open === p.id ? '▾' : '▸' }}</button>
-      <template v-if="edit && edit.id === p.id">
-        <input v-model="edit.name" maxlength="80" />
-        <input v-model="edit.note" maxlength="500" class="preset-note" />
-        <button class="primary small" :disabled="!edit.name.trim()" @click="saveEdit(p)">{{ t('common.save') }}</button>
-        <button class="ghost small-btn" @click="edit = null">{{ t('common.cancel') }}</button>
-      </template>
-      <template v-else>
-        <strong>{{ p.name }}</strong>
-        <span v-if="p.builtin" class="badge">{{ t('preset.lib.builtin') }}</span>
-        <span class="muted preset-note">{{ p.note }}</span>
-        <button class="ghost small-btn" :disabled="demoBusy.has(p.id)" :title="t('preset.lib.play.tip')"
-                @click="playOnDemo(p)"><template v-if="demoBusy.has(p.id)">…</template><AppIcon v-else name="play" /></button>
-        <button v-if="p.builtin" class="ghost small-btn" :title="t('preset.lib.dup.tip')" @click="makeCopy(p)"><AppIcon name="save" /></button>
-        <template v-else>
-          <button class="ghost small-btn" :title="t('preset.lib.editFull')" @click="editorPreset = p"><AppIcon name="sliders" /></button>
-          <button class="ghost small-btn" :title="t('preset.lib.edit')" @click="edit = { id: p.id, name: p.name, note: p.note || '' }"><AppIcon name="pencil" /></button>
-          <button class="ghost small-btn" :title="t('preset.lib.del')" @click="remove(p)"><AppIcon name="x" /></button>
-        </template>
-      </template>
-    </div>
-    <div v-if="open === p.id" class="preset-body muted">
-      <div v-for="(s, i) in p.specs" :key="i">{{ specLine(s) }}</div>
-      <div v-if="finalLine(p)">{{ t('preset.lib.final') }} {{ finalLine(p) }}</div>
-      <div v-if="p.target_lufs != null">{{ t('preset.lib.target', { lufs: p.target_lufs }) }}</div>
-      <div v-if="p.reference_job_id">{{ t('preset.lib.ref', { id: p.reference_job_id }) }}</div>
-    </div>
+  <!-- поиск и фишки семей: «Все N · Мои N · Рок N …» — отбор видимого -->
+  <div class="preset-tools">
+    <input v-model="query" class="preset-search" :placeholder="t('preset.lib.search')" />
+    <button v-for="c in chips" :key="c.family ?? 'all'" class="toggle small-btn" :class="{ on: family === c.family }"
+            @click="family = c.family">{{ c.family == null ? t('preset.lib.all') : c.label }} <span class="muted">{{ c.count }}</span></button>
   </div>
-  </details>
+  <p v-if="msg" class="muted">{{ msg }}</p>
   <p v-if="err" class="err">{{ err }}</p>
-  <PresetEditor v-if="editorPreset !== false" :preset="editorPreset" :presets="presets"
-                @close="editorPreset = false" @saved="load" />
+  <p v-if="!presets.length" class="muted">{{ t('preset.lib.empty') }}</p>
+  <p v-else-if="!shown.length" class="muted">{{ t('preset.lib.nothing') }}</p>
+  <PageBox v-for="f in shown" :key="f.family" :title="f.label" :hint="String(f.genres.reduce((n, g) => n + g.items.length, 0))">
+    <template v-for="g in f.genres" :key="g.genre">
+      <!-- течение — подзаголовком; у своих течений нет -->
+      <div v-if="g.genre && f.family" class="preset-genre">{{ g.genre }}</div>
+      <div v-for="p in g.items" :key="p.id" class="preset-row">
+        <div class="preset-head">
+          <button class="ghost icon" :title="t('preset.lib.open.tip')" @click="open = open === p.id ? null : p.id">
+            <AppIcon :name="open === p.id ? 'chev-up' : 'chev-down'" /></button>
+          <template v-if="edit && edit.id === p.id">
+            <input v-model="edit.name" maxlength="80" />
+            <input v-model="edit.note" maxlength="500" class="preset-note" />
+            <button class="primary small" :disabled="!edit.name.trim()" @click="saveEdit(p)">{{ t('common.save') }}</button>
+            <button class="ghost small-btn" @click="edit = null">{{ t('common.cancel') }}</button>
+          </template>
+          <template v-else>
+            <strong>{{ p.name }}</strong>
+            <span v-if="p.builtin" class="badge">{{ t('preset.lib.builtin') }}</span>
+            <span class="muted preset-note" :title="p.note">{{ p.note }}</span>
+            <button class="ghost small-btn" :disabled="demoBusy.has(p.id)" :title="t('preset.lib.play.tip')"
+                    @click="playOnDemo(p)"><template v-if="demoBusy.has(p.id)">…</template><AppIcon v-else name="play" /></button>
+            <button v-if="p.builtin" class="ghost small-btn" :title="t('preset.lib.dup.tip')" @click="makeCopy(p)"><AppIcon name="save" /></button>
+            <template v-else>
+              <button class="ghost small-btn" :title="t('preset.lib.editFull')" @click="emit('edit', p)"><AppIcon name="sliders" /></button>
+              <button class="ghost small-btn" :title="t('preset.lib.edit')" @click="edit = { id: p.id, name: p.name, note: p.note || '' }"><AppIcon name="pencil" /></button>
+              <button class="ghost small-btn" :title="t('preset.lib.del')" @click="remove(p)"><AppIcon name="x" /></button>
+            </template>
+          </template>
+        </div>
+        <div v-if="open === p.id" class="preset-body muted">
+          <div v-for="(s, i) in p.specs" :key="i">{{ specLine(s) }}</div>
+          <div v-if="finalLine(p)">{{ t('preset.lib.final') }} {{ finalLine(p) }}</div>
+          <div v-if="p.target_lufs != null">{{ t('preset.lib.target', { lufs: p.target_lufs }) }}</div>
+          <div v-if="p.reference_job_id">{{ t('preset.lib.ref', { id: p.reference_job_id }) }}</div>
+        </div>
+      </div>
+    </template>
+  </PageBox>
 </template>
 
 <style scoped>
-.preset-family > summary { cursor: pointer; padding: 4px 0; }
+.preset-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.preset-search { flex: 1 1 260px; min-width: 200px; }
+/* течение — подзаголовок внутри блока семьи */
+.preset-genre { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 4px; }
 .preset-row { border-bottom: 1px solid var(--line, #2a2a35); padding: 4px 0; }
 .preset-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.preset-note { flex: 1; min-width: 160px; font-size: 12px; }
+.preset-note { flex: 1; min-width: 160px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preset-body { padding: 4px 0 4px 34px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
 </style>

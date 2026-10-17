@@ -34,15 +34,27 @@ const EDITOR = join(srcDir, 'components', 'PresetEditor.vue')
 const CATALOG = join(srcDir, 'components', 'PresetCatalog.vue')
 const UI_GUIDE = join(repoDir, 'docs', 'ru', 'ui-guide.md')
 
-test('PresetLibrary импортирует и рендерит PresetEditor; «новый пресет» — в строке заголовка страницы', () => {
-  const src = read(LIBRARY)
-  expect(importsModule(src, 'PresetEditor', 'PresetEditor.vue'), 'нет импорта PresetEditor').toBe(true)
-  expect(rendersComponent(src, 'PresetEditor'), 'нет <PresetEditor в шаблоне').toBe(true)
-  // кнопка — на странице (PageView, слот actions), библиотека отдаёт newPreset наружу
-  expect(src).toMatch(/defineExpose\(\{[^}]*newPreset/)
-  const page = templateOf(read(join(srcDir, 'components', 'PresetsPage.vue')))
-  expect(page).toContain(`t('preset.lib.new')`)
-  expect(page).toMatch(/#actions[\s\S]*newPreset\(\)/)
+test('редактор — страница раздела (internal-window-frame, условие 28): PresetsPage рендерит PresetEditor вместо библиотеки', () => {
+  const page = read(join(srcDir, 'components', 'PresetsPage.vue'))
+  expect(importsModule(page, 'PresetEditor', 'PresetEditor.vue'), 'PresetsPage не импортирует PresetEditor').toBe(true)
+  expect(rendersComponent(page, 'PresetEditor'), 'PresetsPage не рендерит <PresetEditor>').toBe(true)
+  // «Новый пресет» — в строке заголовка страницы и открывает редактор нового пресета
+  const tpl = templateOf(page)
+  expect(tpl).toContain(`t('preset.lib.new')`)
+  expect(tpl).toMatch(/#actions[\s\S]*@click="editing = null"/)
+  // список для «финал как у…» страница читает сама и перечитывает после сохранения: редактор можно открыть
+  // раньше, чем библиотека дочитает
+  const script = page.slice(0, page.indexOf('<template'))
+  expect(script).toContain('api.soundPresets()')
+  expect(tpl).toMatch(/<PresetEditor[^>]*@saved="loadPresets"/)
+  // библиотека сама редактор не держит — только просит открыть пресет
+  const lib = read(LIBRARY)
+  expect(rendersComponent(lib, 'PresetEditor'), 'PresetLibrary не должна рендерить редактор').toBe(false)
+  expect(lib).toMatch(/defineEmits\(\[[^\]]*'edit'/)
+  // сам редактор — страница (PageView), а не модальное окно
+  const ed = templateOf(read(EDITOR))
+  expect(ed).toContain('<PageView')
+  expect(ed).not.toContain('modal-backdrop')
 })
 
 test('у встроенных — «Сохранить как свой», у своих — «редактор пресета»', () => {
