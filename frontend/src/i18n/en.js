@@ -901,7 +901,7 @@ export default {
   'instr.loop.busy': 'rendering…',
   'instr.engine.old': 'The worker does not know the sound engine — update the worker.',
   'instr.engine.off': 'The sound engine is turned off on the worker. Turn it on in the worker settings (fx_engine) and restart the worker.',
-  'instr.stems.make': 'make stems',
+  'instr.stems.make': 'Make stems',
   'instr.stems.busy': 'making stems…',
   'instr.presets': 'presets:',
   'instr.group.other': 'Other',

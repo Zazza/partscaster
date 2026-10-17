@@ -901,7 +901,7 @@ export default {
   'instr.loop.busy': 'считаю…',
   'instr.engine.old': 'Воркер не знает звуковой движок — обновите воркер.',
   'instr.engine.off': 'Звуковой движок на воркере выключен. Включите его в настройках воркера (fx_engine) и перезапустите воркер.',
-  'instr.stems.make': 'сделать дорожки',
+  'instr.stems.make': 'Сделать дорожки',
   'instr.stems.busy': 'делаю дорожки…',
   'instr.presets': 'готовые:',
   'instr.group.other': 'Разное',
