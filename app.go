@@ -320,8 +320,8 @@ func (a *App) YueDraftDelete(jobID int64) (bool, error) {
 }
 
 // YueApplyEdits — «применить всё»: пересборка со всеми правками → один новый трек, черновик очищается.
-func (a *App) YueApplyEdits(parentID int64, specs []studio.SectionSpec, title string) (int64, error) {
-	return studio.ApplyEdits(a.ctx, a.yue, parentID, specs, title)
+func (a *App) YueApplyEdits(parentID int64, specs []studio.SectionSpec, title, mixFile string) (int64, error) {
+	return studio.ApplyEdits(a.ctx, a.yue, parentID, specs, title, mixFile)
 }
 
 func (a *App) YueApplyDsp(jobID int64, chainID string, params map[string]float64) (*yue.DspVariant, error) {

@@ -15,26 +15,24 @@ import (
 	"partscaster/internal/yue"
 )
 
-// Пресет звука в черновик (карточка internal-studio-preset-draft, условия 4–8; тест-кейсы ТК8–ТК11).
+// Пресет звука в черновик (карточка internal-studio-preset-draft, условия 4–8; тест-кейсы ТК8–ТК11;
+// internal-preset-verify-on-apply, условия 1–2, ТК1).
 //
 // PresetDraft(ctx, svc, jobID, p) → {sections, final, master, warnings}: готовит всё, что готовит применение
 // (дорожки, план для гитариста, части барабанов только движком, партии, наборы, замер уровней), но трек не
-// меняет: итоговой версии нет, журнала нет, пресет не меняется. Сверка баланса — как у ApplySoundPreset, на
-// временных версиях, которые к концу (успех, ошибка, отмена) удалены. Нет целей level_db, которые можно
-// сверить, — без сборки вообще.
+// меняет: итоговой версии нет, журнала нет, пресет не меняется. Сборок нет вовсе — ни пересборки, ни версии,
+// ни разделения версий, ни пробных вариантов: сверка баланса — при итоге черновика (ApplyEdits). Записи — как
+// первый проход (громкости по замеру дорожек, без поправок сверки); у записи с level_db на одну дорожку с
+// замером — verify_db = level_db + db записи.
 //
 // Воркер — фейки соседних тестов пресета (psFake, ppFake, gpFake, vfFake, opFake): только внешние границы.
 // Толкования и допущения:
-//   - «временная версия» — версия-трек на воркере (VariantToTrack); «удалена» — DeleteJob с её id (так же
-//     удаляет версии отмена ApplySoundPreset). Сверке нужно разделение версии на дорожки, а оно бывает только
-//     у джобы воркера — поэтому временная версия и есть версия-трек;
-//   - «без рендера» — ни одного вызова движка (ApplyFx), ни одной загрузки варианта (UploadDsp);
+//   - «без сборки» — ни одного вызова движка (ApplyFx), ни одной загрузки варианта (UploadDsp), ни одной
+//     версии-трека (VariantToTrack), ни разделения версии, ни удалений;
 //   - «пресет на воркере не меняется» — методов записи пресета у фейков нет (вызов уронил бы тест паникой),
 //     плюс сам аргумент p после вызова тот же;
 //   - слой «живой звук» выключен (withoutLiveLayer), как в прочих тестах механики пресета: его записи
-//     проверяются своими тестами; поэтому sections = записи пресета + партии;
-//   - при ошибке исправляющего прохода (ТК10) ответ (ошибка или прежние поправки) карточкой не задан — тест
-//     проверяет только уборку временных версий.
+//     проверяются своими тестами; поэтому sections = записи пресета + партии.
 
 // pdDraft — PresetDraft на трек psJobID без слоя «живой звук».
 func pdDraft(svc yue.Service, p yue.SoundPreset) (*PresetDraftResult, error) {
@@ -198,6 +196,11 @@ func TestPresetDraftUnmeasurableTargetNoRender(t *testing.T) {
 	if s := res.Sections[1]; s.Db != 0 || s.LevelTarget != nil {
 		t.Errorf("other: db %v level_target %v, want db 0, без level_target (замера нет)", s.Db, s.LevelTarget)
 	}
+	for i, s := range res.Sections {
+		if s.VerifyDb != nil {
+			t.Errorf("sections[%d] verify_db %v, want нет поля (замера нет — сверить нечем)", i, *s.VerifyDb)
+		}
+	}
 }
 
 // Гитарист у трека без плана — выкинут из записи, пометка в warnings (как у ApplySoundPreset).
@@ -291,8 +294,6 @@ func TestPresetDraftOneQueueOpPreset(t *testing.T) {
 	}
 }
 
-// ---------- ТК9: сверка с промахом — поправки в Db ответа, временные версии удалены, журнала нет ----------
-
 // pdVf — vfFake (замеры трека, версии с id vfFirst, vfFirst+1, …) + учёт созданных версий и сбои по счёту.
 type pdVf struct {
 	*vfFake
@@ -371,19 +372,6 @@ func pdVfSetup(t *testing.T, errs map[int64]float64) *pdVf {
 	return &pdVf{vfFake: f}
 }
 
-// pdAllDeleted — каждая созданная версия удалена; сам трек — нет.
-func pdAllDeleted(t *testing.T, ids []int64, deleted []string) {
-	t.Helper()
-	for _, id := range ids {
-		if !contains(deleted, fmt.Sprintf("job %d", id)) {
-			t.Errorf("временная версия #%d не удалена; созданы %v, удаления %v", id, ids, deleted)
-		}
-	}
-	if contains(deleted, fmt.Sprintf("job %d", psJobID)) {
-		t.Errorf("удалён сам трек #%d: %v", psJobID, deleted)
-	}
-}
-
 // pdNear — |got − want| ≤ tol.
 func pdNear(t *testing.T, what string, got, want, tol float64) {
 	t.Helper()
@@ -392,11 +380,32 @@ func pdNear(t *testing.T, what string, got, want, tol float64) {
 	}
 }
 
-// Гитара (движок, цель −10) промахивается +3,6, после поправки +1,6, затем у цели; бас (без движка, цель −10)
-// у цели. Как у применения: два исправляющих прохода, поправка гитары −3,6 − 1,6 = −5,2 — в Db ответа;
-// гитара — level_target −10 и level_total (громкость трека); бас — Db = цель − уровень дорожки по замеру трека.
-// Все временные версии удалены, итоговой нет, журнал пуст.
-func TestPresetDraftVerifyCorrectsAndCleansUp(t *testing.T) {
+// ---------- ТК1 (internal-preset-verify-on-apply): выбор пресета — без сборок; цели сверки в verify_db ----------
+
+// pdNoBuild — ни сборки, ни версии, ни разделения версий, ни удалений.
+func pdNoBuild(t *testing.T, f *pdVf) {
+	t.Helper()
+	if len(f.ids) != 0 || len(f.promoted) != 0 || f.trackN != 0 {
+		t.Errorf("созданы версии %v (VariantToTrack %d раз), want ни одной", f.ids, f.trackN)
+	}
+	if len(f.splitAsks) != 0 {
+		t.Errorf("разделение версий %v, want ни одного", f.splitAsks)
+	}
+	if len(f.ups) != 0 || len(f.created) != 0 {
+		t.Errorf("загрузки %d / файлы сборки %v, want ни одного (пересборки нет)", len(f.ups), f.created)
+	}
+	if len(f.calls) != 0 || f.masterN != 0 {
+		t.Errorf("движок вызван %d раз, мастер %d, want 0 (пересборки нет)", len(f.calls), f.masterN)
+	}
+	if len(f.deleted) != 0 {
+		t.Errorf("удаления %v, want ни одного", f.deleted)
+	}
+}
+
+// Пресет с целями (гитара с движком и бас, level_db −10), у версий был бы промах +3,6 — черновик не собирает:
+// гитара — level_target −10, level_total, Db как в записи (0), verify_db −10; бас — Db по замеру дорожки,
+// verify_db −10. Журнала нет, пресет не меняется.
+func TestPresetDraftNoBuildsVerifyDbOnTargets(t *testing.T) {
 	t.Parallel()
 	f := pdVfSetup(t, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6})
 	rec := &jrRec{Service: f}
@@ -405,13 +414,7 @@ func TestPresetDraftVerifyCorrectsAndCleansUp(t *testing.T) {
 
 	res := pdMustDraft(t, yue.Journaled(rec), p)
 
-	if !vfAsked(f.splitAsks, vfFirst) || !vfAsked(f.splitAsks, vfFirst+1) {
-		t.Errorf("сверка не дошла до второй сборки: RoFormer просили у %v, want #%d и #%d", f.splitAsks, vfFirst, vfFirst+1)
-	}
-	if len(f.ids) == 0 {
-		t.Fatal("временных версий нет — сверке нечего было разделять")
-	}
-	pdAllDeleted(t, f.ids, f.deleted)
+	pdNoBuild(t, f)
 	if len(rec.recs) != 0 {
 		t.Errorf("записи журнала %+v, want ни одной (трек не меняется)", rec.recs)
 	}
@@ -430,118 +433,64 @@ func TestPresetDraftVerifyCorrectsAndCleansUp(t *testing.T) {
 	}
 	pdNear(t, "гитара level_target", *g.LevelTarget, vfTarget, 1e-9)
 	pdNear(t, "гитара level_total", g.LevelTotal, prlTrackSum(), 0.01)
-	pdNear(t, "гитара Db (поправки сверки)", g.Db, -5.2, 0.01)
+	pdNear(t, "гитара Db (без поправок сверки)", g.Db, 0, 1e-9)
+	if g.VerifyDb == nil {
+		t.Errorf("гитара без verify_db, want −10 (level_db + db)")
+	} else {
+		pdNear(t, "гитара verify_db", *g.VerifyDb, vfTarget, 1e-9)
+	}
 	b := res.Sections[1]
 	if !reflect.DeepEqual(b.Stems, []string{"bass"}) || b.LevelTarget != nil {
 		t.Fatalf("sections[1] = %+v, want бас без level_target (цель без движка — в Db)", b)
 	}
-	pdNear(t, "бас Db", b.Db, vfTarget-(prlSineDb(0.05)-prlTrackSum()), 0.01)
+	pdNear(t, "бас Db (по замеру дорожки)", b.Db, vfTarget-(prlSineDb(0.05)-prlTrackSum()), 0.01)
+	if b.VerifyDb == nil {
+		t.Errorf("бас без verify_db, want −10")
+	} else {
+		pdNear(t, "бас verify_db", *b.VerifyDb, vfTarget, 1e-9)
+	}
 }
 
-// Громкость «на этот раз» db +2 у гитары: цель сверки −10 + 2 = −8; гитара первой сборки на −7,5 (в пределах
-// 1 дБ) — поправок нет, Db гитары как в записи (+2); временная версия удалена.
-func TestPresetDraftVerifyOnTarget(t *testing.T) {
+// Громкость «на этот раз» db +2 у гитары: Db +2 как в записи, verify_db = −10 + 2 = −8; без сборок.
+func TestPresetDraftVerifyDbIncludesDb(t *testing.T) {
 	t.Parallel()
 	f := pdVfSetup(t, map[int64]float64{vfFirst: 2.5})
 	res := pdMustDraft(t, f, vfPresetDb(82, 2))
-	if !vfAsked(f.splitAsks, vfFirst) {
-		t.Errorf("первая сборка не сверена: RoFormer просили у %v", f.splitAsks)
+	pdNoBuild(t, f)
+	g := res.Sections[0]
+	pdNear(t, "гитара Db", g.Db, 2, 1e-9)
+	if g.VerifyDb == nil {
+		t.Fatalf("гитара без verify_db, want −8")
 	}
-	if len(f.ids) == 0 {
-		t.Fatal("временных версий нет")
-	}
-	pdAllDeleted(t, f.ids, f.deleted)
-	pdNear(t, "гитара Db", res.Sections[0].Db, 2, 0.01)
+	pdNear(t, "гитара verify_db", *g.VerifyDb, -8, 1e-9)
 }
 
-// Сбой разделения временной версии — без поправок (как у применения), ответ без ошибки, версия удалена.
-func TestPresetDraftVerifySplitErrorNoCorrection(t *testing.T) {
+// Цель — только у записи с level_db на одну дорожку с замером: без level_db, на две дорожки, у дорожки без
+// замера — поля verify_db нет.
+func TestPresetDraftVerifyDbOnlyMeasurableSingleStem(t *testing.T) {
 	t.Parallel()
-	f := pdVfSetup(t, map[int64]float64{vfFirst: 3.6})
-	f.splitFail[vfFirst] = true
-	res := pdMustDraft(t, f, vfPreset(83))
-	if len(f.ids) == 0 {
-		t.Fatal("временных версий нет")
+	f := pdVfSetup(t, nil)
+	delete(f.p95, "guitar") // у гитары трека замера нет
+	p := lvPreset(86,
+		yue.PresetSpec{Stems: []string{"bass"}, LevelDb: lvF(-10)},                       // цель
+		yue.PresetSpec{Stems: []string{"vocals", "other"}, LevelDb: lvF(-12)},            // две дорожки
+		yue.PresetSpec{Stems: []string{"guitar"}, Engine: engChain(), LevelDb: lvF(-10)}, // без замера
+		psVocalCut(), // без level_db
+		yue.PresetSpec{Stems: []string{"drums"}, Db: -2}, // громкость без цели
+	)
+	res := pdMustDraft(t, f, p)
+	pdNoBuild(t, f)
+	if len(res.Sections) != 5 {
+		t.Fatalf("sections %d, want 5: %+v", len(res.Sections), res.Sections)
 	}
-	pdAllDeleted(t, f.ids, f.deleted)
-	if len(res.Sections) == 0 {
-		t.Fatal("sections пусто")
+	if v := res.Sections[0].VerifyDb; v == nil || math.Abs(*v-(-10)) > 1e-9 {
+		t.Errorf("бас verify_db %v, want −10", deref(v))
 	}
-	pdNear(t, "гитара Db (поправок нет)", res.Sections[0].Db, 0, 0.01)
-	if res.Sections[0].LevelTarget == nil {
-		t.Errorf("гитара без level_target: %+v", res.Sections[0])
+	for i, what := range []string{"две дорожки", "дорожка без замера", "без level_db", "громкость без цели"} {
+		if v := res.Sections[i+1].VerifyDb; v != nil {
+			t.Errorf("sections[%d] (%s) verify_db %v, want нет поля", i+1, what, *v)
+		}
 	}
-}
-
-// ---------- ТК10: ошибка / отмена после временной версии — версия удалена ----------
-
-func TestPresetDraftFailureAfterTempVersionCleansUp(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name        string
-		guitar, trk int
-	}{
-		{"пересборка исправляющего прохода упала", 2, 0},
-		{"версия исправляющего прохода не создана", 0, 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			f := pdVfSetup(t, map[int64]float64{vfFirst: 3.6})
-			f.failGuitarAt, f.failTrackAt = tc.guitar, tc.trk
-			res, err := pdDraft(f, vfPreset(84))
-			if err == nil && res == nil {
-				t.Fatal("PresetDraft: nil без ошибки")
-			}
-			if len(f.ids) == 0 {
-				t.Fatal("сценарий: первая временная версия не создана")
-			}
-			if tc.guitar > 0 && f.guitarN < tc.guitar {
-				t.Fatalf("сценарий: исправляющей пересборки не было (движок на гитару %d раз)", f.guitarN)
-			}
-			if tc.trk > 0 && f.trackN < tc.trk {
-				t.Fatalf("сценарий: второй версии не просили (VariantToTrack %d раз)", f.trackN)
-			}
-			pdAllDeleted(t, f.ids, f.deleted)
-		})
-	}
-}
-
-// pdVfQueue — pdVf + очередь воркера: метка отмены появляется, как только создана временная версия.
-type pdVfQueue struct {
-	*pdVf
-	q *opFake
-}
-
-func (f *pdVfQueue) QueueAdd(ctx context.Context, in yue.QueueOpIn) (*yue.QueueOp, error) {
-	op, err := f.q.QueueAdd(ctx, in)
-	if op != nil {
-		op.State = "running"
-	}
-	return op, err
-}
-
-func (f *pdVfQueue) QueueBeat(ctx context.Context, id int64, progress ...yue.QueueProgress) (*yue.QueueOp, error) {
-	return f.q.QueueBeat(ctx, id, progress...)
-}
-
-func (f *pdVfQueue) QueueFinish(ctx context.Context, id int64, in yue.QueueFinishIn) (*yue.QueueOp, error) {
-	return f.q.QueueFinish(ctx, id, in)
-}
-
-func TestPresetDraftCanceledAfterTempVersionCleansUp(t *testing.T) {
-	t.Parallel()
-	f := &pdVfQueue{pdVf: pdVfSetup(t, map[int64]float64{vfFirst: 3.6}), q: newOpFake()}
-	f.q.beat = func(int) (*yue.QueueOp, error) {
-		return &yue.QueueOp{ID: fakeOpID, State: "running", CancelRequested: f.made.Load()}, nil
-	}
-	_, err := pdDraft(f, vfPreset(85))
-	if !errors.Is(err, ErrCanceled) {
-		t.Fatalf("PresetDraft err = %v, want ErrCanceled", err)
-	}
-	if len(f.ids) == 0 {
-		t.Fatal("сценарий: временная версия не создана до отмены")
-	}
-	pdAllDeleted(t, f.ids, f.deleted)
 }
 
 // ---------- ТК11: level_target / level_total — JSON туда-обратно ----------
@@ -605,15 +554,9 @@ func TestSectionSpecLevelJSONRebuild(t *testing.T) {
 	}
 }
 
-// ---------- ТК13: пробные варианты у трека удалены (условие 20) ----------
-//
-// Толкование: «файл, созданный пробной сборкой» — файл, который воркер вернул на запрос сборки у самого трека
-// psJobID: загрузка (микс пересборки, финал) или вариант/мастер движка; превью кусков движка (preview-*) —
-// вход пересборки, а не итог, в счёт не идут. «Удалён» — DspVariantDelete(psJobID, file), фейк пишет
-// "id/file" в deleted. Файлы временных версий уходят вместе с версиями (DeleteJob) — их проверяет ТК9/ТК10.
+// ---------- ТК1: пресет с финалом и мастером — пробных вариантов нет вовсе ----------
 
-// pdVfPresetFull — пресет сверки (гитара с движком и бас, цели −10) с финалом и мастером: пробная сборка
-// даёт микс пересборки, финал и мастер.
+// pdVfPresetFull — пресет сверки (гитара с движком и бас, цели −10) с финалом и мастером.
 func pdVfPresetFull(id int64) yue.SoundPreset {
 	p := vfPreset(id)
 	p.Final = psFinal()
@@ -622,77 +565,14 @@ func pdVfPresetFull(id int64) yue.SoundPreset {
 	return p
 }
 
-// pdVariantsDeleted — каждый файл, созданный сборками у трека, удалён; файл самого трека — нет.
-func pdVariantsDeleted(t *testing.T, f *pdVf) {
-	t.Helper()
-	if len(f.created) == 0 {
-		t.Fatal("сценарий: пробные сборки не создали у трека ни одного файла")
-	}
-	for _, k := range f.created {
-		if !contains(f.deleted, k) {
-			t.Errorf("пробный файл %s не удалён; созданы %v, удаления %v", k, f.created, f.deleted)
-		}
-	}
-	if k := key(psJobID, "audio.flac"); contains(f.deleted, k) {
-		t.Errorf("удалён файл самого трека %s: %v", k, f.deleted)
-	}
-}
-
-func TestPresetDraftTrialVariantsDeletedOnSuccess(t *testing.T) {
+// Пресет с финалом и мастером и с целями — черновик не создаёт у трека ни одного файла и ничего не удаляет.
+func TestPresetDraftFullPresetNoTrialVariants(t *testing.T) {
 	t.Parallel()
 	f := pdVfSetup(t, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6})
 	if _, err := pdDraft(f, pdVfPresetFull(91)); err != nil {
 		t.Fatalf("PresetDraft: %v", err)
 	}
-	if !vfAsked(f.splitAsks, vfFirst+1) {
-		t.Fatalf("сценарий: второй сборки не было (RoFormer просили у %v)", f.splitAsks)
-	}
-	if f.masterN == 0 {
-		t.Errorf("сценарий: мастер пресета в пробной сборке не вызван")
-	}
-	pdVariantsDeleted(t, f)
-}
-
-// Сбой второй сборки: пересборка исправляющего прохода упала / версия не создана.
-func TestPresetDraftTrialVariantsDeletedOnSecondBuildFailure(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name        string
-		guitar, trk int
-	}{
-		{"пересборка второй сборки упала", 2, 0},
-		{"версия второй сборки не создана", 0, 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			f := pdVfSetup(t, map[int64]float64{vfFirst: 3.6})
-			f.failGuitarAt, f.failTrackAt = tc.guitar, tc.trk
-			res, err := pdDraft(f, pdVfPresetFull(92))
-			if err == nil && res == nil {
-				t.Fatal("PresetDraft: nil без ошибки")
-			}
-			if tc.guitar > 0 && f.guitarN < tc.guitar {
-				t.Fatalf("сценарий: второй пересборки не было (движок на гитару %d раз)", f.guitarN)
-			}
-			if tc.trk > 0 && f.trackN < tc.trk {
-				t.Fatalf("сценарий: второй версии не просили (VariantToTrack %d раз)", f.trackN)
-			}
-			pdVariantsDeleted(t, f)
-		})
-	}
-}
-
-func TestPresetDraftTrialVariantsDeletedOnCancel(t *testing.T) {
-	t.Parallel()
-	f := &pdVfQueue{pdVf: pdVfSetup(t, map[int64]float64{vfFirst: 3.6}), q: newOpFake()}
-	f.q.beat = func(int) (*yue.QueueOp, error) {
-		return &yue.QueueOp{ID: fakeOpID, State: "running", CancelRequested: f.made.Load()}, nil
-	}
-	_, err := pdDraft(f, pdVfPresetFull(93))
-	if !errors.Is(err, ErrCanceled) {
-		t.Fatalf("PresetDraft err = %v, want ErrCanceled", err)
-	}
-	pdVariantsDeleted(t, f.pdVf)
+	pdNoBuild(t, f)
 }
 
 // Без целей level_db сборки нет — и удалять варианты нечего: DspVariantDelete не зовётся.

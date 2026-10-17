@@ -11,7 +11,8 @@ import (
 	"partscaster/internal/yue"
 )
 
-// Ход применения пресета и промежуточные версии (internal-preset-progress, условия 3–5; тест-кейсы «Go studio»).
+// Ход применения пресета (internal-preset-progress, условия 3–4; тест-кейсы «Go studio») и промежуточные версии
+// (internal-preset-verify-on-apply, условие 11, ТК11: удаляются, без подписей «промежуточная»).
 //
 // Контракт (имена выбраны тест-автором — в карточке не заданы):
 //
@@ -23,13 +24,9 @@ import (
 //
 // Шаги пресета: prepare → parts → levels → render(1) → verify(1) → [fix(N+1) → verify(N+1)]…
 // eta — nil до конца первой сверки, потом число ≥ 0.
-// Исправляющий проход: прежняя версия не удаляется, а переименовывается (UpdateJob, только title):
-//
-//	«<название> · <пресет> · промежуточная: сборка 1 — до сверки баланса»
-//	«<название> · <пресет> · промежуточная: сборка N — после поправки N−1» (N ≥ 2)
-//
-// в конце у всех промежуточных родитель — итоговая (SetJobParent). Без исправлений — ни переименований,
-// ни смены родителя. Внешняя граница — воркер (vfFake из preset_verify_test.go + очередь).
+// Исправляющий проход: прежняя версия удаляется (DeleteJob); ни переименований, ни смены родителя — у трека
+// остаётся одна версия, итоговая, с названием «<название> · <пресет>». Внешняя граница — воркер (vfFake из
+// preset_verify_test.go + очередь).
 
 // prgBeat — бит, пришедший воркеру: с ходом или без.
 type prgBeat struct {
@@ -192,17 +189,9 @@ func prgNoJobDeleted(t *testing.T, f *prgPresetFake) {
 	t.Helper()
 	for _, d := range f.deleted {
 		if strings.HasPrefix(d, "job ") {
-			t.Errorf("удалена версия (%s): промежуточные версии остаются", d)
+			t.Errorf("удалена версия (%s): без исправлений единственная версия остаётся", d)
 		}
 	}
-}
-
-func prgRenamed(f *prgPresetFake) map[int64]string {
-	out := map[int64]string{}
-	for _, r := range f.renames {
-		out[r.id] = r.title
-	}
-	return out
 }
 
 func prgVersionTitle(f *prgPresetFake, id int64) string {
@@ -374,8 +363,30 @@ func TestPresetProgressSinglePass(t *testing.T) {
 	}
 }
 
-// Один исправляющий проход: … verify(1) → fix(2) → verify(2); V1 не удалена, подписана «сборка 1 — до сверки
-// баланса», в конце её родитель — V2 (итоговая); eta nil до первой сверки, потом число.
+// prgOnlyFinal — промежуточные версии inter удалены, итоговая final — нет; ни подписей, ни смены родителя.
+func prgOnlyFinal(t *testing.T, f *prgPresetFake, base string, final int64, inter ...int64) {
+	t.Helper()
+	for _, id := range inter {
+		if !contains(f.deleted, fmt.Sprintf("job %d", id)) {
+			t.Errorf("промежуточная версия #%d не удалена: %v", id, f.deleted)
+		}
+	}
+	if contains(f.deleted, fmt.Sprintf("job %d", final)) {
+		t.Errorf("итоговая версия #%d удалена: %v", final, f.deleted)
+	}
+	if len(f.renames) != 0 {
+		t.Errorf("переименования %+v, want ни одного (подписей «промежуточная» нет)", f.renames)
+	}
+	if len(f.parents) != 0 {
+		t.Errorf("смена родителя %v, want ни одной", f.parents)
+	}
+	if got := prgVersionTitle(f, final); got != base {
+		t.Errorf("итоговая %q, нужно %q", got, base)
+	}
+}
+
+// Один исправляющий проход: … verify(1) → fix(2) → verify(2); V1 удалена, итог — V2; eta nil до первой
+// сверки, потом число.
 func TestPresetProgressOneFix(t *testing.T) {
 	t.Parallel()
 	f := prgSetup(t, map[int64]float64{vfFirst: 3.6})
@@ -387,27 +398,10 @@ func TestPresetProgressOneFix(t *testing.T) {
 	if res.ChildID != final {
 		t.Fatalf("ChildID = %d, нужно %d", res.ChildID, final)
 	}
-	prgNoJobDeleted(t, f)
-	base := psTitle + " · " + p.Name
-	ren := prgRenamed(f)
-	if got, want := ren[vfFirst], base+" · промежуточная: сборка 1 — до сверки баланса"; got != want {
-		t.Errorf("V1 подписана %q, нужно %q", got, want)
-	}
-	if _, ok := ren[final]; ok {
-		t.Errorf("итоговая переименована: %q", ren[final])
-	}
-	if got := prgVersionTitle(f, final); got != base {
-		t.Errorf("итоговая %q, нужно %q", got, base)
-	}
-	if f.parents[vfFirst] != final {
-		t.Errorf("родитель V1 = %d, нужно итоговая %d (parents %v)", f.parents[vfFirst], final, f.parents)
-	}
-	if _, ok := f.parents[final]; ok {
-		t.Errorf("у итоговой сменён родитель: %v", f.parents)
-	}
+	prgOnlyFinal(t, f, psTitle+" · "+p.Name, final, vfFirst)
 }
 
-// Два исправляющих прохода: V1 «сборка 1 — до сверки баланса», V2 «сборка 2 — после поправки 1»; обе под V3.
+// Два исправляющих прохода: V1 и V2 удалены, итог — V3.
 func TestPresetProgressTwoFixes(t *testing.T) {
 	t.Parallel()
 	f := prgSetup(t, map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6})
@@ -424,27 +418,7 @@ func TestPresetProgressTwoFixes(t *testing.T) {
 	if res.ChildID != final {
 		t.Fatalf("ChildID = %d, нужно %d", res.ChildID, final)
 	}
-	prgNoJobDeleted(t, f)
-	base := psTitle + " · " + p.Name
-	ren := prgRenamed(f)
-	want := map[int64]string{
-		vfFirst:     base + " · промежуточная: сборка 1 — до сверки баланса",
-		vfFirst + 1: base + " · промежуточная: сборка 2 — после поправки 1",
-	}
-	for id, w := range want {
-		if ren[id] != w {
-			t.Errorf("версия %d подписана %q, нужно %q", id, ren[id], w)
-		}
-		if f.parents[id] != final {
-			t.Errorf("родитель версии %d = %d, нужно итоговая %d", id, f.parents[id], final)
-		}
-	}
-	if _, ok := ren[final]; ok {
-		t.Errorf("итоговая переименована: %q", ren[final])
-	}
-	if got := prgVersionTitle(f, final); got != base {
-		t.Errorf("итоговая %q, нужно %q", got, base)
-	}
+	prgOnlyFinal(t, f, psTitle+" · "+p.Name, final, vfFirst, vfFirst+1)
 }
 
 // Сбой разделения первой версии: сверки нет — исправлений нет, одна версия без переименования; ход не дальше verify(1).

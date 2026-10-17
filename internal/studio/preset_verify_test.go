@@ -3,8 +3,10 @@ package studio
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -18,9 +20,9 @@ import (
 // (rms_p95_db дорожки − сумма мощностей основных vocals/drums/bass/other из JobStems(V)); если хоть одна
 // дальше 1 дБ от цели — исправляющий проход: у каждой целевой записи поправка −ошибка (за проход не больше
 // ±6 дБ), поправки накапливаются (сумма не больше ±9 дБ на запись). Не больше двух исправляющих проходов
-// (всего ≤ 3 пересборки). Промежуточные версии не удаляются (internal-preset-progress), ответ — последняя. Все в
-// пределах 1 дБ — дальше не исправляется. Сбой разделения на любом шаге — ответ последняя готовая версия,
-// без ошибки.
+// (всего ≤ 3 пересборки). Промежуточные версии удаляются, у трека остаётся одна — итоговая
+// (internal-preset-verify-on-apply, условие 11, ТК11). Все в пределах 1 дБ — дальше не исправляется. Сбой
+// разделения на любом шаге — ответ последняя готовая версия, без ошибки.
 //
 // Как видно: пресет — гитара (движок, level_db −10) и бас (без движка, level_db −10). Гейн вставки гитары —
 // амплитуда тона обработанного куска (1000 Гц, prlFake) в пересборке к амплитуде куска; бас — тон 200 Гц
@@ -186,8 +188,8 @@ func vfApply(t *testing.T, f *vfFake, p yue.SoundPreset) *PresetResult {
 }
 
 // vfCheck — проходы: гитара в проходе k (k ≥ 2) ниже первого на shifts[k−2] ±0,1, бас как в первом;
-// версии не удаляются (промежуточные остаются — internal-preset-progress, условие 5), ответ — child.
-func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts []float64, _ []int64, child int64) {
+// удалены ровно версии deleted (промежуточные), у трека осталась одна версия — ответ child.
+func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts []float64, deleted []int64, child int64) {
 	t.Helper()
 	want := len(shifts) + 1
 	if n := f.guitarRuns(); n != want {
@@ -212,8 +214,23 @@ func vfCheck(t *testing.T, f *vfFake, orig []float32, res *PresetResult, shifts 
 			gotDel = append(gotDel, d)
 		}
 	}
-	if len(gotDel) != 0 {
-		t.Errorf("удалены версии %v, want ни одной (промежуточные, трек и ответ остаются)", gotDel)
+	var wantDel []string
+	for _, id := range deleted {
+		wantDel = append(wantDel, fmt.Sprintf("job %d", id))
+	}
+	sort.Strings(gotDel)
+	sort.Strings(wantDel)
+	if strings.Join(gotDel, ",") != strings.Join(wantDel, ",") {
+		t.Errorf("удалены версии %v, want %v (промежуточные, итоговая остаётся)", gotDel, wantDel)
+	}
+	var alive []int64
+	for _, p := range f.jobs {
+		if p.ParentID != nil && !contains(f.deleted, fmt.Sprintf("job %d", p.ID)) {
+			alive = append(alive, p.ID)
+		}
+	}
+	if len(alive) != 1 || alive[0] != child {
+		t.Errorf("у трека остались версии %v, want только итоговая #%d", alive, child)
 	}
 	if res.ChildID != child {
 		t.Errorf("ChildID = %d, want %d (последняя версия)", res.ChildID, child)

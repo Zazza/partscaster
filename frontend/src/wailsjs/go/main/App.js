@@ -22,8 +22,8 @@ export function YueApplyDsp(arg1, arg2, arg3) {
   return window['go']['main']['App']['YueApplyDsp'](arg1, arg2, arg3);
 }
 
-export function YueApplyEdits(arg1, arg2, arg3) {
-  return window['go']['main']['App']['YueApplyEdits'](arg1, arg2, arg3);
+export function YueApplyEdits(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['YueApplyEdits'](arg1, arg2, arg3, arg4);
 }
 
 export function YueApplyFx(arg1, arg2) {

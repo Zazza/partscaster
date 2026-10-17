@@ -12,7 +12,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"time"
 
 	"partscaster/internal/dsp"
 	"partscaster/internal/yue"
@@ -28,8 +27,6 @@ type PresetResult struct {
 	File    string
 	// Warnings — что пресет сделал не так, как записано (у трека нет плана — гитарист пропущен)
 	Warnings []string
-	// Intermediates — промежуточные версии (до исправляющих проходов): подписаны шагом, родитель — ChildID
-	Intermediates []int64
 }
 
 // guitaristNoPlanMark — пометка в названии версии и предупреждение: у трека нет плана, гитарист «по аккордам плана»
@@ -51,12 +48,9 @@ func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 		res = r
 		// пресет отменили, а версия уже есть (в том числе отмена принята в последний миг — уже после этого
 		// шага, во внешней операции приложения) — отменённый пресет следа в треке не оставляет
-		// (промежуточные — первыми: они производные итоговой)
 		OnCanceled(ctx, func(c context.Context) {
-			for _, id := range append(slices.Clone(r.Intermediates), r.ChildID) {
-				if _, derr := svc.DeleteJob(c, id); derr != nil {
-					log.Printf("пресет «%s» отменён: версия #%d не удалена: %v", p.Name, id, derr)
-				}
+			if _, derr := svc.DeleteJob(c, r.ChildID); derr != nil {
+				log.Printf("пресет «%s» отменён: версия #%d не удалена: %v", p.Name, r.ChildID, derr)
 			}
 		})
 		return r.ChildID, nil
@@ -153,84 +147,18 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, err
 	}
-	job, parts, levels, total, warnings := pr.job, pr.parts, pr.levels, pr.total, pr.warnings
-	p = pr.p
-	title := pr.title()
-	passStart := time.Now()
-	ReportStep(ctx, "render", 1, nil)
-	file, err := renderPreset(ctx, svc, job, p, parts, levels, total, nil, nil)
+	name := pr.title() + " · " + pr.p.Name
+	if len(pr.warnings) > 0 {
+		name += " (" + strings.Join(pr.warnings, "; ") + ")"
+	}
+	specs := presetSpecs(pr.p, pr.parts, pr.levels, pr.total)
+	b, err := buildVerified(ctx, svc, jobID, specs, "", name, func(ctx context.Context, sp []SectionSpec) (string, error) {
+		return renderPreset(ctx, svc, pr.job, pr.p, sp)
+	})
 	if err != nil {
 		return nil, err
 	}
-	name := title + " · " + p.Name
-	if len(warnings) > 0 {
-		name += " (" + strings.Join(warnings, "; ") + ")"
-	}
-	child, err := svc.VariantToTrack(ctx, jobID, file, name, 0)
-	if err != nil {
-		return nil, fmt.Errorf("версия трека: %w", err)
-	}
-	// сверка по итогу: цель ставится до мастера, а мастер и остатки старых дорожек сдвигают баланс
-	// (#725: гитара −5,9 при цели −9,5) — итог разделяется и меряется как эталоны; при промахе — исправляющий проход,
-	// поправки копятся; один проход исправлял ~половину (#728: −5,9 → −7,2), поэтому их до presetVerifyPasses
-	// оценка оставшегося — только после первой сверки: «сборка+сверка» первого прохода минус прошедшее в текущем
-	total2 := map[int]float64{}
-	var firstPass time.Duration
-	eta := func() *float64 {
-		if firstPass == 0 {
-			return nil
-		}
-		v := max(0, (firstPass - time.Since(passStart)).Seconds())
-		return &v
-	}
-	var inter []int64
-	for n := 1; n <= presetVerifyPasses; n++ {
-		ReportStep(ctx, "verify", n, eta())
-		corr := presetVerify(ctx, svc, child, p.Specs, levels)
-		if firstPass == 0 {
-			firstPass = time.Since(passStart)
-		}
-		if len(corr) == 0 {
-			break
-		}
-		for i, c := range corr {
-			total2[i] = max(-presetVerifySumDb, min(presetVerifySumDb, total2[i]+c))
-		}
-		passStart = time.Now()
-		ReportStep(ctx, "fix", n+1, eta())
-		next, err := renderPreset(ctx, svc, job, p, parts, levels, total, total2, nil)
-		if err != nil {
-			log.Printf("пресет «%s»: исправляющий проход: %v — остаётся прежний", p.Name, err)
-			break
-		}
-		nextChild, err := svc.VariantToTrack(ctx, jobID, next, name, 0)
-		if err != nil {
-			log.Printf("пресет «%s»: версия исправляющего прохода: %v — остаётся прежняя", p.Name, err)
-			break
-		}
-		// прежняя версия остаётся — подписана, что это за шаг: слышно, что сделала сверка
-		label := name + " · " + intermediateLabel(n)
-		if _, err := svc.UpdateJob(ctx, child, &label, nil); err != nil {
-			log.Printf("пресет «%s»: промежуточная версия #%d не подписана: %v", p.Name, child, err)
-		}
-		inter = append(inter, child)
-		child, file = nextChild, next
-	}
-	// промежуточные — производные итоговой: в списке сворачиваются под ней
-	for _, id := range inter {
-		if err := svc.SetJobParent(ctx, id, child); err != nil {
-			log.Printf("пресет «%s»: промежуточная версия #%d не перенесена под #%d: %v", p.Name, id, child, err)
-		}
-	}
-	return &PresetResult{ChildID: child, File: file, Warnings: warnings, Intermediates: inter}, nil
-}
-
-// intermediateLabel — подпись промежуточной версии n (после неё был исправляющий проход).
-func intermediateLabel(n int) string {
-	if n == 1 {
-		return "промежуточная: сборка 1 — до сверки баланса"
-	}
-	return fmt.Sprintf("промежуточная: сборка %d — после поправки %d", n, n-1)
+	return &PresetResult{ChildID: b.child, File: b.file, Warnings: pr.warnings}, nil
 }
 
 // hasGuitarist — есть ли в записях пресета гитарист «по аккордам плана» (блок движка gtrnotes).
@@ -280,93 +208,17 @@ func dropGuitarist(specs []yue.PresetSpec) []yue.PresetSpec {
 	return out
 }
 
-// presetVerifyTolDb — промах цели больше этого — исправляющий проход; пределы поправок и число проходов
-const (
-	presetVerifyTolDb  = 1.0
-	presetVerifyMaxDb  = 6.0 // за один проход
-	presetVerifySumDb  = 9.0 // сумма поправок записи за все проходы
-	presetVerifyPasses = 2   // исправляющих проходов не больше (всего пересборок ≤ 3)
-)
-
-// presetVerify — сверка версии пресета по итогу: разделение RoFormer, уровни целевых дорожек к треку (как
-// presetLevels, как замер эталонов); поправки записей {индекс specs: −ошибка, ±presetVerifyMaxDb}, если хоть одна
-// дальше presetVerifyTolDb. Сбой разделения/замера — без поправок (остаётся первый проход), в лог.
-func presetVerify(ctx context.Context, svc yue.Service, child int64, specs []yue.PresetSpec, before map[string]float64) map[int]float64 {
-	targets := presetVerifyTargets(specs, before)
-	if len(targets) == 0 {
-		return nil
-	}
-	if _, err := svc.MakeStemsWith(ctx, child, "roformer"); err != nil {
-		log.Printf("пресет: сверка #%d — разделение: %v", child, err)
-		return nil
-	}
-	got, _, err := presetLevels(ctx, svc, child, specs)
-	if err != nil {
-		log.Printf("пресет: сверка #%d — замер: %v", child, err)
-		return nil
-	}
-	// неполный замер (у основной или целевой дорожки нет rms_p95_db) — сумма неверна, промах был бы ложным
-	for _, n := range presetMainStems {
-		if _, ok := got[n]; !ok {
-			log.Printf("пресет: сверка #%d — нет замера дорожки %s", child, n)
-			return nil
-		}
-	}
-	for i := range targets {
-		if _, ok := got[specs[i].Stems[0]]; !ok {
-			log.Printf("пресет: сверка #%d — нет замера дорожки %s", child, specs[i].Stems[0])
-			return nil
-		}
-	}
-	corr := map[int]float64{}
-	miss := false
-	for i, t := range targets {
-		lv := got[specs[i].Stems[0]]
-		e := lv - t
-		corr[i] = max(-presetVerifyMaxDb, min(presetVerifyMaxDb, -e))
-		if math.Abs(e) > presetVerifyTolDb {
-			miss = true
-		}
-	}
-	if !miss {
-		return nil
-	}
-	log.Printf("пресет: сверка #%d — поправки %v", child, corr)
-	return corr
-}
-
-// presetVerifyTargets — цели сверки {индекс specs: дБ}: записи с level_db на одну дорожку, у которой есть замер
-func presetVerifyTargets(specs []yue.PresetSpec, before map[string]float64) map[int]float64 {
-	targets := map[int]float64{}
-	for i, s := range specs {
-		if s.LevelDb != nil && len(s.Stems) == 1 {
-			if _, ok := before[s.Stems[0]]; ok {
-				// цель сверки — с ручной громкостью записи (db «на этот раз»): правка человека не отменяется
-				targets[i] = *s.LevelDb + s.Db
-			}
-		}
-	}
-	return targets
-}
-
-// renderPreset — один проход пресета: пересборка дорожек (цели level_db + поправки сверки corr по индексу
-// записи), финал, мастер; ответ — файл варианта у трека. made (может быть nil) получает каждый созданный вариант —
-// пробной сборке черновика их надо убрать.
-func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.SoundPreset, parts []SectionSpec,
-	levels map[string]float64, total float64, corr map[int]float64, made func(string)) (string, error) {
-	if made == nil {
-		made = func(string) {}
-	}
+// renderPreset — один проход пресета: пересборка дорожек записями specs (presetSpecs, с поправками сверки),
+// финал, мастер; ответ — файл варианта у трека.
+func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.SoundPreset, specs []SectionSpec) (string, error) {
 	jobID := job.ID
 	file := job.AudioFile
-	if len(p.Specs)+len(parts) > 0 {
-		specs := presetSpecs(p, parts, levels, total, corr)
+	if len(specs) > 0 {
 		res, err := rebuildSections(ctx, svc, jobID, specs, fmt.Sprintf("dsp-preset-%d-mix.flac", p.ID))
 		if err != nil {
 			return "", fmt.Errorf("пересборка дорожек: %w", err)
 		}
 		file = res.Variant.File
-		made(file)
 	}
 	if steps := activeSteps(p.Final); len(steps) > 0 {
 		graph, _, err := dsp.StepsGraph(steps)
@@ -378,7 +230,6 @@ func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.Soun
 			return "", fmt.Errorf("финал: %w", err)
 		}
 		file = v.File
-		made(file)
 	}
 	if master := presetMaster(p); len(master) > 0 {
 		// мастер и громкость к цели — на воркере (истинный пик), на файле после финала: вариант
@@ -392,17 +243,16 @@ func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.Soun
 			return "", fmt.Errorf("мастер: %w", err)
 		}
 		file = v.File
-		made(file)
 	}
 	return file, nil
 }
 
-// presetSpecs — записи пересборки прохода пресета: правки с громкостью к целям level_db (без движка — Db по
-// замеру дорожки, с движком — level_target по обработанному куску) и поправками сверки corr, затем партии
-func presetSpecs(p yue.SoundPreset, parts []SectionSpec, levels map[string]float64, total float64,
-	corr map[int]float64) []SectionSpec {
+// presetSpecs — записи пересборки пресета: правки с громкостью к целям level_db (без движка — Db по замеру дорожки,
+// с движком — level_target по обработанному куску), затем партии. У записи с целью — VerifyDb: цель сверки баланса
+// итога (level_db + db записи «на этот раз»: правка человека не отменяется)
+func presetSpecs(p yue.SoundPreset, parts []SectionSpec, levels map[string]float64, total float64) []SectionSpec {
 	specs := make([]SectionSpec, 0, len(p.Specs)+len(parts))
-	for i, s := range p.Specs {
+	for _, s := range p.Specs {
 		sec := presetSection(s)
 		if s.LevelDb != nil && len(s.Stems) == 1 {
 			if lv, ok := levels[s.Stems[0]]; ok {
@@ -413,9 +263,10 @@ func presetSpecs(p yue.SoundPreset, parts []SectionSpec, levels map[string]float
 				} else {
 					sec.Db += max(-presetLevelMax, min(presetLevelMax, *s.LevelDb-lv))
 				}
+				v := *s.LevelDb + s.Db
+				sec.VerifyDb = &v
 			}
 		}
-		sec.Db += corr[i]
 		specs = append(specs, sec)
 	}
 	return append(specs, parts...)
@@ -762,6 +613,12 @@ func presetLevels(ctx context.Context, svc yue.Service, jobID int64, specs []yue
 	if !slices.ContainsFunc(specs, func(s yue.PresetSpec) bool { return s.LevelDb != nil }) {
 		return nil, 0, nil
 	}
+	return stemLevels(ctx, svc, jobID)
+}
+
+// stemLevels — громкость дорожек трека к треку и громкость трека (как presetLevels, без условия целей); нет
+// замера основных — nil
+func stemLevels(ctx context.Context, svc yue.Service, jobID int64) (map[string]float64, float64, error) {
 	list, err := svc.JobStems(ctx, jobID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("замер дорожек: %w", err)

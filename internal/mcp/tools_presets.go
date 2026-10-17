@@ -232,8 +232,8 @@ func registerPresetTools(s *Server) {
 	})
 	s.Register(Tool{
 		Name: "sound_preset_draft",
-		Description: "Пресет звука в черновик студии (синхронно, минуты): подготовка как у sound_preset_apply и сверка " +
-			"баланса на временных версиях (удаляются), трек не меняется, версии нет. Ответ {\"preset\": {sections, " +
+		Description: "Пресет звука в черновик студии (синхронно): подготовка как у sound_preset_apply, без сборок; у " +
+			"записей с целью — verify_db, сверка баланса — при «применить всё» в студии; трек не меняется, версии нет. Ответ {\"preset\": {sections, " +
 			"final?, master?, warnings?}}. Чтобы пресет звучал в студии и попал в «применить всё», положи запись " +
 			"первой в state.edits черновика (draft_get → draft_set; прежнюю запись с полем preset убери): " +
 			"{\"childId\": <отрицательное уникальное>, \"instId\": \"preset\", \"from\": 0, \"to\": 0, \"lead\": 0, " +

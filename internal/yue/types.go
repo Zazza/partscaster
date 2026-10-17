@@ -96,7 +96,7 @@ type Service interface {
 	// UpdateJob — подпись и папка трека (nil — поле не менять, folder "" —
 	// убрать из папки); ответ — трек после правки
 	UpdateJob(ctx context.Context, jobID int64, title, folder *string) (*Job, error)
-	// SetJobParent — родитель трека (промежуточные версии пресета — под итоговой)
+	// SetJobParent — родитель трека (перенос версии под другой трек, MCP job_update)
 	SetJobParent(ctx context.Context, jobID, parentID int64) error
 	// RetryJob — упавшая или отменённая джоба снова в очередь с теми же параметрами.
 	RetryJob(ctx context.Context, jobID int64) error

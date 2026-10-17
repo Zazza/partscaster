@@ -12,7 +12,7 @@ import (
 )
 
 // «Применить всё» (internal-studio-draft, условие 3, ТК3):
-// ApplyEdits(ctx, svc, parentID, specs, title) → id нового трека:
+// ApplyEdits(ctx, svc, parentID, specs, title, mixFile) → id нового трека (mixFile "" — собрать; записи без verify_db):
 //   RebuildSections (как сейчас, с записью rebuild_sections в журнал)
 //   → VariantToTrack(parentID, файл микса, title)
 //   → DraftDelete(parentID).
@@ -85,7 +85,7 @@ func TestApplyEditsRebuildThenTrackThenClearDraft(t *testing.T) {
 	f, _ := secSetup(t)
 	a := newApFake(f)
 	id, err := ApplyEdits(context.Background(), a, parentID,
-		[]SectionSpec{spec7([]string{"other"}, 0)}, "Песня · итог")
+		[]SectionSpec{spec7([]string{"other"}, 0)}, "Песня · итог", "")
 	if err != nil {
 		t.Fatalf("ApplyEdits: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestApplyEditsJournalsRebuild(t *testing.T) {
 	f, _ := secSetup(t)
 	a := newApFake(f)
 	if _, err := ApplyEdits(context.Background(), a, parentID,
-		[]SectionSpec{spec7([]string{"other"}, 0)}, "t"); err != nil {
+		[]SectionSpec{spec7([]string{"other"}, 0)}, "t", ""); err != nil {
 		t.Fatalf("ApplyEdits: %v", err)
 	}
 	n := 0
@@ -147,7 +147,7 @@ func TestApplyEditsRebuildErrorStops(t *testing.T) {
 	f.files[key(7, "audio.flac")] = childFiles(t, dir, 7, 8, exprClicks)["audio.flac"]
 	a := newApFake(f)
 	id, err := ApplyEdits(context.Background(), a, parentID,
-		[]SectionSpec{spec7([]string{"other"}, 0)}, "t")
+		[]SectionSpec{spec7([]string{"other"}, 0)}, "t", "")
 	if err == nil {
 		t.Fatal("ошибки нет, want ошибка пересборки")
 	}
@@ -166,7 +166,7 @@ func TestApplyEditsVariantErrorKeepsDraft(t *testing.T) {
 	a := newApFake(f)
 	a.vtErr = errors.New("воркер недоступен")
 	if _, err := ApplyEdits(context.Background(), a, parentID,
-		[]SectionSpec{spec7([]string{"other"}, 0)}, "t"); err == nil {
+		[]SectionSpec{spec7([]string{"other"}, 0)}, "t", ""); err == nil {
 		t.Fatal("ошибки нет, want ошибка VariantToTrack")
 	}
 	if len(a.delCalls) != 0 {
@@ -180,7 +180,7 @@ func TestApplyEditsEmptySpecs(t *testing.T) {
 	for _, specs := range [][]SectionSpec{nil, {}} {
 		f := newSecFake()
 		a := newApFake(f)
-		if _, err := ApplyEdits(context.Background(), a, parentID, specs, "t"); err == nil {
+		if _, err := ApplyEdits(context.Background(), a, parentID, specs, "t", ""); err == nil {
 			t.Errorf("specs=%v: ошибки нет, want ошибка", specs)
 		}
 		if len(a.steps) != 0 || len(f.fetched) != 0 || len(f.stemsCalls) != 0 {

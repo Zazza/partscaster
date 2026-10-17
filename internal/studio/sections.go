@@ -63,6 +63,9 @@ type SectionSpec struct {
 	// исходной дорожке промахивалась: перегруз поднял гитару на +3,6 дБ над целью
 	LevelTarget *float64 `json:"level_target,omitempty"`
 	LevelTotal  float64  `json:"level_total,omitempty"`
+	// VerifyDb — цель сверки баланса итога (пресет звука): уровень дорожки записи (одной) к треку, дБ; итог
+	// разделяется и меряется, промах — поправка Db записи и пересборка (buildVerified)
+	VerifyDb *float64 `json:"verify_db,omitempty"`
 	// Add у записи Engine — добавить обработанный кусок поверх трека, исходную дорожку не вычитать
 	// (синт-партия по аккордам); дорожка "mix" (весь трек как вход, без разделения) — только с Add
 	Add bool `json:"add,omitempty"`
@@ -159,19 +162,24 @@ func RebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 	if err != nil {
 		return nil, err
 	}
+	file := ""
+	if res.Variant != nil {
+		file = res.Variant.File
+	}
+	recordRebuild(ctx, svc, parentID, specs, file)
+	return res, nil
+}
+
+// recordRebuild — запись rebuild_sections в журнал правок (рецепт): записи пересборки и файл итога
+func recordRebuild(ctx context.Context, svc yue.Service, parentID int64, specs []SectionSpec, file string) {
 	var refs []int64
 	for _, s := range specs {
 		if s.ChildID != 0 {
 			refs = append(refs, s.ChildID)
 		}
 	}
-	file := ""
-	if res.Variant != nil {
-		file = res.Variant.File
-	}
 	yue.Record(ctx, svc, parentID, yue.JobOp{Op: "rebuild_sections", Params: yue.Params(map[string]any{"specs": specs}),
 		Result: file, Refs: refs})
-	return res, nil
 }
 
 // rebuildSections — пересборка; fname "" — overdub-inst-<последняя вклейка>.flac (микс студии), иначе

@@ -189,7 +189,7 @@ function previewSpecs(parentId, extra) {
     const own = draftSpecs(appliedFor(parentId))
     const all = [...(extra || []), ...own]
     if (!all.length) return { empty: true }
-    const r = await api.rebuildSections(parentId, all)
+    const r = await buildMix(parentId, all)
     if (r && r.variant) mixMetricsBy.value = { ...mixMetricsBy.value, [parentId]: r.variant.metrics || null }
     return r
   })
@@ -201,8 +201,23 @@ function previewWith(parentId, transform) {
   return queued(parentId, async () => {
     const list = transform(appliedFor(parentId).filter((it) => !it.off))
     if (!list.length) return { empty: true }
-    return api.rebuildSections(parentId, draftSpecs(list))
+    return buildMix(parentId, draftSpecs(list))
   })
+}
+// последняя удачная пересборка трека: записи (JSON) и файл микса. Все пересборки трека пишут один файл микса, поэтому
+// «применить всё» берёт его вместо первой сборки, только если записи итога те же, что у последней пересборки
+const lastBuilt = new Map()
+async function buildMix(parentId, specs) {
+  lastBuilt.delete(Number(parentId))
+  const r = await api.rebuildSections(parentId, specs)
+  const file = r && r.variant && r.variant.file
+  if (file) lastBuilt.set(Number(parentId), { key: JSON.stringify(specs), file })
+  return r
+}
+// файл сборки-прослушивания, собранной ровно этими записями, или ''
+function builtWith(parentId, specs) {
+  const b = lastBuilt.get(Number(parentId))
+  return b && b.key === JSON.stringify(specs) ? b.file : ''
 }
 function queued(parentId, fn) {
   building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
@@ -217,7 +232,7 @@ async function doRebuild(parentId) {
   // выключенные записи остаются в реестре, но в пересборку не идут; активных нет — звучит оригинал
   const list = appliedFor(parentId).filter((it) => !it.off)
   if (!list.length) return { empty: true }
-  const r = await api.rebuildSections(parentId, draftSpecs(list))
+  const r = await buildMix(parentId, draftSpecs(list))
   // отчёт Go: встала ли вклейка по бочке или по плану (UI предупреждает).
   // Пишем в АКТУАЛЬНЫЙ реестр, а не в снимок до await: пока шла пересборка,
   // tick мог добавить готовую вклейку — снимок её бы затёр
@@ -470,7 +485,7 @@ async function setMaster(parentId, { chain, label = '' }) {
   return rebuild(parentId)
 }
 
-// пресет готовится минутами (сверка баланса): пока идёт, «применить всё» недоступно — иначе готовый пресет
+// пресет готовится через очередь (дорожки, партии): пока идёт, «применить всё» недоступно — иначе готовый пресет
 // отклонился бы («идёт применить всё»), и подготовку пришлось бы запускать заново. run — подготовка (Promise ответа)
 const presetBusy = ref({})
 const isPresetPreparing = (parentId) => !!presetBusy.value[parentId]
@@ -649,14 +664,21 @@ function applyAllOwn(parentId, title, genCtx) {
   // не должны его ждать. Свои пересборки трека в это время не начнутся — правки отклоняются (applying),
   // а кнопка недоступна, пока пересборка трека идёт. Счётчик building — чтобы «▶ микс» ждал итога
   building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
+  let failed = false
   return (async () => {
     const specs = draftSpecs(appliedFor(parentId))
-    const id = await api.applyEdits(parentId, specs, title)
+    // итог пишет тот же файл микса (сборка, поправки сверки): после него прослушиванием этот файл уже не считается
+    const mix = builtWith(parentId, specs)
+    lastBuilt.delete(Number(parentId))
+    const id = await api.applyEdits(parentId, specs, title, mix)
     dropTrack(parentId)
     return id
-  })().finally(() => {
+  })().catch((e) => { failed = true; throw e }).finally(() => {
     applying.delete(Number(parentId))
     building.value = { ...building.value, [parentId]: building.value[parentId] - 1 }
+    // итог не вышел (ошибка, отмена): в файле микса могла остаться сборка с поправками — «▶ микс» должен играть
+    // черновик, прослушивание собирается заново; её сбой виден при следующем «▶ микс», здесь сообщать некуда
+    if (failed) rebuildOwn(parentId).catch((e) => console.warn('пересборка после неудачного итога:', e))
   })
 }
 // «сбросить черновик»: все правки и ожидающие рендеры трека — прочь, черновик на воркере удаляется
@@ -673,6 +695,7 @@ async function clearDraft(parentId) {
   if (!dirty.has(String(parentId))) await api.draftDelete(parentId)
 }
 function dropTrack(parentId) {
+  lastBuilt.delete(Number(parentId))
   const rest = { ...applied.value }
   delete rest[parentId]
   applied.value = rest

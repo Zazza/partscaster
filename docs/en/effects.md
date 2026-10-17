@@ -656,9 +656,9 @@ An edit with processing is brought to the target by measuring the already proces
 the loudness). After the master, the preset splits the finished version, checks the balance and, if it misses by more
 than 1 dB, rebuilds — at most two correcting passes: the master to LUFS loudness and the remains of old stems in other
 stems shift the balance.
-Builds before a correction are not deleted: they are labeled (in Russian) «промежуточная: сборка 1 — до сверки баланса»
-(before the balance check) / «промежуточная: сборка N — после поправки N−1» (after correction N−1) and fold under the
-final version "track · preset".
+Builds before a correction are deleted — one version "track · preset" remains. In the studio the check runs on
+"apply all": choosing a preset only prepares it, with no builds; if the draft has not changed since, the mix already
+built for listening serves as the first build of the result.
 
 ### Guitarist in genre presets
 

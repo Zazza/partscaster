@@ -515,10 +515,12 @@ At the top of the block are the one-click buttons and album loudness:
 
 **Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"Apply"**:
 the preset goes into "Track changes" as one line "Preset: <name>" (an earlier preset is replaced); no new version
-is made. Preparing it goes through the queue and takes a few minutes: no stems — the track is split (drum parts —
-with the RoFormer model), parts and sample kits are prepared, and the balance check builds the preset as a trial,
-measures the stem levels and corrects them (the trial builds are temporary versions, deleted after the check).
-From there it works like any other edit: "▶ mix" plays the track with the preset, "apply all" builds the result.
+is made. Preparing it goes through the queue, with no builds: no stems — the track is split (drum parts — with the
+RoFormer model), parts and sample kits are prepared, volumes are set from the stem measurements. From there it works
+like any other edit: "▶ mix" plays the track with the preset, "apply all" builds the result and checks the balance:
+splits the finished track into stems, measures the levels and, if one misses by more than 1 dB, corrects it and
+builds again (at most twice). One version remains, trial builds are deleted. If the draft has not changed since you
+listened, the mix already built serves as the first build.
 
 - Your own sound edit on a stem (an effect, pedals, a sound chain) or its stereo placement replaces the preset's
   edit on that stem; your master replaces the preset's master. Volumes, volume lines and whole-track effects

@@ -121,7 +121,8 @@ export const api = {
   drafts: () => YueDrafts(),
   draftPut: (jobId, state) => YueDraftPut(jobId, state),
   draftDelete: (jobId) => YueDraftDelete(jobId),
-  applyEdits: (parentId, specs, title) => YueApplyEdits(parentId, specs, title),
+  // mixFile — сборка-прослушивание теми же записями (первой сборки итога нет), '' — собрать
+  applyEdits: (parentId, specs, title, mixFile) => YueApplyEdits(parentId, specs, title, mixFile || ''),
   // линия громкости по волне: stem '' — весь трек (вариант), иначе только дорожка
   volumeEnvelope: (id, stem, points) => YueVolumeEnvelope(id, stem || '', points),
   dspVariantDelete: (id, file) => YueDspVariantDelete(id, file),

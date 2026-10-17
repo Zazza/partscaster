@@ -213,6 +213,13 @@ describe('draftSpecs: раскрытие пресета (ТК4, условие 1
     expect(out[0]).toMatchObject({ level_target: -18, level_total: -12 })
   })
 
+  it('verify_db sections (цель сверки при итоге) проходит как есть; у записи без цели поля нет', () => {
+    const target = sec(['bass'], { db: 4.9, verify_db: -10 })
+    const out = draftSpecs([presetRecord({ sections: [target, pVolume('other')] }, INFO, -1)])
+    expect(out[0]).toMatchObject({ stems: ['bass'], db: 4.9, verify_db: -10 })
+    expect('verify_db' in out[1]).toBe(false)
+  })
+
   it('draftSpecs не мутирует список и запись пресета', () => {
     const list = [rec(), stemFx('drums'), humanMaster()]
     const before = clone(list)
