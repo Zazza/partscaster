@@ -411,12 +411,14 @@ func TestRebuildSectionsEngineMixedWithInsertAndChain(t *testing.T) {
 	if a := toneAmp(out, 3000, 9.5, 10.5); a > 0.01 {
 		t.Errorf("движок: 3000 Гц (vocals) в 9–11 с %.4f, want ≈ 0", a)
 	}
-	if a := toneAmp(out, 1000, 9.0, 9.9); !near(a, engAmp, 0.02) {
-		t.Errorf("движок: обработанный кусок (1000 Гц) на 9.0–9.9 с %.4f, want ≈ %.2f", a, engAmp)
+	// сумма трека выше 0 дБFS — микс целиком тише до потолка (internal-mix-headroom): громкости — к общему гейну g,
+	// его даёт голос между записями (вне окон эффектов не тронут)
+	g := toneAmp(out, 3000, 4, 8) / ampTone
+	if g > 1.01 || g < 0.7 {
+		t.Errorf("3000 Гц на 4–8 с: гейн микса %.3f, want 0,7…1 (голос вне окон эффектов не тронут)", g)
 	}
-	// между записями голос на месте
-	if a := toneAmp(out, 3000, 4, 8); !near(a, ampTone, 0.02) {
-		t.Errorf("3000 Гц на 4–8 с %.4f, want ≈ %.2f (голос вне окон эффектов не тронут)", a, ampTone)
+	if a := toneAmp(out, 1000, 9.0, 9.9); !near(a, engAmp*g, 0.02) {
+		t.Errorf("движок: обработанный кусок (1000 Гц) на 9.0–9.9 с %.4f, want ≈ %.3f", a, engAmp*g)
 	}
 }
 

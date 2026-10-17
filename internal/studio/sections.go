@@ -108,6 +108,8 @@ const (
 	engineGridSec = 0.01
 	// tmpPattern — файлы конвейера живут в своём temp-каталоге, имя не важно
 	tmpPattern = "*.flac"
+	// mixCeilingDb — пик сэмплов собранного микса перед записью в FLAC, дБFS
+	mixCeilingDb = -0.1
 	// опора громкости для «молчащего» окна: уровень старой дорожки перед окном
 	// (длиной с окно + запас); окно тише него в 4 раза (−12 дБ) — молчит
 	ctxExtraSec       = 4.0
@@ -328,19 +330,27 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 	}
 	ins, inputs = placeStems(ins, tags, inputs, places, parent)
 
-	out := dir + "/out.flac"
+	// сумма и шаги на весь микс — во float WAV: FLAC режет всё выше 0 дБFS, а совпавшие удары частей барабанов
+	// с подъёмом в припеве её превышают (#1162: 17 583 срезанные вершины — «бочка в перегруз»)
+	out := dir + "/out.wav"
 	if err := dsp.RunInputs(inputs, out, dsp.InsertsGraph(ins)); err != nil {
 		return nil, err
 	}
 	// эффекты на весь микс — по порядку, каждый на выход предыдущего
 	for i, m := range mixFx {
-		next := fmt.Sprintf("%s/mix-%d.flac", dir, i)
+		next := fmt.Sprintf("%s/mix-%d.wav", dir, i)
 		if err := dsp.Run(out, next, mixGraph(m), nil); err != nil {
 			return nil, fmt.Errorf("эффект на весь трек: %w", err)
 		}
 		out = next
 	}
-	data, err := os.ReadFile(out)
+	// вариант — FLAC с пиком не выше потолка: громче — весь микс одной громкостью тише (мастер пресета потом
+	// доводит громкость до цели своим ограничителем)
+	flac := dir + "/out.flac"
+	if _, err := dsp.FitPeak(out, flac, mixCeilingDb); err != nil {
+		return nil, fmt.Errorf("запас громкости: %w", err)
+	}
+	data, err := os.ReadFile(flac)
 	if err != nil {
 		return nil, err
 	}

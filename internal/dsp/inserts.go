@@ -194,7 +194,8 @@ func RunInputs(inputs []string, outPath, graph string) error {
 	for _, p := range inputs {
 		args = append(args, "-i", p)
 	}
-	args = append(args, "-filter_complex", graph, "-map", "[out]", outPath)
+	args = append(args, "-filter_complex", graph, "-map", "[out]")
+	args = append(append(args, outCodec(outPath)...), outPath)
 	cmd := ffmpegCmd(args)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -937,7 +937,8 @@ func Run(inPath, outPath, filterGraph string, span *Span) error {
 		args = append(args, "-ss", fmt.Sprintf("%.1f", span.StartSec),
 			"-t", fmt.Sprintf("%.1f", span.DurSec))
 	}
-	args = append(args, "-i", inPath, "-filter_complex", filterGraph, "-map", "[out]", outPath)
+	args = append(args, "-i", inPath, "-filter_complex", filterGraph, "-map", "[out]")
+	args = append(append(args, outCodec(outPath)...), outPath)
 	cmd := ffmpegCmd(args)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
