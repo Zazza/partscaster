@@ -208,7 +208,7 @@ def run(src_dir: Path, audio_name: str, ref_dir: Path, out_dir: Path, ref_from: 
     ref = ref[int(ref_from * rsr): int((ref_from + ref_dur) * rsr)].mean(axis=1)
     if len(ref) < REF_MIN_SEC * rsr:
         raise ValueError("образец голоса короче 3 с — сдвинь начало окна")
-    with tempfile.TemporaryDirectory(prefix="yue-voice-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="partscaster-voice-") as tmp:
         t = Path(tmp)
         sf.write(str(t / "src.wav"), vocals.mean(axis=1), sr)
         sf.write(str(t / "ref.wav"), ref, rsr)

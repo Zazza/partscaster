@@ -46,7 +46,7 @@ type RecipeExport struct {
 	Warnings []string `json:"warnings"`
 }
 
-// YueExportRecipe — рецепт песни трека в файл *.yue-track.json (диалог сохранения).
+// YueExportRecipe — рецепт песни трека в файл *.partscaster.json (диалог сохранения).
 func (a *App) YueExportRecipe(jobID int64) (*RecipeExport, error) {
 	data, err := a.yue.Recipe(a.ctx, jobID)
 	if err != nil {
@@ -61,7 +61,7 @@ func (a *App) YueExportRecipe(jobID int64) (*RecipeExport, error) {
 	_ = json.Unmarshal(data, &head)
 	target, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultFilename: recipeFileName(head.Track.Title, jobID),
-		Filters:         []runtime.FileFilter{{DisplayName: "Рецепт трека", Pattern: "*.yue-track.json"}},
+		Filters:         []runtime.FileFilter{{DisplayName: "Рецепт трека", Pattern: "*" + recipeExt}},
 	})
 	if err != nil || target == "" {
 		return &RecipeExport{}, err
@@ -72,12 +72,15 @@ func (a *App) YueExportRecipe(jobID int64) (*RecipeExport, error) {
 	return &RecipeExport{Path: target, Warnings: head.Warnings}, nil
 }
 
+// recipeExt — расширение рецепта при экспорте
+const recipeExt = studio.RecipeExt
+
 func recipeFileName(title string, id int64) string {
 	name := safeFileName(title)
 	if name == "" {
 		name = fmt.Sprintf("track-%d", id)
 	}
-	return name + ".yue-track.json"
+	return name + recipeExt
 }
 
 // safeFileName — название трека как имя файла: без пробелов по краям, символы, недопустимые
@@ -95,7 +98,7 @@ func safeFileName(title string) string {
 func (a *App) YuePickRecipe() (string, error) {
 	src, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:   "Импорт рецепта трека",
-		Filters: []runtime.FileFilter{{DisplayName: "Рецепт трека", Pattern: "*.yue-track.json;*.json"}},
+		Filters: []runtime.FileFilter{{DisplayName: "Рецепт трека", Pattern: "*" + recipeExt + ";*" + studio.RecipeExtOld + ";*.json"}},
 	})
 	if err != nil || src == "" {
 		return "", err

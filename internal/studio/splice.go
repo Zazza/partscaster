@@ -54,7 +54,7 @@ func splice(ctx context.Context, svc yue.Service, baseID int64, parts []SplicePa
 	if crossfade <= 0 {
 		crossfade = spliceXfade
 	}
-	dir, err := os.MkdirTemp("", fmt.Sprintf("yue-splice-%d-*", baseID))
+	dir, err := os.MkdirTemp("", fmt.Sprintf("partscaster-splice-%d-*", baseID))
 	if err != nil {
 		return nil, err
 	}

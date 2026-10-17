@@ -39,7 +39,7 @@ func volumeEnvelope(ctx context.Context, svc yue.Service, jobID int64, stem stri
 		}
 		return res.Variant, nil
 	}
-	dir, err := os.MkdirTemp("", fmt.Sprintf("yue-envelope-%d-*", jobID))
+	dir, err := os.MkdirTemp("", fmt.Sprintf("partscaster-envelope-%d-*", jobID))
 	if err != nil {
 		return nil, err
 	}

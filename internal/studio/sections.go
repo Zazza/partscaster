@@ -187,7 +187,7 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 			all = append(all, s)
 		}
 	}
-	dir, err := os.MkdirTemp("", fmt.Sprintf("yue-sections-%d-*", parentID))
+	dir, err := os.MkdirTemp("", fmt.Sprintf("partscaster-sections-%d-*", parentID))
 	if err != nil {
 		return nil, err
 	}

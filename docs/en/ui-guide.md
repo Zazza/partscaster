@@ -169,16 +169,16 @@ the "notes →" button in the form and with the "notes (ABC)" item in the track 
 ## Track list
 
 The main page: all tracks in a table of compact rows. Derived items (stretches for inserts, rebuilds, variants)
-are hidden under their track. While there are no tracks — the "New track" and "import track" buttons.
+are hidden under their track. In the title row — **"Import"** (a menu: "Your own track (audio file)" and "Track recipe")
+and "New track".
 
 <!-- screenshot: track list with one expanded row — details, versions, buttons -->
 
 ### Filters
 
-The panel above the list sticks to the top: status ("in progress", "finished", "errors and canceled"), date
+The panel above the list sticks to the top: search "title · style · number" (first and wider), status ("in progress", "finished", "errors and canceled"), date
 ("today", "7 days", "30 days"), length ("sample <1 min", "1–3 min", "3–6 min", ">6 min"), drafts ("drafts only",
-"no drafts"), folder ("Album" (Альбом), "Basics" (Основы), "Experiments" (Эксперименты), your own, "no folder"),
-search "title · style · number", the **"import recipe"** and **"import track"** buttons. Under the panel — "showing N of M", the page
+"no drafts"), folder ("Album" (Альбом), "Basics" (Основы), "Experiments" (Эксперименты), your own, "no folder"). Under the panel — "showing N of M", the page
 number and "Collapse all" if several rows are expanded. A long list is paged with the ← → arrows at the bottom.
 
 ### Track row
@@ -235,7 +235,8 @@ A recipe is a small file with the rules of the song, without audio: with it, the
 installation.
 
 - **"Export recipe"** in the "⋯" menu of a finished track — save the file. The app lists what was not included.
-- **"import recipe"** above the list — the "Import track recipe" window: choose a file ("Another file…" — a
+- **"Import" → "Track recipe"** in the list's title row — the "Import track recipe" window: choose a file (`*.partscaster.json`;
+  older `*.yue-track.json` files open too) ("Another file…" — a
   different one), look at the title and the number of steps, "Import". The performance will be very close, but not
   identical; sound edits are repeated exactly. If the model on this worker is different, the window offers a mode:
   "by seed — like the original" or "by note plan" (the same notes, a new performance).
@@ -243,8 +244,8 @@ installation.
 
 ### Importing your own track
 
-A track made elsewhere (another generator, your own recording) can be worked on in the studio. The
-**"import track"** button is above the list next to "import recipe", and in an empty list — next to "New track".
+A track made elsewhere (another generator, your own recording) can be worked on in the studio. **"Import" → "Your own
+track (audio file)"** is in the list's title row, next to "New track".
 You can also import a track through MCP (the `import_track` tool).
 
 - Choose a file (flac, mp3, wav, ogg, m4a) — the track is uploaded to the worker, the app takes the score right

@@ -362,7 +362,8 @@ func TestArtifactsPicksBestFile(t *testing.T) {
 	if !ok {
 		t.Fatalf("artifacts failed: %s", out)
 	}
-	if !strings.Contains(out, "yue-9-audio.mp3") {
+	// ТК17: имя файла в каталоге загрузок — «partscaster-<id>-<файл>», без «yue»
+	if !strings.Contains(out, "partscaster-9-audio.mp3") || strings.Contains(out, "yue-9-audio.mp3") {
 		t.Fatalf("out: %s", out)
 	}
 }

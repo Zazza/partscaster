@@ -342,7 +342,7 @@ func (s *Server) download(id int64, file string) (string, error) {
 	if err := os.MkdirAll(s.downloadDir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("yue-%d-%s", id, file)
+	name := fmt.Sprintf("partscaster-%d-%s", id, file)
 	path := filepath.Join(s.downloadDir, name)
 	f, err := os.Create(path)
 	if err != nil {

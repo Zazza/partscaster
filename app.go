@@ -351,7 +351,7 @@ func (a *App) YueAudioURL(id int64, file string) string {
 }
 
 func (a *App) YueOpenExternal(id int64, file string) error {
-	tmp, err := a.fetchTempFile(id, file, fmt.Sprintf("yue-%d-*%s", id, filepath.Ext(file)))
+	tmp, err := a.fetchTempFile(id, file, fmt.Sprintf("partscaster-%d-*%s", id, filepath.Ext(file)))
 	if err != nil {
 		return err
 	}

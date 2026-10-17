@@ -221,7 +221,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 | Инструмент | Параметры | Что делает |
 |---|---|---|
-| `recipe_export` | job_id, path | Песня трека (от корня) → файл `*.yue-track.json` в каталог загрузок или `path`; `warnings` — что не вошло |
+| `recipe_export` | job_id, path | Песня трека (от корня) → файл `*.partscaster.json` в каталог загрузок или `path` (старое `*.yue-track.json` тоже принимается); `warnings` — что не вошло |
 | `recipe_import` | path, mode, confirm | Без `confirm` — превью (название, шаги, модель, предупреждения); `confirm=true` — начать. `mode`: `seed` (тот же сид, по умолчанию) или `plan` (по нотам — если модель воркера другой версии) |
 | `recipe_imports` | retry, dismiss | Ход импортов; `retry=<id>` — продолжить упавший с того же шага, `dismiss=<id>` — убрать из списка |
 

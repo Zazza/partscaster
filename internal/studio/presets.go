@@ -614,7 +614,7 @@ func RunGraph(ctx context.Context, svc yue.Service, jobID int64, src, graph, fna
 		}
 		src = job.AudioFile
 	}
-	dir, err := os.MkdirTemp("", fmt.Sprintf("yue-graph-%d-*", jobID))
+	dir, err := os.MkdirTemp("", fmt.Sprintf("partscaster-graph-%d-*", jobID))
 	if err != nil {
 		return nil, err
 	}

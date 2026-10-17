@@ -24,7 +24,7 @@ func registerRecipeTools(s *Server) {
 	s.Register(Tool{
 		Name: "recipe_export",
 		Description: "Рецепт трека: песня правилами, без аудио (стиль, текст, сид, план; продолжения, версии, " +
-			"эффекты, пресеты, склейки) — файл *.yue-track.json, чтобы на другой установке сделать новый, очень " +
+			"эффекты, пресеты, склейки) — файл *.partscaster.json, чтобы на другой установке сделать новый, очень " +
 			"похожий трек (recipe_import). Берётся вся песня трека (от корня). Правки, сделанные до журнала, " +
 			"не входят — warnings в ответе. Импортированное аудио и «голос альбома» рецептом не переносятся.",
 		InputSchema: props(map[string]any{
@@ -42,14 +42,14 @@ func registerRecipeTools(s *Server) {
 				return "", err
 			}
 			path := argString(args, "path")
-			if path != "" && !strings.HasSuffix(path, ".yue-track.json") {
-				return "", errors.New("path: файл рецепта — *.yue-track.json (чтобы не перезаписать чужой файл)")
+			if path != "" && !strings.HasSuffix(path, studio.RecipeExt) && !strings.HasSuffix(path, studio.RecipeExtOld) {
+				return "", errors.New("path: файл рецепта — *" + studio.RecipeExt + " (или старое *" + studio.RecipeExtOld + "), чтобы не перезаписать чужой файл")
 			}
 			if path == "" {
 				if err := os.MkdirAll(s.downloadDir, 0o755); err != nil {
 					return "", err
 				}
-				path = filepath.Join(s.downloadDir, fmt.Sprintf("track-%d.yue-track.json", id))
+				path = filepath.Join(s.downloadDir, fmt.Sprintf("track-%d%s", id, studio.RecipeExt))
 			}
 			if err := os.WriteFile(path, data, 0o644); err != nil {
 				return "", err
@@ -64,7 +64,7 @@ func registerRecipeTools(s *Server) {
 
 	s.Register(Tool{
 		Name: "recipe_import",
-		Description: "Импорт рецепта трека (*.yue-track.json): по его правилам создаётся НОВЫЙ трек — генерации заново " +
+		Description: "Импорт рецепта трека (*.partscaster.json или старый *.yue-track.json): по его правилам создаётся НОВЫЙ трек — генерации заново " +
 			"(очередь видеокарты) и те же правки по порядку. Исполнение очень близкое, но не идентичное; правки звука — " +
 			"точно. mode: seed (по умолчанию, тот же сид) | plan (по плану нот — если модель воркера другой версии: " +
 			"ноты те же, исполнение новое). Сначала без confirm — превью (название, шаги, модель, предупреждения), " +

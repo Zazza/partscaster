@@ -313,7 +313,7 @@ func RegisterStudioTools(s *Server) {
 			if err := os.MkdirAll(s.downloadDir, 0o755); err != nil {
 				return "", err
 			}
-			path := filepath.Join(s.downloadDir, fmt.Sprintf("yue-%d-%s.spectrum.png", id, label))
+			path := filepath.Join(s.downloadDir, fmt.Sprintf("partscaster-%d-%s.spectrum.png", id, label))
 			if err := os.WriteFile(path, b, 0o644); err != nil {
 				return "", err
 			}

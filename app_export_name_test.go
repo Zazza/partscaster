@@ -33,15 +33,16 @@ func TestExportFileName(t *testing.T) {
 	}
 }
 
-// ТК14: имя рецепта после выноса общей замены символов не меняется.
-func TestRecipeFileNameKeepsBehaviour(t *testing.T) {
+// ТК14': имя рецепта — «<название>.partscaster.json», без названия — «track-<номер>.partscaster.json»,
+// недопустимые символы — «_».
+func TestRecipeFileNamePartscasterSuffix(t *testing.T) {
 	cases := []struct {
 		title string
 		id    int64
 		want  string
 	}{
-		{"A/B", 1, "A_B.yue-track.json"},
-		{"", 2, "track-2.yue-track.json"},
+		{"A/B", 1, "A_B.partscaster.json"},
+		{"", 2, "track-2.partscaster.json"},
 	}
 	for _, c := range cases {
 		if got := recipeFileName(c.title, c.id); got != c.want {

@@ -223,7 +223,7 @@ Moving a song to another installation without audio.
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `recipe_export` | job_id, path | The track's song (from the root) → file `*.yue-track.json` to the downloads directory or `path`; `warnings` — what was not included |
+| `recipe_export` | job_id, path | The track's song (from the root) → file `*.partscaster.json` to the downloads directory or `path` (the older `*.yue-track.json` is also accepted); `warnings` — what was not included |
 | `recipe_import` | path, mode, confirm | Without `confirm` — a preview (title, steps, model, warnings); `confirm=true` — start. `mode`: `seed` (the same seed, default) or `plan` (by notes — if the worker model is a different version) |
 | `recipe_imports` | retry, dismiss | Progress of imports; `retry=<id>` — continue a failed one from the same step, `dismiss=<id>` — remove from the list |
 

@@ -66,7 +66,7 @@ func (p *player) Load(id int64, wavBytes []byte, dur time.Duration) error {
 	if len(wavBytes) >= 4 && string(wavBytes[:4]) == "fLaC" {
 		ext = ".flac"
 	}
-	f, err := os.CreateTemp("", fmt.Sprintf("yue-%d-*%s", id, ext))
+	f, err := os.CreateTemp("", fmt.Sprintf("partscaster-%d-*%s", id, ext))
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (p *player) Seek(target time.Duration) error {
 		p.mu.Unlock()
 		return nil
 	}
-	out, err := os.CreateTemp("", fmt.Sprintf("yue-seek-%d-*.flac", curID))
+	out, err := os.CreateTemp("", fmt.Sprintf("partscaster-seek-%d-*.flac", curID))
 	if err != nil {
 		return err
 	}
