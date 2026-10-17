@@ -2,13 +2,15 @@
 // и ожидающие рендеры кусков. Главный экземпляр — на воркере (/jobs/{id}/draft), localStorage —
 // копия на ПК. Чистая логика без DOM: шаг записи, группировка по шагам, слияние копий, состояние.
 
+import { clampDb } from './insertMix.js'
+
 // шаги студии, к которым относится правка, — в порядке страницы
 export const EDIT_STEPS = ['edit', 'sound', 'voice', 'done']
 
 // Шаг записи: явный step (эффект из «Обработки голоса» — voice) или по виду записи
 export function editStep(it) {
   if (it && EDIT_STEPS.includes(it.step)) return it.step
-  if (it.master) return 'done'
+  if (it.master || it.preset) return 'done'   // мастер и пресет звука — шаг «Готово»
   if (it.mix) return 'sound'          // эффект на весь трек — шаг «Звук» (у «одного клика» явный step 'done')
   if (it.childId > 0) return 'edit'   // вклейка рендера («+ инструмент»)
   // «громкость дорожек» (заглушить, тише/громче) — приём шага «Править»
@@ -24,6 +26,33 @@ export function editsBySteps(list) {
 }
 
 const copy = (x) => JSON.parse(JSON.stringify(x))
+
+// запись реестра правок → спецификация пересборки
+export function specOf(it) {
+  return {
+    child_id: it.childId > 0 ? it.childId : 0, from: it.from, to: it.to,
+    // у «громкости дорожек» (childId ≤ 0) db без зажима: −100 — заглушить
+    lead: it.lead || 0, beat_sec: it.beat || 0, db: it.childId > 0 ? clampDb(it.db) : it.db,
+    stems: it.stems || [], fade_in: it.fadeIn || 0, fade_out: it.fadeOut || 0,
+    keep_high_hz: it.keepHighHz || 0,
+    // эффект на дорожку: цепочка и её крутилки
+    ...(it.chain ? { chain: it.chain, params: it.params || {} } : {}),
+    // доска педалей на дорожку: цепочка эффектов по порядку
+    ...(it.steps ? { steps: it.steps } : {}),
+    // линия громкости дорожки (по волне): точки {t, db} по всему треку
+    ...(it.envelope ? { envelope: it.envelope } : {}),
+    // цепочка звукового движка воркера: JSON-блоки как у fx_apply
+    ...(it.engine ? { engine: it.engine } : {}),
+    // добавление поверх трека (синт): исходная дорожка не вычитается
+    ...(it.add ? { add: true } : {}),
+    // место в стерео: у партии-добавления — её место, своей записью — место дорожки
+    ...(it.place ? { place: it.place } : {}),
+    // мастер: цепочка движка на весь собранный микс на воркере
+    ...(it.master ? { master: true } : {}),
+    // эффект на весь собранный микс (до мастера): цепочка, педали или линия громкости
+    ...(it.mix ? { mix: true } : {}),
+  }
+}
 
 // gen — изменения, которым нужен рендер: {specs: [приёмы плана], voice: {params, name} | null, instrumental}
 export const isEmptyGen = (g) => !g || (!(g.specs || []).length && !g.voice && !g.instrumental && !g.timbre)

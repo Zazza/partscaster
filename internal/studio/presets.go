@@ -73,7 +73,28 @@ func ApplySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	return res, nil
 }
 
-func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
+// presetPrep — пресет, подготовленный к сборке на треке: записи (без гитариста, если у трека нет плана; с линиями
+// барабанщика), партии, замер громкостей дорожек
+type presetPrep struct {
+	job      *yue.Job
+	p        yue.SoundPreset
+	parts    []SectionSpec
+	levels   map[string]float64
+	total    float64
+	warnings []string
+}
+
+// title — название трека для версий пресета (пустое — «#id»)
+func (pr *presetPrep) title() string {
+	if t := strings.TrimSpace(pr.job.Title); t != "" {
+		return t
+	}
+	return fmt.Sprintf("#%d", pr.job.ID)
+}
+
+// preparePreset — подготовка пресета к сборке: дорожки (нет — разделение), план для гитариста, партии, слой
+// «живой звук», наборы сэмплов, замер громкостей. Общая для ApplySoundPreset и PresetDraft.
+func preparePreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*presetPrep, error) {
 	ReportStep(ctx, "prepare", 1, nil) // дорожки, проверка плана
 	job, err := findJob(ctx, svc, jobID)
 	if err != nil {
@@ -124,13 +145,20 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 	if err != nil {
 		return nil, err
 	}
-	title := strings.TrimSpace(job.Title)
-	if title == "" {
-		title = fmt.Sprintf("#%d", jobID)
+	return &presetPrep{job: job, p: p, parts: parts, levels: levels, total: total, warnings: warnings}, nil
+}
+
+func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*PresetResult, error) {
+	pr, err := preparePreset(ctx, svc, jobID, p)
+	if err != nil {
+		return nil, err
 	}
+	job, parts, levels, total, warnings := pr.job, pr.parts, pr.levels, pr.total, pr.warnings
+	p = pr.p
+	title := pr.title()
 	passStart := time.Now()
 	ReportStep(ctx, "render", 1, nil)
-	file, err := renderPreset(ctx, svc, job, p, parts, levels, total, nil)
+	file, err := renderPreset(ctx, svc, job, p, parts, levels, total, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +198,7 @@ func applySoundPreset(ctx context.Context, svc yue.Service, jobID int64, p yue.S
 		}
 		passStart = time.Now()
 		ReportStep(ctx, "fix", n+1, eta())
-		next, err := renderPreset(ctx, svc, job, p, parts, levels, total, total2)
+		next, err := renderPreset(ctx, svc, job, p, parts, levels, total, total2, nil)
 		if err != nil {
 			log.Printf("пресет «%s»: исправляющий проход: %v — остаётся прежний", p.Name, err)
 			break
@@ -264,15 +292,7 @@ const (
 // presetLevels, как замер эталонов); поправки записей {индекс specs: −ошибка, ±presetVerifyMaxDb}, если хоть одна
 // дальше presetVerifyTolDb. Сбой разделения/замера — без поправок (остаётся первый проход), в лог.
 func presetVerify(ctx context.Context, svc yue.Service, child int64, specs []yue.PresetSpec, before map[string]float64) map[int]float64 {
-	targets := map[int]float64{}
-	for i, s := range specs {
-		if s.LevelDb != nil && len(s.Stems) == 1 {
-			if _, ok := before[s.Stems[0]]; ok {
-				// цель сверки — с ручной громкостью записи (db «на этот раз»): правка человека не отменяется
-				targets[i] = *s.LevelDb + s.Db
-			}
-		}
-	}
+	targets := presetVerifyTargets(specs, before)
 	if len(targets) == 0 {
 		return nil
 	}
@@ -315,36 +335,38 @@ func presetVerify(ctx context.Context, svc yue.Service, child int64, specs []yue
 	return corr
 }
 
+// presetVerifyTargets — цели сверки {индекс specs: дБ}: записи с level_db на одну дорожку, у которой есть замер
+func presetVerifyTargets(specs []yue.PresetSpec, before map[string]float64) map[int]float64 {
+	targets := map[int]float64{}
+	for i, s := range specs {
+		if s.LevelDb != nil && len(s.Stems) == 1 {
+			if _, ok := before[s.Stems[0]]; ok {
+				// цель сверки — с ручной громкостью записи (db «на этот раз»): правка человека не отменяется
+				targets[i] = *s.LevelDb + s.Db
+			}
+		}
+	}
+	return targets
+}
+
 // renderPreset — один проход пресета: пересборка дорожек (цели level_db + поправки сверки corr по индексу
-// записи), финал, мастер; ответ — файл варианта у трека.
+// записи), финал, мастер; ответ — файл варианта у трека. made (может быть nil) получает каждый созданный вариант —
+// пробной сборке черновика их надо убрать.
 func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.SoundPreset, parts []SectionSpec,
-	levels map[string]float64, total float64, corr map[int]float64) (string, error) {
+	levels map[string]float64, total float64, corr map[int]float64, made func(string)) (string, error) {
+	if made == nil {
+		made = func(string) {}
+	}
 	jobID := job.ID
 	file := job.AudioFile
 	if len(p.Specs)+len(parts) > 0 {
-		specs := make([]SectionSpec, 0, len(p.Specs)+len(parts))
-		for i, s := range p.Specs {
-			sec := presetSection(s)
-			if s.LevelDb != nil && len(s.Stems) == 1 {
-				if lv, ok := levels[s.Stems[0]]; ok {
-					if len(s.Engine) > 0 {
-						// с обработкой — по обработанному куску (замер при пересборке): цепочка меняет громкость
-						target := *s.LevelDb
-						sec.LevelTarget, sec.LevelTotal = &target, total
-					} else {
-						sec.Db += max(-presetLevelMax, min(presetLevelMax, *s.LevelDb-lv))
-					}
-				}
-			}
-			sec.Db += corr[i]
-			specs = append(specs, sec)
-		}
-		specs = append(specs, parts...)
+		specs := presetSpecs(p, parts, levels, total, corr)
 		res, err := rebuildSections(ctx, svc, jobID, specs, fmt.Sprintf("dsp-preset-%d-mix.flac", p.ID))
 		if err != nil {
 			return "", fmt.Errorf("пересборка дорожек: %w", err)
 		}
 		file = res.Variant.File
+		made(file)
 	}
 	if steps := activeSteps(p.Final); len(steps) > 0 {
 		graph, _, err := dsp.StepsGraph(steps)
@@ -356,6 +378,7 @@ func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.Soun
 			return "", fmt.Errorf("финал: %w", err)
 		}
 		file = v.File
+		made(file)
 	}
 	if master := presetMaster(p); len(master) > 0 {
 		// мастер и громкость к цели — на воркере (истинный пик), на файле после финала: вариант
@@ -369,8 +392,33 @@ func renderPreset(ctx context.Context, svc yue.Service, job *yue.Job, p yue.Soun
 			return "", fmt.Errorf("мастер: %w", err)
 		}
 		file = v.File
+		made(file)
 	}
 	return file, nil
+}
+
+// presetSpecs — записи пересборки прохода пресета: правки с громкостью к целям level_db (без движка — Db по
+// замеру дорожки, с движком — level_target по обработанному куску) и поправками сверки corr, затем партии
+func presetSpecs(p yue.SoundPreset, parts []SectionSpec, levels map[string]float64, total float64,
+	corr map[int]float64) []SectionSpec {
+	specs := make([]SectionSpec, 0, len(p.Specs)+len(parts))
+	for i, s := range p.Specs {
+		sec := presetSection(s)
+		if s.LevelDb != nil && len(s.Stems) == 1 {
+			if lv, ok := levels[s.Stems[0]]; ok {
+				if len(s.Engine) > 0 {
+					// с обработкой — по обработанному куску (замер при пересборке): цепочка меняет громкость
+					target := *s.LevelDb
+					sec.LevelTarget, sec.LevelTotal = &target, total
+				} else {
+					sec.Db += max(-presetLevelMax, min(presetLevelMax, *s.LevelDb-lv))
+				}
+			}
+		}
+		sec.Db += corr[i]
+		specs = append(specs, sec)
+	}
+	return append(specs, parts...)
 }
 
 func findJob(ctx context.Context, svc yue.Service, id int64) (*yue.Job, error) {

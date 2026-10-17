@@ -61,8 +61,8 @@ type SectionSpec struct {
 	// LevelTarget (пресет звука, level_db у записи с Engine) — громкость ОБРАБОТАННОГО куска к треку, дБ: подстройка
 	// по замеру куска (dsp.LoudLevelDb) минус LevelTotal — громкость трека, ±presetLevelMax, сверх Db. Цель по
 	// исходной дорожке промахивалась: перегруз поднял гитару на +3,6 дБ над целью
-	LevelTarget *float64 `json:"-"`
-	LevelTotal  float64  `json:"-"`
+	LevelTarget *float64 `json:"level_target,omitempty"`
+	LevelTotal  float64  `json:"level_total,omitempty"`
 	// Add у записи Engine — добавить обработанный кусок поверх трека, исходную дорожку не вычитать
 	// (синт-партия по аккордам); дорожка "mix" (весь трек как вход, без разделения) — только с Add
 	Add bool `json:"add,omitempty"`

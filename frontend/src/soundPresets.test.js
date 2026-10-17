@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { presetFromEdits, presetLine, togglePreset, withLevels } from './soundPresets.js'
+import { presetRecord } from './presetDraft.js'
 
 // записи реестра правок в форме useInserts (у правок без рендера childId < 0)
 const base = (childId, stems, over = {}) => ({
@@ -95,6 +96,34 @@ describe('presetFromEdits — правки студии → пресет', () =>
     delete rec.db
     const { specs } = presetFromEdits([rec])
     expect(specs[0].db).toBe(0)
+  })
+
+  // internal-studio-preset-draft, условие 22 (ТК15): запись-пресет черновика в specs не попадает, считается в skipped
+  const PRESET_RESULT = {
+    sections: [
+      { child_id: 0, from: 0, to: 0, lead: 0, beat_sec: 0, db: -2, stems: ['bass'], fade_in: 0, fade_out: 0,
+        keep_high_hz: 0, engine: ENGINE },
+      { child_id: 0, from: 0, to: 0, lead: 0, beat_sec: 0, db: 0, stems: ['vocals'], fade_in: 0, fade_out: 0,
+        keep_high_hz: 0, chain: 'soften', params: { strength: 0.5 } },
+    ],
+    final: [{ chain: 'width', params: { width: 1.1 } }],
+    master: [{ type: 'limiter', target_lufs: -13 }],
+  }
+  const presetRec = () => presetRecord(PRESET_RESULT, { id: 71, name: 'Пост-панк' }, -20)
+
+  it('запись-пресет черновика не входит в specs и считается пропущенной', () => {
+    const { specs, skipped } = presetFromEdits([presetRec()])
+    expect(specs).toEqual([])
+    expect(skipped).toBe(1)
+  })
+
+  it('запись-пресет рядом с правками: входят только правки, пресет — в пропущенных', () => {
+    const { specs, skipped } = presetFromEdits([presetRec(), engineRec(), fxRec()])
+    expect(specs).toEqual([
+      { stems: ['bass'], engine: ENGINE, db: -3 },
+      { stems: ['vocals'], chain: 'soften', params: { strength: 0.6 }, db: 0 },
+    ])
+    expect(skipped).toBe(1)
   })
 
   it('не меняет записи реестра', () => {

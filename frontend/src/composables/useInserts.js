@@ -10,6 +10,7 @@ import { renderJob } from '../requests.js'
 import { clampDb, INSERT_DEFAULT_DB } from '../insertMix.js'
 import { withStemPlace, withMaster } from '../mixDesk.js'
 import { draftState, isEmptyDraft, isEmptyGen, genNeedsRender, genTimbre, mergeDrafts } from '../draftEdits.js'
+import { draftSpecs, presetRecord, withPreset } from '../presetDraft.js'
 
 const { t } = useI18n()
 const KEY = 'yue_insert_queue'
@@ -185,7 +186,7 @@ function rebuildOwn(parentId) {
 function previewSpecs(parentId, extra) {
   try { notApplying(parentId) } catch (e) { return Promise.reject(e) }
   return queued(parentId, async () => {
-    const own = appliedFor(parentId).filter((it) => !it.off).map(specOf)
+    const own = draftSpecs(appliedFor(parentId))
     const all = [...(extra || []), ...own]
     if (!all.length) return { empty: true }
     const r = await api.rebuildSections(parentId, all)
@@ -200,7 +201,7 @@ function previewWith(parentId, transform) {
   return queued(parentId, async () => {
     const list = transform(appliedFor(parentId).filter((it) => !it.off))
     if (!list.length) return { empty: true }
-    return api.rebuildSections(parentId, list.map(specOf))
+    return api.rebuildSections(parentId, draftSpecs(list))
   })
 }
 function queued(parentId, fn) {
@@ -212,37 +213,11 @@ function queued(parentId, fn) {
   return run
 }
 const isBuilding = (parentId) => (building.value[parentId] || 0) > 0
-// запись реестра правок → спецификация пересборки
-function specOf(it) {
-  return {
-    child_id: it.childId > 0 ? it.childId : 0, from: it.from, to: it.to,
-    // у «громкости дорожек» (childId ≤ 0) db без зажима: −100 — заглушить
-    lead: it.lead || 0, beat_sec: it.beat || 0, db: it.childId > 0 ? clampDb(it.db) : it.db,
-    stems: it.stems || [], fade_in: it.fadeIn || 0, fade_out: it.fadeOut || 0,
-    keep_high_hz: it.keepHighHz || 0,
-    // эффект на дорожку: цепочка и её крутилки
-    ...(it.chain ? { chain: it.chain, params: it.params || {} } : {}),
-    // доска педалей на дорожку: цепочка эффектов по порядку
-    ...(it.steps ? { steps: it.steps } : {}),
-    // линия громкости дорожки (по волне): точки {t, db} по всему треку
-    ...(it.envelope ? { envelope: it.envelope } : {}),
-    // цепочка звукового движка воркера: JSON-блоки как у fx_apply
-    ...(it.engine ? { engine: it.engine } : {}),
-    // добавление поверх трека (синт): исходная дорожка не вычитается
-    ...(it.add ? { add: true } : {}),
-    // место в стерео: у партии-добавления — её место, своей записью — место дорожки
-    ...(it.place ? { place: it.place } : {}),
-    // мастер: цепочка движка на весь собранный микс на воркере
-    ...(it.master ? { master: true } : {}),
-    // эффект на весь собранный микс (до мастера): цепочка, педали или линия громкости
-    ...(it.mix ? { mix: true } : {}),
-  }
-}
 async function doRebuild(parentId) {
   // выключенные записи остаются в реестре, но в пересборку не идут; активных нет — звучит оригинал
   const list = appliedFor(parentId).filter((it) => !it.off)
   if (!list.length) return { empty: true }
-  const r = await api.rebuildSections(parentId, list.map(specOf))
+  const r = await api.rebuildSections(parentId, draftSpecs(list))
   // отчёт Go: встала ли вклейка по бочке или по плану (UI предупреждает).
   // Пишем в АКТУАЛЬНЫЙ реестр, а не в снимок до await: пока шла пересборка,
   // tick мог добавить готовую вклейку — снимок её бы затёр
@@ -495,6 +470,34 @@ async function setMaster(parentId, { chain, label = '' }) {
   return rebuild(parentId)
 }
 
+// пресет готовится минутами (сверка баланса): пока идёт, «применить всё» недоступно — иначе готовый пресет
+// отклонился бы («идёт применить всё»), и подготовку пришлось бы запускать заново. run — подготовка (Promise ответа)
+const presetBusy = ref({})
+const isPresetPreparing = (parentId) => !!presetBusy.value[parentId]
+async function preparePreset(parentId, run, info) {
+  notApplying(parentId)
+  if (isPresetPreparing(parentId)) throw new Error(t('inserts.presetPreparing'))
+  presetBusy.value = { ...presetBusy.value, [parentId]: true }
+  try {
+    const r = await run()
+    await putPreset(parentId, r, info)
+    return r
+  } finally {
+    const rest = { ...presetBusy.value }
+    delete rest[parentId]
+    presetBusy.value = rest
+  }
+}
+// пресет звука в черновик (ответ PresetDraft): одна запись «Пресет», прежний пресет заменяется; правки человека
+// на тех же дорожках перекрывают его при раскрытии (presetDraft.draftSpecs)
+async function putPreset(parentId, result, info) {
+  notApplying(parentId)
+  const rec = presetRecord(result, info, -(Date.now() * 100 + (muteSeq++ % 100)))
+  applied.value = { ...applied.value, [parentId]: withPreset(appliedFor(parentId), rec) }
+  save()
+  return rebuild(parentId)
+}
+
 async function setDb(parentId, childId, db) {
   notApplying(parentId)
   const it = appliedFor(parentId).find((x) => x.childId === childId)
@@ -610,6 +613,7 @@ async function finalize(newId, title) {
 // после успеха реестр и ожидающие рендеры трека очищаются. Ошибка — реестр не тронут
 function applyAll(parentId, title, genCtx) {
   notApplying(parentId)
+  if (isPresetPreparing(parentId)) throw new Error(t('inserts.presetPreparing'))
   return applyAllOwn(parentId, title, genCtx)
 }
 // без проверки хода — для шага итога самого хода (finalize): отметка {finalize} стоит, пока он не закончится
@@ -646,7 +650,7 @@ function applyAllOwn(parentId, title, genCtx) {
   // а кнопка недоступна, пока пересборка трека идёт. Счётчик building — чтобы «▶ микс» ждал итога
   building.value = { ...building.value, [parentId]: (building.value[parentId] || 0) + 1 }
   return (async () => {
-    const specs = appliedFor(parentId).filter((it) => !it.off).map(specOf)
+    const specs = draftSpecs(appliedFor(parentId))
     const id = await api.applyEdits(parentId, specs, title)
     dropTrack(parentId)
     return id
@@ -764,5 +768,5 @@ setInterval(tick, 3000)
 setInterval(advanceApplying, 3000)
 
 export function useInserts() {
-  return { pending, applied, applyAll, clearDraft, genFor, setGen, applyingFor, register, byParent, appliedFor, rebuild, previewSpecs, previewWith, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
+  return { pending, applied, applyAll, clearDraft, genFor, setGen, applyingFor, register, byParent, appliedFor, rebuild, previewSpecs, previewWith, setDb, setOff, remove, replaceEngine, selectAlt, addMute, addMutes, addStemFx, addStemPedals, addMixFx, addMixPedals, setMixEnvelope, addStemEngine, addStemEngines, addStemEnvelope, setStemPlace, setPlace, setMaster, preparePreset, isPresetPreparing, mixMetrics, setMixMetrics, carryTo, flush, latestFile, mixFile, isBuilding }
 }

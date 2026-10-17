@@ -46,6 +46,8 @@ export function mixLabel(file, { applied = [], jobs = [], labelOf, fmt }) {
 // строка реестра вклеек: у эффекта на дорожку — «эффект · дорожка», у вклейки/
 // заглушки — название приёма
 export function insertTitle(it, { chainName, stemName, instName, placeName }) {
+  // пресет звука — одной строкой: название и пометки (гитарист пропущен…)
+  if (it.preset) return [t('insert.preset', { name: it.preset.name }), ...(it.preset.warnings || [])].join(' · ')
   // мастер — на весь микс; место дорожки — «место 30 % вправо · гитары»
   if (it.master && it.engine) return it.label || t('insert.master', { name: it.engine.map((b) => b.type).join(' → ') })
   if (isPlaceRecord(it)) return `${placeName ? placeName(it.place) : t('mix.place') + ' ' + placeLabel(it.place)} · ${stemName(it.stems[0])}`

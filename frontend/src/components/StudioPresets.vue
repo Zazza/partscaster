@@ -1,6 +1,6 @@
 <script setup>
-// Студия, шаг «Готово»: пресеты звука. «Применить к треку» — пресет на этот трек сейчас (новая
-// версия «<трек> · <пресет>»); «сохранить правки как пресет» — правки «весь трек» из «Правок трека»
+// Студия, шаг «Готово»: пресеты звука. «Применить» — пресет в «Изменения трека» одной записью (собирает
+// «применить всё» вместе с остальными правками); «сохранить правки как пресет» — правки «весь трек» из «Правок трека»
 // (движок, эффекты, педали на дорожки) + финал другого пресета → свой пресет для любых треков.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
@@ -39,6 +39,8 @@ const fromEdits = computed(() => presetFromEdits(inserts.appliedFor(props.job.id
 const finalSteps = computed(() => (presets.value.find((p) => p.id === finalFrom.value) || {}).final || [])
 const current = computed(() => presets.value.find((p) => p.id === presetId.value) || null)
 const changed = computed(() => Object.keys(levels.value).length > 0)
+// идёт «применить всё» — черновик правок не принимает
+const locked = computed(() => { const a = inserts.applyingFor(props.job.id); return !!(a && !a.error) })
 const stemName = (s) => t('studio.dsp.target.' + s)
 // подпись записи пресета: дорожки и что с ними (для ползунка громкости)
 const specLabel = (sp) => (sp.stems || []).map(stemName).join(', ') +
@@ -98,20 +100,23 @@ async function preview() {
   } finally { busy.value = '' }
 }
 
-// применение — через очередь обработки: интерфейс не блокируется, можно
-// поставить несколько пресетов подряд и сравнить готовые версии
+// «Применить»: пресет — в черновик одной записью «Пресет» (подготовка и сверка баланса — операция очереди,
+// минуты), прежний пресет заменяется; трек собирает «применить всё». Новой версии нет
 async function apply() {
   const jobId = props.job.id
-  const p = presets.value.find((x) => x.id === presetId.value)
-  if (!p) return
+  const p = current.value
+  if (!p || busy.value || locked.value) return
+  busy.value = 'apply'
   err.value = ''
+  msg.value = t('preset.draft.preparing', { name: p.name })
   try {
-    // громкость поправлена — применяется копия пресета, сам пресет не меняется
-    if (changed.value) await api.applySoundPresetWith(jobId, withLevels(p, levels.value))
-    else await api.applySoundPreset(jobId, p.id)
-    msg.value = t('preset.queued', { name: p.name })
+    // громкость поправлена — копия пресета, сам пресет не меняется
+    const body = changed.value ? withLevels(p, levels.value) : p
+    const r = await inserts.preparePreset(jobId, () => api.soundPresetDraft(jobId, body), { id: p.id, name: p.name })
+    msg.value = t('preset.draft.done', { name: p.name }) +
+      ((r && r.warnings) || []).map((w) => ' ' + t('preset.draft.warn', { text: w })).join('')
     emit('applied')
-  } catch (e) { msg.value = ''; err.value = String(e) }
+  } catch (e) { msg.value = ''; err.value = String(e) } finally { busy.value = '' }
 }
 
 // «сохранить как мой»: копия выбранного пресета с поправленной громкостью — новый свой пресет
@@ -153,7 +158,7 @@ async function save() {
 <template>
   <div class="dsp-row">
     <VSelect v-model="presetId" :options="options" :disabled="!!busy" searchable style="max-width: 320px" />
-    <button class="primary small" :disabled="!!busy || presetId == null" :title="t('preset.apply.tip')" @click="apply">
+    <button class="primary small" :disabled="!!busy || presetId == null || locked" :title="t('preset.apply.tip')" @click="apply">
       {{ busy === 'apply' ? t('instr.busy') : t('preset.apply') }}</button>
     <button class="ghost small" :disabled="!!busy || presetId == null || !previewable"
             :title="previewable ? t('preset.preview.tip') : t('preset.preview.empty')" @click="preview">

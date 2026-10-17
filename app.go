@@ -93,21 +93,10 @@ func (a *App) YueSoundPresetDelete(id int64) error {
 	return a.yue.SoundPresetDelete(a.ctx, id)
 }
 
-// YueApplySoundPreset — пресет к треку через общую очередь воркера: интерфейс не
-// блокируется (можно поставить несколько и сравнить версии), ход и порядок —
-// в очереди левого блока; версия трека появится в списке по готовности.
-// Возвращает id записи очереди.
-func (a *App) YueApplySoundPreset(jobID, presetID int64) (int64, error) {
-	list, err := a.yue.SoundPresets(a.ctx)
-	if err != nil {
-		return 0, err
-	}
-	for _, p := range list {
-		if p.ID == presetID {
-			return a.enqueuePreset(jobID, p)
-		}
-	}
-	return 0, fmt.Errorf("нет пресета %d", presetID)
+// YueSoundPresetDraft — пресет в черновик студии: подготовка и сверка баланса (операция очереди, минуты), трек не
+// меняется; ответ — запись «Пресет» для «Изменений трека», итог собирает «применить всё».
+func (a *App) YueSoundPresetDraft(jobID int64, p yue.SoundPreset) (*studio.PresetDraftResult, error) {
+	return studio.PresetDraft(a.ctx, a.yue, jobID, p)
 }
 
 // YueApplySoundPresetWith — копия пресета (громкость записей поправлена в студии)

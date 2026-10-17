@@ -230,6 +230,43 @@ func registerPresetTools(s *Server) {
 			return "", fmt.Errorf("нет пресета %d (см. sound_presets)", pid)
 		},
 	})
+	s.Register(Tool{
+		Name: "sound_preset_draft",
+		Description: "Пресет звука в черновик студии (синхронно, минуты): подготовка как у sound_preset_apply и сверка " +
+			"баланса на временных версиях (удаляются), трек не меняется, версии нет. Ответ {\"preset\": {sections, " +
+			"final?, master?, warnings?}}. Чтобы пресет звучал в студии и попал в «применить всё», положи запись " +
+			"первой в state.edits черновика (draft_get → draft_set; прежнюю запись с полем preset убери): " +
+			"{\"childId\": <отрицательное уникальное>, \"instId\": \"preset\", \"from\": 0, \"to\": 0, \"lead\": 0, " +
+			"\"beat\": 0, \"db\": 0, \"stems\": [], \"fadeIn\": 0, \"fadeOut\": 0, \"keepHighHz\": 0, \"step\": \"done\", " +
+			"\"label\": <название>, \"preset\": {\"id\": <id>, \"name\": <название>, ...поля ответа}}.",
+		InputSchema: props(map[string]any{
+			"job_id":    prop("ID трека", "integer"),
+			"preset_id": prop("id пресета (sound_presets)", "integer"),
+			"db": prop("громкость записей пресета поверх рецепта: {\"индекс записи specs\": дБ −24…24} "+
+				"(пресет не меняется)", "object"),
+		}, "job_id", "preset_id"),
+		Handler: func(s *Server, args map[string]any) (string, error) {
+			ctx := context.Background()
+			list, err := s.client.SoundPresets(ctx)
+			if err != nil {
+				return "", err
+			}
+			pid := argInt(args, "preset_id")
+			for _, p := range list {
+				if p.ID == pid {
+					if err := applyDbOverrides(&p, args["db"]); err != nil {
+						return "", err
+					}
+					res, err := studio.PresetDraft(ctx, s.client, argInt(args, "job_id"), p)
+					if err != nil {
+						return "", err
+					}
+					return toJSON(map[string]any{"preset": res}), nil
+				}
+			}
+			return "", fmt.Errorf("нет пресета %d (см. sound_presets)", pid)
+		},
+	})
 }
 
 // applyDbOverrides — громкость записей пресета на это применение: {"индекс": дБ} заменяет Db записи

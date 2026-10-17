@@ -89,7 +89,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 ## Инструменты
 
-Всего 75. В колонке «Параметры» обязательные — **жирным**.
+Всего 76. В колонке «Параметры» обязательные — **жирным**.
 
 ### Очередь воркера
 
@@ -209,6 +209,7 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 | `sound_preset_create` | **name**, note, specs, final, master, parts, target_lufs, reference_job_id | Свой пресет. Поля — как в теле пресета ([api.md](api.md#тело-пресета)); нужно хоть что-то из `specs`, `final`, `master`, `target_lufs` |
 | `sound_preset_update` | **preset_id**, **name**, note, specs, final, master, parts, target_lufs, reference_job_id | Заменить свой пресет; не переданные `master`, `parts`, `target_lufs` остаются прежними (`[]` / `null` — снять). Встроенный — нельзя |
 | `sound_preset_delete` † | **preset_id**, **confirm** | Удалить свой пресет |
+| `sound_preset_draft` | **job_id**, **preset_id**, db | Пресет в черновик студии (синхронно, минуты): подготовка как у `sound_preset_apply` и сверка баланса на временных версиях (удаляются), трек не меняется → `{"preset": {sections, final?, master?, warnings?}}`. Запись в `state.edits` черновика (`draft_get` → `draft_set`, прежнюю запись с `preset` убрать, новую — первой): `{"childId": <отрицательное уникальное>, "instId": "preset", "from": 0, "to": 0, "lead": 0, "beat": 0, "db": 0, "stems": [], "fadeIn": 0, "fadeOut": 0, "keepHighHz": 0, "step": "done", "label": <название>, "preset": {"id", "name", …ответ}}` |
 | `sound_preset_apply` | **job_id**, **preset_id**, db | Применить сейчас (синхронно, минуты): разделит трек, поставит недостающие наборы, пересоберёт, финал — на результате → `{version_id, file, warnings?}`. `db` — громкость записей на этот раз: `{"индекс": дБ}` |
 
 Пресет можно заказать и при создании трека — `submit` с `sound_preset_ids` (до 3): их применит открытое

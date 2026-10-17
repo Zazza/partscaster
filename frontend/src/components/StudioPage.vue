@@ -829,7 +829,8 @@ const finalGroups = computed(() => {
 })
 const applyingStatus = computed(() => t('queue.status.' + ((applying.value && applying.value.status) || 'queued')))
 const canApplyAll = computed(() => (activeEdits.value.length > 0 || hasGen.value) && !waitingRenders.value
-  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value && !(applying.value && !applying.value.error))
+  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value && !(applying.value && !applying.value.error)
+  && !inserts.isPresetPreparing(props.job.id))
 async function applyAll() {
   if (!canApplyAll.value) return
   applyAllBusy.value = true
@@ -1900,6 +1901,29 @@ function setWindowTitle() {
           <h3 id="st-done" class="studio-step">5 · {{ t('studio.step.done') }} <span class="muted">{{ t('studio.step.done.sub') }}</span></h3>
           <!-- шаг одной рамкой, блоки — карточками внутри -->
           <div class="studio-box studio-step-box">
+            <div ref="masterBox" class="studio-box">
+              <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
+              <div class="studio-box-body">
+              <div class="dsp-row">
+                <button class="ghost" :disabled="dspBusy" :title="t('studio.dsp.master.tip')" @click="applyOneClick('master')">
+                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="disc" /> {{ t('studio.dsp.master') }}</template>
+                </button>
+                <button class="ghost" :disabled="dspBusy" :title="t('studio.dsp.breathe.tip')" @click="applyOneClick('breathe')">
+                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="wind" /> {{ t('studio.dsp.breathe') }}</template>
+                </button>
+                <VSelect v-model="oneClickLevel" :title="t('studio.dsp.level.tip')" style="max-width: 130px"
+                         :options="ONE_CLICK_LEVELS.map((l) => ({ value: l, label: t('studio.dsp.level.' + l) }))" />
+                <button class="ghost" :title="t('studio.done.level.tip')" @click="goChain('level')">{{ t('studio.done.level') }}</button>
+              </div>
+                <StudioMaster ref="masterRef" :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
+              </div>
+            </div>
+            <div class="studio-box">
+              <div class="studio-box-head"><span>{{ t('preset.title') }}</span> <span class="muted studio-box-hint">{{ t('preset.sub') }}</span></div>
+              <div class="studio-box-body">
+                <StudioPresets :job="job" @applied="reloadVariants" />
+              </div>
+            </div>
             <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
             <div class="studio-box">
               <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span>
@@ -1930,7 +1954,7 @@ function setWindowTitle() {
                       <span class="muted">{{ insertWindow(it, insertWin) }}</span>
                       <PlaceControls v-if="it.add || isPlaceRecord(it)" :model-value="it.place" :disabled="dbBusy || it.off"
                                      @update:model-value="(p) => onPlace(it, p)" />
-                      <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master" class="od-gain">{{ t('studio.inserts.db') }}
+                      <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master && !it.preset" class="od-gain">{{ t('studio.inserts.db') }}
                         <input type="range" :min="INSERT_MIN_DB" :max="INSERT_MAX_DB" step="1" :value="it.db"
                                :disabled="dbBusy || it.off" @change="onInsertDb(it, $event.target.value)" />
                         {{ it.db > 0 ? '+' : '' }}{{ it.db }} {{ t('studio.inserts.dbUnit') }}
@@ -1961,33 +1985,10 @@ function setWindowTitle() {
                 <p v-if="applyAllMsg" class="muted">{{ applyAllMsg }}</p>
               </div>
             </div>
-            <div ref="masterBox" class="studio-box">
-              <div class="studio-box-head"><span><AppIcon name="sliders" /> {{ t('mix.master') }}</span> <span class="muted studio-box-hint">{{ t('mix.master.sub') }}</span></div>
-              <div class="studio-box-body">
-                <StudioMaster ref="masterRef" :job="job" :sel="selRange" :cursor="waveCursor" @applied="reloadVariants" />
-              </div>
-            </div>
-            <div class="studio-box">
-              <div class="studio-box-head"><span>{{ t('preset.title') }}</span> <span class="muted studio-box-hint">{{ t('preset.sub') }}</span></div>
-              <div class="studio-box-body">
-                <StudioPresets :job="job" @applied="reloadVariants" />
-              </div>
-            </div>
-            <!-- готово: мастеринг одним кликом, громкость альбома и все результаты (варианты) с ▶ / ⤓ / → в треки -->
+            <!-- результаты: все версии трека с ▶ / ⤓ / → в треки -->
             <div class="studio-box">
               <div class="studio-box-head"><span>{{ t('studio.done') }}</span></div>
               <div class="studio-box-body">
-              <div class="dsp-row">
-                <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.master.tip')" @click="applyOneClick('master')">
-                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="disc" /> {{ t('studio.dsp.master') }}</template>
-                </button>
-                <button class="primary" :disabled="dspBusy" :title="t('studio.dsp.breathe.tip')" @click="applyOneClick('breathe')">
-                  <template v-if="dspBusy">…</template><template v-else><AppIcon name="wind" /> {{ t('studio.dsp.breathe') }}</template>
-                </button>
-                <VSelect v-model="oneClickLevel" :title="t('studio.dsp.level.tip')" style="max-width: 130px"
-                         :options="ONE_CLICK_LEVELS.map((l) => ({ value: l, label: t('studio.dsp.level.' + l) }))" />
-                <button class="ghost" :title="t('studio.done.level.tip')" @click="goChain('level')">{{ t('studio.done.level') }}</button>
-              </div>
               <p v-if="!dspVariants.length" class="muted">{{ t('studio.done.empty') }}</p>
               <label v-else class="muted done-details"><input v-model="showDeltas" type="checkbox" /> {{ t('studio.done.details') }}</label>
               <!-- все версии трека — промежуточные тоже: новые сверху, понятное название, полная подпись — в подсказке -->

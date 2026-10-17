@@ -90,7 +90,7 @@ default; installation — `dry_run=false` and `confirm=true`).
 
 ## Tools
 
-75 in total. In the "Parameters" column, required ones are in **bold**.
+76 in total. In the "Parameters" column, required ones are in **bold**.
 
 ### Worker queue
 
@@ -211,6 +211,7 @@ A preset is a recipe for processing the whole track: stem edits, a final stage o
 | `sound_preset_create` | **name**, note, specs, final, master, parts, target_lufs, reference_job_id | Your own preset. Fields — as in the preset body ([api.md](api.md#preset-body)); at least one of `specs`, `final`, `master`, `target_lufs` is needed |
 | `sound_preset_update` | **preset_id**, **name**, note, specs, final, master, parts, target_lufs, reference_job_id | Replace your own preset; `master`, `parts`, `target_lufs` that are not passed stay the same (`[]` / `null` — remove). A built-in one — not allowed |
 | `sound_preset_delete` † | **preset_id**, **confirm** | Delete your own preset |
+| `sound_preset_draft` | **job_id**, **preset_id**, db | Preset into the studio draft (synchronous, minutes): prepared like `sound_preset_apply`, the balance check runs on temporary versions (deleted), the track is not changed → `{"preset": {sections, final?, master?, warnings?}}`. The record for the draft's `state.edits` (`draft_get` → `draft_set`, drop the earlier record with `preset`, put the new one first): `{"childId": <unique negative>, "instId": "preset", "from": 0, "to": 0, "lead": 0, "beat": 0, "db": 0, "stems": [], "fadeIn": 0, "fadeOut": 0, "keepHighHz": 0, "step": "done", "label": <name>, "preset": {"id", "name", …response}}` |
 | `sound_preset_apply` | **job_id**, **preset_id**, db | Apply now (synchronous, minutes): splits the track, installs missing kits, rebuilds, the final stage — on the result → `{version_id, file, warnings?}`. `db` — volume of entries for this time: `{"index": dB}` |
 
 A preset can also be ordered when creating a track — `submit` with `sound_preset_ids` (up to 3): the open app

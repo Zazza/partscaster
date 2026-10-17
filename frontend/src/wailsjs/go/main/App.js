@@ -30,10 +30,6 @@ export function YueApplyFx(arg1, arg2) {
   return window['go']['main']['App']['YueApplyFx'](arg1, arg2);
 }
 
-export function YueApplySoundPreset(arg1, arg2) {
-  return window['go']['main']['App']['YueApplySoundPreset'](arg1, arg2);
-}
-
 export function YueApplySoundPresetWith(arg1, arg2) {
   return window['go']['main']['App']['YueApplySoundPresetWith'](arg1, arg2);
 }
@@ -332,6 +328,10 @@ export function YueSoundPresetCreate(arg1) {
 
 export function YueSoundPresetDelete(arg1) {
   return window['go']['main']['App']['YueSoundPresetDelete'](arg1);
+}
+
+export function YueSoundPresetDraft(arg1, arg2) {
+  return window['go']['main']['App']['YueSoundPresetDraft'](arg1, arg2);
 }
 
 export function YueSoundPresetRetry(arg1, arg2) {

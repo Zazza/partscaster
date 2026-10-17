@@ -454,6 +454,9 @@ suffers a little inside phrases. It needs the optional Seed-VC component on the 
 
 ### 5 Done
 
+Blocks in order: "Master", "Sound presets", "Track changes" (the final list and "apply all" — after the master,
+which also puts its edit here), "results".
+
 **Track changes** — everything you applied in the steps above, listed by step ("2 · Edit", "3 · Sound",
 "4 · Voice", "5 · Done"). Changes that need a render (plan tricks, a new voice, "no vocals") and the song timbre from "Album voice" are a line each.
 Overlaid edits (inserts, mutes, effects and pedals on a stem, volume lines, sound chains, parts, stereo placement,
@@ -484,13 +487,28 @@ finished versions do not change).
 track: −14 — like streaming services, −11 — loud), "limiter", peak "ceiling" (dBTP), "master chain" (blocks),
 "▶ after / ▶ before" on the mix with edits, "Apply" — one "Master" edit (a new one replaces the old one,
 "now:" shows the current one). After the rebuild — the line "After master: −14.0 LUFS, peak −1.0 dBTP".
+At the top of the block are the one-click buttons and album loudness:
 
-**Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"apply to
-track"**: no stems — the track is split (drum parts — with the RoFormer model), the stems are rebuilt, the final
-result is a new version "track · preset" (a few minutes, the job goes through the queue). If the balance check
-  rebuilt it, the earlier builds stay as versions "track · preset · промежуточная: сборка N — …" (the label is
-  always in Russian) and fold under the final version once it finishes. Listen to the final one; the intermediate
-  ones let you hear what the check corrected.
+- **"one-click mastering"** — the "Mastering" (Мастеринг) chain (unsquash the "brick", loudness through
+  saturation, top-end grit) on the whole track — into "Track changes" with the level in its label; the final — "apply all".
+- **"one-click breathing"** — unsquash the "brick" of a neural mix: quiet parts a little quieter, loud parts as
+  they were.
+- The level **"light / medium / strong"** for both buttons: "light" — less top-end grit (if the voice rings or
+  squeaks), "strong" — louder and denser.
+- **"album loudness…"** — opens the "Album loudness" (Громкость альбома) effect in "Audio effects": bring the
+  album's tracks to one loudness.
+
+**Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"Apply"**:
+the preset goes into "Track changes" as one line "Preset: <name>" (an earlier preset is replaced); no new version
+is made. Preparing it goes through the queue and takes a few minutes: no stems — the track is split (drum parts —
+with the RoFormer model), parts and sample kits are prepared, and the balance check builds the preset as a trial,
+measures the stem levels and corrects them (the trial builds are temporary versions, deleted after the check).
+From there it works like any other edit: "▶ mix" plays the track with the preset, "apply all" builds the result.
+
+- Your own sound edit on a stem (an effect, pedals, a sound chain) or its stereo placement replaces the preset's
+  edit on that stem; your master replaces the preset's master. Volumes, volume lines and whole-track effects
+  play together with the preset. Turn your edit off and the preset's edit plays again. The balance is not
+  re-checked after your edits.
 
 - Under the selected preset — a description and a volume slider for each of its edits (bass louder, voice
   quieter…): the preset is applied with them, the preset itself does not change. If you changed them — "as in
@@ -504,16 +522,8 @@ result is a new version "track · preset" (a few minutes, the job goes through t
 
 What is inside presets and how to edit them — the ["Sound presets"](#sound-presets) section.
 
-**results** — one-click buttons at the top, all track versions below.
+**results** — all track versions.
 
-- **"one-click mastering"** — the "Mastering" (Мастеринг) chain (unsquash the "brick", loudness through
-  saturation, top-end grit) on the whole track — into "Track changes" with the level in its label; the final — "apply all".
-- **"one-click breathing"** — unsquash the "brick" of a neural mix: quiet parts a little quieter, loud parts as
-  they were.
-- The level **"light / medium / strong"** for both buttons: "light" — less top-end grit (if the voice rings or
-  squeaks), "strong" — louder and denser.
-- **"album loudness…"** — opens the "Album loudness" (Громкость альбома) effect in "Audio effects": bring the
-  album's tracks to one loudness.
 - The version list — all of them, intermediate ones too: newest at the top, a clear name and date, the full
   caption in the tooltip. Each has: ▶, ⤓ (save flac), **"→ to tracks"** (→ в треки; make it a separate track in
   the list), ✕.
