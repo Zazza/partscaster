@@ -96,8 +96,8 @@ func TestRebuildSectionsPresetEmptyRecipeIsError(t *testing.T) {
 			if !strings.Contains(out, "пустой рецепт") {
 				t.Errorf("ошибка %q, want «пустой рецепт»", out)
 			}
-			if len(f.fakeService.uploads) != 0 {
-				t.Errorf("при ошибке загружено: %d", len(f.fakeService.uploads))
+			if len(f.uploads) != 0 {
+				t.Errorf("при ошибке загружено: %d", len(f.uploads))
 			}
 		})
 	}

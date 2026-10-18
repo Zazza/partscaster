@@ -7,9 +7,6 @@ internal-guitar-plan-chords (условия 2, 10: манера у пяти пр
   группа guitar-notes, первый блок gtrnotes с набором своей гитары (+ обработка у электро);
   прежние 16 гитарных цепочек и их id не меняются; манера (style блока gtrnotes): нейлон 2 (перебор),
   полуакустика 0 (авто), Emily 3 (бас + аккорд), FSBS 1 (бой), фузз 4 (квинты);
-- пресеты звука (genres.build): «Инди-рок · акустический» (acoustic), «Гаражный рок · фузз по нотам»
-  (fuzz), «Инди-поп · чистая гитара» (emily), «Джаз-лаунж · нейлон» (nylon) — у спека гитары цепочка
-  guitar-notes-*: первый блок gtrnotes с нужным набором;
 - фразы страницы «Инструменты»: у гитарных фраз — phrases/<id>.notes.json (те же поля, что кэш трека:
   notes [[s, e, m, v]...]), блок gtrnotes играет по ним; phrases.NOTE_BLOCKS содержит gtrnotes;
   POST /fx/phrase с цепочкой gtrnotes на гитарной фразе — круг звучит (нот хватает, ChainError нет).
@@ -22,7 +19,6 @@ import json
 import unittest
 from pathlib import Path
 
-import genres
 import test_fx_api as fa
 
 WORKER = Path(__file__).resolve().parent
@@ -39,8 +35,6 @@ OLD_GUITAR = ("guitar-amp-clean", "guitar-amp-hot", "guitar-amp-spring", "guitar
               "guitar-postpunk", "guitar-jangle", "guitar-surf", "guitar-fuzz", "guitar-industrial",
               "guitar-symphonic", "guitar-altrock", "guitar-shoegaze", "guitar-ambient", "guitar-tremolo",
               "guitar-lofi")
-GENRE_VARIANTS = {"Инди-рок · акустический": "shinyguitar", "Гаражный рок · фузз по нотам": "fsbsguitar",
-                  "Инди-поп · чистая гитара": "emilyguitar", "Джаз-лаунж · нейлон": "nylonguitar"}
 GUITAR_PHRASES = ("gtr-arpeggio", "gtr-strum", "gtr-sustain", "gtr-shred", "gtr-funk", "gtr-jazz")
 
 
@@ -90,37 +84,6 @@ class TestFxPresetChains(unittest.TestCase):
                 self.assertIn(pid, self.by_id)
                 self.assertNotEqual(self.by_id[pid].get("group"), "guitar-notes")
                 self.assertNotEqual(self.by_id[pid]["chain"][0].get("type"), "gtrnotes")
-
-
-class TestGenreVariants(unittest.TestCase):
-
-    def setUp(self):
-        self.by_name = {p["name"]: p for p in genres.build()}
-
-    def test_variants_exist_with_gtrnotes(self):
-        for name, kit in GENRE_VARIANTS.items():
-            with self.subTest(variant=name):
-                self.assertIn(name, self.by_name)
-                specs = [s for s in self.by_name[name]["specs"] if "guitar" in s.get("stems", [])]
-                self.assertEqual(len(specs), 1)
-                eng = specs[0].get("engine") or []
-                self.assertTrue(eng, "у гитары нет цепочки")
-                self.assertEqual(eng[0].get("type"), "gtrnotes")
-                self.assertEqual(_kit_name(eng[0]), kit)
-                self.assertIsNotNone(specs[0].get("level_db"), "у гитары нет цели громкости")
-
-    def test_other_variants_untouched(self):
-        # internal-guitarist-presets: гитарист теперь во всех вариантах, кроме «Электроники» (там — только
-        # «8-бит и гитары»); прочие записи (барабаны, бас) гитару по нотам по-прежнему не переигрывают
-        for p in genres.build():
-            if p["name"] in GENRE_VARIANTS:
-                continue
-            electronic_yue = p["family"] == "Электроника" and p["slug"] != "chiptune-guitars"
-            for s in p["specs"]:
-                if "guitar" in s.get("stems", []) and not electronic_yue:
-                    continue
-                with self.subTest(preset=p["slug"], stems=s.get("stems")):
-                    self.assertFalse(any(b.get("type") == "gtrnotes" for b in s.get("engine") or []))
 
 
 class TestPhraseNotes(unittest.TestCase):

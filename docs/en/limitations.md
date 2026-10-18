@@ -8,7 +8,8 @@ What the app cannot do now, or can do only with caveats — and what to do inste
 A plan is the note score of a track (score.abc). A generated track always has one; an imported track has one only
 if transcription worked (otherwise the studio has a "Create score" button). Without a plan:
 
-- the **guitarist** is removed from the preset: the version gets the mark "(YuE2 guitar — the track has no plan)"
+- the **guitarist** is removed from your own preset that has one (built-in genre presets do not use it): the version
+  gets the mark "(YuE2 guitar — the track has no plan)"
   ("(гитара YuE2 — у трека нет плана)"); the rest of the processing runs;
 - **drummer fills** and the cymbals of the "live sound" layer are skipped silently;
 - **drums forward in choruses** are skipped — and also when the plan has no chorus;

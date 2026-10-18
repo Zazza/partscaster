@@ -60,7 +60,7 @@ version. Details — [ui-guide.md](ui-guide.md).
   built-in: 106 genre presets (34 styles in the families "Rock" (Рок), "Heavy" (Тяжёлое), "Electronic" (Электроника), "Pop and other" (Поп и другое)) and 3 general ones. One
   preset changes:
   - drums — all parts as a kit (live or drum machine) with rhythm section processing;
-  - bass and guitar — processing and volume; in many rock presets — the guitarist from the plan's chords;
+  - bass and guitar — processing and volume (the guitar stays the YuE2 guitar);
   - parts on top — synth or percussion in the right sections;
   - master — glue, loudness target, peak limiter;
   - balance — levels of kick, snare, hi-hat and guitar measured on real recordings; after the master the app checks

@@ -571,8 +571,8 @@ subheadings. At the top are a search (name, description, movement) and the chips
 number of presets: a chip keeps one family, search and chip work together. There are 109 built-in presets: 34 movements (post-punk, cold wave, goth, indie, shoegaze, metal, synth-pop,
 trip-hop, house, soul…) with 3 variants each, plus 7 more. Each built-in preset replaces the drums with a kit,
 changes the bass and guitar, sets the stem balance by measurement, like in real recordings, adds parts and a
-master; it does not touch the voice. Except for electronic music, the guitar is played by the guitarist following
-the plan's chords, with its own style for each variant (without a track plan — the neural network's guitar). The
+master; it does not touch the voice. The guitar is the neural network's own guitar through the variant treatment
+(pedals, overdrive, echo); no track plan is needed for that. The
 preset sets the loudness of the result itself: most built-in presets target −14 or −11 LUFS, some −16.
 
 A preset row has:

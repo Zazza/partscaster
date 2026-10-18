@@ -418,9 +418,9 @@ ringing strings of the previous one.
 **Second take** (`double` 1) — the part is played again, the way a guitarist would record it a second time: other
 samples of the same notes, each hit a few milliseconds earlier or later (up to 6 ms), tuning 4 cents higher, a wider
 strum spread. The first take sounds on the left, the second on the right (10 % into the other channel): the guitars get
-wider and the middle stays free for the vocals. Each channel is as loud as a single take. In the built-in genre presets
-the second take is on for the rhythm guitar (manners "auto", "strumming", "fifths"); fingerpicking, "bass + chord" and
-"cinematic" do not get it. A mono input gets one take.
+wider and the middle stays free for the vocals. Each channel is as loud as a single take. The second take suits
+the rhythm guitar (manners "auto", "strumming", "fifths"); fingerpicking, "bass + chord" and "cinematic" do not need
+it. A mono input gets one take.
 
 The part is computed without a GPU in seconds and cached with the track (`guitar-part.json`; a new guitar stem or a new
 plan — recalculation). To see it: `GET /jobs/{id}/guitar_part`, MCP `guitar_part`. Limit: if the YuE2 guitar went into
@@ -611,7 +611,9 @@ sound, without band names.
    ride, crash) get no compression and overdrive from "tight", and their room is brighter (top 12 kHz): compression and
    a dark room muffled the ring.
 2. **Bass** — a ready-made chain: a sound treatment or note replacement with a kit (bass guitar, synth bass).
-3. **Guitar** — the guitarist by the plan chords (see below) and the variant treatment.
+3. **Guitar** — the YuE2 guitar (the model's own) through the variant treatment: pedals, overdrive, echo from the
+   ready-made `guitar-*` chains. Nothing replaces the part: by ear the YuE2 performance is livelier and sits better in
+   the band than the [guitarist by chords](#guitarist-by-chords), which stays a tool for manual processing.
 4. **Parts on top of the track** — some variants have a synth, keys or percussion in all song parts or only in
    some (for example, strings in the choruses).
 5. **Master** — bus glue and, where the style asks for it, tape; loudness — as a target:
@@ -627,7 +629,7 @@ sound, without band names.
 The ["live sound" layer](#the-live-sound-layer) is applied together with any preset.
 
 **List of genres** — 4 families, 34 genres, 106 variants (30 genres have 3 variants each, four have 4 each: the fourth
-variant comes with the guitarist by notes right away — acoustic, fuzz, clean guitar, nylon):
+variant is another guitar treatment — acoustic, dry fuzz, clean guitar, nylon):
 
 | Family | Genres |
 |---|---|
@@ -649,8 +651,7 @@ measurements of real records split by RoFormer:
 | Electronic | −6 dB | −11 dB | −25 dB |
 
 With the "soft" master, the kick and snare go 2 dB deeper. The bass target is set by the variant (usually −6…−8 dB). The
-guitar target is the variant level plus the family offset (rock −2.5 dB, heavy −4.5, pop and other −1, electronic 0)
-and another −3 dB if the guitarist plays: clean samples with an attack are more audible at the same loudness.
+guitar target is the variant level plus the family offset (rock −2.5 dB, heavy −4.5, pop and other −1, electronic 0).
 
 An edit with processing is brought to the target by measuring the already processed stem (overdrive and samples change
 the loudness). After the master, the preset splits the finished version, checks the balance and, if it misses by more
@@ -659,30 +660,6 @@ stems shift the balance.
 Builds before a correction are deleted — one version "track · preset" remains. In the studio the check runs on
 "apply all": choosing a preset only prepares it, with no builds; if the draft has not changed since, the mix already
 built for listening serves as the first build of the result.
-
-### Guitarist in genre presets
-
-In all genre presets except electronic, the YuE2 guitar is replaced by the [guitarist by chords](#guitarist-by-chords)
-(80 of 106 variants), followed by the variant treatment. The guitar and the manner are chosen by the treatment:
-
-| Variant treatment | Guitar | Manner |
-|---|---|---|
-| post-punk chorus, surf | FSBS (Fender) | fingerpicking |
-| tremolo, ambient echo | Emily (Epiphone) | fingerpicking |
-| "jangle", shoegaze wall | FSBS | strumming |
-| clean (blues, funk, soul, pop) | Emily | bass + chord |
-| alt-rock | FSBS | auto by song parts |
-| fuzz, industrial, metal | FSBS through the variant overdrive | fifths |
-| cassette treatment | FSBS through a fuzz, softer tape | fifths |
-
-Exceptions: "Post-punk · angular dry" (Пост-панк · угловатый сухой) — fingerpicking; "Symphonic metal" (Симфо-метал)
-and "Doom · mournful" (Дум · траурный) — clean Emily fifths with echo and hall instead of high gain. The tape on clean
-samples is softened (wow ≤ 0.15, flutter ≤ 0.1): strong tape on them "shakes and floats". In electronic presets the
-guitar is in the background and stays the YuE2 guitar, except "Chiptune and 8-bit · 8-bit and guitars" (Чиптюн и
-8-бит · 8-бит и гитары).
-
-For a track without a plan, the guitarist is skipped (the YuE2 guitar goes through the rest of the processing), and the
-version name gets the mark "YuE2 guitar — the track has no plan" (гитара YuE2 — у трека нет плана).
 
 ### The "live sound" layer
 
