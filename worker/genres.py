@@ -40,12 +40,10 @@ CYMBAL_TREATMENTS = dict(TREATMENTS, tight=[], room=[dict(_ROOM, lowpass_hz=1200
 # мастер: склейка шины и, где по стилю, лента; громкость — целью (limiter дописывает воркер)
 _GLUE = {"type": "glue", "threshold_db": -18, "ratio": 2, "attack_ms": 10, "release_ms": 250, "mix": 0.7}
 _TAPE = {"type": "tape", "wow": 0.12, "flutter": 0.08, "saturation": 0.25, "lowpass_hz": 12000, "hiss": 0.04}
-_CASSETTE = {"type": "tape", "wow": 0.3, "flutter": 0.25, "saturation": 0.35, "lowpass_hz": 9000, "hiss": 0.12}
 MASTERS = {
     "stream": ([_GLUE], -14.0),
     "loud": ([_GLUE], -11.0),
     "tape": ([_TAPE, _GLUE], -14.0),
-    "cassette": ([_CASSETTE, _GLUE], -14.0),
     "soft": ([dict(_GLUE, mix=0.4)], -16.0),
 }
 
@@ -108,9 +106,9 @@ GENRES = [
         [
             (
                 "tape",
-                "советская лента",
-                "Сэмплерная машина 80-х, бас мелодией, гитары с хорусом, струнные синтезатора и "
-                "кассета на всём — холодный постсоветский пост-панк.",
+                "советская",
+                "Сэмплерная машина 80-х, бас мелодией, гитары с хорусом, струнные синтезатора — холодный "
+                "постсоветский пост-панк.",
                 "linn",
                 "room",
                 "bass-melodic",
@@ -118,7 +116,7 @@ GENRES = [
                 "guitar-postpunk",
                 -11,
                 [("synth-solina", [])],
-                "cassette",
+                "stream",
             ),
             (
                 "synth",
@@ -145,7 +143,7 @@ GENRES = [
                 "guitar-ambient",
                 -11,
                 [("synth-choir", ["chorus"])],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -328,7 +326,7 @@ GENRES = [
             (
                 "lofi",
                 "домашняя запись",
-                "Барабаны лоуфай, бас медиатором, гитара с кассеты — запись в гараже на кассетник.",
+                "Барабаны лоуфай, бас медиатором, узкая гитара — запись в гараже.",
                 "osdk",
                 "lofi",
                 "bass-pick",
@@ -336,7 +334,7 @@ GENRES = [
                 "guitar-lofi",
                 -7,
                 [],
-                "cassette",
+                "stream",
             ),
             (
                 "organ",
@@ -387,7 +385,7 @@ GENRES = [
             (
                 "garage",
                 "гаражный",
-                "Барабаны в комнате, фузз-бас, гитары с кассеты — панк из подвала.",
+                "Барабаны в комнате, фузз-бас, узкие грязные гитары — панк из подвала.",
                 "osdk",
                 "room",
                 "bass-fuzz",
@@ -395,7 +393,7 @@ GENRES = [
                 "guitar-lofi",
                 -6,
                 [],
-                "cassette",
+                "stream",
             ),
             (
                 "pop",
@@ -614,7 +612,7 @@ GENRES = [
                 "guitar-tremolo",
                 -9,
                 [("synth-mellotron", [])],
-                "cassette",
+                "stream",
             ),
             (
                 "organ",
@@ -910,7 +908,7 @@ GENRES = [
             (
                 "rust",
                 "ржавый",
-                "Сэмплерная машина лоуфай, фузз-бас, гитары с кассеты — грязный индастриал.",
+                "Сэмплерная машина лоуфай, фузз-бас, узкие грязные гитары — грязный индастриал.",
                 "linn",
                 "lofi",
                 "bass-fuzz",
@@ -918,7 +916,7 @@ GENRES = [
                 "guitar-lofi",
                 -6,
                 [],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -1002,7 +1000,7 @@ GENRES = [
             (
                 "sludge",
                 "вязкий",
-                "Сухие плотные барабаны, фузз-бас, грязный фузз и лента — болотно и злобно.",
+                "Сухие плотные барабаны, фузз-бас, грязный фузз — болотно и злобно.",
                 "osdk",
                 "tight",
                 "bass-fuzz",
@@ -1010,7 +1008,7 @@ GENRES = [
                 "guitar-fuzz",
                 -6,
                 [],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -1122,7 +1120,7 @@ GENRES = [
                 "guitar-lofi",
                 -14,
                 [("synth-vltone", []), ("synth-casio", ["chorus"])],
-                "cassette",
+                "stream",
             ),
             (
                 "guitars",
@@ -1148,7 +1146,7 @@ GENRES = [
                 "guitar-lofi",
                 -15,
                 [("synth-stylophone", []), ("synth-music-box", ["chorus"])],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -1297,8 +1295,8 @@ GENRES = [
         [
             (
                 "rhodes",
-                "Rhodes и лента",
-                "Сэмплерная машина лоуфай, 808-саб, Rhodes и лента — тёмный трип-хоп.",
+                "Rhodes",
+                "Сэмплерная машина лоуфай, 808-саб, Rhodes — тёмный трип-хоп.",
                 "linn",
                 "lofi",
                 "bass-synth-sub808",
@@ -1306,7 +1304,7 @@ GENRES = [
                 "guitar-ambient",
                 -12,
                 [("synth-rhodes", [])],
-                "cassette",
+                "stream",
             ),
             (
                 "strings",
@@ -1332,7 +1330,7 @@ GENRES = [
                 "guitar-ambient",
                 -13,
                 [("synth-piano-soft", [])],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -1344,7 +1342,7 @@ GENRES = [
             (
                 "rhodes",
                 "Rhodes",
-                "Живые барабаны лоуфай, 808-саб, Rhodes и кассета — расслабленный бит.",
+                "Живые барабаны лоуфай, 808-саб, Rhodes — расслабленный бит.",
                 "osdk",
                 "lofi",
                 "bass-synth-sub808",
@@ -1352,7 +1350,7 @@ GENRES = [
                 "guitar-lofi",
                 -12,
                 [("synth-rhodes", [])],
-                "cassette",
+                "stream",
             ),
             (
                 "piano",
@@ -1365,7 +1363,7 @@ GENRES = [
                 "guitar-lofi",
                 -13,
                 [("synth-piano-soft", []), ("perc-shaker16", [])],
-                "cassette",
+                "stream",
             ),
             (
                 "box",
@@ -1378,7 +1376,7 @@ GENRES = [
                 "guitar-lofi",
                 -13,
                 [("synth-music-box", [])],
-                "cassette",
+                "stream",
             ),
         ],
     ),
@@ -1750,7 +1748,9 @@ def build() -> list:
             specs = _drums(fx, kit, treat, (kick, snare), HH_LEVELS.get(family, HH_LEVELS["default"]))
             specs.append({"stems": ["bass"], "engine": copy.deepcopy(fx[bass]["chain"]), "level_db": float(bass_lv)})
             gtr_db = float(gtr_lv) + GTR_SHIFT.get(family, 0.0)
-            specs.append({"stems": ["guitar"], "engine": copy.deepcopy(fx[gtr]["chain"]), "level_db": gtr_db})
+            # лента на вырезанной гитаре раскачивает и огрехи разделения (#1250/#1259) — в пресетах гитара без неё
+            gchain = [b for b in copy.deepcopy(fx[gtr]["chain"]) if b["type"] != "tape"]
+            specs.append({"stems": ["guitar"], "engine": gchain, "level_db": gtr_db})
             out.append(
                 {
                     "slug": f"{gslug}-{vslug}",

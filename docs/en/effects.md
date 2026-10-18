@@ -623,8 +623,10 @@ sound, without band names.
 | streaming | glue | −14 LUFS |
 | loud | glue | −11 LUFS |
 | tape | tape (top 12 kHz) + glue | −14 LUFS |
-| cassette | cassette (top 9 kHz) + glue | −14 LUFS |
 | soft | glue with share 0.4 | −16 LUFS |
+
+Genre presets have no cassette in the master and no tape on the guitar: pitch wobble on a separated stem and on the
+whole track brings out separation artifacts, and the top cut makes the track dull. Tape can be added by hand.
 
 The ["live sound" layer](#the-live-sound-layer) is applied together with any preset.
 
@@ -733,7 +735,7 @@ guitars — 3 s, basses — 6 s, piano and orchestra — 8 s (worker memory).
   through the intentional top cut). All built-in genre presets process the guitar — so they have air only on the
   vocals; strings, acoustic and synths on "other" (it and the guitar are one group) get no air. The air level is taken
   from the 12–16 kHz band of the stem itself: where YuE2 already dims that band (strings, acoustic), the boost is
-  small. For presets with tape or cassette in the master (a 12/9 kHz cut is the style), the tape kills the air.
+  small. For presets with tape in the master (a 12 kHz cut is the style), the tape kills the air.
 - Cymbals, fills and "drums forward" are placed by the track plan: a track without a plan gets only air.
 - The reverb and delay tail past the end of the track is cut off: the result length equals the track length.
 - There is no preview with the "Ducking from drums" (Ducking от барабанов) chain (it needs a second key stem) — you

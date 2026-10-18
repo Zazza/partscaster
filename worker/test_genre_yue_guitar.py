@@ -13,7 +13,8 @@
 - «Цепочка обработки варианта» — id готовой цепочки в поле «гитара» варианта таблицы GENRES (вариант:
   slug, вариант, подсказка, набор, обработка, бас, ур. баса, гитара, ур. гитары, партии, мастер); если там
   guitar-notes-*, ожидается замена по условию 2. Ожидаемая цепочка — fx_presets.json[id]["chain"] целиком,
-  блок в блок: так же проверяется «нет урезания drive/tape» и отсутствие вставок перед обработкой.
+  блок в блок: так же проверяется «нет урезания drive» и отсутствие вставок перед обработкой. Лента (tape)
+  из цепочки гитары в пресетах убрана по internal-presets-no-cassette (условие 2) — ожидание без неё.
 - Запись гитары — элемент specs со stems == ["guitar"]; у каждого пресета ровно одна.
 - slug пресета = slug течения + "-" + slug варианта.
 - ТК4 буквально: «план» и «гитарист» ищутся подстрокой без учёта регистра во всей подсказке (не только в
@@ -92,6 +93,11 @@ def _blocks(obj):
             yield from _blocks(v)
 
 
+def _no_tape(chain):
+    """Цепочка гитары в пресете: обработка варианта без ленты (internal-presets-no-cassette, условие 2)."""
+    return [b for b in chain if b.get("type") != "tape"]
+
+
 class YueGuitarPresetsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -116,7 +122,7 @@ class YueGuitarPresetsTest(unittest.TestCase):
             with self.subTest(slug=p["slug"]):
                 cid = self._expected_chain_id(p["slug"])
                 self.assertIn(cid, self.fx, "цепочки варианта нет в fx_presets")
-                self.assertEqual(_guitar_spec(p)["engine"], self.fx[cid]["chain"])
+                self.assertEqual(_guitar_spec(p)["engine"], _no_tape(self.fx[cid]["chain"]))
 
     # ТК2 / условие 2: guitar-notes-* заменены обработкой гитары YuE2
     def test_notes_variants_get_yue_processing(self):
@@ -134,7 +140,7 @@ class YueGuitarPresetsTest(unittest.TestCase):
                 p = next(x for x in self.built if x["slug"] == slug)
                 self.assertEqual(_guitar_spec(p)["engine"], self.fx[target]["chain"])
 
-    # ТК2: нет second take (double), drive/tape не урезаны относительно fx_presets
+    # ТК2: нет second take (double), drive не урезан относительно fx_presets; ленты на гитаре нет
     def test_no_double_and_no_softened_drive_or_tape(self):
         for p in self.built:
             with self.subTest(slug=p["slug"]):
@@ -142,7 +148,7 @@ class YueGuitarPresetsTest(unittest.TestCase):
                 self.assertNotIn("double", spec)
                 for b in spec["engine"]:
                     self.assertNotIn("double", b)
-                ref = self.fx[self._expected_chain_id(p["slug"])]["chain"]
+                ref = _no_tape(self.fx[self._expected_chain_id(p["slug"])]["chain"])
                 for kind in ("drive", "tape"):
                     got = [b for b in spec["engine"] if b.get("type") == kind]
                     want = [b for b in ref if b.get("type") == kind]
