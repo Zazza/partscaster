@@ -1,20 +1,16 @@
-// Пресет звука в черновике: одна запись «Пресет: <имя>» в «Изменениях трека». Go (PresetDraft) готовит её
-// содержимое — записи пересборки с посчитанными громкостями и поправками сверки, финал и мастер; черновик
-// раскрывает запись при каждой пересборке. Правка человека на той же дорожке заменяет правку пресета:
-// выключил свою — правка пресета снова звучит. Чистая логика без DOM.
+// Пресет звука в черновике: одна запись «Пресет: <имя>» в «Изменениях трека» — рецепт целиком, сразу, без
+// подготовки. Сборка (Go expandPresets) раскрывает его подготовкой на месте записи. Правка человека на той же
+// дорожке заменяет правку пресета: выключил свою — правка пресета снова звучит. Чистая логика без DOM.
 import { specOf } from './draftEdits.js'
 import { isPlaceRecord } from './mixDesk.js'
 
 const copy = (x) => JSON.parse(JSON.stringify(x))
 
-// запись черновика из ответа PresetDraft
-export function presetRecord(result, { id, name }, childId) {
-  const r = result || {}
+// запись черновика: рецепт пресета (с громкостями «на этот раз») — как есть
+export function presetRecord(preset, { id, name }, childId) {
   return {
     childId, instId: 'preset', from: 0, to: 0, lead: 0, beat: 0, db: 0, stems: [], fadeIn: 0, fadeOut: 0,
-    keepHighHz: 0, step: 'done', label: name,
-    preset: { id, name, sections: copy(r.sections || []), final: copy(r.final || []), master: copy(r.master || []),
-      warnings: copy(r.warnings || []) },
+    keepHighHz: 0, step: 'done', label: name, preset: { id, name, recipe: copy(preset || {}) },
   }
 }
 
@@ -45,6 +41,13 @@ const isPlaceSection = (s) => !!s.place && !s.add && !hasSound(s) && !(s.envelop
 
 const whole = { child_id: 0, from: 0, to: 0, lead: 0, beat_sec: 0, db: 0, fade_in: 0, fade_out: 0, keep_high_hz: 0 }
 
+// новая запись: одна спецификация-пресет, перекрытия — Go пропустит эти правки пресета при раскрытии
+function presetSpec(it, ov) {
+  return { ...whole, stems: [], id: String(it.childId), preset: { preset: copy(it.preset.recipe),
+    skip_sound: [...ov.sound], skip_place: [...ov.place], skip_master: ov.master } }
+}
+
+// старая запись (черновик до рецепта): посчитанные записи, финал и мастер
 function expand(p, ov) {
   const out = []
   for (const s of p.sections || []) {
@@ -61,5 +64,9 @@ function expand(p, ov) {
 export function draftSpecs(list) {
   const on = (list || []).filter((it) => !it.off)
   const ov = overrides(on)
-  return on.flatMap((it) => (it.preset ? expand(it.preset, ov) : [specOf(it)]))
+  return on.flatMap((it) => {
+    if (!it.preset) return [{ ...specOf(it), id: String(it.childId) }]
+    if (it.preset.recipe) return [presetSpec(it, ov)]
+    return expand(it.preset, ov).map((s) => ({ ...s, id: String(it.childId) }))
+  })
 }

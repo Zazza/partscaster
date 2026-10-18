@@ -330,10 +330,6 @@ export function YueSoundPresetDelete(arg1) {
   return window['go']['main']['App']['YueSoundPresetDelete'](arg1);
 }
 
-export function YueSoundPresetDraft(arg1, arg2) {
-  return window['go']['main']['App']['YueSoundPresetDraft'](arg1, arg2);
-}
-
 export function YueSoundPresetRetry(arg1, arg2) {
   return window['go']['main']['App']['YueSoundPresetRetry'](arg1, arg2);
 }

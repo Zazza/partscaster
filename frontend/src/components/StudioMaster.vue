@@ -44,9 +44,9 @@ const inputFile = computed(() => {
   if (!mix) return ''
   return current.value ? premasterFile(mix) : mix
 })
-// громкость после мастера — по метрикам последней пересборки (любая правка с мастером в треке её обновляет);
-// после перезапуска студии — из списка вариантов трека
-const line = computed(() => (current.value ? masterLine(inserts.mixMetrics(props.job.id)) : ''))
+// громкость после мастера — по метрикам последней сборки микса («▶ микс», «применить всё»); черновик менялся после
+// неё — строки нет до следующей сборки; после перезапуска студии — из списка вариантов трека
+const line = computed(() => (current.value && !inserts.mixStale(props.job.id) ? masterLine(inserts.mixMetrics(props.job.id)) : ''))
 async function loadLine() {
   const mix = inserts.mixFile(props.job.id)
   if (!current.value || !mix || inserts.mixMetrics(props.job.id)) return
@@ -87,6 +87,8 @@ defineExpose({ editRecord })
 async function playAfter() {
   err.value = ''
   const jobId = props.job.id
+  // «стало» берёт микс без мастера из последней сборки: черновик менялся (или не собирался) — сначала собрать
+  try { await inserts.currentMix(jobId) } catch (e) { err.value = String(e); return }
   const req = { source: 'mix', chain: workerChain(), output: 'mix', preview: true, ...listenWin.value,
     ...(inputFile.value ? { file: inputFile.value } : {}) }
   await toggleArtifact('master-after', t('instr.after'), async () => {
@@ -98,8 +100,10 @@ async function playAfter() {
   })
 }
 
-function playBefore() {
+async function playBefore() {
   const w = listenWin.value
+  // «было» — микс с правками: черновик менялся — сначала собрать
+  try { await inserts.currentMix(props.job.id) } catch (e) { err.value = String(e); return }
   before.play({ jobId: props.job.id, file: inputFile.value || props.job.audio_file, dur: props.job.duration_sec, from: w.from, to: w.to })
 }
 
@@ -110,12 +114,11 @@ async function apply() {
   const p = MASTERS.find((x) => x.id === presetId.value)
   const label = t('mix.master.label', { name: p ? tr(p.name) : t('desk.own') })
   const c = workerChain()
-  busy.value = 'apply'
   try {
     await inserts.setMaster(jobId, { chain: c, label })
     msg.value = t('mix.master.applied')
     emit('applied')
-  } catch (e) { err.value = String(e) } finally { busy.value = '' }
+  } catch (e) { err.value = String(e) }
 }
 </script>
 

@@ -582,9 +582,10 @@ describe('ТК11: «сбросить черновик» снимает заст�
   const QSPEC = { childId: PIECE, instId: 'i-3', from: 5, to: 15, lead: 0.1, beat: 0.5, db: -6, srcJob: T }
   const pendingOf = (ins) => (ins.pending && 'value' in ins.pending ? ins.pending.value : ins.pending) || []
 
-  it('пересборка куска 901 всё время падает → итога нет; clearDraft(901) проходит, ход и черновик 901 сняты, правки снова принимаются', async () => {
-    const rebuildSections = vi.fn(async () => { throw new Error('rebuild sections failed') })
-    const ins = await load({ rebuildSections, drafts: [{ job_id: T, state: { v: 1, edits: [E1], queue: [QSPEC], ts: 1000, gen: GEN } }] })
+  // internal-studio-instant-apply: готовый кусок кладётся в черновик без пересборки, поэтому застревание
+  // теперь — кусок, который не готов никогда (итог ждёт его); предмет проверки прежний — clearDraft снимает ход
+  it('кусок 901 не готов никогда → итога нет; clearDraft(901) проходит, ход и черновик 901 сняты, правки снова принимаются', async () => {
+    const ins = await load({ drafts: [{ job_id: T, state: { v: 1, edits: [E1], queue: [QSPEC], ts: 1000, gen: GEN } }] })
     await vi.waitFor(() => expect(genEmpty(ins.genFor(T))).toBe(false), WAIT)
     setJob(PIECE, 'queued')
     setJob(NEW, 'queued')
@@ -593,8 +594,6 @@ describe('ТК11: «сбросить черновик» снимает заст�
     await until(() => expect(chains(ins.appliedFor(NEW))).toEqual(['soften']))
     await until(() => expect(ins.applyingFor(NEW)).toMatchObject({ finalize: true, title: TITLE }))
 
-    setJob(PIECE, 'done')
-    await until(() => expect(rebuildSections).toHaveBeenCalled())
     await vi.advanceTimersByTimeAsync(20_000)
     expect(apiMock.applyEdits).not.toHaveBeenCalled()
 
@@ -604,9 +603,7 @@ describe('ТК11: «сбросить черновик» снимает заст�
     expect(pendingOf(ins).filter(s => Number(s.parent) === NEW)).toEqual([])
     await vi.waitFor(() => expect(deletesFor(NEW).length).toBeGreaterThan(0), WAIT)
 
-    // воркер снова собирает куски (сбой пересборки был условием застревания, а не предметом проверки);
     // правка трека 901 принимается — блокировки «применить всё» больше нет
-    rebuildSections.mockImplementation(async (_p, specs) => report(specs))
     const err = await attempt(() => ins.addStemFx(NEW, fx())).then(() => null, (e) => e)
     expect(String(err && err.message)).not.toMatch(/применить всё/i)
     expect(ins.appliedFor(NEW).some(x => x.chain === 'soften' && x.from === 176)).toBe(true)

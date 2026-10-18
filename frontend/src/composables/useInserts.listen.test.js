@@ -163,20 +163,25 @@ describe('applyAll не передаёт файл (пусто)', () => {
     expect(applyArgs()[3]).toBe('')
   })
 
-  it('запись выключили после прослушивания (записи итога другие) → пусто', async () => {
+  it('запись выключили после прослушивания (записи итога другие) → пусто; выключение само не пересобирает', async () => {
     const ins = await load({ drafts: [remote(T, [E1, E2])] })
     await ins.rebuild(T)
     const n = apiMock.rebuildSections.mock.calls.length
     await ins.setOff(T, -12, true)
     for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(0)
-    // если выключение само пересобрало трек — последняя пересборка уже с новыми записями, файл законен
-    const rebuiltAgain = apiMock.rebuildSections.mock.calls.length > n
+    expect(apiMock.rebuildSections.mock.calls.length).toBe(n)
     await ins.applyAll(T, 'итог')
-    if (rebuiltAgain) {
-      expect(applyArgs()[3]).toBe(await lastFile())
-    } else {
-      expect(applyArgs()[3]).toBe('')
-    }
+    expect(applyArgs()[3]).toBe('')
+  })
+
+  it('после выключения «▶ микс» (ensureMix) собирает новыми записями → applyAll берёт её файл', async () => {
+    const ins = await load({ drafts: [remote(T, [E1, E2])] })
+    await ins.rebuild(T)
+    await ins.setOff(T, -12, true)
+    const r = await ins.ensureMix(T)
+    await ins.applyAll(T, 'итог')
+    expect(applyArgs()[3]).toBe(r.variant.file)
+    expect(applyArgs()[1]).toEqual(apiMock.rebuildSections.mock.calls.at(-1)[1])
   })
 })
 
@@ -212,20 +217,25 @@ describe('«применить всё» не вышло (api.applyEdits откл
     await busy
   })
 
-  it('после неудачи прослушивание пересобирается записями черновика, и следующий applyAll берёт её файл', async () => {
+  it('после неудачи черновик снова «не собран»: «▶ микс» пересобирает записями черновика, следующий applyAll берёт её файл', async () => {
     const ins = await load({ drafts: [remote(T, [E1, E2])] })
+    await ins.ensureMix(T)
+    expect(ins.mixStale(T)).toBe(false)
     apiMock.applyEdits.mockRejectedValueOnce(new Error('rebuild failed on worker'))
     await expect(ins.applyAll(T, 'итог')).rejects.toThrow()
     const draftSpecs = JSON.parse(JSON.stringify(apiMock.applyEdits.mock.calls[0][1]))
-    await vi.waitFor(() => expect(apiMock.rebuildSections.mock.calls.some(c => Number(c[0]) === T)).toBe(true), WAIT)
+    // итог мог перезаписать файл микса — прежняя сборка больше не годится для прослушивания
+    expect(ins.mixStale(T)).toBe(true)
+    const n = apiMock.rebuildSections.mock.calls.length
+    const r = await ins.ensureMix(T)
+    expect(apiMock.rebuildSections.mock.calls.length).toBe(n + 1)
     const call = apiMock.rebuildSections.mock.calls.at(-1)
     expect(Number(call[0])).toBe(T)
     expect(call[1]).toEqual(draftSpecs)
-    const file = await lastFile()
-    for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(0)
     await ins.applyAll(T, 'итог')
     expect(apiMock.applyEdits).toHaveBeenCalledTimes(2)
     expect(applyArgs()[1]).toEqual(draftSpecs)
-    expect(applyArgs()[3]).toBe(file)
+    expect(applyArgs()[3]).toBe(r.variant.file)
   })
+
 })

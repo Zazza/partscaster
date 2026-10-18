@@ -19,7 +19,12 @@ func ApplyEdits(ctx context.Context, svc yue.Service, parentID int64, specs []Se
 	}
 	var b *verifiedBuild
 	_, err := RunOp(ctx, svc, "rebuild", rebuildLabel(specs), parentID, func(ctx context.Context) (int64, error) {
-		r, err := buildVerified(yue.WithoutJournal(ctx), svc, parentID, specs, mixFile, title,
+		jctx := yue.WithoutJournal(ctx)
+		all, _, err := expandPresets(jctx, svc, parentID, specs)
+		if err != nil {
+			return 0, err
+		}
+		r, err := buildVerified(jctx, svc, parentID, all, mixFile, title,
 			func(ctx context.Context, sp []SectionSpec) (string, error) {
 				res, err := rebuildSections(ctx, svc, parentID, sp, "")
 				if err != nil {

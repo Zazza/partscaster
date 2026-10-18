@@ -16,7 +16,7 @@ import BLOCKS from '../fxBlocks.json'
 import { fxPresets } from '../fxPresets.js'
 import { useInstruments } from '../composables/useInstruments.js'
 import { fromWorkerChain, toWorkerChain } from '../fxChain.js'
-import { applyEngine, ensureKits } from '../engineRun.js'
+import { engineRecord, ensureKits } from '../engineRun.js'
 import { percHits, barsFromBeat, PERC_PATTERNS } from '../percPart.js'
 import { previewWindow, applyWindow } from '../trackDesk.js'
 import { chordGridOnce } from '../trackGrid.js'
@@ -141,13 +141,12 @@ async function apply() {
   const label = t('perc.label', { name: tr(preset.value?.name) || t('perc.own'), pattern: t('perc.pattern.' + pattern.value) })
   const placeNow = { ...place.value }
   const snap = { jobId, dur: props.job.duration_sec, src: 'mix', ...target.value, chain: workerChain(), label }
-  busy.value = 'apply'
   try {
-    const rec = await applyEngine(api, snap, { oldMsg: t('instr.engine.old'), onKit: (k) => { msg.value = t('perc.kit', { kit: k }) } })
-    await inserts.addStemEngine(jobId, { ...rec, add: true, place: placeNow })
+    // только запись в черновик: наборы и проверку цепочки делает сборка
+    await inserts.addStemEngine(jobId, { ...engineRecord(snap), add: true, place: placeNow })
     msg.value = t('perc.applied')
     emit('applied')
-  } catch (e) { err.value = String(e) } finally { busy.value = '' }
+  } catch (e) { err.value = String(e) }
 }
 </script>
 

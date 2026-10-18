@@ -41,6 +41,16 @@ type secFake struct {
 	stemsFailed bool // MakeStems возвращает ошибку
 }
 
+// FxAssets — у воркера уже есть наборы osdk всех частей барабанов: сборка проверяет наборы цепочек движка до
+// расчёта (ensurePresetKits), ставить здесь нечего
+func (f *secFake) FxAssets(context.Context) (map[string]any, error) {
+	var kits []any
+	for _, n := range drumParts {
+		kits = append(kits, map[string]any{"name": "osdk/" + n})
+	}
+	return map[string]any{"kits": kits}, nil
+}
+
 func newSecFake() *secFake {
 	return &secFake{
 		files:      map[string]string{},

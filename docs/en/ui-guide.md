@@ -469,24 +469,34 @@ suffers a little inside phrases. It needs the optional Seed-VC component on the 
 
 ### 5 Done
 
-Blocks in order: "Master", "Sound presets", "Track changes" (the final list and "apply all" — after the master,
-which also puts its edit here), "results".
+Blocks in order: "Master", "Sound presets", "Track changes" (the "apply all" button with the number of edits —
+after the master, which also puts its edit here), "results".
 
-**Track changes** — everything you applied in the steps above, listed by step ("2 · Edit", "3 · Sound",
+**Edits panel** — at the top right, over the studio blocks, staying in place as you scroll. Collapsed it shows the
+number of edits ("0 edits", "1 edit", "5 edits"); a click expands the list, another click collapses it (the studio
+remembers your choice). Every "Apply" in the studio only records the edit here — the button is free at once,
+nothing is computed and nothing joins the queue. The track is built only when you listen to it ("▶ mix", the
+studio player) or press "apply all".
+
+**Track changes** (the expanded panel) — everything you applied in the steps, listed by step ("2 · Edit", "3 · Sound",
 "4 · Voice", "5 · Done"). Changes that need a render (plan tricks, a new voice, "no vocals") and the song timbre from "Album voice" are a line each.
 Overlaid edits (inserts, mutes, effects and pedals on a stem, volume lines, sound chains, parts, stereo placement,
-master) come with controls, and the track is rebuilt right away:
+master) come with controls:
 
-- a checkbox — turn on/off (a turned-off edit stays in the list struck through, the track is rebuilt without it);
+- a checkbox — turn on/off (a turned-off edit stays in the list struck through and is left out of the build);
 - the edit's "volume" slider;
 - "✓ in time" (the part is aligned to the track's kick) or "by plan" (alignment failed, a shift of up to ~0.1 s is
   possible);
 - render variants 1…N and "↻ another take" — the same stretch with a different seed;
 - stereo placement — for parts;
 - "edit" on a sound chain — opens it in "Stems", where the button becomes "replace";
-- ✕ — delete (with confirmation).
+- ✕ — delete (with confirmation);
+- a red line with a reason — the build stumbled on this edit (no final was made, the list is intact); a successful
+  build clears the mark. Under a preset line are its warnings (for example, "no plan — guitarist skipped").
 
-The block header has "▶ mix with edits" (the track with all enabled edits). The list is kept on the worker: it survives closing the app and
+At the top of the list is "▶ mix with edits" (the track with all enabled edits). If the edits changed since the last
+build, it says "the mix will be built before playing": the first press builds it (the button shows ⟳, and you can
+keep editing meanwhile), later presses play the ready mix. The list is kept on the worker: it survives closing the app and
 restarts, and the track in the list shows the "unfinished work" mark. **"apply all"** — one new track
 "<title> · final" from all enabled changes, then the list is cleared; while pieces render ("waiting for render: N")
 or the mix is being built, the button is unavailable. If the list has changes that need a render (a new voice, plan
@@ -514,9 +524,10 @@ At the top of the block are the one-click buttons and album loudness:
   album's tracks to one loudness.
 
 **Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"Apply"**:
-the preset goes into "Track changes" as one line "Preset: <name>" (an earlier preset is replaced); no new version
-is made. Preparing it goes through the queue, with no builds: no stems — the track is split (drum parts — with the
-RoFormer model), parts and sample kits are prepared, volumes are set from the stem measurements. From there it works
+the preset goes into "Track changes" at once as one line "Preset: <name>" (an earlier preset is replaced); no new
+version is made. It is prepared at build time ("▶ mix" or "apply all"): no stems — the track is split (drum parts —
+with the RoFormer model), parts and sample kits are prepared, volumes are set from the stem measurements. Your own
+edits on the same stems take priority over the preset's. From there it works
 like any other edit: "▶ mix" plays the track with the preset, "apply all" builds the result and checks the balance:
 splits the finished track into stems, measures the levels and, if one misses by more than 1 dB, corrects it and
 builds again (at most twice). One version remains, trial builds are deleted. If the draft has not changed since you

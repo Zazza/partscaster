@@ -9,7 +9,7 @@ import {
   YueFxInstruments, YueFxInstrumentCreate, YueFxInstrumentUpdate, YueFxInstrumentDelete,
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueVoicePreview, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
-  YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPresetWith, YueSoundPresetDraft, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
+  YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
   YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
   YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
@@ -31,7 +31,6 @@ export const api = {
   soundPresetDelete: (id) => YueSoundPresetDelete(id),
   applySoundPresetWith: (jobId, preset) => YueApplySoundPresetWith(jobId, preset),
   // пресет в черновик: {sections, final?, master?, warnings?} — запись «Пресет» в «Изменениях трека»
-  soundPresetDraft: (jobId, preset) => YueSoundPresetDraft(jobId, preset),
   soundPresetRetry: (jobId, presetId) => YueSoundPresetRetry(jobId, presetId),
   queueList: () => YueQueueList(),
   queueMove: (id, dir) => YueQueueMove(id, dir),

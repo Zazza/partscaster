@@ -280,3 +280,97 @@ describe('▶ панели: студийный контекст (togglePlay в �
     expect(apiMock.playFile).toHaveBeenCalledWith(7, 'audio.flac', 180)
   })
 })
+
+// internal-studio-instant-apply (кросс-ревью): верхний ▶ в студии, последний артефакт — микс черновика того же
+// трека (overdub-inst-N.flac), воспроизведение остановлено или доиграло → ▶ идёт в студийный контекст: один
+// вызов ctx.ensure() (сборка, если черновик менялся) и игра файла, который он вернул.
+// Толкование: ensure() отвечает именем файла (строкой).
+describe('▶ панели в студии: микс черновика — через ctx.ensure()', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('localStorage', new MemStorage())
+    apiMock.playFile = vi.fn().mockResolvedValue({})
+    apiMock.seekAudio = vi.fn().mockResolvedValue({})
+    apiMock.toggleAudio = vi.fn().mockResolvedValue({})
+    apiMock.stopAudio = vi.fn().mockResolvedValue({})
+    apiMock.audioState = vi.fn().mockResolvedValue({ playing: false, position_sec: 0, duration_sec: 0, job_id: 0 })
+  })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  const CTX = (over = {}) => ({ jobId: 882, file: 'overdub-inst-0.flac', mainFile: 'audio.flac',
+    mixFile: 'overdub-inst-0.flac', dur: 200, label: '#882 трек',
+    ensure: vi.fn(async () => 'overdub-inst-1.flac'), ...over })
+
+  it('остановлено, последний — старый микс черновика этого трека → ensure() один раз, играет его файл', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:overdub-inst-0.flac', '#882 микс', 882, 'overdub-inst-0.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).toHaveBeenCalledTimes(1)
+    expect(apiMock.playFile).toHaveBeenCalledTimes(1)
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-1.flac', 200)
+  })
+
+  it('доиграло до конца (загружен микс черновика) → тоже через ensure()', async () => {
+    const p = await freshPlayer({ job_id: 882, playing: false, position_sec: 200, duration_sec: 200 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:overdub-inst-0.flac', '#882 микс', 882, 'overdub-inst-0.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).toHaveBeenCalledTimes(1)
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-1.flac', 200)
+    expect(apiMock.toggleAudio).not.toHaveBeenCalled()
+  })
+
+  // кросс-ревью, круг 2: выбранная на волне старая версия микса — «прослушанное главнее», не текущий черновик
+  it('последний — старая версия микса (не текущий микс черновика) → играет её, ensure не зовётся', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:overdub-inst-3.flac', '#882 старый микс', 882, 'overdub-inst-3.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-3.flac', 200)
+  })
+
+  it('последний — другой файл того же трека (превью dsp-fx) → играет его, ensure не зовётся', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:dsp-fx-1.flac', '#882 превью', 882, 'dsp-fx-1.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'dsp-fx-1.flac', 200)
+  })
+
+  it('последний — сам трек (mainFile) → студийный контекст через ensure()', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('w882:main', '#882', 882, 'audio.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).toHaveBeenCalledTimes(1)
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-1.flac', 200)
+  })
+
+  it('имя похоже, но не микс черновика (overdub-inst-x.flac) → играет как есть', async () => {
+    const p = await freshPlayer({ job_id: 0, playing: false, position_sec: 0 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:overdub-inst-x.flac', '#882', 882, 'overdub-inst-x.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(apiMock.playFile).toHaveBeenCalledWith(882, 'overdub-inst-x.flac', 200)
+  })
+
+  it('играет микс черновика в середине → пауза, ensure не зовётся', async () => {
+    const p = await freshPlayer({ job_id: 882, playing: true, position_sec: 50, duration_sec: 200 })
+    const ctx = CTX()
+    p.setStudioCtx(ctx)
+    p.markNow('v882:overdub-inst-0.flac', '#882 микс', 882, 'overdub-inst-0.flac', 200)
+    await p.togglePlay(); await flush()
+    expect(ctx.ensure).not.toHaveBeenCalled()
+    expect(apiMock.toggleAudio).toHaveBeenCalled()
+  })
+})

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -46,6 +47,10 @@ func registerRevoiceTools(s *Server) {
 				"на весь собранный микс на воркере, одна на трек; ответ — громкость и пик после мастера. " +
 				"mix true + chain/params, steps или envelope — эффект на ВЕСЬ собранный микс (после правок дорожек, до мастера, " +
 				"по порядку записей; stems не учитываются). " +
+				"preset {preset: рецепт sound_presets, skip_sound?, skip_place?, skip_master?} — запись-пресет (sound_preset_draft): " +
+				"сборка готовит его (дорожки, партии, наборы, замер) и раскрывает в записи; skip_* — дорожки/место/мастер, " +
+				"которые перекрыты своими записями. id — метка записи: сбой сборки на ней приходит с « {edit:<id>}» в тексте ошибки; " +
+				"предупреждения подготовки пресета — warnings ответа. " +
 				"stems: drums/bass/other/vocals; при child_id 0 ещё guitar/piano — гитара и клавиши внутри other " +
 				"(заменить куском их нельзя)", "items": map[string]any{"type": "object"}},
 			"as_track":  prop("сделать вариант версией-треком", "boolean"),
@@ -67,7 +72,11 @@ func registerRevoiceTools(s *Server) {
 			}
 			var b strings.Builder
 			fmt.Fprintf(&b, "вариант %s у трека #%d\n", res.Variant.File, jobID)
-			if lufs, ok := res.Variant.Metrics["lufs"].(float64); ok && slices.ContainsFunc(specs, func(x studio.SectionSpec) bool { return x.Master }) {
+			// мастер — своей записью или из записи-пресета (раскрывается при сборке)
+			hasMaster := slices.ContainsFunc(specs, func(x studio.SectionSpec) bool {
+				return x.Master || (x.Preset != nil && !x.Preset.SkipMaster)
+			})
+			if lufs, ok := res.Variant.Metrics["lufs"].(float64); ok && hasMaster {
 				tp, _ := res.Variant.Metrics["true_peak_db"].(float64)
 				fmt.Fprintf(&b, "  мастер: %.1f LUFS, истинный пик %.1f dBTP\n", lufs, tp)
 			}
@@ -77,6 +86,10 @@ func registerRevoiceTools(s *Server) {
 					how = "по бочке"
 				}
 				fmt.Fprintf(&b, "  #%d: с %.2f с, %s (score %.2f, gain %.2f)\n", r.ChildID, r.StartSec, how, r.Score, r.Gain)
+			}
+			// предупреждения подготовки записи-пресета (нет плана — гитарист пропущен): агент должен их видеть
+			for _, w := range res.Warnings {
+				fmt.Fprintf(&b, "  внимание: %s\n", w)
 			}
 			if argBool(args, "as_track") {
 				id, err := promoteVersion(s.client, jobID, res.Variant.File, argString(args, "title"),
@@ -472,6 +485,10 @@ func parseSectionSpecs(raw any) ([]studio.SectionSpec, error) {
 		if err != nil {
 			return nil, fmt.Errorf("specs[%d]: %w", i, err)
 		}
+		preset, err := presetRefArg(m["preset"])
+		if err != nil {
+			return nil, fmt.Errorf("specs[%d]: %w", i, err)
+		}
 		out = append(out, studio.SectionSpec{
 			ChildID: argInt(m, "child_id"), From: argFloat(m, "from"), To: argFloat(m, "to"),
 			Lead: argFloat(m, "lead"), BeatSec: argFloat(m, "beat_sec"), Stems: argStringSlice(m, "stems"),
@@ -479,9 +496,31 @@ func parseSectionSpecs(raw any) ([]studio.SectionSpec, error) {
 			KeepHighHz: argFloat(m, "keep_high_hz"), Revoice: argBool(m, "revoice"),
 			Chain: argString(m, "chain"), Params: argNumMap(m, "params"), Steps: steps, Envelope: argEnvelope(m, "envelope"),
 			Engine: engine, Add: argBool(m, "add"), Place: placeArg(m["place"]), Master: argBool(m, "master"),
+			Mix: argBool(m, "mix"), ID: argString(m, "id"), Preset: preset,
 		})
 	}
 	return out, nil
+}
+
+// presetRefArg — запись-пресет {preset, skip_sound?, skip_place?, skip_master?} как есть (через JSON);
+// нет поля — nil; без рецепта — ошибка (иначе сборка тихо пропустила бы пресет)
+func presetRefArg(raw any) (*studio.PresetRef, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("preset: %w", err)
+	}
+	var ref studio.PresetRef
+	if err := json.Unmarshal(b, &ref); err != nil {
+		return nil, fmt.Errorf("preset: нужен объект {preset, skip_sound?, skip_place?, skip_master?}: %w", err)
+	}
+	pr := ref.Preset
+	if len(pr.Specs) == 0 && len(pr.Final) == 0 && len(pr.Master) == 0 && pr.TargetLUFS == nil && len(pr.Parts) == 0 {
+		return nil, errors.New("preset: пустой рецепт (нужен preset из sound_presets)")
+	}
+	return &ref, nil
 }
 
 // placeArg — {pan, width} → место в стерео; нет поля — nil, width не задан — 1 (как есть)

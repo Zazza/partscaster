@@ -18,7 +18,7 @@ const lastArtifact = ref(null)   // {key, label, jobId, file, dur} | null
 // прослушивания играет сам трек, с активными правками — свежий микс
 // (последняя правка); прослушанное этого трека поновее (превью, вариант)
 // главнее. Вне студии играет последний запущенный артефакт
-const studioCtx = ref(null)      // {jobId, file, mainFile, mixFile, dur, label} | null
+const studioCtx = ref(null)      // {jobId, file, mainFile, mixFile, dur, label, ensure?} | null; ensure — собрать микс, если устарел (→ файл)
 function setStudioCtx(v) { studioCtx.value = v }
 const volume = ref(parseFloat(localStorage.getItem('yue_volume') ?? '0.8'))
 
@@ -136,7 +136,9 @@ async function togglePlay() {
   // вне студии — последний запущенный артефакт
   const ctx = studioCtx.value
   let target = a && (!ctx || a.jobId === ctx.jobId) ? a : ctx
-  if (ctx && a && a.jobId === ctx.jobId && ctx.mixFile && a.file === ctx.mainFile) target = ctx
+  // последним играл сам трек или текущий микс черновика (он мог устареть: ctx.ensure соберёт заново) — цель студия;
+  // старая версия микса на волне и превью — как слушали
+  if (ctx && a && a.jobId === ctx.jobId && ctx.mixFile && (a.file === ctx.mainFile || a.file === ctx.mixFile)) target = ctx
   // загружено то же, что целью, и не остановлено — пауза/продолжение
   if (st.job_id > 0 && (!target || target.jobId === st.job_id) && !playbackEnded(st) && st.position_sec > 0) {
     return api.toggleAudio()
@@ -148,7 +150,8 @@ async function togglePlay() {
     playBusy.value = { ...playBusy.value, [busyKey]: true }
     nowPlaying.value = target.label
     try {
-      await api.playFile(target.jobId, target.file, target.dur)
+      const file = (target === ctx && ctx.ensure && (await ctx.ensure())) || target.file
+      await api.playFile(target.jobId, file, target.dur)
       nowPlayingKey.value = busyKey
     } catch (e) {
       nowPlaying.value = t('player.errorDetail', { err: String(e) })

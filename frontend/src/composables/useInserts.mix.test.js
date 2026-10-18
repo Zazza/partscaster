@@ -52,12 +52,22 @@ async function load({ applied = {} } = {}) {
   apiMock.applyEdits = vi.fn(async () => 501)
   const mod = await import('./useInserts.js')
   const ins = mod.useInserts()
+  current = ins
   await vi.waitFor(() => expect(apiMock.drafts).toHaveBeenCalled(), WAIT)
   await flush()
   return ins
 }
+// «▶ микс» (internal-studio-instant-apply, условие 6): запись правки сама не собирает — сборка черновика
+// трека идёт через ensureMix; ответ — спецификации последней пересборки.
+let current = null
+async function built(id = 'P') {
+  await current.ensureMix(id)
+  await flush()
+  return apiMock.rebuildSections.mock.calls.at(-1)[1]
+}
 
-const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+
+const lastCall = () => built()
 const mixRecs = (ins, id = 'P') => ins.appliedFor(id).filter(x => x.mix === true)
 const mixSpecs = specs => specs.filter(s => s.mix === true)
 
@@ -72,7 +82,7 @@ afterEach(() => {
 })
 
 describe('addMixFx — эффект на весь трек', () => {
-  it('запись: childId < 0, mix: true, stems [mix], chain/params; вклейки на месте; сразу пересборка', async () => {
+  it('запись: childId < 0, mix: true, stems [mix], chain/params; вклейки на месте; без пересборки до «▶ микс»', async () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.addMixFx('P', levelFx())
     await flush()
@@ -81,7 +91,9 @@ describe('addMixFx — эффект на весь трек', () => {
     expect(recs[0].childId).toBeLessThan(0)
     expect(recs[0]).toMatchObject({ mix: true, stems: ['mix'], chain: 'level', params: { gain: -3, ceiling: -1 } })
     expect(ins.appliedFor('P').some(x => x.childId === 1)).toBe(true)
-    expect(apiMock.rebuildSections).toHaveBeenCalled()
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    await built()
+    expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
     expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
   })
 
@@ -89,7 +101,7 @@ describe('addMixFx — эффект на весь трек', () => {
     const ins = await load({})
     await ins.addMixFx('P', levelFx())
     await flush()
-    const specs = mixSpecs(lastCall())
+    const specs = mixSpecs((await lastCall()))
     expect(specs.length).toBe(1)
     expect(specs[0]).toMatchObject({ mix: true, child_id: 0, stems: ['mix'], chain: 'level' })
     expect(specs[0].params).toEqual({ gain: -3, ceiling: -1 })
@@ -99,7 +111,7 @@ describe('addMixFx — эффект на весь трек', () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.addMixFx('P', levelFx())
     await flush()
-    const other = lastCall().filter(s => s.child_id === 1)
+    const other = (await lastCall()).filter(s => s.child_id === 1)
     expect(other.length).toBe(1)
     expect(other[0].mix === true).toBe(false)
   })
@@ -130,7 +142,7 @@ describe('addMixFx — эффект на весь трек', () => {
     expect(recs.length).toBe(2)
     expect(new Set(recs.map(x => x.childId)).size).toBe(2)
     expect(recs.every(x => x.childId < 0)).toBe(true)
-    expect(mixSpecs(lastCall()).map(s => s.chain)).toEqual(['level', 'breathe'])
+    expect(mixSpecs((await lastCall())).map(s => s.chain)).toEqual(['level', 'breathe'])
   })
 
   it('соседний трек не трогается', async () => {
@@ -153,7 +165,7 @@ describe('addMixPedals — педали на весь трек', () => {
     expect(recs[0]).toMatchObject({ mix: true, stems: ['mix'], label: 'Овердрайв → Реверб' })
     expect(recs[0].steps).toEqual(pedals)
     expect(editStep(recs[0])).toBe('sound')
-    const specs = mixSpecs(lastCall())
+    const specs = mixSpecs((await lastCall()))
     expect(specs.length).toBe(1)
     expect(specs[0]).toMatchObject({ mix: true, child_id: 0, stems: ['mix'] })
     expect(specs[0].steps).toEqual(pedals)
@@ -173,7 +185,7 @@ describe('setMixEnvelope — одна линия громкости на вес�
     expect(recs[0]).toMatchObject({ mix: true, stems: ['mix'] })
     expect(recs[0].envelope).toEqual(env1)
     expect(editStep(recs[0])).toBe('sound')
-    const specs = envSpecs(lastCall())
+    const specs = envSpecs((await lastCall()))
     expect(specs.length).toBe(1)
     expect(specs[0]).toMatchObject({ mix: true, child_id: 0, stems: ['mix'] })
     expect(specs[0].envelope).toEqual(env1)
@@ -188,7 +200,7 @@ describe('setMixEnvelope — одна линия громкости на вес�
     const recs = mixRecs(ins).filter(x => x.envelope)
     expect(recs.length).toBe(1)
     expect(recs[0].envelope).toEqual(env2)
-    const specs = envSpecs(lastCall())
+    const specs = envSpecs((await lastCall()))
     expect(specs.length).toBe(1)
     expect(specs[0].envelope).toEqual(env2)
   })
@@ -203,7 +215,7 @@ describe('setMixEnvelope — одна линия громкости на вес�
     expect(mixRecs(ins).filter(x => x.envelope && x.envelope.length).length).toBe(0)
     expect(mixRecs(ins).filter(x => x.chain === 'level').length).toBe(1)
     expect(ins.appliedFor('P').some(x => x.childId === 1)).toBe(true)
-    expect(envSpecs(lastCall()).length).toBe(0)
+    expect(envSpecs((await lastCall())).length).toBe(0)
   })
 
   it('пустая при отсутствии линии — записей не добавляет', async () => {
@@ -220,7 +232,7 @@ describe('setMixEnvelope — одна линия громкости на вес�
     await flush()
     await ins.setMixEnvelope('P', env2)
     await flush()
-    const call = lastCall()
+    const call = (await lastCall())
     const stemEnv = call.filter(s => s.mix !== true && Array.isArray(s.envelope) && s.envelope.length)
     expect(stemEnv.length).toBe(1)
     expect(stemEnv[0].stems).toEqual(['vocals'])

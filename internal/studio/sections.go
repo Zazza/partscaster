@@ -66,6 +66,10 @@ type SectionSpec struct {
 	// VerifyDb — цель сверки баланса итога (пресет звука): уровень дорожки записи (одной) к треку, дБ; итог
 	// разделяется и меряется, промах — поправка Db записи и пересборка (buildVerified)
 	VerifyDb *float64 `json:"verify_db,omitempty"`
+	// ID — запись черновика студии, из которой эта (сбой сборки — EditError с ним); Preset — запись-пресет:
+	// сборка раскрывает её подготовкой (expandPresets), других полей у неё нет
+	ID     string     `json:"id,omitempty"`
+	Preset *PresetRef `json:"preset,omitempty"`
 	// Add у записи Engine — добавить обработанный кусок поверх трека, исходную дорожку не вычитать
 	// (синт-партия по аккордам); дорожка "mix" (весь трек как вход, без разделения) — только с Add
 	Add bool `json:"add,omitempty"`
@@ -91,6 +95,8 @@ func (s SectionSpec) isPlace() bool {
 type RebuildResult struct {
 	Variant *yue.DspVariant `json:"variant"`
 	Inserts []InsertReport  `json:"inserts"`
+	// Warnings — предупреждения подготовки пресетов черновика (у трека нет плана — гитарист пропущен)
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // InsertReport — куда встал рендер куска.
@@ -152,10 +158,16 @@ type stemSet map[string]string
 func RebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs []SectionSpec) (*RebuildResult, error) {
 	var res *RebuildResult
 	_, err := RunOp(ctx, svc, "rebuild", rebuildLabel(specs), parentID, func(ctx context.Context) (int64, error) {
-		r, err := rebuildSections(yue.WithoutJournal(ctx), svc, parentID, specs, "")
+		jctx := yue.WithoutJournal(ctx)
+		all, warnings, err := expandPresets(jctx, svc, parentID, specs)
 		if err != nil {
 			return 0, err
 		}
+		r, err := rebuildSections(jctx, svc, parentID, all, "")
+		if err != nil {
+			return 0, err
+		}
+		r.Warnings = warnings
 		res = r
 		return 0, nil // итог — вариант трека (файл), не новая версия
 	})
@@ -206,6 +218,14 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 	specs, master, places, mixFx, err := splitMix(specs)
 	if err != nil {
 		return nil, err
+	}
+	// наборы сэмплов цепочек движка: студия при записи правки их не качает — недостающие ставит сборка
+	withKits := append(slices.Clone(specs), mixFx...)
+	if master != nil {
+		withKits = append(withKits, *master)
+	}
+	if err := ensurePresetKits(ctx, svc, nil, withKits); err != nil {
+		return nil, kitEditErr(withKits, err)
 	}
 	needStems := len(places) > 0
 	for _, sp := range specs {
@@ -262,7 +282,7 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 					part = muteInserts(one, parent, &inputs)
 				}
 				if err != nil {
-					return nil, err
+					return nil, editErr(s, err)
 				}
 				if s.Add && s.Place != nil {
 					m, _ := dsp.PlaceMatrix(s.Place.Pan, s.Place.Width) // проверено в splitMix
@@ -285,11 +305,11 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 		}
 		child, err := fetchStems(ctx, svc, s.ChildID, dir)
 		if err != nil {
-			return nil, err
+			return nil, editErr(s, err)
 		}
 		if s.Revoice && slices.Contains(s.Stems, "vocals") {
 			if child["vocals"], err = FetchTemp(ctx, svc, s.ChildID, "stem-vocals.flac", dir, tmpPattern); err != nil {
-				return nil, fmt.Errorf("стем vocals #%d: %w", s.ChildID, err)
+				return nil, editErr(s, fmt.Errorf("стем vocals #%d: %w", s.ChildID, err))
 			}
 		}
 		beat := s.BeatSec
@@ -348,7 +368,7 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 	for i, m := range mixFx {
 		next := fmt.Sprintf("%s/mix-%d.wav", dir, i)
 		if err := dsp.Run(out, next, mixGraph(m), nil); err != nil {
-			return nil, fmt.Errorf("эффект на весь трек: %w", err)
+			return nil, editErr(m, fmt.Errorf("эффект на весь трек: %w", err))
 		}
 		out = next
 	}
@@ -373,7 +393,7 @@ func rebuildSections(ctx context.Context, svc yue.Service, parentID int64, specs
 		// мастер — на воркере, на весь собранный микс, в тот же файл: студия играет его по имени
 		if v, err = svc.ApplyFx(ctx, parentID, yue.FxRequest{Source: "mix", File: v.File, InPlace: true,
 			Chain: master.Engine}); err != nil {
-			return nil, fmt.Errorf("мастер: %w", err)
+			return nil, editErr(*master, fmt.Errorf("мастер: %w", err))
 		}
 		// микс без мастера — для «было/стало» правки мастера в студии (иначе мастер лёг бы дважды)
 		if _, err := svc.UploadDsp(ctx, parentID, PremasterFile(fname), label+" · без мастера", data); err != nil {
@@ -390,41 +410,41 @@ func PremasterFile(mix string) string {
 
 // splitMix — из записей пересборки отделить мастер (одна активная), места дорожек (по одному на
 // дорожку) и эффекты на весь микс (по порядку); остальные записи — как были. Место только у
-// записи-добавления или своей записью. Ошибки — до скачивания чего-либо.
+// записи-добавления или своей записью. Ошибки — до скачивания чего-либо, с ID записи (EditError).
 func splitMix(specs []SectionSpec) (rest []SectionSpec, master *SectionSpec, places map[string][4]float64,
 	mixFx []SectionSpec, err error) {
 	places = map[string][4]float64{}
 	for i, s := range specs {
 		if s.Place != nil {
 			if _, err := dsp.PlaceMatrix(s.Place.Pan, s.Place.Width); err != nil {
-				return nil, nil, nil, nil, fmt.Errorf("место: %w", err)
+				return nil, nil, nil, nil, editErr(s, fmt.Errorf("место: %w", err))
 			}
 		}
 		switch {
 		case s.Mix:
 			if err := checkMix(s); err != nil {
-				return nil, nil, nil, nil, err
+				return nil, nil, nil, nil, editErr(s, err)
 			}
 			mixFx = append(mixFx, s)
 		case s.Master:
 			if len(s.Engine) == 0 {
-				return nil, nil, nil, nil, errors.New("мастер без цепочки движка")
+				return nil, nil, nil, nil, editErr(s, errors.New("мастер без цепочки движка"))
 			}
 			if master != nil {
-				return nil, nil, nil, nil, errors.New("у трека две записи мастера — оставьте одну")
+				return nil, nil, nil, nil, editErr(s, errors.New("у трека две записи мастера — оставьте одну"))
 			}
 			master = &specs[i]
 		case s.isPlace():
 			if len(s.Stems) != 1 || !slices.Contains(engineStems, s.Stems[0]) {
-				return nil, nil, nil, nil, fmt.Errorf("место — одной дорожке трека (не %v)", s.Stems)
+				return nil, nil, nil, nil, editErr(s, fmt.Errorf("место — одной дорожке трека (не %v)", s.Stems))
 			}
 			name := s.Stems[0]
 			if _, dup := places[name]; dup {
-				return nil, nil, nil, nil, fmt.Errorf("у дорожки %s два места — оставьте одно", name)
+				return nil, nil, nil, nil, editErr(s, fmt.Errorf("у дорожки %s два места — оставьте одно", name))
 			}
 			places[name], _ = dsp.PlaceMatrix(s.Place.Pan, s.Place.Width)
 		case s.Place != nil && !s.Add:
-			return nil, nil, nil, nil, errors.New("место — у партии-добавления или своей записью дорожки, не у замены")
+			return nil, nil, nil, nil, editErr(s, errors.New("место — у партии-добавления или своей записью дорожки, не у замены"))
 		default:
 			rest = append(rest, s)
 		}
@@ -537,6 +557,8 @@ func rebuildLabel(specs []SectionSpec) string {
 	for _, s := range specs {
 		var what string
 		switch {
+		case s.Preset != nil:
+			what = "пресет «" + s.Preset.Preset.Name + "»"
 		case s.Master:
 			what = "мастер: " + strings.TrimPrefix(EngineLabel(s.Engine), "Движок: ")
 		case s.ChildID > 0:

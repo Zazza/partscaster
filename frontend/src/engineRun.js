@@ -1,10 +1,7 @@
-// Звуковой движок из интерфейса без Vue: докачка наборов сэмплов и «применить цепочку» (короткое
-// превью, затем запись в реестр пересборки). Вызывают пульт дорожек студии (TrackDesk) и InstrumentsPage.
-import RU from './i18n/ru.js'
+// Звуковой движок из интерфейса без Vue: докачка наборов сэмплов (превью) и запись цепочки в черновик.
+// Вызывают пульт дорожек студии (TrackDesk), синт, перкуссия и InstrumentsPage.
 import { missingKits } from './fxChain.js'
 import { installKit } from './kitProgress.js'
-
-export const PREVIEW_SEC = 10 // проверка цепочки перед записью — короткий кусок
 
 const copy = (v) => JSON.parse(JSON.stringify(v)) // цепочка — данные JSON: копия без общих объектов
 
@@ -26,21 +23,8 @@ export async function ensureKits(api, chain, kits, onKit) {
   return need
 }
 
-/** Применить цепочку движка к дорожке: снимок {jobId, dur, src, from, to, chain, label} берётся до
- *  первого await — пока качается набор, дорожку, пресет и трек могут сменить, а превью и запись
- *  должны быть про одно и то же. Старый воркер (нет превью) — ошибка: запрос сделал бы вариант,
- *  а такую запись пересборка отвергла бы. Возврат — запись для useInserts.addStemEngine.
- *  opts.oldMsg — текст ошибки «обновите воркер» на языке интерфейса; opts.onKit — как у ensureKits. */
-export async function applyEngine(api, snap, opts = {}) {
-  const s = { ...snap, chain: copy(snap.chain || []) }
-  const oldMsg = opts.oldMsg || RU['instr.engine.old']
-  const cfg = await api.workerConfig()
-  if (!cfg || !cfg.fx_preview) throw new Error(oldMsg)
-  await ensureKits(api, s.chain, ((await api.fxAssets()) || {}).kits, opts.onKit)
-  // запись с цепочкой, которую воркер не примет (движок выключен, нет захвата, нет дорожки),
-  // роняла бы каждую следующую пересборку — сначала короткое превью того же
-  const end = s.to > s.from ? Math.min(s.to, s.from + PREVIEW_SEC) : Math.min(s.from + PREVIEW_SEC, s.dur || s.from + PREVIEW_SEC)
-  const r = await api.applyFx(s.jobId, { source: s.src, chain: s.chain, from: s.from, to: end, output: 'solo', preview: true })
-  if (!r || !String(r.file || '').startsWith('preview-fx-')) throw new Error(oldMsg)
-  return { stem: s.src, chain: copy(s.chain), from: s.from, to: s.to, label: s.label }
+/** Запись цепочки движка на дорожку для useInserts.addStemEngine из снимка {src, from, to, chain, label}: только
+ *  данные — без запроса к воркеру; наборы ставит и цепочку проверяет сборка (сбой — красная строка правки). */
+export function engineRecord(snap) {
+  return { stem: snap.src, chain: copy(snap.chain || []), from: snap.from, to: snap.to, label: snap.label }
 }

@@ -8,29 +8,16 @@
 //   api.installFxKit(имя набора) по одному (следующий — после окончания предыдущего), в
 //   порядке цепочки, каждый один раз; уже стоящие не трогаются. Ошибка установки →
 //   отклонённый промис с текстом ошибки.
-// - applyEngine(api, snap): snap — снимок EngineBox (допущение о форме):
-//     { jobId, dur, src, from, to, chain, label }
-//     jobId — id трека, dur — длина трека (с), src — дорожка (stem), from/to — окно (с;
-//     to ≤ from — «до конца», как to ≤ 0 у записи реестра), chain — цепочка для воркера,
-//     label — подпись записи.
-//   Порядок: api.workerConfig() → нет fx_preview — ошибка «обнов…»; наборы цепочки —
-//   по api.fxAssets().kits, недостающие — api.installFxKit; затем api.applyFx(jobId, req)
-//   с req ⊇ {source: src, output: 'solo', preview: true, from, to: окно превью, chain};
-//   окно превью — до 10 с от from: to > from → min(to, from + 10); to ≤ from →
-//   min(from + 10, dur). Ответ не preview-fx-* — ошибка «обнов…».
-//   Возврат — то, что нужно записи реестра useInserts.addStemEngine:
-//     ⊇ { stem: src, chain, from, to, label } (to — исходное окно записи, не окно превью).
-//   Снимок берётся до первого await: изменения исходных объектов во время ожидания
-//   workerConfig / fxAssets / installFxKit не меняют ни запрос превью, ни запись.
-// - Текст ошибки «старый воркер» — из i18n; в тестах принимается ru («обнов») или en
-//   («update»), т.к. язык окружения тестов не задан.
+// - engineRecord(snap) (internal-studio-instant-apply, условия 1–2): «Применить» цепочки движка только пишет
+//   запись — без превью, установки наборов и запросов к воркеру; api функция не получает. Синхронная.
+//   snap — снимок EngineBox {src, chain, from, to, label}; ответ — запись для useInserts.addStemEngine:
+//   {stem: src, chain: глубокая копия snap.chain, from, to, label}; окно как есть (to ≤ from — «до конца»);
+//   запись не делит объектов с snap.chain.
 import { describe, it, expect } from 'vitest'
-import { ensureKits, applyEngine } from './engineRun.js'
-
-const OLD_WORKER = /обнов|update/i
+import { ensureKits, engineRecord } from './engineRun.js'
 
 // Фейк api: асинхронные методы, журнал вызовов, хуки «во время ожидания».
-// hooks[method] вызывается ПОСЛЕ того, как applyEngine/ensureKits вызвали метод, но до
+// hooks[method] вызывается ПОСЛЕ того, как ensureKits вызвал метод, но до
 // того, как его промис разрешился, — это и есть «изменение во время await».
 function fakeApi({
   config = { fx_preview: true },
@@ -161,150 +148,46 @@ const SNAP = (over = {}) => ({
   jobId: 466, dur: 180, src: 'other', from: 20, to: 35, chain: CHAIN(), label: 'Гитара: JCM2000', ...over,
 })
 
-describe('applyEngine: запрос превью и запись', () => {
-  it('один запрос превью solo по дорожке, окно до 10 с от from; запись — исходное окно', async () => {
-    const f = fakeApi()
-    const rec = await applyEngine(f.api, SNAP())
-    const fx = f.calls('applyFx')
-    expect(fx).toHaveLength(1)
-    const [, id, req] = fx[0]
-    expect(id).toBe(466)
-    expect(req).toMatchObject({ source: 'other', output: 'solo', preview: true, from: 20, to: 30 })
-    expect(req.chain).toEqual(CHAIN())
+describe('engineRecord: запись без запросов к воркеру', () => {
+  it('запись: stem = src, chain = цепочка снимка, окно и подпись как есть', () => {
+    const rec = engineRecord(SNAP())
     expect(rec).toMatchObject({ stem: 'other', from: 20, to: 35, label: 'Гитара: JCM2000' })
     expect(rec.chain).toEqual(CHAIN())
   })
 
-  it('окно короче 10 с → превью ровно по окну', async () => {
-    const f = fakeApi()
-    await applyEngine(f.api, SNAP({ from: 20, to: 25.5 }))
-    expect(f.calls('applyFx')[0][2]).toMatchObject({ from: 20, to: 25.5 })
+  it('синхронная: возвращает запись, а не промис', () => {
+    const rec = engineRecord(SNAP())
+    expect(typeof rec?.then).not.toBe('function')
   })
 
-  it('окно ровно 10 с → превью по окну', async () => {
-    const f = fakeApi()
-    await applyEngine(f.api, SNAP({ from: 40, to: 50 }))
-    expect(f.calls('applyFx')[0][2]).toMatchObject({ from: 40, to: 50 })
+  it('to ≤ from («до конца») хранится как есть', () => {
+    expect(engineRecord(SNAP({ from: 40, to: 0 }))).toMatchObject({ from: 40, to: 0 })
+    expect(engineRecord(SNAP({ from: 40, to: 30 }))).toMatchObject({ from: 40, to: 30 })
   })
 
-  it('to ≤ from («до конца») → превью 10 с от from; запись хранит to как есть', async () => {
-    for (const to of [0, -1, 20, 10]) {
-      const f = fakeApi()
-      const rec = await applyEngine(f.api, SNAP({ from: 20, to }))
-      expect(f.calls('applyFx')[0][2]).toMatchObject({ from: 20, to: 30 })
-      expect(rec).toMatchObject({ from: 20, to })
-    }
+  it('from = 0, to = 0 — весь трек', () => {
+    expect(engineRecord(SNAP({ from: 0, to: 0 }))).toMatchObject({ from: 0, to: 0 })
   })
 
-  it('to ≤ from у конца трека → превью не дальше длины трека', async () => {
-    const f = fakeApi()
-    await applyEngine(f.api, SNAP({ from: 175, to: 0, dur: 180 }))
-    expect(f.calls('applyFx')[0][2]).toMatchObject({ from: 175, to: 180 })
+  it('цепочка с наборами — запись без установки (api не нужен)', () => {
+    const chain = [{ type: 'sampler', kit: 'osdk/kick', kit_open: 'osdk/hh-open' }, { type: 'bass', kit: 'growlybass/bass' }]
+    expect(engineRecord(SNAP({ src: 'kick', chain })).chain).toEqual(chain)
   })
 
-  it('from = 0 — допустимое начало окна', async () => {
-    const f = fakeApi()
-    await applyEngine(f.api, SNAP({ from: 0, to: 0, dur: 6 }))
-    expect(f.calls('applyFx')[0][2]).toMatchObject({ from: 0, to: 6 })
-  })
-})
-
-describe('applyEngine: старый воркер', () => {
-  for (const [name, config] of [
-    ['нет fx_preview', { fx_engine: true }],
-    ['fx_preview: false', { fx_preview: false }],
-    ['config пустой', null],
-  ]) {
-    it(`${name} → ошибка «обновите», превью не запрашивается`, async () => {
-      const f = fakeApi({ config })
-      await expect(applyEngine(f.api, SNAP())).rejects.toThrow(OLD_WORKER)
-      expect(f.calls('applyFx')).toHaveLength(0)
-      expect(f.installs()).toEqual([])
-    })
-  }
-
-  for (const [name, resp] of [
-    ['вариант dsp-fx-* вместо превью', { file: 'dsp-fx-other-0a1b2c3d.flac' }],
-    ['пустой ответ', null],
-    ['без имени файла', { duration_sec: 10 }],
-  ]) {
-    it(`ответ ${name} → ошибка «обновите»`, async () => {
-      const f = fakeApi({ applyResp: resp })
-      await expect(applyEngine(f.api, SNAP())).rejects.toThrow(OLD_WORKER)
-    })
-  }
-})
-
-describe('applyEngine: наборы', () => {
-  const SAMPLER_CHAIN = () => [{ type: 'sampler', kit: 'osdk/hh-closed', kit_open: 'osdk/hh-half', choke: 1 }]
-
-  it('недостающий набор ставится до запроса превью', async () => {
-    const f = fakeApi({ kits: [kit('osdk/kick')] })
-    await applyEngine(f.api, SNAP({ src: 'drums', chain: SAMPLER_CHAIN() }))
-    expect(f.installs()).toEqual(['osdk'])
-    const order = f.log.map((e) => e[0])
-    expect(order.indexOf('installFxKit:end')).toBeLessThan(order.indexOf('applyFx'))
-  })
-
-  it('наборы стоят → ничего не ставит', async () => {
-    const f = fakeApi({ kits: [kit('osdk/hh-closed'), kit('osdk/hh-half')] })
-    await applyEngine(f.api, SNAP({ src: 'drums', chain: SAMPLER_CHAIN() }))
-    expect(f.installs()).toEqual([])
-    expect(f.calls('applyFx')).toHaveLength(1)
-  })
-
-  it('ошибка установки → отклонённый промис с текстом, превью не запрашивается', async () => {
-    const f = fakeApi({ installErr: { osdk: 'osdk: GitHub недоступен' } })
-    await expect(applyEngine(f.api, SNAP({ src: 'drums', chain: SAMPLER_CHAIN() }))).rejects.toThrow(/GitHub недоступен/)
-    expect(f.calls('applyFx')).toHaveLength(0)
-  })
-})
-
-describe('applyEngine: снимок до первого await', () => {
-  // меняет всё, что можно поменять в исходных объектах: поля снимка и цепочку вглубь
-  function mutate(snap) {
-    snap.jobId = 999
-    snap.src = 'vocals'
-    snap.from = 100
-    snap.to = 105
-    snap.dur = 101
-    snap.label = 'чужая подпись'
-    snap.chain[0].kit = 'evil/kit'
-    snap.chain[0].floor_db = -10
-    snap.chain.push({ type: 'gain', gain_db: 12 })
-  }
-
-  const CHAIN_K = () => [{ type: 'sampler', kit: 'osdk/kick', floor_db: -40 }, { type: 'eq', bands: [{ freq_hz: 200, gain_db: 2, q: 1 }] }]
-
-  for (const when of ['workerConfig', 'fxAssets', 'installFxKit']) {
-    it(`изменение исходных объектов во время ${when} не меняет запрос и запись`, async () => {
-      const snap = SNAP({ src: 'drums', from: 20, to: 35, chain: CHAIN_K(), label: 'Бочка' })
-      const f = fakeApi({ kits: [], hooks: { [when]: () => mutate(snap) } })
-      const rec = await applyEngine(f.api, snap)
-      if (when === 'installFxKit') expect(f.installs()).toEqual(['osdk'])
-      const fx = f.calls('applyFx')
-      expect(fx).toHaveLength(1)
-      const [, id, req] = fx[0]
-      expect(id).toBe(466)
-      expect(req).toMatchObject({ source: 'drums', output: 'solo', preview: true, from: 20, to: 30 })
-      expect(req.chain).toEqual(CHAIN_K())
-      expect(rec).toMatchObject({ stem: 'drums', from: 20, to: 35, label: 'Бочка' })
-      expect(rec.chain).toEqual(CHAIN_K())
-    })
-  }
-
-  it('устанавливает наборы из снимка, а не из изменённой цепочки', async () => {
-    const snap = SNAP({ src: 'drums', chain: CHAIN_K() })
-    const f = fakeApi({ kits: [], hooks: { workerConfig: () => mutate(snap) } })
-    await applyEngine(f.api, snap)
-    expect(f.installs()).toEqual(['osdk'])
-  })
-
-  it('запись не делит объекты с исходной цепочкой', async () => {
+  it('запись не делит объекты с исходной цепочкой: правка источника после вызова запись не меняет', () => {
     const snap = SNAP()
-    const f = fakeApi()
-    const rec = await applyEngine(f.api, snap)
-    snap.chain[0].output_db = 12
+    const rec = engineRecord(snap)
+    snap.chain[0].input_db = 12
+    snap.chain[1].bands[0].gain_db = 6
+    snap.chain.push({ type: 'reverb' })
     expect(rec.chain).toEqual(CHAIN())
+    rec.chain[0].output_db = 0
+    expect(snap.chain[0].output_db).toBe(-3)
+  })
+
+  it('снимок не меняется', () => {
+    const snap = SNAP()
+    engineRecord(snap)
+    expect(snap).toEqual(SNAP())
   })
 })

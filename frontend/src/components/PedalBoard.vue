@@ -22,6 +22,7 @@ const props = defineProps({
   chains: { type: Array, default: () => [] },
   sel: { type: Object, default: null },        // выделение на волне/ролле {from, to}
   cursor: { type: Number, default: 0 },        // курсор воспроизведения, с
+  stems: { type: Array, default: () => [] },   // дорожки трека, известные студии ({name}): нет гитары — запись на «прочее»
 })
 const emit = defineEmits(['applied', 'stem'])
 const { t } = useI18n()
@@ -164,25 +165,25 @@ async function playSlot(slot) {
 async function apply() {
   const steps = boardSteps(board.value)
   const label = presetSel.value && presets.value.find((p) => p.id === presetSel.value)?.name || ''
-  busy.value = true
   msg.value = ''
   try {
     if (stem.value) {
       const s = props.sel
-      await withStem(async (st) => {
-        // запись реестра с дорожкой, которой нет, пересборку роняет каждый раз — сначала
-        // проверяем дорожку быстрым превью (то же скачивание/разделение, тот же кэш)
-        const w = win()
-        await api.fxPreview(props.job.id, st, steps, w.from, w.to, SLOT)
-        await inserts.addStemPedals(props.job.id, { stem: st, steps, from: s ? s.from : 0, to: s ? s.to : 0, label })
-      })
+      // только запись: дорожку решает список дорожек студии — гитары у трека нет (дорожки уже есть, а подробной
+      // 6-стемной нет) — педали на «гитары/синты», без запроса к воркеру
+      const names = props.stems.map((x) => x.name)
+      if (stem.value === 'guitar' && names.length && !names.includes('guitar')) {
+        stem.value = 'other'
+        msg.value = t('pedals.noguitar')
+      }
+      await inserts.addStemPedals(props.job.id, { stem: stem.value, steps, from: s ? s.from : 0, to: s ? s.to : 0, label })
     } else {
       // весь трек: доска — запись черновика на собранный микс (до мастера), отдельной версии нет
       await inserts.addMixPedals(props.job.id, { steps, label })
     }
     emit('applied')
     msg.value = (msg.value ? msg.value + ' ' : '') + t('pedals.applied')
-  } catch (e) { msg.value = String(e) } finally { busy.value = false }
+  } catch (e) { msg.value = String(e) }
 }
 
 async function findGrid() {

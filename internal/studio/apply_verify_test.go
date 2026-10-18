@@ -36,7 +36,7 @@ import (
 // треку = цель + guitarErr[версия], бас — ровно у цели. Добавлены внешние границы «черновик»
 // (DraftDelete) и «бас версии сдвинут» (bassErr — для ТК6).
 //
-// Записи итога — такие, какие отдаёт PresetDraft пресета vfPreset: гитара (движок, level_target −10 +
+// Записи итога — такие, какие давала подготовка пресета vfPreset: гитара (движок, level_target −10 +
 // level_total, verify_db −10) и бас (Db по замеру трека, verify_db −10).
 //
 // Как видно: каждая загрузка — пересборка (записи без финала и мастера); гейн гитары — тон 1000 Гц в загрузке
@@ -751,36 +751,8 @@ func TestApplyEditsJournalOneRebuildWithCorrections(t *testing.T) {
 	}
 }
 
-// ---------- Условие 12: одна реализация сверки — черновик + итог дают те же поправки, что пресет сразу ----------
-
-func TestPresetVerifyDraftThenApplySameAsDirect(t *testing.T) {
-	t.Parallel()
-	errs := map[int64]float64{vfFirst: 3.6, vfFirst + 1: 1.6}
-
-	direct, origD := vfSetup(t, errs)
-	vfApply(t, direct, vfPreset(95))
-	dp := direct.passes(t, origD)
-
-	f, orig := aeSetup(t, errs)
-	draft := pdMustDraft(t, f, vfPreset(95))
-	if len(f.ups) != 0 {
-		t.Fatalf("сценарий: черновик собирал (%d загрузок)", len(f.ups))
-	}
-	aeApply(t, f, draft.Sections, "")
-	ap := f.passes(t, orig)
-
-	if len(ap) != len(dp) {
-		t.Fatalf("сборок: черновик+итог %d, пресет сразу %d", len(ap), len(dp))
-	}
-	for k := range ap {
-		if d := ap[k].guitar - dp[k].guitar; math.Abs(d) > 0.1 {
-			t.Errorf("гитара прохода %d: черновик+итог %+.2f, сразу %+.2f", k+1, ap[k].guitar, dp[k].guitar)
-		}
-		if d := ap[k].bass - dp[k].bass; math.Abs(d) > 0.1 {
-			t.Errorf("бас прохода %d: черновик+итог %+.2f, сразу %+.2f", k+1, ap[k].bass, dp[k].bass)
-		}
-	}
-}
+// Условие 12 (одна реализация сверки: черновик + итог = пресет сразу) — TestApplyEditsPresetRecordSameAsDirect
+// в preset_record_test.go: запись-пресет черновика раскрывается при итоге (internal-studio-instant-apply, ТК9).
 
 // ---------- verify_db в JSON ----------
 

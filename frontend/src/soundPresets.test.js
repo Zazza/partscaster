@@ -109,10 +109,23 @@ describe('presetFromEdits — правки студии → пресет', () =>
     final: [{ chain: 'width', params: { width: 1.1 } }],
     master: [{ type: 'limiter', target_lufs: -13 }],
   }
-  const presetRec = () => presetRecord(PRESET_RESULT, { id: 71, name: 'Пост-панк' }, -20)
+  // старая запись (посчитанные sections) — как её писал прежний presetRecord
+  const oldPresetRec = () => ({ childId: -20, instId: 'preset', from: 0, to: 0, lead: 0, beat: 0, db: 0, stems: [],
+    fadeIn: 0, fadeOut: 0, keepHighHz: 0, step: 'done', label: 'Пост-панк',
+    preset: { id: 71, name: 'Пост-панк', ...JSON.parse(JSON.stringify(PRESET_RESULT)), warnings: [] } })
+  // internal-studio-instant-apply (условие 4): запись с рецептом пресета
+  const RECIPE = { id: 71, name: 'Пост-панк', specs: [{ stems: ['bass'], engine: ENGINE, db: -2 }],
+    final: [{ chain: 'width', params: { width: 1.1 } }], target_lufs: -13, master: [] }
+  const presetRec = () => presetRecord(RECIPE, { id: 71, name: 'Пост-панк' }, -20)
 
-  it('запись-пресет черновика не входит в specs и считается пропущенной', () => {
+  it('запись-пресет черновика (рецепт) не входит в specs и считается пропущенной', () => {
     const { specs, skipped } = presetFromEdits([presetRec()])
+    expect(specs).toEqual([])
+    expect(skipped).toBe(1)
+  })
+
+  it('старая запись-пресет (sections) тоже не входит в specs и считается пропущенной', () => {
+    const { specs, skipped } = presetFromEdits([oldPresetRec()])
     expect(specs).toEqual([])
     expect(skipped).toBe(1)
   })

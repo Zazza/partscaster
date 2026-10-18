@@ -17,7 +17,7 @@ import { installKit as installKitOn } from '../kitProgress.js'
 import { fromWorkerChain, toWorkerChain, missingRequired, fillAmp } from '../fxChain.js'
 import { instrumentTree, familyOptions, subOptions, itemOptions, pathOf } from '../presetGroups.js'
 import { DRUM_KITS, DRUM_TREATMENTS } from '../drumKits.js'
-import { applyEngine, ensureKits } from '../engineRun.js'
+import { engineRecord, ensureKits } from '../engineRun.js'
 import { insertTitle, insertWindow } from '../insertLabels.js'
 import { deskRows, previewWindow, applyWindow, presetsFor, removeRecord, rhythmSection, shouldAutoSplit, stemLevels, stemAudibility, withPending } from '../trackDesk.js'
 import { notesHint } from '../guitarNotesHint.js'
@@ -198,9 +198,12 @@ async function previewRow(stem) {
   } catch (e) { err.value = String(e) } finally { busy.value = '' }
 }
 // «было» — трек со всеми правками без этой (нет правок — оригинал)
-function playRowBefore() {
+// черновик менялся после сборки — сначала сборка (иначе «было» звучало бы старым миксом)
+async function playRowBefore() {
   const w = listenWin.value
-  rowBefore.play({ jobId: props.job.id, file: inserts.mixFile(props.job.id) || props.job.audio_file,
+  let file
+  try { file = await inserts.currentMix(props.job.id) } catch (e) { err.value = String(e); return }
+  rowBefore.play({ jobId: props.job.id, file: file || props.job.audio_file,
     dur: props.job.duration_sec, from: w.from, to: w.to })
 }
 async function applyRow(stem) {
@@ -243,7 +246,7 @@ function playBeforeWin() {
     dur: props.job.duration_sec, from: w.from, to: w.to })
 }
 
-// «в трек» / «заменить»: проверка коротким превью → запись реестра → пересборка
+// «в трек» / «заменить»: только запись в черновик (наборы и проверку цепочки делает сборка)
 async function apply() {
   err.value = ''
   msg.value = ''
@@ -254,16 +257,15 @@ async function apply() {
     chain: toWorkerChain(chain.value),
     label: p ? t('engine.label', { name: tr(p.name) }) : (ed && ed.label) || t('engine.label', { name: t('desk.own') }),
   }
-  busy.value = 'apply'
   try {
-    const rec = await applyEngine(api, snap, { oldMsg: t('instr.engine.old'), onKit: () => { busy.value = 'kit' } })
+    const rec = engineRecord(snap)
     if (ed) await inserts.replaceEngine(snap.jobId, ed.childId, { chain: rec.chain, label: rec.label })
     else await inserts.addStemEngine(snap.jobId, rec)
     // пока шла запись, могли открыть на правку другую запись — её не сбрасывать
     if (editing.value === ed) editing.value = null
     msg.value = t('engine.applied')
     emit('applied')
-  } catch (e) { err.value = String(e) } finally { busy.value = ''; loadAssets() }
+  } catch (e) { err.value = String(e) }
 }
 
 // ритм-секция набором: все части барабанов и бас, что есть у трека, — одной пересборкой
@@ -289,12 +291,7 @@ async function previewRhythm() {
   const items = rhythm.value.map((r) => ({ ...r, ...rhythmWin.value }))
   busy.value = 'rhythm'
   try {
-    const recs = []
-    for (const it of items) {
-      recs.push(await applyEngine(api, { jobId, dur, src: it.stem, from: it.from, to: it.to, chain: it.chain, label: it.label },
-        { oldMsg: t('instr.engine.old'), onKit: () => { busy.value = 'kit' } }))
-      busy.value = 'rhythm'
-    }
+    const recs = items.map((it) => engineRecord({ src: it.stem, from: it.from, to: it.to, chain: it.chain, label: it.label }))
     const extra = recs.map((r) => ({ instId: 'engine', from: r.from, to: r.to, db: 0, stems: [r.stem], engine: r.chain }))
     const res = await inserts.previewWith(jobId, (list) => [...list, ...extra])
     if (!res || !res.variant) throw new Error(t('studio.edits.none'))
@@ -306,22 +303,14 @@ async function applyRhythm() {
   err.value = ''
   msg.value = ''
   const jobId = props.job.id
-  const dur = props.job.duration_sec
-  const items = rhythm.value.map((r) => ({ ...r, ...rhythmWin.value }))   // всё — до первого await
-  busy.value = 'rhythm'
+  const items = rhythm.value.map((r) => ({ ...r, ...rhythmWin.value }))
   try {
-    // каждая цепочка — проверка коротким превью, как у «в трек»: запись, которую воркер не примет
-    // (движок выключен, нет набора, старый воркер), роняла бы каждую следующую пересборку трека
-    const recs = []
-    for (const it of items) {
-      recs.push(await applyEngine(api, { jobId, dur, src: it.stem, from: it.from, to: it.to, chain: it.chain, label: it.label },
-        { oldMsg: t('instr.engine.old'), onKit: () => { busy.value = 'kit' } }))
-      busy.value = 'rhythm'
-    }
-    await inserts.addStemEngines(jobId, recs)
+    // только запись в черновик: наборы и проверку цепочек делает сборка (сбой — красная строка правки)
+    await inserts.addStemEngines(jobId, items.map((it) => engineRecord({ src: it.stem, from: it.from, to: it.to,
+      chain: it.chain, label: it.label })))
     msg.value = t('desk.rhythm.done', { n: items.length })
     emit('applied')
-  } catch (e) { err.value = String(e) } finally { busy.value = ''; loadAssets() }
+  } catch (e) { err.value = String(e) }
 }
 
 // громкость дорожки к треку (замер воркера): почти неслышную двигать и обрабатывать бесполезно (#689: райд −35 дБ)

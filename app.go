@@ -94,12 +94,6 @@ func (a *App) YueSoundPresetDelete(id int64) error {
 	return a.yue.SoundPresetDelete(a.ctx, id)
 }
 
-// YueSoundPresetDraft — пресет в черновик студии: подготовка и сверка баланса (операция очереди, минуты), трек не
-// меняется; ответ — запись «Пресет» для «Изменений трека», итог собирает «применить всё».
-func (a *App) YueSoundPresetDraft(jobID int64, p yue.SoundPreset) (*studio.PresetDraftResult, error) {
-	return studio.PresetDraft(a.ctx, a.yue, jobID, p)
-}
-
 // YueApplySoundPresetWith — копия пресета (громкость записей поправлена в студии)
 // в очередь; пресет на воркере не меняется.
 func (a *App) YueApplySoundPresetWith(jobID int64, p yue.SoundPreset) (int64, error) {

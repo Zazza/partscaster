@@ -1896,6 +1896,19 @@ button.toggle.on { border-color: var(--accent); color: var(--accent); font-weigh
 /* волна прилипает вплотную под полосой шагов: видна из любого шага (галочка «волна сверху»).
    Фон — сплошная панель: полупрозрачный studio-box просвечивал */
 .wave-panel.wave-pinned { position: sticky; top: 46px; z-index: 3; margin-top: 0; background: var(--panel); }
+/* окно правок: якорь нулевой высоты прилипает под полосой шагов, само окно — поверх блоков у правого края;
+   раскрытое не шире окна приложения и прокручивается само */
+.edits-dock { position: sticky; top: 52px; height: 0; z-index: 5; }
+.edits-panel { position: absolute; top: 0; right: 8px; max-width: calc(100% - 16px); box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.edits-panel.open { width: 560px; max-height: calc(100vh - 220px); overflow-y: auto; }
+.edits-panel.failed { border-color: var(--err); }
+.edits-panel-head { display: block; width: 100%; text-align: right; white-space: nowrap; border: none; }
+.edits-panel-body { padding: 4px 12px 10px; }
+.edits-panel-body .final-group { margin-top: 8px; }
+.edits-panel-body .insert-row.failed strong { color: var(--err); }
+.edits-panel-body .insert-note { flex-basis: 100%; margin: 0; font-size: 12px; }
+[data-theme="light"] .edits-panel { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
 /* в светлой теме янтарь ЖК на светлом не читается — активный шаг акцентным цветом */
 [data-theme="light"] .studio-steps .on { color: var(--accent); border-color: var(--accent); }
 .studio-step { margin: 22px 2px 8px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; scroll-margin-top: 56px; }

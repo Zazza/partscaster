@@ -87,7 +87,8 @@ func (pr *presetPrep) title() string {
 }
 
 // preparePreset — подготовка пресета к сборке: дорожки (нет — разделение), план для гитариста, партии, слой
-// «живой звук», наборы сэмплов, замер громкостей. Общая для ApplySoundPreset и PresetDraft.
+// «живой звук», замер громкостей (наборы сэмплов ставит сборка). Общая для ApplySoundPreset и записи-пресета
+// черновика (expandPresets).
 func preparePreset(ctx context.Context, svc yue.Service, jobID int64, p yue.SoundPreset) (*presetPrep, error) {
 	ReportStep(ctx, "prepare", 1, nil) // дорожки, проверка плана
 	job, err := findJob(ctx, svc, jobID)
@@ -116,7 +117,7 @@ func preparePreset(ctx context.Context, svc yue.Service, jobID int64, p yue.Soun
 	if err := ensurePresetStems(ctx, svc, jobID, p.Specs); err != nil {
 		return nil, err
 	}
-	ReportStep(ctx, "parts", 1, nil) // партии, слой, наборы
+	ReportStep(ctx, "parts", 1, nil) // партии, слой
 	// партии — до наборов: пропущенная (нет нот, нет аккордов) свой набор не качает и ошибкой не роняет пресет
 	parts, err := presetParts(ctx, svc, job, p.Parts)
 	if err != nil {
@@ -131,9 +132,7 @@ func preparePreset(ctx context.Context, svc yue.Service, jobID int64, p yue.Soun
 	if p.Specs, err = liveDrumSpecs(ctx, svc, job, p); err != nil {
 		return nil, err
 	}
-	if err := ensurePresetKits(ctx, svc, p.Specs, parts); err != nil {
-		return nil, err
-	}
+	// наборы сэмплов ставит сборка (rebuildSections) — у пресета сразу в трек и у записи-пресета черновика
 	ReportStep(ctx, "levels", 1, nil)
 	levels, total, err := presetLevels(ctx, svc, jobID, p.Specs)
 	if err != nil {
@@ -417,7 +416,7 @@ func ensurePresetKits(ctx context.Context, svc yue.Service, specs []yue.PresetSp
 	}
 	for _, chain := range chains {
 		for _, b := range chain {
-			for _, k := range []string{"kit", "kit_open", "kit_mid", "kit_low", "mute_kit"} {
+			for _, k := range kitKeys {
 				if v, _ := b[k].(string); v != "" && !slices.Contains(need, v) {
 					need = append(need, v)
 				}
@@ -448,11 +447,43 @@ func ensurePresetKits(ctx context.Context, svc yue.Service, specs []yue.PresetSp
 			continue
 		}
 		if _, err := svc.InstallFxKit(ctx, kit); err != nil {
-			return fmt.Errorf("набор %s: %w", kit, err)
+			return &kitError{kit: kit, err: err}
 		}
 		installed = append(installed, kit)
 	}
 	return nil
+}
+
+// kitKeys — поля блоков движка с именем набора сэмплов (sampler, bass, perc, гитарист)
+var kitKeys = []string{"kit", "kit_open", "kit_mid", "kit_low", "mute_kit"}
+
+// kitError — набор сэмплов не встал: по имени набора сборка находит правку, которой он нужен
+type kitError struct {
+	kit string
+	err error
+}
+
+func (e *kitError) Error() string { return fmt.Sprintf("набор %s: %v", e.kit, e.err) }
+func (e *kitError) Unwrap() error { return e.err }
+
+// kitEditErr — сбой установки набора с ID первой правки, чья цепочка движка его берёт (студия красит её строку)
+func kitEditErr(specs []SectionSpec, err error) error {
+	var ke *kitError
+	if !errors.As(err, &ke) {
+		return err
+	}
+	for _, s := range specs {
+		for _, b := range s.Engine {
+			for _, k := range kitKeys {
+				if v, _ := b[k].(string); v != "" {
+					if name, _, _ := strings.Cut(v, "/"); name == ke.kit {
+						return editErr(s, err)
+					}
+				}
+			}
+		}
+	}
+	return err
 }
 
 // RunGraph — граф ffmpeg на файл трека → вариант fname с подписью label ("" — по имени файла).

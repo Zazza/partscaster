@@ -100,23 +100,20 @@ async function preview() {
   } finally { busy.value = '' }
 }
 
-// «Применить»: пресет — в черновик одной записью «Пресет» (подготовка без сборок — операция очереди), прежний
-// пресет заменяется; трек собирает и сверяет баланс «применить всё». Новой версии нет
+// «Применить»: пресет — в черновик одной записью «Пресет» сразу (рецепт; подготовка и сверка баланса — при
+// сборке: «▶ микс», «применить всё»), прежний пресет заменяется. Новой версии нет
 async function apply() {
   const jobId = props.job.id
   const p = current.value
   if (!p || busy.value || locked.value) return
-  busy.value = 'apply'
   err.value = ''
-  msg.value = t('preset.draft.preparing', { name: p.name })
   try {
     // громкость поправлена — копия пресета, сам пресет не меняется
     const body = changed.value ? withLevels(p, levels.value) : p
-    const r = await inserts.preparePreset(jobId, () => api.soundPresetDraft(jobId, body), { id: p.id, name: p.name })
-    msg.value = t('preset.draft.done', { name: p.name }) +
-      ((r && r.warnings) || []).map((w) => ' ' + t('preset.draft.warn', { text: w })).join('')
+    await inserts.putPreset(jobId, body, { id: p.id, name: p.name })
+    msg.value = t('preset.draft.done', { name: p.name })
     emit('applied')
-  } catch (e) { msg.value = ''; err.value = String(e) } finally { busy.value = '' }
+  } catch (e) { msg.value = ''; err.value = String(e) }
 }
 
 // «сохранить как мой»: копия выбранного пресета с поправленной громкостью — новый свой пресет

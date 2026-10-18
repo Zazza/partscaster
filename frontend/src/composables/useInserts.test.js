@@ -51,8 +51,18 @@ async function load({ queue = [], applied = {}, jobs = [], rebuildSections }) {
   // старый контракт: если сервис его вызовет, тест это увидит
   apiMock.rebuildInserts = vi.fn(async (_p, specs) => report(specs))
   const mod = await import('./useInserts.js')
-  return mod.useInserts()
+  current = mod.useInserts()
+  return current
 }
+// «▶ микс» (internal-studio-instant-apply, условие 6): запись правки сама не собирает — сборка черновика
+// трека идёт через ensureMix; ответ — спецификации последней пересборки.
+let current = null
+async function built(id = 'P') {
+  await current.ensureMix(id)
+  await flush()
+  return apiMock.rebuildSections.mock.calls.at(-1)[1]
+}
+
 
 const pendingOf = ins => unref(ins.pending) || []
 const childIds = list => list.map(x => x.childId).sort()
@@ -63,6 +73,7 @@ afterEach(() => {
 })
 
 describe('гонка пересборок', () => {
+  // internal-studio-instant-apply: готовый кусок кладётся тиком в черновик, сборка — по «▶ микс» (ensureMix)
   it('вклейка, добавленная тиком во время чужой пересборки, не пропадает, вторая пересборка шлёт обе', async () => {
     const calls = []
     const rebuildSections = vi.fn((parent, specs) => {
@@ -77,13 +88,18 @@ describe('гонка пересборок', () => {
       rebuildSections,
     })
 
-    // первая пересборка (от setDb) повисла
+    // первая пересборка («▶ микс» после setDb) повисла
     ins.setDb('P', 1, -12)
+    ins.ensureMix('P')
     await flush()
     expect(calls.length).toBe(1)
 
-    // тик: ребёнок 2 готов → вклейка B в реестр, пересборка встаёт в очередь
+    // тик: ребёнок 2 готов → вклейка B в реестр; «▶ микс» ещё раз — пересборка встаёт в очередь
     await vi.advanceTimersByTimeAsync(3000)
+    await flush()
+    expect(childIds(ins.appliedFor('P'))).toEqual([1, 2])
+    const second = ins.ensureMix('P')
+    await flush()
     // строго по одной: пока первая висит, вторая не стартовала
     expect(calls.length).toBe(1)
 
@@ -93,6 +109,7 @@ describe('гонка пересборок', () => {
     expect(calls[1].specs.map(s => s.child_id).sort()).toEqual([1, 2])
 
     calls[1].d.resolve(report(calls[1].specs))
+    await second
     await flush()
 
     const reg = ins.appliedFor('P')
@@ -107,6 +124,8 @@ describe('setDb', () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.setDb('P', 1, -40)
     await flush()
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    await built()
     const call = apiMock.rebuildSections.mock.calls.at(-1)
     expect(call[0]).toBe('P')
     expect(call[1].find(s => s.child_id === 1).db).toBe(-24)
@@ -117,7 +136,7 @@ describe('setDb', () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.setDb('P', 1, 20)
     await flush()
-    expect(apiMock.rebuildSections.mock.calls.at(-1)[1][0].db).toBe(12)
+    expect((await built())[0].db).toBe(12)
     expect(ins.appliedFor('P')[0].db).toBe(12)
   })
 
@@ -159,17 +178,17 @@ describe('tick', () => {
     expect(childIds(pendingOf(ins))).toEqual([2])
   })
 
-  it('ребёнок готов → вклейка в реестре, трек пересобран, спека ушла из очереди', async () => {
+  it('ребёнок готов → вклейка в реестре, спека ушла из очереди; «▶ микс» собирает с ней', async () => {
     const ins = await load({ queue: [specB], jobs: [{ id: 2, status: 'done' }] })
     await vi.advanceTimersByTimeAsync(3000)
     await flush()
     expect(childIds(ins.appliedFor('P'))).toEqual([2])
-    expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
-    expect(apiMock.rebuildSections.mock.calls[0][0]).toBe('P')
     expect(pendingOf(ins)).toEqual([])
+    expect((await built()).map(s => s.child_id)).toEqual([2])
+    expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
   })
 
-  it('ошибка пересборки не теряет вклейку: она в реестре, спека в очереди, повтор на следующем тике', async () => {
+  it('ошибка сборки не теряет вклейку: она в реестре, «▶ микс» после сбоя собирает снова с ней', async () => {
     let fail = true
     const rebuildSections = vi.fn(async (_p, specs) => {
       if (fail) throw new Error('воркер недоступен')
@@ -178,18 +197,17 @@ describe('tick', () => {
     const ins = await load({ queue: [specB], jobs: [{ id: 2, status: 'done' }], rebuildSections })
     await vi.advanceTimersByTimeAsync(3000)
     await flush()
-    expect(rebuildSections).toHaveBeenCalledTimes(1)
-    expect(childIds(ins.appliedFor('P'))).toEqual([2])
-    expect(childIds(pendingOf(ins))).toEqual([2])
-
-    // следующий тик — повтор, теперь успешный
-    fail = false
-    await vi.advanceTimersByTimeAsync(3000)
+    await ins.ensureMix('P').catch(() => {})
     await flush()
-    expect(rebuildSections.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(childIds(ins.appliedFor('P'))).toEqual([2])
+
+    fail = false
+    const specs = await built()
+    expect(specs.map(s => s.child_id)).toEqual([2])
     expect(childIds(ins.appliedFor('P'))).toEqual([2])
     expect(pendingOf(ins)).toEqual([])
   })
+
 })
 
 describe('carryTo', () => {
@@ -228,38 +246,26 @@ const B = { childId: 2, instId: 'i-b', from: 5, to: 15, lead: 0.1, beat: 0.5, db
 
 describe('повторное попадание вклейки в реестр', () => {
   it('спека уже применённой вклейки не сбрасывает db из setDb и не меняет порядок реестра', async () => {
-    let n = 0
-    const rebuildSections = vi.fn(async (_p, specs) => {
-      n++
-      if (n === 1) throw new Error('воркер недоступен')
-      return report(specs)
-    })
     const ins = await load({
       applied: { P: [A, B] },
       queue: [specA],
       jobs: [{ id: 1, status: 'done' }, { id: 2, status: 'done' }],
-      rebuildSections,
     })
 
-    // первый тик: пересборка падает, спека A остаётся в очереди
-    await vi.advanceTimersByTimeAsync(3000)
-    await flush()
-    expect(rebuildSections).toHaveBeenCalledTimes(1)
-
-    // пользователь меняет громкость — пересборка успешна
+    // пользователь меняет громкость — запись в черновике
     await ins.setDb('P', 1, -12)
     await flush()
 
-    // следующий тик снова обрабатывает спеку A (db −6 в спеке)
+    // тик обрабатывает спеку A (db −6 в спеке)
     await vi.advanceTimersByTimeAsync(3000)
     await flush()
 
     const reg = ins.appliedFor('P')
     expect(reg.map(x => x.childId)).toEqual([1, 2])
     expect(reg.find(x => x.childId === 1).db).toBe(-12)
-    const last = rebuildSections.mock.calls.at(-1)
-    expect(last[1].find(s => s.child_id === 1).db).toBe(-12)
+    expect((await built()).find(s => s.child_id === 1).db).toBe(-12)
   })
+
 })
 
 describe('carryTo: вклейка и в реестре, и в очереди', () => {
@@ -289,25 +295,11 @@ describe('flush', () => {
     const ins = await load({ queue: [specB], jobs: [{ id: 2, status: 'done' }] })
     await ins.flush()
     expect(childIds(ins.appliedFor('P'))).toEqual([2])
-    expect(apiMock.rebuildSections).toHaveBeenCalled()
+    await built()
     const call = apiMock.rebuildSections.mock.calls.at(-1)
     expect(call[0]).toBe('P')
     expect(call[1].map(s => s.child_id)).toContain(2)
     expect(pendingOf(ins)).toEqual([])
-  })
-
-  it('резолвится только после завершения пересборки', async () => {
-    const d = deferred()
-    const rebuildSections = vi.fn(() => d.promise)
-    const ins = await load({ queue: [specB], jobs: [{ id: 2, status: 'done' }], rebuildSections })
-    let done = false
-    const p = ins.flush().then(() => { done = true })
-    await flush()
-    expect(rebuildSections).toHaveBeenCalledTimes(1)
-    expect(done).toBe(false)
-    d.resolve(report(rebuildSections.mock.calls[0][1]))
-    await p
-    expect(done).toBe(true)
   })
 
   it('пустая очередь → резолвится без пересборок', async () => {
@@ -388,7 +380,7 @@ describe('flush: ошибка списка джоб и перекрытие с �
     expect(done).toBe(true)
     expect(apiMock.jobs).toHaveBeenCalledTimes(2)
     expect(childIds(ins.appliedFor('P'))).toEqual([2])
-    expect(apiMock.rebuildSections).toHaveBeenCalled()
+    expect((await built()).map(s => s.child_id)).toContain(2)
     expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
   })
 })
@@ -402,13 +394,14 @@ describe('пересборка по стемам (rebuildSections)', () => {
   it('stems/fadeIn/fadeOut спеки из очереди доходят до api вместе с окном', async () => {
     const ins = await load({ queue: [specS], jobs: [{ id: 5, status: 'done' }] })
     await ins.flush()
+    await built()
     expect(apiMock.rebuildSections).toHaveBeenCalled()
     const [parent, specs] = apiMock.rebuildSections.mock.calls.at(-1)
     expect(parent).toBe('P')
     const s = specs.find(x => x.child_id === 5)
     expect(s).toEqual({
       child_id: 5, from: 8, to: 16, lead: 2, beat_sec: 0.5, db: -3,
-      stems: ['bass'], fade_in: 0.25, fade_out: 0.5, keep_high_hz: 0,
+      stems: ['bass'], fade_in: 0.25, fade_out: 0.5, keep_high_hz: 0, id: '5',
     })
     expect(apiMock.rebuildInserts).not.toHaveBeenCalled()
   })
@@ -418,7 +411,7 @@ describe('пересборка по стемам (rebuildSections)', () => {
     const ins = await load({ applied: { P: [S] } })
     await ins.setDb('P', 5, -3)
     await flush()
-    const s = apiMock.rebuildSections.mock.calls.at(-1)[1].find(x => x.child_id === 5)
+    const s = (await built()).find(x => x.child_id === 5)
     expect(s).toMatchObject({ stems: ['drums'], fade_in: 0.1, fade_out: 0.2, db: -3 })
     expect(ins.appliedFor('P')[0]).toMatchObject({ stems: ['drums'], fadeIn: 0.1, fadeOut: 0.2 })
   })
@@ -444,12 +437,13 @@ describe('keepHighHz вклейки доходит до api (keep_high_hz)', () 
   it('keepHighHz спеки из очереди уходит в api как keep_high_hz вместе с остальными полями', async () => {
     const ins = await load({ queue: [specK], jobs: [{ id: 6, status: 'done' }] })
     await ins.flush()
+    await built()
     expect(apiMock.rebuildSections).toHaveBeenCalled()
     const [parent, specs] = apiMock.rebuildSections.mock.calls.at(-1)
     expect(parent).toBe('P')
     expect(specs.find(x => x.child_id === 6)).toEqual({
       child_id: 6, from: 8, to: 16, lead: 2, beat_sec: 0.5, db: 0,
-      stems: ['drums'], fade_in: 0.1, fade_out: 0.2, keep_high_hz: 6000,
+      stems: ['drums'], fade_in: 0.1, fade_out: 0.2, keep_high_hz: 6000, id: '6',
     })
   })
 
@@ -458,7 +452,7 @@ describe('keepHighHz вклейки доходит до api (keep_high_hz)', () 
     delete noKeep.keepHighHz
     const ins = await load({ queue: [noKeep], jobs: [{ id: 6, status: 'done' }] })
     await ins.flush()
-    const s = apiMock.rebuildSections.mock.calls.at(-1)[1].find(x => x.child_id === 6)
+    const s = (await built()).find(x => x.child_id === 6)
     expect(s.keep_high_hz).toBe(0)
   })
 
@@ -467,7 +461,7 @@ describe('keepHighHz вклейки доходит до api (keep_high_hz)', () 
     const ins = await load({ applied: { P: [K] } })
     await ins.setDb('P', 6, -3)
     await flush()
-    const s = apiMock.rebuildSections.mock.calls.at(-1)[1].find(x => x.child_id === 6)
+    const s = (await built()).find(x => x.child_id === 6)
     expect(s).toMatchObject({ keep_high_hz: 6000, db: -3 })
     expect(ins.appliedFor('P')[0]).toMatchObject({ keepHighHz: 6000 })
   })
@@ -490,9 +484,9 @@ describe('keepHighHz вклейки доходит до api (keep_high_hz)', () 
 
 describe('addMutes — громкость дорожек без рендера', () => {
   const mute = (from, to, db, stems = ['other']) => ({ instId: 'drumsolo', from, to, stems, db })
-  const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+  const lastCall = () => built()
 
-  it('записи в реестре с уникальными отрицательными childId, сразу одна пересборка', async () => {
+  it('записи в реестре с уникальными отрицательными childId; без пересборки, «▶ микс» — одна', async () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.addMutes('P', [mute(0, 5, -100), mute(10, 15, -100)])
     await flush()
@@ -502,8 +496,9 @@ describe('addMutes — громкость дорожек без рендера',
     for (const m of mutes) expect(m.childId).toBeLessThan(0)
     expect(new Set(mutes.map(x => x.childId)).size).toBe(2)
     expect(reg.some(x => x.childId === 1)).toBe(true)   // вклейка A не потерялась
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    expect((await lastCall()).length).toBe(3)
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
-    expect(lastCall().length).toBe(3)
   })
 
   it('два вызова подряд (время не сдвигается) — childId всё равно не совпадают', async () => {
@@ -521,7 +516,7 @@ describe('addMutes — громкость дорожек без рендера',
     const ins = await load({})
     await ins.addMutes('P', [mute(8, 16, -100, ['other', 'bass'])])
     await flush()
-    const s = lastCall()[0]
+    const s = (await lastCall())[0]
     expect(s.child_id).toBe(0)
     expect(s).toMatchObject({ from: 8, to: 16, stems: ['other', 'bass'] })
   })
@@ -530,7 +525,7 @@ describe('addMutes — громкость дорожек без рендера',
     const ins = await load({})
     await ins.addMutes('P', [mute(0, 2, 0), mute(4, 6, -60), mute(8, 10, -100)])
     await flush()
-    const byFrom = Object.fromEntries(lastCall().map(s => [s.from, s.db]))
+    const byFrom = Object.fromEntries((await lastCall()).map(s => [s.from, s.db]))
     expect(byFrom).toEqual({ 0: 0, 4: -60, 8: -100 })
     const reg = Object.fromEntries(ins.appliedFor('P').map(x => [x.from, x.db]))
     expect(reg).toEqual({ 0: 0, 4: -60, 8: -100 })
@@ -540,7 +535,7 @@ describe('addMutes — громкость дорожек без рендера',
     const ins = await load({ applied: { P: [{ ...A, db: -60 }] } })
     await ins.addMutes('P', [mute(20, 25, -60)])
     await flush()
-    const call = lastCall()
+    const call = (await lastCall())
     expect(call.find(s => s.child_id === 1).db).toBe(-24)
     expect(call.find(s => s.child_id === 0).db).toBe(-60)
   })
@@ -561,7 +556,7 @@ describe('addMutes — громкость дорожек без рендера',
 })
 
 describe('selectAlt — другой вариант вклейки', () => {
-  it('запись меняет childId на выбранный вариант, трек пересобирается с ним', async () => {
+  it('запись меняет childId на выбранный вариант; «▶ микс» собирает с ним', async () => {
     const ins = await load({ applied: { P: [{ ...A, alts: [7] }] } })
     await ins.selectAlt('P', 1, 7)
     await flush()
@@ -569,8 +564,8 @@ describe('selectAlt — другой вариант вклейки', () => {
     expect(reg.length).toBe(1)
     expect(reg[0].childId).toBe(7)
     expect(reg[0]).toMatchObject({ instId: 'i-a', from: 0, to: 10 })
-    expect(apiMock.rebuildSections).toHaveBeenCalled()
-    expect(apiMock.rebuildSections.mock.calls.at(-1)[1].map(s => s.child_id)).toEqual([7])
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    expect((await built()).map(s => s.child_id)).toEqual([7])
     expect(ins.latestFile('P')).toBe('overdub-inst-7.flac')
   })
 
@@ -583,14 +578,14 @@ describe('selectAlt — другой вариант вклейки', () => {
   })
 })
 
-describe('addStemFx — эффект на дорожку через пересборку', () => {
+describe('addStemFx — эффект на дорожку записью черновика', () => {
   const fx = (over = {}) => ({
     stem: 'vocals', chain: 'soften', params: { strength: 0.6, freq: 6000 }, from: 176, to: 0, ...over,
   })
-  const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+  const lastCall = () => built()
   const fxSpec = specs => specs.find(s => s.chain)
 
-  it('запись в реестре с отрицательным childId, сразу пересборка', async () => {
+  it('запись в реестре с отрицательным childId; без пересборки, «▶ микс» — одна', async () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.addStemFx('P', fx())
     await flush()
@@ -598,16 +593,17 @@ describe('addStemFx — эффект на дорожку через пересб
     const recs = reg.filter(x => x.childId < 0)
     expect(recs.length).toBe(1)
     expect(reg.some(x => x.childId === 1)).toBe(true)   // вклейка A не потерялась
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    expect((await lastCall()).length).toBe(2)
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
     expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
-    expect(lastCall().length).toBe(2)
   })
 
   it('в api уходит child_id 0, stems [stem], chain, params, окно; to 0 — как есть (до конца)', async () => {
     const ins = await load({})
     await ins.addStemFx('P', fx())
     await flush()
-    const s = lastCall()[0]
+    const s = (await lastCall())[0]
     expect(s.child_id).toBe(0)
     expect(s.stems).toEqual(['vocals'])
     expect(s.chain).toBe('soften')
@@ -620,7 +616,7 @@ describe('addStemFx — эффект на дорожку через пересб
     const ins = await load({})
     await ins.addStemFx('P', fx({ stem: 'drums', chain: 'dewhistle', params: { freqs: [2638, 3628] }, from: 2, to: 4 }))
     await flush()
-    expect(lastCall()[0]).toMatchObject({
+    expect((await lastCall())[0]).toMatchObject({
       child_id: 0, stems: ['drums'], chain: 'dewhistle', params: { freqs: [2638, 3628] }, from: 2, to: 4,
     })
   })
@@ -629,7 +625,7 @@ describe('addStemFx — эффект на дорожку через пересб
     const ins = await load({})
     await ins.addStemFx('P', fx())
     await flush()
-    expect(lastCall()[0].db).toBe(0)
+    expect((await lastCall())[0].db).toBe(0)
     expect(ins.appliedFor('P').find(x => x.childId < 0).db).toBe(0)
   })
 
@@ -649,10 +645,11 @@ describe('addStemFx — эффект на дорожку через пересб
     const ins = await load({})
     await ins.addStemFx('P', fx())
     await flush()
+    await built()
     await ins.addMutes('P', [{ instId: 'm', from: 10, to: 20, stems: ['other'], db: -100 }])
     await flush()
+    const call = (await lastCall())
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(2)
-    const call = lastCall()
     expect(call.length).toBe(2)
     const s = fxSpec(call)
     expect(s).toMatchObject({ child_id: 0, stems: ['vocals'], chain: 'soften', params: { strength: 0.6, freq: 6000 }, from: 176, to: 0, db: 0 })
@@ -667,7 +664,7 @@ describe('addStemFx — эффект на дорожку через пересб
     await flush()
     await ins.setDb('P', 1, -40)
     await flush()
-    const call = lastCall()
+    const call = (await lastCall())
     expect(call.find(s => s.child_id === 1).db).toBe(-24)
     expect(fxSpec(call)).toMatchObject({ child_id: 0, chain: 'soften', params: { strength: 0.6, freq: 6000 }, db: 0 })
   })
@@ -687,30 +684,31 @@ describe('addStemFx — эффект на дорожку через пересб
   })
 })
 
-describe('addStemEnvelope — громкость по волне на дорожку через пересборку', () => {
+describe('addStemEnvelope — громкость по волне на дорожку записью черновика', () => {
   const envV = [{ t: 1, db: 0 }, { t: 3, db: -12 }]
   const envV2 = [{ t: 2, db: -6 }]
   const envD = [{ t: 0, db: 3 }, { t: 4, db: -3 }]
-  const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+  const lastCall = () => built()
   const envSpecs = specs => specs.filter(s => Array.isArray(s.envelope) && s.envelope.length)
 
-  it('запись в реестре с отрицательным childId, вклейки не теряются, сразу одна пересборка', async () => {
+  it('запись в реестре с отрицательным childId, вклейки не теряются; «▶ микс» — одна пересборка', async () => {
     const ins = await load({ applied: { P: [A] } })
     await ins.addStemEnvelope('P', { stem: 'vocals', envelope: envV })
     await flush()
     const reg = ins.appliedFor('P')
     expect(reg.filter(x => x.childId < 0).length).toBe(1)
     expect(reg.some(x => x.childId === 1)).toBe(true)   // вклейка A не потерялась
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    expect((await lastCall()).length).toBe(2)
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
     expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
-    expect(lastCall().length).toBe(2)
   })
 
   it('в api уходит child_id 0, stems [stem], envelope как передан, без chain', async () => {
     const ins = await load({})
     await ins.addStemEnvelope('P', { stem: 'vocals', envelope: envV })
     await flush()
-    const s = lastCall()[0]
+    const s = (await lastCall())[0]
     expect(s.child_id).toBe(0)
     expect(s.stems).toEqual(['vocals'])
     expect(s.envelope).toEqual(envV)
@@ -724,7 +722,7 @@ describe('addStemEnvelope — громкость по волне на дорож
     await ins.addStemEnvelope('P', { stem: 'vocals', envelope: envV2 })
     await flush()
     expect(ins.appliedFor('P').filter(x => x.childId < 0).length).toBe(1)
-    const specs = envSpecs(lastCall())
+    const specs = envSpecs((await lastCall()))
     expect(specs.length).toBe(1)
     expect(specs[0]).toMatchObject({ child_id: 0, stems: ['vocals'] })
     expect(specs[0].envelope).toEqual(envV2)
@@ -739,7 +737,7 @@ describe('addStemEnvelope — громкость по волне на дорож
     const recs = ins.appliedFor('P').filter(x => x.childId < 0)
     expect(recs.length).toBe(2)
     expect(new Set(recs.map(x => x.childId)).size).toBe(2)
-    const byStem = Object.fromEntries(envSpecs(lastCall()).map(s => [s.stems.join(','), s.envelope]))
+    const byStem = Object.fromEntries(envSpecs((await lastCall())).map(s => [s.stems.join(','), s.envelope]))
     expect(byStem).toEqual({ vocals: envV, drums: envD })
   })
 
@@ -749,7 +747,7 @@ describe('addStemEnvelope — громкость по волне на дорож
     await flush()
     await ins.addStemEnvelope('P', { stem: 'vocals', envelope: envV })
     await flush()
-    const call = lastCall()
+    const call = (await lastCall())
     expect(call.length).toBe(2)
     expect(call.some(s => s.chain === 'soften')).toBe(true)
     expect(envSpecs(call).length).toBe(1)
@@ -758,13 +756,13 @@ describe('addStemEnvelope — громкость по волне на дорож
 
 // Цепочка звукового движка на дорожку — запись реестра (instId 'engine', engine: chain),
 // в api уходит полем engine; подпись — label записи.
-describe('addStemEngine — цепочка движка на дорожку через пересборку', () => {
+describe('addStemEngine — цепочка движка на дорожку записью черновика', () => {
   const chain = [
     { type: 'amp', model: 'JCM2000.nam', input_db: -6 },
     { type: 'cab', cutoff_hz: 7000 },
   ]
   const eng = (over = {}) => ({ stem: 'other', chain, from: 20, to: 35, label: 'Гитара через JCM2000', ...over })
-  const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+  const lastCall = () => built()
   const engSpecs = specs => specs.filter(s => Array.isArray(s.engine) && s.engine.length)
 
   it('запись в реестре: childId < 0, instId engine, engine = цепочка, окно, дорожка, label; вклейки на месте', async () => {
@@ -779,13 +777,14 @@ describe('addStemEngine — цепочка движка на дорожку че
     expect(recs[0].engine).toEqual(chain)
   })
 
-  it('сразу одна пересборка; в api — child_id 0, stems [stem], engine как есть, окно, db 0, без chain/steps', async () => {
+  it('без пересборки; «▶ микс» — одна, в api — child_id 0, stems [stem], engine как есть, окно, db 0, без chain/steps', async () => {
     const ins = await load({})
     await ins.addStemEngine('P', eng())
     await flush()
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    const s = (await lastCall())[0]
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
     expect(apiMock.rebuildSections.mock.calls.at(-1)[0]).toBe('P')
-    const s = lastCall()[0]
     expect(s).toMatchObject({ child_id: 0, stems: ['other'], from: 20, to: 35, db: 0 })
     expect(s.engine).toEqual(chain)
     expect(s.chain || '').toBe('')
@@ -796,7 +795,7 @@ describe('addStemEngine — цепочка движка на дорожку че
     const ins = await load({})
     await ins.addStemEngine('P', { stem: 'guitar', chain })
     await flush()
-    expect(lastCall()[0]).toMatchObject({ child_id: 0, stems: ['guitar'], from: 0, to: 0 })
+    expect((await lastCall())[0]).toMatchObject({ child_id: 0, stems: ['guitar'], from: 0, to: 0 })
     const rec = ins.appliedFor('P').find(x => x.childId < 0)
     expect(rec.from).toBe(0)
     expect(rec.to).toBe(0)
@@ -807,10 +806,11 @@ describe('addStemEngine — цепочка движка на дорожку че
     const ins = await load({})
     await ins.addStemEngine('P', eng())
     await flush()
+    await built()
     await ins.addMutes('P', [{ instId: 'm', from: 0, to: 5, stems: ['drums'], db: -100 }])
     await flush()
+    const call = (await lastCall())
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(2)
-    const call = lastCall()
     expect(call.length).toBe(2)
     const specs = engSpecs(call)
     expect(specs.length).toBe(1)
@@ -825,7 +825,7 @@ describe('addStemEngine — цепочка движка на дорожку че
     await ins.addStemFx('P', { stem: 'vocals', chain: 'soften', params: { strength: 0.6 }, from: 0, to: 0 })
     await ins.addStemEngine('P', eng())
     await flush()
-    const call = lastCall()
+    const call = (await lastCall())
     expect(call.length).toBe(3)
     expect(call.some(s => s.child_id === 1)).toBe(true)
     expect(call.find(s => s.chain === 'soften').engine).toBeUndefined()
@@ -841,7 +841,7 @@ describe('addStemEngine — цепочка движка на дорожку че
     expect(ids.length).toBe(2)
     expect(new Set(ids).size).toBe(2)
     for (const id of ids) expect(id).toBeLessThan(0)
-    expect(engSpecs(lastCall()).map(s => s.stems[0]).sort()).toEqual(['other', 'vocals'])
+    expect(engSpecs((await lastCall())).map(s => s.stems[0]).sort()).toEqual(['other', 'vocals'])
   })
 
   it('реестр сохраняется в localStorage: engine и label на месте', async () => {
@@ -862,7 +862,7 @@ describe('addStemEngine — цепочка движка на дорожку че
   })
 })
 
-describe('addStemEngines — несколько цепочек движка одной пересборкой', () => {
+describe('addStemEngines — несколько цепочек движка одной записью', () => {
   const smp = kit => [{ type: 'sampler', kit }]
   const items = [
     { stem: 'kick', chain: smp('osdk/kick'), from: 0, to: 0, label: 'Бочка: набор' },
@@ -871,10 +871,12 @@ describe('addStemEngines — несколько цепочек движка од
   ]
   const engSpecs = specs => specs.filter(s => Array.isArray(s.engine) && s.engine.length)
 
-  it('три записи → одна пересборка, в ней все три цепочки', async () => {
+  it('три записи → без пересборки; «▶ микс» — одна, в ней все три цепочки', async () => {
     const ins = await load({})
     await ins.addStemEngines('P', items)
     await flush()
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    await built()
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
     const [parent, specs] = apiMock.rebuildSections.mock.calls[0]
     expect(parent).toBe('P')
@@ -902,14 +904,14 @@ describe('addStemEngines — несколько цепочек движка од
       expect(r.engine).toEqual(item.chain)
     }
     // вклейка A вошла в ту же пересборку
-    expect(apiMock.rebuildSections.mock.calls[0][1].some(s => s.child_id === 1)).toBe(true)
+    expect((await built()).some(s => s.child_id === 1)).toBe(true)
   })
 
   it('окно выделения доходит до каждой записи', async () => {
     const ins = await load({})
     await ins.addStemEngines('P', items.map(item => ({ ...item, from: 12, to: 27 })))
     await flush()
-    for (const s of engSpecs(apiMock.rebuildSections.mock.calls[0][1])) expect(s).toMatchObject({ from: 12, to: 27 })
+    for (const s of engSpecs(await built())) expect(s).toMatchObject({ from: 12, to: 27 })
   })
 
   it('пустой список — без пересборки, реестр не меняется', async () => {
@@ -950,14 +952,15 @@ describe('реестр правок: выключить, удалить, зам�
     stems: ['other'], fadeIn: 0, fadeOut: 0, keepHighHz: 0, engine: oldChain, label: 'Гитара через JCM2000',
   }
   const calls = () => apiMock.rebuildSections.mock.calls
-  const lastSpecs = () => calls().at(-1)[1]
+  const lastSpecs = () => built()
   const recOf = (ins, id) => ins.appliedFor('P').find(x => x.childId === id)
 
   // перезапуск приложения: модуль импортируется заново, localStorage — прежний
   async function reload() {
     vi.resetModules()
     const mod = await import('./useInserts.js')
-    return mod.useInserts()
+    current = mod.useInserts()
+    return current
   }
 
   describe('setOff', () => {
@@ -965,9 +968,10 @@ describe('реестр правок: выключить, удалить, зам�
       const ins = await load({ applied: { P: [E1, E2] } })
       await ins.setOff('P', -11, true)
       await flush()
+      expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+      const specs = (await lastSpecs())
       expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
       expect(calls().at(-1)[0]).toBe('P')
-      const specs = lastSpecs()
       expect(specs.length).toBe(1)
       expect(specs[0]).toMatchObject({ child_id: 0, chain: 'dewhistle', stems: ['drums'], from: 10, to: 20 })
       expect(childIds(ins.appliedFor('P'))).toEqual([-11, -12].sort())
@@ -979,10 +983,11 @@ describe('реестр правок: выключить, удалить, зам�
       const ins = await load({ applied: { P: [E1, E2] } })
       await ins.setOff('P', -11, true)
       await flush()
+      await built()
       await ins.setOff('P', -11, false)
       await flush()
+      const chains = (await lastSpecs()).map(s => s.chain).sort()
       expect(apiMock.rebuildSections).toHaveBeenCalledTimes(2)
-      const chains = lastSpecs().map(s => s.chain).sort()
       expect(chains).toEqual(['dewhistle', 'soften'])
       expect(recOf(ins, -11).off).toBe(false)
     })
@@ -991,18 +996,17 @@ describe('реестр правок: выключить, удалить, зам�
       const ins = await load({ applied: { P: [A, B] } })
       await ins.setOff('P', 1, true)
       await flush()
-      expect(lastSpecs().map(s => s.child_id)).toEqual([2])
+      expect((await lastSpecs()).map(s => s.child_id)).toEqual([2])
       expect(recOf(ins, 1).off).toBe(true)
     })
   })
 
   describe('все записи выключены', () => {
-    it('setOff единственной → воркер не вызван, результат { empty: true }', async () => {
+    it('setOff единственной → воркер не вызван, запись выключена', async () => {
       const ins = await load({ applied: { P: [E1] } })
-      const res = await ins.setOff('P', -11, true)
+      await ins.setOff('P', -11, true)
       await flush()
       expect(apiMock.rebuildSections).not.toHaveBeenCalled()
-      expect(res).toEqual({ empty: true })
       expect(recOf(ins, -11).off).toBe(true)
     })
 
@@ -1027,8 +1031,9 @@ describe('реестр правок: выключить, удалить, зам�
       await ins.remove('P', -11)
       await flush()
       expect(childIds(ins.appliedFor('P'))).toEqual([-12])
+      expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+      const specs = (await lastSpecs())
       expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
-      const specs = lastSpecs()
       expect(specs.length).toBe(1)
       expect(specs[0].chain).toBe('dewhistle')
     })
@@ -1047,7 +1052,7 @@ describe('реестр правок: выключить, удалить, зам�
       await flush()
       await ins.remove('P', -11)   // не бросает и не отклоняется
       await flush()
-      expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
+      expect(apiMock.rebuildSections).not.toHaveBeenCalled()
       expect(childIds(ins.appliedFor('P'))).toEqual([-12])
     })
 
@@ -1110,8 +1115,9 @@ describe('реестр правок: выключить, удалить, зам�
       expect(rec.label).toBe('Реверб')
       expect(rec).toMatchObject({ from: 20, to: 35, stems: ['other'] })
       expect(childIds(ins.appliedFor('P'))).toEqual([-21, 1].sort())
+      expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+      const eng = (await lastSpecs()).filter(s => Array.isArray(s.engine))
       expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
-      const eng = lastSpecs().filter(s => Array.isArray(s.engine))
       expect(eng.length).toBe(1)
       expect(eng[0].engine).toEqual(newChain)
       expect(eng[0]).toMatchObject({ child_id: 0, from: 20, to: 35, stems: ['other'] })
@@ -1180,7 +1186,7 @@ describe('реестр правок: выключить, удалить, зам�
       apiMock.rebuildSections.mockClear()
       await again.rebuild('P')
       await flush()
-      const specs = lastSpecs()
+      const specs = (await lastSpecs())
       expect(specs.length).toBe(1)
       expect(specs[0].chain).toBe('dewhistle')
     })
@@ -1350,14 +1356,15 @@ describe('addStemEngine с add — синт поверх трека', () => {
   const synth = [{ type: 'synth', notes: [{ t: 12, d: 2, midi: [62, 65, 69], vel: 0.8 }], osc1: 0 },
     { type: 'chorus', mix: 0.5 }]
   const syn = (over = {}) => ({ stem: 'mix', chain: synth, from: 10, to: 30, label: 'Синт: пэд', add: true, ...over })
-  const lastCall = () => apiMock.rebuildSections.mock.calls.at(-1)[1]
+  const lastCall = () => built()
 
   it('в api — add: true, stems [mix], engine как есть, окно', async () => {
     const ins = await load({})
     await ins.addStemEngine('P', syn())
     await flush()
+    expect(apiMock.rebuildSections).not.toHaveBeenCalled()
+    const s = (await lastCall())[0]
     expect(apiMock.rebuildSections).toHaveBeenCalledTimes(1)
-    const s = lastCall()[0]
     expect(s).toMatchObject({ child_id: 0, stems: ['mix'], from: 10, to: 30, add: true })
     expect(s.engine).toEqual(synth)
   })
@@ -1366,7 +1373,7 @@ describe('addStemEngine с add — синт поверх трека', () => {
     const ins = await load({})
     await ins.addStemEngine('P', { stem: 'other', chain: [{ type: 'reverb', wet: 0.2 }], from: 0, to: 0 })
     await flush()
-    expect(lastCall()[0].add ?? false).toBe(false)
+    expect((await lastCall())[0].add ?? false).toBe(false)
   })
 
   it('add сохраняется в реестре и уходит снова при следующей пересборке', async () => {
@@ -1379,9 +1386,9 @@ describe('addStemEngine с add — синт поверх трека', () => {
     expect(saved.P.find(x => x.childId < 0).add).toBe(true)
     await ins.addMutes('P', [{ instId: 'm', from: 0, to: 5, stems: ['drums'], db: -100 }])
     await flush()
-    const again = lastCall().find(s => Array.isArray(s.engine) && s.engine.length)
+    const again = (await lastCall()).find(s => Array.isArray(s.engine) && s.engine.length)
     expect(again).toMatchObject({ stems: ['mix'], add: true })
-    expect(lastCall().find(s => !s.engine).add ?? false).toBe(false)
+    expect((await lastCall()).find(s => !s.engine).add ?? false).toBe(false)
   })
 })
 

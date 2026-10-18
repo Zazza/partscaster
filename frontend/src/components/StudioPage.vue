@@ -28,6 +28,7 @@ import { continueRequest, fragmentRequest, fragmentWindow, genRequest, renderJob
 import { resultTitle, resultsOrder, resultDate, playFragment as playFragmentJob } from '../results.js'
 import { jobWatchStep } from '../jobWatch.js'
 import { readFlag, writeFlag } from '../prefs.js'
+import { editsCountLabel, loadPanelOpen, savePanelOpen } from '../editsPanel.js'
 import VSelect from '../VSelect.vue'
 import WaveView from './WaveView.vue'
 import PedalBoard from './PedalBoard.vue'
@@ -641,16 +642,11 @@ async function addSection(instId) {
   const inst = [...TRICK_INSTRUMENTS, ...TRICK_MUTES].find((i) => i.id === instId)
   if (!p || !r || !inst) return
   if (inst.mute) {
-    // без рендера: заглушить дорожки в окне и пересобрать трек
+    // без рендера: заглушить дорожки в окне — запись в черновик (слушать — «▶ микс»)
     trickBusy.value = true
     rollErr.value = ''
     try {
-      const res = await inserts.addMute(props.job.id, { instId: inst.id, from: r.from, to: r.to, stems: inst.mute, db: inst.db })
-      if (res && res.variant) {
-        await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
-        markNow(`v${props.job.id}:${res.variant.file}`, `#${props.job.id} ${props.job.title}`,
-          props.job.id, res.variant.file, props.job.duration_sec)
-      }
+      await inserts.addMute(props.job.id, { instId: inst.id, from: r.from, to: r.to, stems: inst.mute, db: inst.db })
     } catch (e) {
       rollErr.value = String(e)
     } finally {
@@ -827,10 +823,20 @@ const finalGroups = computed(() => {
   return EDIT_STEPS.map((step) => ({ step, gen: genBy[step], items: items[step] || [] }))
     .filter((x) => x.gen.length || x.items.length)
 })
+// окно правок: число правок (включённые записи и изменения с рендером), раскрыто/свёрнуто — запоминается
+const editsCount = computed(() => finalGroups.value.reduce((n, g) => n + g.gen.length + g.items.filter((it) => !it.off).length, 0))
+const editsLabel = computed(() => editsCountLabel(editsCount.value, locale.value))
+const editsFailed = computed(() => appliedInserts.value.some((it) => it.error))
+const panelOpen = ref(loadPanelOpen())
+// сборка споткнулась на правке — окно раскрывается (красная строка на виду), без запоминания
+watch(editsFailed, (f) => { if (f) panelOpen.value = true })
+function setPanelOpen(open) {
+  panelOpen.value = open
+  savePanelOpen(open)
+}
 const applyingStatus = computed(() => t('queue.status.' + ((applying.value && applying.value.status) || 'queued')))
 const canApplyAll = computed(() => (activeEdits.value.length > 0 || hasGen.value) && !waitingRenders.value
-  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value && !(applying.value && !applying.value.error)
-  && !inserts.isPresetPreparing(props.job.id))
+  && !inserts.isBuilding(props.job.id) && !applyAllBusy.value && !(applying.value && !applying.value.error))
 async function applyAll() {
   if (!canApplyAll.value) return
   applyAllBusy.value = true
@@ -865,28 +871,30 @@ const mixFile = computed(() => inserts.mixFile(props.job.id))
 watch([mixFile, () => props.job.id, () => props.job.title], () => {
   const main = props.job.audio_file || 'audio.flac'
   setStudioCtx(mixFile.value
-    ? { jobId: props.job.id, file: mixFile.value, mainFile: main, mixFile: mixFile.value,
+    ? { jobId: props.job.id, file: mixFile.value, mainFile: main, mixFile: mixFile.value, ensure: ensureMixFile,
         dur: props.job.duration_sec, label: t('studio.edits.mix') + ' · #' + props.job.id + ' ' + props.job.title }
     : { jobId: props.job.id, file: main, mainFile: main, mixFile: null,
         dur: props.job.duration_sec, label: `#${props.job.id} ${props.job.title}` })
 }, { immediate: true })
 onUnmounted(() => setStudioCtx(null))
 const mixBuilding = computed(() => inserts.isBuilding(props.job.id))
-// prev — файл микса с правками до правки: его и остановить, если правок не осталось (готовые
-// варианты в «Готово» не трогаем); новый микс играет под своим ключом — ▶/■ и стоп его видят
-async function afterEdit(r, prev) {
-  if (r && r.empty) {
-    trickMsg.value = t('studio.edits.none')
-    if (prev && nowPlayingKey.value === `v${props.job.id}:${prev}`) {
-      nowPlayingKey.value = ''
-      await api.stopAudio().catch(() => { /* плеер уже остановлен */ })
-    }
-  } else if (r && r.variant) {
-    await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
-    markNow(`v${props.job.id}:${r.variant.file}`, `#${props.job.id} ${props.job.title}`,
-      props.job.id, r.variant.file, props.job.duration_sec)
+// микс устарел (черновик менялся после сборки): «▶ микс» сначала соберёт
+const mixStale = computed(() => { void appliedInserts.value; void mixBuilding.value; return inserts.mixStale(props.job.id) })
+// микс для плеера: устарел — сборка, иначе готовый файл
+async function ensureMixFile() {
+  const r = await inserts.ensureMix(props.job.id)
+  if (r && !r.cached) reloadVariants()
+  return (r && (r.file || (r.variant && r.variant.file))) || null
+}
+// правка только записана (сборки нет): prev — файл микса с правками до неё; правок не осталось, а микс
+// играет — остановить
+async function afterEdit(_r, prev) {
+  if (activeEdits.value.length) return
+  trickMsg.value = t('studio.edits.none')
+  if (prev && nowPlayingKey.value === `v${props.job.id}:${prev}`) {
+    nowPlayingKey.value = ''
+    await api.stopAudio().catch(() => { /* плеер уже остановлен */ })
   }
-  reloadVariants()
 }
 async function toggleEdit(it) {
   dbBusy.value = true
@@ -924,16 +932,17 @@ async function onPlace(it, place) {
   rollErr.value = ''
   const prev = mixFile.value
   try {
-    const r = isPlaceRecord(it) ? await inserts.setStemPlace(props.job.id, it.stems[0], place)
-      : await inserts.setPlace(props.job.id, it.childId, place)
-    await afterEdit(r, prev)
+    if (isPlaceRecord(it)) await inserts.setStemPlace(props.job.id, it.stems[0], place)
+    else await inserts.setPlace(props.job.id, it.childId, place)
+    await afterEdit(null, prev)
   } catch (e) { rollErr.value = String(e) } finally { dbBusy.value = false }
 }
 function playMix() {
-  const file = mixFile.value
-  if (!file) return
+  if (!mixFile.value) return
   const label = t('studio.edits.mix') + ' · #' + props.job.id
-  toggleArtifact(`v${props.job.id}:${file}`, label, async () => {
+  toggleArtifact(`v${props.job.id}:${mixFile.value}`, label, async () => {
+    // черновик менялся — сначала сборка (ensureMix), иначе готовый микс
+    const file = (await ensureMixFile()) || mixFile.value
     try {
       await api.playFile(props.job.id, file, props.job.duration_sec)
       markNow(`v${props.job.id}:${file}`, label, props.job.id, file, props.job.duration_sec)
@@ -954,8 +963,7 @@ async function onInsertDb(it, value) {
   dbBusy.value = true
   rollErr.value = ''
   try {
-    const r = await inserts.setDb(props.job.id, it.childId, Number(value))
-    if (r && r.variant) await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
+    await inserts.setDb(props.job.id, it.childId, Number(value))
   } catch (e) {
     rollErr.value = String(e)
   } finally {
@@ -974,11 +982,10 @@ async function sparseVerses() {
   trickBusy.value = true
   rollErr.value = ''
   try {
-    const res = await inserts.addMutes(props.job.id, wins.flatMap((w) => [
+    await inserts.addMutes(props.job.id, wins.flatMap((w) => [
       { instId: 'otherdown', from: w.from, to: w.to, stems: ['other'], db: -6 },
       { instId: 'drumsdown', from: w.from, to: w.to, stems: ['drums'], db: -3 },
     ]))
-    if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
   } catch (e) {
     rollErr.value = String(e)
   } finally {
@@ -1016,8 +1023,7 @@ async function pickAlt(it, alt) {
   dbBusy.value = true
   rollErr.value = ''
   try {
-    const r = await inserts.selectAlt(props.job.id, it.childId, alt)
-    if (r && r.variant) await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
+    await inserts.selectAlt(props.job.id, it.childId, alt)
   } catch (e) {
     rollErr.value = String(e)
   } finally {
@@ -1097,8 +1103,7 @@ async function revoiceFromSel() {
   }
 }
 
-// воспроизведение партии: если файл микса ещё не на сервере (автовклейка не
-// успела/не дошла) — пересобрать прямо сейчас; кнопка ▶ тем же путём самолечится
+// воспроизведение партии: готовые партии — в черновик, микс собирается, если черновик менялся (ensureMix)
 async function playInstrument(j) {
   // студия могла заметить готовность партии раньше сервиса: сначала сервис
   // вклеивает готовые партии, потом играем свежий микс (имя — по реестру)
@@ -1106,16 +1111,10 @@ async function playInstrument(j) {
   instJob.value = j
   try {
     await inserts.flush()
-    const file = inserts.latestFile(props.job.id)
-    try {
-      if (!file) throw new Error('no mix')   // перехватывается ниже: пересборка
-      await api.playFile(props.job.id, file, props.job.duration_sec)
-    } catch {
-      // файла на воркере нет (пересборка не дошла) — пересобрать сейчас
-      const r = await inserts.rebuild(props.job.id)
-      if (!r || !r.variant) throw new Error(t('studio.trick.inst.notready'))
-      await api.playFile(props.job.id, r.variant.file, props.job.duration_sec)
-    }
+    // готовая партия только записана в черновик — микс собирается сейчас (если черновик менялся)
+    const file = await ensureMixFile()
+    if (!file) throw new Error(t('studio.trick.inst.notready'))
+    await api.playFile(props.job.id, file, props.job.duration_sec)
   } finally {
     // пока шла пересборка, могли запустить новую партию — её статус не трогаем
     if (instJob.value && instJob.value.id === j.id) instJob.value = { ...j, mixing: false }
@@ -1209,10 +1208,13 @@ async function previewTimbre() {
     await vcAfter.play({ jobId, file: r.file, dur: r.to - r.from, from: 0, to: r.to - r.from })
   } catch (e) { vcErr.value = String(e) } finally { vcBusy.value = false }
 }
-function playTimbreBefore() {
+// «было» — трек со всеми правками: черновик менялся — сначала сборка
+async function playTimbreBefore() {
   const w = vcWin.value
   if (!w) return
-  vcBefore.play({ jobId: props.job.id, file: inserts.mixFile(props.job.id) || props.job.audio_file,
+  let file
+  try { file = await inserts.currentMix(props.job.id) } catch (e) { vcErr.value = String(e); return }
+  vcBefore.play({ jobId: props.job.id, file: file || props.job.audio_file,
     dur: props.job.duration_sec, from: w.from, to: w.to })
 }
 function applyTimbre() {
@@ -1360,15 +1362,14 @@ async function applyEnvelope() {
   try {
     const pts = envPts.value.map(({ t, db }) => ({ t, db }))
     if (envTarget.value) {
-      const res = await inserts.addStemEnvelope(props.job.id, { stem: envTarget.value, envelope: pts })
-      // пустая линия убрала единственную запись реестра — пересобирать нечего
-      if (!(res && res.variant)) waveErr.value = t('studio.wave.env.nothing')
+      await inserts.addStemEnvelope(props.job.id, { stem: envTarget.value, envelope: pts })
+      // пустая линия убрала единственную запись черновика — слушать нечего
+      if (!activeEdits.value.length) waveErr.value = t('studio.wave.env.nothing')
     } else {
       // весь трек: линия — запись черновика на собранный микс (одна на трек), отдельной версии нет
       // ровная линия — снять записанную (пустая линия убирает запись)
       await inserts.setMixEnvelope(props.job.id, isFlat(pts) ? [] : pts)
     }
-    await reloadVariants()
   } catch (e) {
     waveErr.value = String(e)
   } finally { envBusy.value = false }
@@ -1428,16 +1429,12 @@ async function applyDsp() {
   try {
     if (dspTarget.value) {
       // эффект на дорожку: в реестр пересборки (копится со вклейками), окно — выделение
-      const res = await inserts.addStemFx(props.job.id, stemFxRequest(dspTarget.value, c.id, dspParams.value, selTimeRange()))
-      await reloadVariants()
-      if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
+      await inserts.addStemFx(props.job.id, stemFxRequest(dspTarget.value, c.id, dspParams.value, selTimeRange()))
       return
     }
     // весь трек: запись черновика на собранный микс (до мастера), отдельной версии не делаем —
     // итог собирает «применить всё» в «Готово»
-    const res = await inserts.addMixFx(props.job.id, { chain: c.id, params: dspParams.value || {} })
-    await reloadVariants()
-    if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
+    await inserts.addMixFx(props.job.id, { chain: c.id, params: dspParams.value || {} })
   } catch (e) {
     rollErr.value = String(e)
   } finally { dspBusy.value = false }
@@ -1455,9 +1452,7 @@ async function applyOneClick(chainId) {
     dspTarget.value = ''
     const params = oneClickParams(chainId, oneClickLevel.value)
     const label = c.name + ' (' + t('studio.dsp.level.' + oneClickLevel.value) + ')'
-    const res = await inserts.addMixFx(props.job.id, { chain: chainId, params, step: 'done', label })
-    await reloadVariants()
-    if (res && res.variant) await api.playFile(props.job.id, res.variant.file, props.job.duration_sec)
+    await inserts.addMixFx(props.job.id, { chain: chainId, params, step: 'done', label })
     rollErr.value = ''
     trickMsg.value = t('studio.dsp.oneclick.added', { name: label })
   } catch (e) {
@@ -1539,6 +1534,70 @@ function setWindowTitle() {
         </span>
         <KitProgress />
       </nav>
+      <!-- окно правок: прибито сверху справа поверх блоков; свёрнутое — «N правок», раскрытое — весь черновик -->
+      <div v-if="studioReady" class="edits-dock">
+        <div class="edits-panel" :class="{ open: panelOpen, failed: editsFailed }">
+          <button class="edits-panel-head ghost small-btn" :aria-expanded="panelOpen" :title="t('studio.panel.tip')"
+                  @click="setPanelOpen(!panelOpen)">
+            <AppIcon v-if="editsFailed" name="alert" /> {{ editsLabel }} <span class="muted">{{ panelOpen ? '▴' : '▾' }}</span></button>
+          <div v-if="panelOpen" class="edits-panel-body">
+            <div v-if="activeEdits.length" class="dsp-row">
+              <button class="ghost small-btn" :class="{ stop: isPlaying('v' + job.id + ':' + mixFile) }"
+                      :disabled="mixBuilding || playBusy['v' + job.id + ':' + mixFile]" :title="t('studio.edits.mix.tip')" @click="playMix">
+                {{ mixBuilding ? '⟳' : playBtn('v' + job.id + ':' + mixFile) }} {{ t('studio.edits.mix') }}</button>
+              <span v-if="mixBuilding" class="muted">{{ t('studio.panel.building') }}</span>
+              <span v-else-if="mixStale" class="muted">{{ t('studio.panel.stale') }}</span>
+            </div>
+                    <p v-if="!finalGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
+                    <div v-for="g in finalGroups" :key="g.step" class="final-group">
+                      <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
+                      <!-- изменения с рендером: «применить всё» сделает их одним рендером, потом наложит правки -->
+                      <ul v-if="g.gen.length">
+                        <li v-for="line in g.gen" :key="line" class="final-gen">{{ line }}</li>
+                      </ul>
+                      <!-- наложенные правки — с ручками: вкл/выкл, громкость, дубли, удалить (трек пересобирается сразу) -->
+                      <div v-if="g.items.length" class="insert-list">
+                        <div v-for="it in g.items" :key="it.childId" class="insert-row" :class="{ off: it.off, failed: it.error }">
+                          <input type="checkbox" :checked="!it.off" :disabled="dbBusy" :title="t('studio.edits.on.tip')" @change="toggleEdit(it)" />
+                          <strong>{{ insertTitle(it, insertNames) }}</strong>
+                          <span class="muted">{{ insertWindow(it, insertWin) }}</span>
+                          <PlaceControls v-if="it.add || isPlaceRecord(it)" :model-value="it.place" :disabled="dbBusy || it.off"
+                                         @update:model-value="(p) => onPlace(it, p)" />
+                          <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master && !it.preset" class="od-gain">{{ t('studio.inserts.db') }}
+                            <input type="range" :min="INSERT_MIN_DB" :max="INSERT_MAX_DB" step="1" :value="it.db"
+                                   :disabled="dbBusy || it.off" @change="onInsertDb(it, $event.target.value)" />
+                            {{ it.db > 0 ? '+' : '' }}{{ it.db }} {{ t('studio.inserts.dbUnit') }}
+                          </label>
+                          <span v-if="it.aligned === true" class="muted" :title="t('studio.inserts.aligned.tip')">✓ {{ t('studio.inserts.aligned') }}</span>
+                          <span v-else-if="it.aligned === false" class="error" :title="t('studio.inserts.plan.tip')"><AppIcon name="alert" /> {{ t('studio.inserts.plan') }}</span>
+                          <template v-if="(it.alts || []).length > 1">
+                            <button v-for="(alt, n) in it.alts" :key="alt" class="ghost small-btn" :class="{ on: alt === it.childId }"
+                                    :disabled="dbBusy || it.off" :title="t('studio.inserts.alt.tip')" @click="pickAlt(it, alt)">{{ n + 1 }}</button>
+                          </template>
+                          <button v-if="it.childId > 0" class="ghost small-btn" :disabled="dbBusy || trickBusy || it.off" :title="t('studio.inserts.more.tip')"
+                                  @click="moreVariant(it)">↻ {{ t('studio.inserts.more') }}</button>
+                          <button v-if="it.engine && !it.add" class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.edit.tip')"
+                                  @click="editEngine(it)">{{ t('studio.edits.edit') }}</button>
+                          <span class="spacer"></span>
+                          <button class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.del.tip')" @click="removeEdit(it)"><AppIcon name="x" /></button>
+                          <!-- сборка споткнулась на этой правке / предупреждения подготовки пресета -->
+                          <p v-if="it.error" class="error insert-note"><AppIcon name="alert" /> {{ it.error }}</p>
+                          <p v-for="w in (it.warnings || [])" :key="w" class="muted insert-note">{{ w }}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
+            <div class="dsp-row final-actions">
+              <button v-if="finalGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
+                <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
+              <span class="spacer"></span>
+              <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">
+                {{ applyAllBusy ? t('studio.final.applying') : t('studio.final.apply') }}</button>
+            </div>
+            <p v-if="applyAllMsg" class="muted">{{ applyAllMsg }}</p>
+          </div>
+        </div>
+      </div>
       <div class="roll-block" @mouseup="barSelEnd" @mouseleave="barSelEnd">
         <p v-if="rollBusy" class="muted">{{ t('studio.parsing') }}</p>
         <p v-if="!abcFile" class="muted">
@@ -1864,7 +1923,7 @@ function setWindowTitle() {
               <summary class="studio-box-head"><span><AppIcon name="pedal" /> {{ t('pedals') }}</span> <span class="muted studio-box-hint">{{ t('pedals.sub') }}</span></summary>
               <div class="studio-box-body">
                 <PedalBoard :job="job" :chains="dspChains" :sel="selRange" :cursor="waveCursor" :active="dspTarget"
-                            @stem="selectTarget" @applied="reloadVariants" />
+                            :stems="stemsList" @stem="selectTarget" />
               </div>
             </details>
           </div>
@@ -1924,60 +1983,17 @@ function setWindowTitle() {
                 <StudioPresets :job="job" @applied="reloadVariants" />
               </div>
             </div>
-            <!-- черновик правок (на воркере): все шаги списком и одна кнопка — итоговый трек -->
+            <!-- итог: список правок — в окне сверху справа; здесь — одна кнопка с числом правок -->
             <div class="studio-box">
-              <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span>
-                <span v-if="mixFile && activeEdits.length" class="studio-box-tools">
-                  <button class="ghost small-btn" :class="{ stop: isPlaying('v' + job.id + ':' + mixFile) }"
-                          :disabled="mixBuilding || playBusy['v' + job.id + ':' + mixFile]" :title="t('studio.edits.mix.tip')" @click="playMix">
-                    {{ playBtn('v' + job.id + ':' + mixFile) }} {{ t('studio.edits.mix') }}</button>
-                </span>
-              </div>
+              <div class="studio-box-head"><span>{{ t('studio.final') }}</span> <span class="muted studio-box-hint">{{ t('studio.final.sub') }}</span></div>
               <div class="studio-box-body">
-                <p v-if="!finalGroups.length && !waitingRenders" class="muted">{{ t('studio.final.empty') }}</p>
                 <p v-if="applying && !applying.error && applying.job_id" class="muted"><span class="pulse">⟳</span>
                   {{ t('studio.final.progress', { id: applying.job_id, status: applyingStatus }) }}</p>
                 <p v-if="applying && !applying.error && applying.finalize" class="muted"><span class="pulse">⟳</span>
                   {{ t('studio.final.finalizing') }}</p>
                 <p v-if="applying && applying.error" class="error">{{ t('studio.final.applyError', { error: applying.error }) }}</p>
-                <div v-for="g in finalGroups" :key="g.step" class="final-group">
-                  <span class="muted">{{ t('studio.final.step.' + g.step) }}</span>
-                  <!-- изменения с рендером: «применить всё» сделает их одним рендером, потом наложит правки -->
-                  <ul v-if="g.gen.length">
-                    <li v-for="line in g.gen" :key="line" class="final-gen">{{ line }}</li>
-                  </ul>
-                  <!-- наложенные правки — с ручками: вкл/выкл, громкость, дубли, удалить (трек пересобирается сразу) -->
-                  <div v-if="g.items.length" class="insert-list">
-                    <div v-for="it in g.items" :key="it.childId" class="insert-row" :class="{ off: it.off }">
-                      <input type="checkbox" :checked="!it.off" :disabled="dbBusy" :title="t('studio.edits.on.tip')" @change="toggleEdit(it)" />
-                      <strong>{{ insertTitle(it, insertNames) }}</strong>
-                      <span class="muted">{{ insertWindow(it, insertWin) }}</span>
-                      <PlaceControls v-if="it.add || isPlaceRecord(it)" :model-value="it.place" :disabled="dbBusy || it.off"
-                                     @update:model-value="(p) => onPlace(it, p)" />
-                      <label v-if="it.db > -60 && !isPlaceRecord(it) && !it.master && !it.preset" class="od-gain">{{ t('studio.inserts.db') }}
-                        <input type="range" :min="INSERT_MIN_DB" :max="INSERT_MAX_DB" step="1" :value="it.db"
-                               :disabled="dbBusy || it.off" @change="onInsertDb(it, $event.target.value)" />
-                        {{ it.db > 0 ? '+' : '' }}{{ it.db }} {{ t('studio.inserts.dbUnit') }}
-                      </label>
-                      <span v-if="it.aligned === true" class="muted" :title="t('studio.inserts.aligned.tip')">✓ {{ t('studio.inserts.aligned') }}</span>
-                      <span v-else-if="it.aligned === false" class="error" :title="t('studio.inserts.plan.tip')"><AppIcon name="alert" /> {{ t('studio.inserts.plan') }}</span>
-                      <template v-if="(it.alts || []).length > 1">
-                        <button v-for="(alt, n) in it.alts" :key="alt" class="ghost small-btn" :class="{ on: alt === it.childId }"
-                                :disabled="dbBusy || it.off" :title="t('studio.inserts.alt.tip')" @click="pickAlt(it, alt)">{{ n + 1 }}</button>
-                      </template>
-                      <button v-if="it.childId > 0" class="ghost small-btn" :disabled="dbBusy || trickBusy || it.off" :title="t('studio.inserts.more.tip')"
-                              @click="moreVariant(it)">↻ {{ t('studio.inserts.more') }}</button>
-                      <button v-if="it.engine && !it.add" class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.edit.tip')"
-                              @click="editEngine(it)">{{ t('studio.edits.edit') }}</button>
-                      <span class="spacer"></span>
-                      <button class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.del.tip')" @click="removeEdit(it)"><AppIcon name="x" /></button>
-                    </div>
-                  </div>
-                </div>
-                <p v-if="waitingRenders" class="muted">{{ t('studio.final.waiting', { n: waitingRenders }) }}</p>
                 <div class="dsp-row final-actions">
-                  <button v-if="finalGroups.length || waitingRenders" class="ghost small-btn" :disabled="applyAllBusy" @click="resetEdits">
-                    <AppIcon name="x" /> {{ t('studio.final.reset') }}</button>
+                  <button class="ghost small-btn" @click="setPanelOpen(true)">{{ editsLabel }}</button>
                   <span class="spacer"></span>
                   <button class="primary" :disabled="!canApplyAll" :title="t('studio.final.apply.tip')" @click="applyAll">
                     {{ applyAllBusy ? t('studio.final.applying') : t('studio.final.apply') }}</button>

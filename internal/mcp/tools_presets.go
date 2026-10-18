@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync/atomic"
+	"time"
 
 	"partscaster/internal/studio"
 	"partscaster/internal/yue"
@@ -232,22 +234,17 @@ func registerPresetTools(s *Server) {
 	})
 	s.Register(Tool{
 		Name: "sound_preset_draft",
-		Description: "Пресет звука в черновик студии (синхронно): подготовка как у sound_preset_apply, без сборок; у " +
-			"записей с целью — verify_db, сверка баланса — при «применить всё» в студии; трек не меняется, версии нет. Ответ {\"preset\": {sections, " +
-			"final?, master?, warnings?}}. Чтобы пресет звучал в студии и попал в «применить всё», положи запись " +
-			"первой в state.edits черновика (draft_get → draft_set; прежнюю запись с полем preset убери): " +
-			"{\"childId\": <отрицательное уникальное>, \"instId\": \"preset\", \"from\": 0, \"to\": 0, \"lead\": 0, " +
-			"\"beat\": 0, \"db\": 0, \"stems\": [], \"fadeIn\": 0, \"fadeOut\": 0, \"keepHighHz\": 0, \"step\": \"done\", " +
-			"\"label\": <название>, \"preset\": {\"id\": <id>, \"name\": <название>, ...поля ответа}}.",
+		Description: "Пресет звука в черновик студии: запись «Пресет» с рецептом целиком, сразу, без подготовки и сборок " +
+			"(трек не меняется). Подготовка (дорожки, партии, наборы, замер) и сверка баланса — при сборке черновика: " +
+			"«▶ микс» и «применить всё» в студии. Ответ {\"edit\": запись}: положи её первой в state.edits черновика " +
+			"(draft_get → draft_set; прежнюю запись с полем preset убери).",
 		InputSchema: props(map[string]any{
-			"job_id":    prop("ID трека", "integer"),
 			"preset_id": prop("id пресета (sound_presets)", "integer"),
 			"db": prop("громкость записей пресета поверх рецепта: {\"индекс записи specs\": дБ −24…24} "+
 				"(пресет не меняется)", "object"),
-		}, "job_id", "preset_id"),
+		}, "preset_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
-			ctx := context.Background()
-			list, err := s.client.SoundPresets(ctx)
+			list, err := s.client.SoundPresets(context.Background())
 			if err != nil {
 				return "", err
 			}
@@ -257,11 +254,7 @@ func registerPresetTools(s *Server) {
 					if err := applyDbOverrides(&p, args["db"]); err != nil {
 						return "", err
 					}
-					res, err := studio.PresetDraft(ctx, s.client, argInt(args, "job_id"), p)
-					if err != nil {
-						return "", err
-					}
-					return toJSON(map[string]any{"preset": res}), nil
+					return toJSON(map[string]any{"edit": presetEdit(p, time.Now())}), nil
 				}
 			}
 			return "", fmt.Errorf("нет пресета %d (см. sound_presets)", pid)
@@ -293,4 +286,16 @@ func applyDbOverrides(p *yue.SoundPreset, raw any) error {
 	}
 	p.Specs = specs
 	return nil
+}
+
+// presetEdit — запись «Пресет» черновика студии (как presetDraft.presetRecord приложения): рецепт целиком,
+// childId — отрицательный уникальный (как у правок без рендера)
+// presetEditSeq — счётчик записей в пределах миллисекунды: два пресета подряд не получают один childId
+// (по нему студия находит строку с ошибкой сборки)
+var presetEditSeq atomic.Int64
+
+func presetEdit(p yue.SoundPreset, now time.Time) map[string]any {
+	return map[string]any{"childId": -(now.UnixMilli()*100 + presetEditSeq.Add(1)%100), "instId": "preset", "from": 0, "to": 0, "lead": 0,
+		"beat": 0, "db": 0, "stems": []string{}, "fadeIn": 0, "fadeOut": 0, "keepHighHz": 0, "step": "done",
+		"label": p.Name, "preset": map[string]any{"id": p.ID, "name": p.Name, "recipe": p}}
 }
