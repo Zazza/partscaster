@@ -340,16 +340,16 @@ export const fxPresets = [
     stems: ['bass'], group: 'bass-tone',
     name: { ru: 'Бас-мелодия: высокий с хорусом', en: 'Melodic bass: high with chorus' },
     note: {
-      ru: 'Низ срезан, середина и щелчок вперёд, хорус и короткое эхо — бас поёт мелодию над гитарами. Лучше всего, когда бас в треке и так играет высоко.',
-      en: 'Lows cut, mids and click forward, chorus and a short echo — the bass sings the melody above the guitars. Best when the bass already plays high.',
+      ru: 'Середина и щелчок вперёд, лёгкий хорус и короткое эхо — бас поёт мелодию над гитарами, низ на месте. Лучше всего, когда бас в треке и так играет высоко.',
+      en: 'Mids and click forward, a light chorus and a short echo — the bass sings the melody above the guitars, the lows stay. Best when the bass already plays high.',
     },
     chain: [
-      { type: 'eq', highpass_hz: 140, bands: [{ freq_hz: 1200, gain_db: 5, q: 0.8 }, { freq_hz: 3000, gain_db: 3, q: 1 }] },
+      // низ не срезается: со срезом 140 Гц разделение не узнаёт бас басом, он звучит громким синтом (#1242 → #1256)
+      { type: 'eq', highpass_hz: 45, bands: [{ freq_hz: 1200, gain_db: 3, q: 0.8 }, { freq_hz: 3000, gain_db: 2, q: 1 }] },
       { type: 'comp', threshold_db: -24, ratio: 4, makeup_db: 4 },
       { type: 'drive', gain_db: 8, mix: 0.25 },
-      { type: 'chorus', voices: 2, depth_ms: 3, rate_hz: 0.7, mix: 0.5 },
-      { type: 'delay', time_ms: 280, feedback: 0.2, lowpass_hz: 4000, wet: 0.12 },
-      { type: 'gain', gain_db: 4 },   // срез низа — бас на 4,4 дБ тише исходного («Gone»): громкость обратно
+      { type: 'chorus', voices: 2, depth_ms: 3, rate_hz: 0.7, mix: 0.3 },
+      { type: 'delay', time_ms: 280, feedback: 0.2, lowpass_hz: 4000, wet: 0.08 },
     ],
   },
   {
