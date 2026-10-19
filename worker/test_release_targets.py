@@ -7,6 +7,8 @@ T2. Неизвестная TARGET_OS («haiku») → отказ, в stderr уп�
 T3. TARGET_OS=windows на Linux → dist/partscaster-<V>-windows-amd64.zip, внутри каталог
     partscaster-<V>-windows-amd64/ с partscaster.exe, partscaster-mcp.exe, worker-<V>.tar.gz, INSTALL.txt
     (@VERSION@ заменён). Предпоследняя строка stdout — путь к zip, последняя — к архиву воркера.
+    Архив воркера несёт готовую сборку yue2.cpp для Windows (yue2cpp/yue-server.exe), linux-сборки в нём нет.
+    Без сборки для Windows пакет не собирается — это проверяет test_cpp_only (ТК13).
     wails вызван с `-platform windows/amd64`, go build partscaster-mcp — с GOOS=windows GOARCH=amd64.
 T4. TARGET_OS не задана → пакет под хост: linux-amd64.tar.gz с partscaster (без .exe), partscaster-mcp,
     worker, INSTALL.txt; wails вызван без `-platform windows`.
@@ -14,7 +16,8 @@ T4. TARGET_OS не задана → пакет под хост: linux-amd64.tar.
 Настоящие wails/go не нужны: в PATH песочницы — заглушки, которые пишут свои аргументы
 и окружение в лог. Скрипт работает от корня своего репозитория, поэтому запускается копия
 в песочнице tempfile; общий dist/ не трогается. Сборка yue2.cpp через docker не должна
-запускаться — в песочнице подложен готовый dist/yue2cpp-linux-x86_64/yue-server.
+запускаться — в песочнице подложен готовый dist/yue2cpp-linux-x86_64/yue-server (для пакета
+Windows — ещё и dist/yue2cpp-windows-x86_64/yue-server.exe).
 """
 import os
 import shutil
@@ -159,6 +162,11 @@ class TestReleaseTargets(unittest.TestCase):
 
     # T3
     def test_windows_on_linux(self):
+        # готовая сборка yue2.cpp для Windows (собирается на Windows tools/yue2cpp-build.ps1)
+        win = self.root / "dist" / "yue2cpp-windows-x86_64"
+        win.mkdir(parents=True)
+        (win / "yue-server.exe").write_bytes(b"MZ fake")
+        (win / "libggml-cuda.dll").write_bytes(b"MZ fake")
         p = self._run("windows")
         self._ok(p)
         top = f"partscaster-{VERSION}-windows-amd64"
@@ -172,10 +180,12 @@ class TestReleaseTargets(unittest.TestCase):
         worker = self.root / lines[-1]
         self.assertEqual(worker.name, f"worker-{VERSION}.tar.gz")
         self.assertTrue(worker.is_file(), worker)
-        # воркер в пакете Windows — своей ОС: linux-сборка yue2.cpp в него не попадает
-        # (кросс-сборка с Linux идёт без yue2.cpp — этот движок недоступен в таком пакете)
+        # воркер в пакете Windows — своей ОС: сборка yue2.cpp для Windows, linux-сборки нет
         with tarfile.open(worker, "r:gz") as tf:
-            self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server", tf.getnames())
+            names = tf.getnames()
+        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", names)
+        self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server", names)
+        self.assertNotIn(f"worker-{VERSION}/yue2cpp/libggml-base.so", names)
 
         with zipfile.ZipFile(zpath) as zf:
             names = {n.rstrip("/") for n in zf.namelist()}

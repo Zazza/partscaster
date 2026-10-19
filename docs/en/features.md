@@ -23,8 +23,9 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
 - **Queue** — one generation; **×5 seeds** — five variants of one song (a seed is the random number); you pick the best one
   by ear.
 - **Sound presets right in the form** — up to three; when the track is ready, the "track · preset" versions appear by themselves.
-- **Two generation engines** — the main one (PyTorch) and the experimental yue2.cpp: less video memory and faster, but the
-  same seed gives a different song. You switch it in "Settings".
+- **A generation model to fit your graphics card** — generation runs on yue2.cpp, from 8 GB of video memory. "Settings"
+  suggest a model for your card (BF16, Q8 or Q8 in economy mode); you can choose any. The same seed on another model gives
+  a different performance; a track made by another model has a model badge in the list.
 
 ## 2. Edit
 

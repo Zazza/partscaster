@@ -11,7 +11,7 @@ import VSelect from '../VSelect.vue'
 import { workerCheckText } from '../workerCheck.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useWorkerCompat } from '../composables/useWorkerCompat.js'
-import { modelOptions as cppModelOptions, engineConfig } from '../engine.js'
+import { modelOptions as cppModelOptions, modelConfig } from '../engine.js'
 const { askConfirm } = useConfirm()
 
 // имя модели — camelCase под kebab-аргумент v-model:server-url родителя:
@@ -33,11 +33,10 @@ const autoStems = ref(true)
 const stemsAuto = ref('studio')        // когда делать дорожки трека: studio | always | manual
 const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
 const roformerOk = ref(false)           // окружение RoFormer установлено на воркере
-// движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим
-const engine = ref('torch')
+// модель генерации (yue2.cpp) и экономный режим
 const cppModel = ref('q8')
 const cppLowVram = ref(false)
-const engineMsg = ref('')               // итог смены движка/загрузки модели
+const engineMsg = ref('')               // итог смены модели/её загрузки
 const modelLoad = ref(null)             // идущая загрузка модели {name, file, done, total}
 let modelTimer = 0
 const checkRes = ref(null)              // «Проверить»: { ok, text }
@@ -88,15 +87,12 @@ function connectClaude() {
 }
 
 const engineSupported = computed(() => !!(info.value && info.value.cpp_models)) // старый воркер — блока нет
-const engineOptions = computed(() => [
-  { value: 'torch', label: t('settings.engine.torch') },
-  { value: 'cpp', label: t('settings.engine.cpp'), disabled: !(info.value && info.value.cpp_available) },
-])
 const cppModels = computed(() => cppModelOptions(info.value))
 const cppModelInstalled = computed(() => !!cppModels.value.find((o) => o.value === cppModel.value && o.installed))
+// рекомендуемая для карты воркера модель и режим — подсказка под выбором (выбрать можно любую)
+const recommended = computed(() => (info.value && info.value.cpp_recommended) || null)
 
 function applyEngine(c) {
-  engine.value = c.engine || 'torch'
   cppModel.value = c.cpp_model || 'q8'
   cppLowVram.value = !!c.cpp_low_vram
 }
@@ -174,10 +170,10 @@ async function save() {
     } catch (e) {
       err.value = t('settings.worker.notApplied', { err: String(e) })
     }
-    // движок — отдельным запросом: отказ (модель не скачана) не роняет остальные настройки
+    // модель — отдельным запросом: отказ (модель не скачана) не роняет остальные настройки
     if (engineSupported.value) {
       try {
-        await api.setWorkerConfig(engineConfig(engine.value, cppModel.value, cppLowVram.value))
+        await api.setWorkerConfig(modelConfig(cppModel.value, cppLowVram.value))
         engineMsg.value = ''
       } catch (e) {
         engineMsg.value = t('settings.engine.notApplied', { err: String(e) })
@@ -247,25 +243,20 @@ async function save() {
     </PageBox>
 
       <PageBox v-if="engineSupported" :title="t('settings.engine')">
+        <div v-if="!info.cpp_available" class="set-hint error">{{ t('settings.engine.unavailable') }}</div>
         <div class="set-row">
-          <span>{{ t('settings.engine.choice') }}</span>
-          <VSelect v-model="engine" :options="engineOptions" />
+          <span>{{ t('settings.engine.model') }}</span>
+          <VSelect v-model="cppModel" :options="cppModels" />
+          <button v-if="!cppModelInstalled" class="ghost" :disabled="!!modelLoad" @click="downloadModel">{{ t('settings.engine.download') }}</button>
         </div>
-        <div v-if="!info.cpp_available" class="set-hint muted">{{ t('settings.engine.unavailable') }}</div>
-        <template v-if="engine === 'cpp'">
-          <div class="set-hint"><span class="badge exp">{{ t('settings.engine.experimental') }}</span> {{ t('settings.engine.note') }}</div>
-          <div class="set-row">
-            <span>{{ t('settings.engine.model') }}</span>
-            <VSelect v-model="cppModel" :options="cppModels" />
-            <button v-if="!cppModelInstalled" class="ghost" :disabled="!!modelLoad" @click="downloadModel">{{ t('settings.engine.download') }}</button>
-          </div>
-          <div v-if="modelLoad" class="set-hint muted">{{ t('settings.engine.downloading', { file: modelLoad.file || '…', done: (modelLoad.done / 1e9).toFixed(1), total: (modelLoad.total / 1e9).toFixed(1) }) }}</div>
-          <div v-else-if="!cppModelInstalled" class="set-hint muted">{{ t('settings.engine.needDownload') }}</div>
-          <label class="set-row set-check">
-            <input type="checkbox" v-model="cppLowVram" />
-            <span>{{ t('settings.engine.lowVram') }}</span>
-          </label>
-        </template>
+        <div v-if="recommended" class="set-hint muted">{{ t(recommended.low_vram ? 'settings.engine.recommendedLow' : 'settings.engine.recommended', { name: recommended.model.toUpperCase(), gb: recommended.vram_mib ? Math.round(recommended.vram_mib / 1024) : '?' }) }}</div>
+        <div v-if="modelLoad" class="set-hint muted">{{ t('settings.engine.downloading', { file: modelLoad.file || '…', done: (modelLoad.done / 1e9).toFixed(1), total: (modelLoad.total / 1e9).toFixed(1) }) }}</div>
+        <div v-else-if="!cppModelInstalled" class="set-hint muted">{{ t('settings.engine.needDownload') }}</div>
+        <label class="set-row set-check">
+          <input type="checkbox" v-model="cppLowVram" />
+          <span>{{ t('settings.engine.lowVram') }}</span>
+        </label>
+        <div class="set-hint muted">{{ t('settings.engine.note') }}</div>
         <div v-if="engineMsg" class="set-hint">{{ engineMsg }}</div>
       </PageBox>
 

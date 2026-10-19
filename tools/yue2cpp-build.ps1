@@ -1,5 +1,5 @@
-﻿# Готовая сборка yue2.cpp для Windows (второй движок генерации, ЭКСПЕРИМЕНТ): dist/yue2cpp-windows-x86_64/
-# с yue-server.exe и libggml*.dll. Требует: Visual Studio Build Tools (C++), CUDA Toolkit 12.8 (nvcc), cmake, ninja.
+﻿# Готовая сборка yue2.cpp для Windows (движок генерации): dist/yue2cpp-windows-x86_64/
+# с yue-server.exe и libggml*.dll; без неё пакет Windows не собирается (tools/worker-tar.sh). Требует: Visual Studio Build Tools (C++), CUDA Toolkit 12.8 (nvcc), cmake, ninja.
 # Библиотеки CUDA (cudart, cublas) пользователю не нужны: exe найдёт их в venv воркера — torch cu128 вшивает их
 # в torch/lib, а worker/engine_cpp.py добавляет этот каталог в PATH. Файл с BOM: PowerShell 5.1 без него читает
 # UTF-8 как ANSI и падает на русских комментариях.

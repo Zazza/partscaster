@@ -48,7 +48,7 @@ func RegisterInstallTools(s *Server) {
 		Name: "install_worker",
 		Description: "Установить воркер на машине с GPU (Ubuntu + NVIDIA/CUDA). Пустой host — всё на этом ПК " +
 			"(частая схема: приложение и GPU на одной машине), host — отдельная машина по ssh. " +
-			"Компоненты: воркер (обязательно, ~" + gbStr(sizeWorkerGB) + " ГБ: окружение + веса YuE2 и разбора нот), " +
+			"Компоненты: воркер (обязательно, до ~" + gbStr(sizeWorkerGB) + " ГБ: окружение, программа yue2.cpp и модель генерации, веса разбора нот), " +
 			"whisper — распознавание текстов треков (~" + gbStr(sizeWhisperGB) + " ГБ), " +
 			"Seed-VC — «голос альбома», ЭКСПЕРИМЕНТ (~" + gbStr(sizeSeedvcGB) + " ГБ после установки, больше во время). " +
 			"RoFormer — более чистое разделение дорожек (~" + gbStr(sizeSepGB) + " ГБ, веса некоммерческие). " +
@@ -69,9 +69,8 @@ func RegisterInstallTools(s *Server) {
 			"sep_dir":    prop("каталог RoFormer: окружение <dir>/venv и веса <dir>/models, можно на другом диске (пусто — ~/sep-venv и ~/sep-models)", "string"),
 			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/partscaster/seedvc; можно на другом диске)", "string"),
 			"hf_home":    prop("каталог кеша весов HF (по умолчанию ~/yue/hf-cache)", "string"),
-			"engine": prop("движок генерации: torch — основной (по умолчанию) | cpp — yue2.cpp, ЭКСПЕРИМЕНТ: меньше видеопамяти "+
-				"(~8 ГБ, в экономном режиме ~4,5 ГБ против ~11), но тот же сид даёт другую песню (спроси пользователя)", "string"),
-			"cpp_model": prop("модель yue2.cpp (только при engine=cpp): auto — по видеопамяти (по умолчанию) | bf16 | q8 | q6 | q5", "string"),
+			"cpp_model": prop("модель генерации: auto — рекомендуемая по видеопамяти (по умолчанию) | bf16 (~10 ГБ видеопамяти) | "+
+				"q8 (~8 ГБ) | q6 | q5; при переустановке без cpp_model скачанный выбор не меняется", "string"),
 			"archive": prop("архив воркера worker-<версия>.tar.gz (пусто — собрать из исходников make worker-tar, "+
 				"либо взять лежащий рядом с partscaster-mcp из релизного пакета)", "string"),
 		}),
@@ -100,8 +99,8 @@ func RegisterInstallTools(s *Server) {
 				return "", errors.New("спроси пользователя, чем делать дорожки по умолчанию, и передай stems_model=htdemucs|roformer " +
 					"(htdemucs — быстрее, roformer — чище; потом меняется в настройках приложения)")
 			}
-			engine, cppModel := argString(args, "engine"), argString(args, "cpp_model")
-			if err := checkEngineArgs(engine, cppModel); err != nil {
+			cppModel := argString(args, "cpp_model")
+			if err := checkCppModel(cppModel); err != nil {
 				return "", err
 			}
 			// без RoFormer и без явного выбора настройка не меняется: переустановка ради whisper
@@ -135,7 +134,7 @@ func RegisterInstallTools(s *Server) {
 				}
 			}
 			plan, steps := workerInstallPlanFull(argString(args, "host"), archive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
-			plan, steps = withEngine(plan, steps, engine, cppModel)
+			plan, steps = withCppModel(plan, steps, cppModel)
 			out, err := runSteps(argString(args, "host"), steps, !dryRun)
 			out = plan + "\n" + out + workerAddress(s)
 			if dryRun {
@@ -178,12 +177,12 @@ func RegisterInstallTools(s *Server) {
 	})
 }
 
-// Размеры компонентов воркера, ГБ (замер на установленной машине, 2026-10-03):
-// воркер — окружение 7,4 + веса YuE2-3B 6,8, MERT 2,4, VAE 0,5, SheetSage 0,2,
-// demucs 0,1; whisper — окружение 2,7 + модель small 0,5; Seed-VC — 11 после
+// Размеры компонентов воркера, ГБ (замер на установленной машине, 2026-10-03; модель генерации — 2026-10-19):
+// воркер — окружение 7,4 + модель генерации до 7,7 (BF16 7,2 + VAE 0,5; Q8 — 4,3), MERT 2,4 и SheetSage 0,2
+// (разбор нот), demucs 0,1; whisper — окружение 2,7 + модель small 0,5; Seed-VC — 11 после
 // установки и ~14 на время установки (см. seedvc_install.sh).
 const (
-	sizeWorkerGB     = 17.5
+	sizeWorkerGB     = 17.8
 	sizeWhisperGB    = 3.2
 	sizeSeedvcGB     = 11
 	sizeSeedvcPeakGB = 14
@@ -297,43 +296,28 @@ func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool,
 	return plan, steps
 }
 
-// checkEngineArgs — движок генерации и модель yue2.cpp для install.sh (--engine, --cpp-model); проверка до шагов.
-func checkEngineArgs(engine, cppModel string) error {
-	switch engine {
-	case "", "torch", "cpp":
-	default:
-		return fmt.Errorf("engine: torch или cpp (получено %q)", engine)
-	}
+// checkCppModel — модель генерации для install.sh (--cpp-model); проверка до шагов.
+func checkCppModel(cppModel string) error {
 	switch cppModel {
 	case "", "auto", "bf16", "q8", "q6", "q5":
-	default:
-		return fmt.Errorf("cpp_model: auto, bf16, q8, q6 или q5 (получено %q)", cppModel)
+		return nil
 	}
-	if cppModel != "" && engine != "cpp" {
-		return errors.New("cpp_model — только вместе с engine=cpp")
-	}
-	return nil
+	return fmt.Errorf("cpp_model: auto, bf16, q8, q6 или q5 (получено %q)", cppModel)
 }
 
-// withEngine — выбор движка в плане и в шаге install.sh; без engine план прежний (движок не меняется).
-func withEngine(plan string, steps []step, engine, cppModel string) (string, []step) {
-	if engine == "" {
-		return plan, steps
+// withCppModel — модель генерации в плане и в шаге install.sh; без cpp_model install.sh оставит скачанный выбор,
+// а без него поставит рекомендуемую.
+func withCppModel(plan string, steps []step, cppModel string) (string, []step) {
+	if cppModel == "" {
+		return plan + "Модель генерации (yue2.cpp): выбранная раньше, если скачана; иначе — рекомендуемая по видеопамяти.\n", steps
 	}
-	flags := " --engine " + engine
-	switch engine {
-	case "cpp":
-		if cppModel == "" {
-			cppModel = "auto"
-		}
-		flags += " --cpp-model " + cppModel
-		plan += "Движок генерации: yue2.cpp — ЭКСПЕРИМЕНТ (модель " + cppModel + "; программа из архива или сборка, " +
-			"модель скачивается). Не вышло — воркер работает на основном движке.\n"
-	default:
-		plan += "Движок генерации: основной (PyTorch).\n"
+	if cppModel == "auto" {
+		plan += "Модель генерации (yue2.cpp): рекомендуемая по видеопамяти.\n"
+	} else {
+		plan += "Модель генерации (yue2.cpp): " + cppModel + ".\n"
 	}
 	for i := range steps {
-		steps[i].cmd = strings.Replace(steps[i].cmd, "/install.sh --no-start", "/install.sh --no-start"+flags, 1)
+		steps[i].cmd = strings.Replace(steps[i].cmd, "/install.sh --no-start", "/install.sh --no-start --cpp-model "+cppModel, 1)
 	}
 	return plan, steps
 }
@@ -344,7 +328,8 @@ func planText(whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir st
 	mark := map[bool]string{true: "[x]", false: "[ ]"}
 	var b strings.Builder
 	b.WriteString("Компоненты:\n")
-	fmt.Fprintf(&b, "  [x] воркер — генерация (YuE2), разбор нот, дорожки (demucs): ~%s ГБ (веса качаются при первом запуске)\n",
+	fmt.Fprintf(&b, "  [x] воркер — генерация (YuE2 на yue2.cpp), разбор нот, дорожки (demucs): до ~%s ГБ "+
+		"(модель генерации — при установке, веса разбора нот — при первом запуске)\n",
 		gbStr(sizeWorkerGB))
 	fmt.Fprintf(&b, "  %s RoFormer — чистое разделение дорожек (+ барабаны по частям), включается в настройках: ~%s ГБ, "+
 		"веса некоммерческие (CC BY-NC-SA); без него дорожки делает demucs\n", mark[roformer], gbStr(sizeSepGB))

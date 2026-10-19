@@ -78,7 +78,7 @@ export const api = {
   playLoop: (file, phase) => YuePlayLoop(file, phase),
   // прогресс установки набора сэмплов на воркере ({} — ничего не ставится)
   fxKitProgress: () => YueFxKitProgress(),
-  // второй движок генерации yue2.cpp (эксперимент): загрузка модели на воркер и её прогресс
+  // модель генерации (yue2.cpp): загрузка на воркер и её прогресс
   installEngineModel: (name) => YueInstallEngineModel(name),
   engineModelProgress: () => YueEngineModelProgress(),
   // свои инструменты (на воркере): список, сохранить, заменить, удалить

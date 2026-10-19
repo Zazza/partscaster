@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Готовая сборка yue2.cpp (второй движок генерации, ЭКСПЕРИМЕНТ) для архива воркера: dist/yue2cpp-linux-x86_64/
+# Готовая сборка yue2.cpp (движок генерации) для архива воркера: dist/yue2cpp-linux-x86_64/
 # (yue-server + libggml*, поиск библиотек — свой каталог). Собирается в контейнере CUDA 12.8 на ubuntu 22.04
 # (glibc 2.35 — идёт и на системах новее): библиотеки CUDA 12 (cudart, cublas) у пользователя уже есть в venv
-# воркера (пакеты nvidia-* от PyTorch cu128), пакет разработки CUDA ему не нужен. Нужен docker.
+# воркера (пакеты nvidia-* от PyTorch cu128), пакет разработки CUDA ему не нужен. Нужен docker. Без этой сборки
+# архив воркера Linux всё равно собирается (install.sh соберёт программу на GPU-машине).
 # usage: tools/yue2cpp-build.sh   (архитектуры — YUE2CPP_ARCHS, по умолчанию все карты от Turing до Blackwell)
 set -euo pipefail
 cd "$(dirname "$0")/.."

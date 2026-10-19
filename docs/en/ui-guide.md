@@ -218,7 +218,9 @@ hover.
 
 Under the versions:
 
-- **Info line**: "seed N", the yue2.cpp engine badge (experiment), "plan: melody only", character,
+- **Info line**: "seed N", the generation model badge ("BF16", "Q8"…; old tracks of the former engine — "PyTorch")
+  — only if the track was made by a different model than the one chosen now: a repeat with the same seed will sound
+  different, and "Repeat" warns first; "plan: melody only", character,
   "custom ABC", "main: #N" (if another version is chosen as the main one).
 - **Folder** — an icon; click — a list: "no folder", folders, "new folder…" (name and Enter). The song's versions
   move together with it.
@@ -702,10 +704,13 @@ button in the title row — "Saved" or an error shows next to it.
     RoFormer cuts out voice, guitars and keys more cleanly and splits drums into parts; its weights are
     non-commercial (CC BY-NC-SA). It applies to new separations. If it is not installed on the worker, the page
     tells you where to read ([deployment.md](deployment.md)).
-- **"Generation engine"** (if the worker supports it) — "Main (PyTorch)" or "yue2.cpp — experimental". yue2.cpp
-  has "model", "Download" (download progress as a line; after it — "Save") and "Economy mode (8 GB)": ~4.5 GB of
-  video memory, songs up to ~3.5 min. A different engine with the same seed gives a different song; notes and
-  continuations carry over. Tracks from this engine are marked with a badge in the track details.
+- **"Generation model"** — "model": BF16, Q8, Q6, Q5 with size and state ("downloaded" / "not downloaded"); the one
+  recommended for the worker's graphics card is marked "recommended", and below the choice there is a hint "For this
+  graphics card (N GB) … is recommended" (sometimes — in economy mode). Any model can be chosen. A model that is not
+  downloaded has "Download" (download progress as a line; after it — "Save"). "Economy mode (8 GB)": ~4.5 GB of video
+  memory, songs up to ~3.5 min. The same seed on another model gives a different performance; notes and continuations
+  carry over; the model changes from the next generation. If the worker has no yue2.cpp program, an error hint says that
+  generation does not work and the worker needs reinstalling.
 - **"Worker (information only)"** (at the bottom of the "Worker connection" block) — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), separation model;
   below — "App version".
 - **"For AI agents (Claude Code, Claude Desktop, Codex)"** — the MCP server partscaster-mcp gives an agent the

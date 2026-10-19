@@ -674,7 +674,7 @@ func (a *App) YueFxKitProgress() (map[string]any, error) {
 	return a.yue.FxKitProgress(a.ctx)
 }
 
-// YueInstallEngineModel — скачать модель yue2.cpp (второй движок, эксперимент) на воркер; ждёт конца загрузки.
+// YueInstallEngineModel — скачать модель генерации (yue2.cpp) на воркер; ждёт конца загрузки.
 func (a *App) YueInstallEngineModel(name string) (map[string]any, error) {
 	return a.yue.InstallEngineModel(a.ctx, name)
 }

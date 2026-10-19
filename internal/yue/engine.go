@@ -18,7 +18,7 @@ var modelHTTP = &http.Client{Transport: &http.Transport{
 	Proxy:       nil,
 }}
 
-// InstallEngineModel — воркер скачивает модель второго движка yue2.cpp (ЭКСПЕРИМЕНТ) и VAE с проверкой суммы;
+// InstallEngineModel — воркер скачивает модель генерации yue2.cpp и VAE с проверкой суммы;
 // ждёт конца загрузки, готовые файлы не качаются заново.
 func (c *Client) InstallEngineModel(ctx context.Context, name string) (map[string]any, error) {
 	var out map[string]any

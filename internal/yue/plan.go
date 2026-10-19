@@ -39,7 +39,7 @@ func (c *Client) WorkerConfig(ctx context.Context) (map[string]any, error) {
 	return out, nil
 }
 
-// SetWorkerConfig — смена настроек воркера на лету (stems_model, fx_engine, engine…).
+// SetWorkerConfig — смена настроек воркера на лету (stems_model, fx_engine, cpp_model…).
 func (c *Client) SetWorkerConfig(ctx context.Context, cfg map[string]any) error {
 	return c.postJSON(ctx, "/config", cfg, requestTimeout, nil)
 }

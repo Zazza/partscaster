@@ -29,15 +29,15 @@ EXE=""
 [[ "$GOOS" == "windows" ]] && EXE=".exe"
 
 mkdir -p dist
-# второй движок yue2.cpp (эксперимент) — готовой сборкой в архиве воркера: на Linux — в контейнере CUDA 12.8
-# (нужен docker), на Windows — локально (нужны VS Build Tools C++, CUDA Toolkit, cmake, ninja); без сборки
-# install.sh --engine cpp соберёт программу сам, а partscaster-worker.exe просто не предложит этот движок
+# движок генерации yue2.cpp — готовой сборкой в архиве воркера: на Linux — в контейнере CUDA 12.8 (нужен docker),
+# на Windows — локально (нужны VS Build Tools C++, CUDA Toolkit, cmake, ninja). Linux без сборки — архив с
+# предупреждением (install.sh соберёт программу сам); пакет Windows без сборки worker-tar.sh не соберёт
 if [[ "$HOST_OS" == "linux" && ! -x dist/yue2cpp-linux-x86_64/yue-server ]] && command -v docker >/dev/null; then
   tools/yue2cpp-build.sh || echo "!! сборка yue2.cpp не удалась — архив воркера без неё" >&2
 fi
 if [[ "$HOST_OS" == "windows" && ! -f dist/yue2cpp-windows-x86_64/yue-server.exe ]] && command -v nvcc >/dev/null; then
   powershell -NoProfile -ExecutionPolicy Bypass -File tools/yue2cpp-build.ps1 \
-    || echo "!! сборка yue2.cpp не удалась — архив воркера без неё" >&2
+    || echo "!! сборка yue2.cpp не удалась — пакет Windows без неё не собирается" >&2
 fi
 export TARGET_OS="$GOOS"   # worker-tar берёт каталог yue2cpp своей ОС
 WORKER_TAR="$(tools/worker-tar.sh dist "$VERSION" | tail -1)"

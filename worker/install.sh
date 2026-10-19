@@ -3,9 +3,9 @@
 #
 #   ./install.sh [--no-start] [--hf-home DIR]   установить эту версию и (без --no-start) перезапустить
 #   ~/partscaster/current/install.sh --rollback   вернуть предыдущую версию
-#   движок генерации: --engine torch (основной) | cpp (yue2.cpp — ЭКСПЕРИМЕНТ, меньше видеопамяти);
-#     для cpp: --cpp-model auto|bf16|q8|q6|q5 (auto — по видеопамяти), --cpp-low-vram (экономный, ~4,5 ГБ)
-#   без --engine движок не меняется (новая установка — основной)
+#   модель генерации (yue2.cpp): --cpp-model auto|bf16|q8|q6|q5 (auto — рекомендуемая по видеопамяти),
+#     --cpp-low-vram — экономный режим (~4,5 ГБ); без флагов скачанная выбранная модель не меняется,
+#     а если её нет — ставится рекомендуемая
 #
 # Раскладка: код — $PARTSCASTER_HOME/releases/<время>-<версия>/, ссылка $PARTSCASTER_HOME/current — действующая версия;
 # данные ($PARTSCASTER_HOME/data) и настройки машины ($PARTSCASTER_HOME/worker.env) общие для всех версий и не трогаются.
@@ -52,34 +52,25 @@ KEEP=3 # сколько прежних версий хранить кроме д
 NO_START=0
 ROLLBACK=0
 HF_HOME_DIR="~/yue/hf-cache"
-ENGINE=""      # пусто — движок не трогаем
-CPP_MODEL=""   # пусто при --engine cpp — auto
+CPP_MODEL=""   # пусто — скачанный выбор пользователя, без него — рекомендуемая (как auto)
 CPP_LOW_VRAM=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-start) NO_START=1 ;;
     --rollback) ROLLBACK=1 ;;
     --hf-home) HF_HOME_DIR="${2:?--hf-home: нужен каталог}"; shift ;;
-    --engine) ENGINE="${2:?--engine: torch или cpp}"; shift ;;
     --cpp-model) CPP_MODEL="${2:?--cpp-model: auto, bf16, q8, q6 или q5}"; shift ;;
     --cpp-low-vram) CPP_LOW_VRAM=1 ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+    --engine) echo "неизвестный параметр: --engine — движок генерации один (yue2.cpp); модель: --cpp-model" >&2; exit 2 ;;
     *) echo "неизвестный параметр: $1" >&2; exit 2 ;;
   esac
   shift
 done
-case "$ENGINE" in
-  "" | torch | cpp) ;;
-  *) echo "--engine: torch или cpp (получено «$ENGINE»)" >&2; exit 2 ;;
-esac
 case "$CPP_MODEL" in
   "" | auto | bf16 | q8 | q6 | q5) ;;
   *) echo "--cpp-model: auto, bf16, q8, q6 или q5 (получено «$CPP_MODEL»)" >&2; exit 2 ;;
 esac
-if [[ "$ENGINE" != cpp && ( -n "$CPP_MODEL" || $CPP_LOW_VRAM == 1 ) ]]; then
-  echo "--cpp-model и --cpp-low-vram — только вместе с --engine cpp" >&2
-  exit 2
-fi
 
 # пути уходят в юнит systemd: кавычки, обратный слэш, % (спецификаторы systemd) и перевод строки там
 # не записать буквально — такие пути отклоняются до любых изменений (пробелы — можно, юнит их кавычит)
@@ -163,11 +154,29 @@ with_worker_env() {
   )
 }
 
-# settings.json данных воркера: дописать ключи engine/cpp_* (остальные сохраняются)
-settings_set() { # settings_set '{"engine": "cpp", ...}'
+# python воркера с его окружением: системный python3 или venv (настройки — до установки пакетов не нужны)
+settings_py() {
   local py=python3
   command -v python3 >/dev/null || py="$PARTSCASTER_VENV/bin/python"
-  with_worker_env "$py" -c '
+  with_worker_env "$py" -c "$@"
+}
+
+# выбранная модель и экономный режим из settings.json данных воркера: «<модель> <0|1>» (модели нет — « 0»)
+settings_model() {
+  settings_py '
+import json, os
+from pathlib import Path
+try:
+    st = json.loads((Path(os.environ["PARTSCASTER_DATA_DIR"]) / "settings.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    st = {}
+print(st.get("cpp_model") or "", int(bool(st.get("cpp_low_vram"))))
+'
+}
+
+# записать модель и экономный режим (остальные ключи сохраняются; выбор движка прежних версий — убирается)
+settings_set_model() { # settings_set_model <модель> <0|1>
+  settings_py '
 import json, os, sys
 from pathlib import Path
 p = Path(os.environ["PARTSCASTER_DATA_DIR"]) / "settings.json"
@@ -175,12 +184,13 @@ try:
     st = json.loads(p.read_text(encoding="utf-8"))
 except (OSError, ValueError):
     st = {}
-st.update(json.loads(sys.argv[1]))
+st.pop("engine", None)
+st.update(cpp_model=sys.argv[1], cpp_low_vram=sys.argv[2] == "1")
 p.parent.mkdir(parents=True, exist_ok=True)
 tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")  # атомарно: работающий воркер не прочтёт полфайла
 tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
 os.replace(tmp, p)
-' "$1"
+' "$1" "$2"
 }
 
 CPP_COMMIT="c893629" # = engine_cpp.CPP_COMMIT
@@ -217,9 +227,12 @@ cpp_build() { # сборка закреплённого коммита в $PARTS
   echo "$CPP_COMMIT" > "$src/.commit"
 }
 
-cpp_binary() { # путь к рабочей программе yue2.cpp (из архива или собранной), иначе — сборка
-  local rel="$PARTSCASTER_HOME/current/yue2cpp/yue-server" built="$PARTSCASTER_HOME/yue2cpp-src/build/yue-server"
-  local mark="$PARTSCASTER_HOME/yue2cpp-src/.commit"
+cpp_binary() { # cpp_binary <каталог версии>: рабочая программа yue2.cpp (из архива или собранная), иначе — сборка
+  local rel="$1/yue2cpp/yue-server" built="$PARTSCASTER_HOME/yue2cpp-src/build/yue-server"
+  local mark="$PARTSCASTER_HOME/yue2cpp-src/.commit" own
+  # своя программа из worker.env (PARTSCASTER_CPP_BIN) — воркер берёт её первой (engine_cpp._candidates)
+  own="$(with_worker_env bash -c 'printf %s "${PARTSCASTER_CPP_BIN:-}"')"
+  if [[ -n "$own" ]] && cpp_runs "$own"; then echo "$own"; return 0; fi
   if cpp_runs "$rel"; then echo "$rel"; return 0; fi
   # собранная раньше — если пометки нет или коммит тот же (пометка другая — закреплён новый коммит)
   if cpp_runs "$built" && { [[ ! -f "$mark" ]] || [[ "$(cat "$mark")" == "$CPP_COMMIT" ]]; }; then
@@ -229,42 +242,40 @@ cpp_binary() { # путь к рабочей программе yue2.cpp (из а
   return 1
 }
 
-cpp_auto_model() { # по видеопамяти первой карты (воркер работает на cuda:0): 12 ГБ сообщают ~12282 МиБ
-  local mib
-  mib="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc '0-9')"
-  mib="${mib:-0}"
-  if ((mib >= 11776)); then
-    echo "q8 0"
-  elif ((mib >= 7680)); then
-    echo "q8 1"
-  else
-    echo "q5 1"
-  fi
-}
-
-engine_setup() {
-  if [[ "$ENGINE" == torch ]]; then
-    settings_set '{"engine": "torch"}'
-    echo "движок: основной (PyTorch)"
+# модель генерации: выбор пользователя (скачан, флагов нет) не трогается; иначе — флаг или рекомендуемая
+# (engine_cpp.recommend — единственное место порогов видеопамяти). Программа yue2.cpp и модель обязательны:
+# не вышло — установка падает (повторный запуск докачает), прежняя версия остаётся действующей
+cpp_setup() { # cpp_setup <каталог новой версии>
+  local dir="$1" py="$PARTSCASTER_VENV/bin/python" model="$CPP_MODEL" low="" rec bin current current_low
+  local rec_model rec_low
+  rec="$(cd "$dir" && with_worker_env "$py" engine_cpp.py recommend)" || return 1
+  read -r rec_model rec_low <<<"$rec"
+  read -r current current_low <<<"$(settings_model)"
+  if [[ -z "$model" && -n "$current" ]] && (cd "$dir" && with_worker_env "$py" engine_cpp.py installed "$current"); then
+    echo "модель генерации: $current (выбрана раньше, скачана)"
+    bin="$(cpp_binary "$dir")" || { echo "yue2.cpp не установлен: нужна готовая программа из архива или git, cmake, nvcc для сборки" >&2; return 1; }
+    echo "программа yue2.cpp: $bin"
+    [[ $CPP_LOW_VRAM == 1 ]] && current_low=1
+    # перезапись тем же выбором: убирает ключ engine прежних версий (и включает экономный режим по флагу)
+    settings_set_model "$current" "$current_low"
     return 0
   fi
-  local model="$CPP_MODEL" low="$CPP_LOW_VRAM" bin
   if [[ -z "$model" || "$model" == auto ]]; then
-    read -r model low < <(cpp_auto_model)
-    [[ $CPP_LOW_VRAM == 1 ]] && low=1
-    echo "модель yue2.cpp по видеопамяти: $model$([[ $low == 1 ]] && echo ', экономный режим')"
+    model="$rec_model"
+    low="$rec_low"
+    echo "модель генерации по видеопамяти: $model$([[ $low == 1 ]] && echo ', экономный режим') (рекомендуемая)"
+  else
+    low="$rec_low"
+    echo "модель генерации: $model (рекомендуемая для этой карты — $rec_model)"
   fi
-  if ! bin="$(cpp_binary)"; then
-    echo "yue2.cpp не собран: нужны git, cmake, nvcc (пакет разработки CUDA)"
-    return 1
-  fi
+  [[ $CPP_LOW_VRAM == 1 ]] && low=1
+  bin="$(cpp_binary "$dir")" || { echo "yue2.cpp не установлен: нужна готовая программа из архива или git, cmake, nvcc для сборки" >&2; return 1; }
   echo "программа yue2.cpp: $bin"
-  if ! (cd "$PARTSCASTER_HOME/current" && with_worker_env "$PARTSCASTER_VENV/bin/python" engine_cpp.py download "$model"); then
-    echo "модель yue2.cpp не скачана: $model (повтор install.sh докачает)"
+  if ! (cd "$dir" && with_worker_env "$py" engine_cpp.py download "$model"); then
+    echo "модель $model не скачана — повторный запуск install.sh докачает" >&2
     return 1
   fi
-  settings_set "{\"engine\": \"cpp\", \"cpp_model\": \"$model\", \"cpp_low_vram\": $([[ $low == 1 ]] && echo true || echo false)}"
-  echo "движок: yue2.cpp (эксперимент), модель $model"
+  settings_set_model "$model" "$low"
 }
 
 if [[ $ROLLBACK == 1 ]]; then
@@ -345,7 +356,15 @@ if [[ ! -f "$PARTSCASTER_HOME/worker.env" ]]; then
   printf 'HF_HOME=%s\n' "$(expand_home "$HF_HOME_DIR")" > "$PARTSCASTER_HOME/worker.env"
 fi
 
-# действующей версия становится, когда пакеты под неё встали: сбой pip выше оставляет прежнюю
+# движок генерации yue2.cpp: программа из архива релиза (готовая сборка CUDA 12.8; библиотеки CUDA — из venv
+# воркера), не запускается — сборка закреплённого коммита; модель — с проверкой суммы
+echo "== модель генерации (yue2.cpp) =="
+if ! cpp_setup "$PARTSCASTER_HOME/releases/$NAME"; then
+  echo "!! yue2.cpp или модель не установлены — версия $VERSION не включена" >&2
+  exit 1
+fi
+
+# действующей версия становится, когда пакеты и движок под неё встали: сбой выше оставляет прежнюю
 switch_current "$PARTSCASTER_HOME/releases/$NAME"
 trap - EXIT
 install_unit
@@ -364,18 +383,6 @@ echo "== наборы сэмплов =="
   done < "$PARTSCASTER_HOME/worker.env"
   "$PARTSCASTER_VENV/bin/python" kits_install.py
 ) || echo "!! не все наборы поставились — следующий запуск install.sh докачает"
-
-# движок генерации: без --engine не трогаем. yue2.cpp — ЭКСПЕРИМЕНТ: программа из архива релиза
-# (готовая сборка CUDA 12.8; библиотеки CUDA — из venv воркера), не запускается — сборка закреплённого коммита;
-# модель — с проверкой суммы. Не вышло — воркер всё равно установлен, движок — основной (PyTorch).
-if [[ -n "$ENGINE" ]]; then
-  echo "== движок генерации: $ENGINE =="
-  if ! engine_setup; then
-    # прежний выбор yue2.cpp без рабочей программы/модели этой версии ломал бы генерации — основной движок
-    settings_set '{"engine": "torch"}' || true
-    echo "!! движок yue2.cpp не включён — воркер работает на основном (PyTorch); повтор: install.sh --engine cpp"
-  fi
-fi
 
 # хранятся действующая и KEEP последних прочих версий
 cur="$(basename "$(readlink -f "$PARTSCASTER_HOME/current")")"

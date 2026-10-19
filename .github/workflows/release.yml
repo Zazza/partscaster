@@ -44,7 +44,8 @@ jobs:
         run: choco install -y cuda --version=12.8.1.1.9 # как контейнер Linux-сборки (12.8); VS C++ на раннере есть
       - name: Пакет
         # release.sh сам собирает yue2.cpp готовой программой: на Linux — в контейнере CUDA 12.8, на Windows —
-        # локально с CUDA из шага выше; без сборки архив воркера едет без второго движка (не фатально)
+        # локально с CUDA из шага выше. Без сборки пакет Windows не собирается (partscaster-worker.exe не умеет
+        # собирать yue2.cpp сам); архив воркера Linux собирается с предупреждением — install.sh соберёт программу
         run: |
           # Linux: Wails под webkit2gtk-4.1 (на ubuntu-24.04 нет 4.0, без тега cgo ищет 4.0)
           if [[ "$RUNNER_OS" == "Linux" ]]; then export GOFLAGS="-tags=webkit2_41"; fi

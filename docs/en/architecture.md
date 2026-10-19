@@ -13,9 +13,9 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 ┌──────────────────────────────┐   HTTP :8091    ┌─────────────────────────────────────┐
 │ partscaster — app            │ ──────────────▶ │ worker (Python, FastAPI, :8091)     │
 │ Wails v2: Go + Vue 3         │                 │  • shared GPU queue                 │
-│  • sound — system player     │                 │  • YuE2 (PyTorch) — main engine     │
-│  • ffmpeg effects — locally  │                 │  • yue2.cpp (yue-server on          │
-│  • sound presets, rebuild    │                 │    127.0.0.1) — second, experiment  │
+│  • sound — system player     │                 │  • YuE2 generation — yue2.cpp       │
+│  • ffmpeg effects — locally  │                 │    (yue-server on 127.0.0.1,        │
+│  • sound presets, rebuild    │                 │    started/stopped by the worker)   │
 ├──────────────────────────────┤                 │  • SheetSage2, demucs / RoFormer    │
 │ partscaster-mcp — MCP server │ ──────────────▶ │  • sound engine, NAM, kits          │
 │ stdio, for AI agents         │                 │  • whisper, Seed-VC — separate      │
@@ -110,10 +110,10 @@ in `worker/`.
 
 | Module | Role |
 |---|---|
-| `yue_worker.py` | all endpoints, SQLite, generation loop, model loading, settings (`<data>/settings.json`), overdub mix |
+| `yue_worker.py` | all endpoints, SQLite, generation loop, starting the yue2.cpp server, settings (`<data>/settings.json`), overdub mix |
 | `opqueue.py` | shared queue of long operations (below); a pure module without FastAPI and torch |
 | `proclock.py` | inter-process file lock on Linux and Windows |
-| `engine_cpp.py` | second engine **yue2.cpp**: models (pinned files and checksums), starting and stopping `yue-server`, translating requests, parsing the response and the log; from the command line — `python engine_cpp.py download <model>` |
+| `engine_cpp.py` | generation engine **yue2.cpp**: models (pinned files and checksums), the recommended model by VRAM, starting and stopping `yue-server`, translating requests, parsing the response and the log; from the command line — `python engine_cpp.py download <model>`, `installed <model>`, `recommend [MiB]` |
 | `sheetsage.py` | SheetSage2: track → ABC score (for the piano roll and overdub) |
 | `abcparse.py`, `plancheck.py`, `arc.py`, `chordgrid.py` | parsing ABC into a timeline; checking an edited plan; dramaturgy (build-up, explosion) on top of the plan; chord grid by bars |
 | `stems.py`, `sep_run.py` | stem separation: demucs in the worker process, or BS-Roformer-SW + DrumSep as a subprocess in a separate environment |
@@ -149,21 +149,31 @@ Consequences:
 - **a piece preview is cheap**: the latents are saved, so a piece decodes in seconds without generation;
 - **the instruments are set by the style string**, not by the score: ABC has only the Vocal and Ins voices.
 
-## Two generation engines
+## Generation engine — yue2.cpp
 
-| | Main | yue2.cpp (experiment) |
+Generation runs on [yue2.cpp](https://github.com/ServeurpersoCom/yue2.cpp) on GGML: the YuE2-3B model in GGUF. The
+former PyTorch engine (package `yue2`) is removed; the torch library stays in the worker — stems, SheetSage2 and NAM
+run on it, while whisper and Seed-VC work in their own environments.
+
+| Model | File | VRAM at peak |
 |---|---|---|
-| What it is | PyTorch, package `yue2` (YuE2-3B, BF16) | [yue2.cpp](https://github.com/ServeurpersoCom/yue2.cpp) on GGML: the same weights in GGUF (bf16/q8/q6/q5) |
-| VRAM at peak | ~11 GB (measured ~11.4) | BF16 ~10 GB, Q8 ~8, Q6/Q5 ~7.7; low-VRAM mode (`--max-seq 8192`, song up to ~3.5 min) — ~4.5 |
-| How it works | the model loads on the first operation and stays loaded | the worker starts `yue-server` on 127.0.0.1 itself and shuts it down |
+| `bf16` | 7.2 GB | ~10 GB |
+| `q8` | 3.8 GB | ~8 GB |
+| `q6` / `q5` | 2.9 / 2.6 GB | ~7.7 GB |
+| low-VRAM mode (`--max-seq 8192`, song up to ~3.5 min) | — | ~4.5 GB (Q8) |
 
-- The choice is the worker setting `engine` (app, MCP `config_set`); it takes effect from the next generation,
-  and a track remembers its engine (`jobs.engine`). Only one engine is in VRAM at a time: before starting
-  yue2.cpp, the worker unloads PyTorch; before loading PyTorch, it stops yue2.cpp.
-- **The seed does not carry over between engines or between yue2.cpp models** — you get a different performance.
-  **Notes carry over**: continuation and preview use `semantic.npy` / `latent.npy`, the format is shared.
-- Both engines have the model operations: track, custom plan, dramaturgy, draft, fragment, continuation,
-  plan only, piece preview, cancel.
+- The worker starts `yue-server` on 127.0.0.1 (a free port) on the first model operation and keeps it running
+  between generations; a model or mode change means a new process for the next generation; on out-of-memory the
+  server is stopped completely.
+- The model and low-VRAM mode are the worker settings `cpp_model`, `cpp_low_vram` (app, MCP `config_set`).
+  The recommended model for the card comes from `engine_cpp.recommend` (the only place with thresholds): from
+  11776 MiB — `bf16`, from 9728 — `q8`, less or unknown — `q8` in low-VRAM mode. It is a hint (`GET /config` →
+  `cpp_recommended`); the user chooses.
+- A track remembers its model (`jobs.engine` = `cpp-<model>`; old tracks of the former engine have `""` or `torch`).
+  **The seed does not carry over between models** — you get a different performance. **Notes carry over**:
+  continuation and preview use `semantic.npy` / `latent.npy`, so old tracks continue on yue2.cpp.
+- Model operations: track, custom plan, dramaturgy, draft, fragment, continuation, plan only, piece preview,
+  cancel.
 - The yue2.cpp program and the model files are pinned (repository commit, GGUF revision and sha256): an update of
   the other project does not change the sound of tracks already made.
 
@@ -191,7 +201,9 @@ There is one GPU, so one long operation runs (the "slot"); the others wait by th
 
 ## VRAM
 
-- The main engine keeps the model loaded between requests: ~7.7 GB at rest, ~11 GB at the generation peak.
+- The generation model lives in a separate `yue-server` process that keeps running between generations: at peak
+  BF16 ~10 GB, Q8 ~8 GB, low-VRAM mode ~4.5 GB. The worker gets VRAM figures for `/stats` and the error text from
+  `nvidia-smi`, not through torch: a CUDA context in its own process would take memory for nothing.
 - SheetSage2 is small (hundreds of MB) and also stays loaded.
 - Separation: demucs (~0.7 GB) loads per call and unloads; RoFormer is a separate process, and its memory
   is freed when it exits.
@@ -221,14 +233,15 @@ parts. Which model ran — the `model` field of the response; in `GET /config` �
 (`//go:embed payload`). The first run installs into the user folder (default
 `%LOCALAPPDATA%\partscaster-worker`) uv, Python 3.12, the environment and packages, unpacks the worker code
 into `app\` and starts uvicorn; after that it starts right away. While the window is open, the worker works: the Python process
-is tied to the program by a Windows job object. Models are in `hf-cache\`, data is in `data\`; the PyTorch
-mode is `YUE2_BACKEND=torch-eager`. Details: [deployment.md](deployment.md).
+is tied to the program by a Windows job object. The yue2.cpp program is in the worker archive (the Windows package
+is not built without it), the generation model is in `data\yue2cpp-models\`, other weights are in `hf-cache\`,
+data is in `data\`. Details: [deployment.md](deployment.md).
 
 ## Build and release (`tools/`, `.github/workflows/`)
 
 | File | What it does |
 |---|---|
-| `tools/worker-tar.sh` | worker archive `worker-<version>.tar.gz`: code without tests, `*.json`, `requirements*.txt`, installation scripts, phrases, the systemd unit and the ready-made yue2.cpp program for its own OS, if built |
+| `tools/worker-tar.sh` | worker archive `worker-<version>.tar.gz`: code without tests, `*.json`, `requirements*.txt`, installation scripts, phrases, the systemd unit and the ready-made yue2.cpp program for its own OS (required for Windows; Linux without it — with a warning, `install.sh` builds it) |
 | `tools/release.sh` | package for an OS: app, `partscaster-mcp`, worker archive, `INSTALL.txt`; for Windows — also `partscaster-worker.exe` |
 | `tools/yue2cpp-build.sh`, `tools/yue2cpp-build.ps1` | yue2.cpp build: Linux — in a CUDA 12.8 container, Windows — locally |
 | `tools/mcp-gendata.sh` | MCP library data from frontend sources |

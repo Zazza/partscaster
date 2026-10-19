@@ -5,13 +5,13 @@ S1. POST /jobs без seed (нет / 0 / null) и без parent_id → у джо
 S2. Явный seed сохраняется как есть.
 S3. С parent_id и без seed — seed родителя; у родителя 0/NULL (старый трек,
     реально генерировался с 831001) → 831001. Явный seed ребёнка важнее.
-S4. _run_job передаёт пайплайну seed, сохранённый в строке джобы.
+S4. _run_job передаёт серверу yue2.cpp сид, сохранённый в строке джобы: им и ноты (lm_seed),
+    и шум звука (seed) заявки.
 """
-import sys
-import types
 import unittest
 
-from test_character import _get, _job_id, _post_job, _RecordingModel, _Sampling
+from test_character import _get, _job_id, _post_job
+from test_jobs_lifecycle import _Case as _CppCase
 from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase
 
 LIB_DEFAULT_SEED = 831001
@@ -93,43 +93,25 @@ class TestSeedInherit(_WorkerApiCase):
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestSeedGeneration(_WorkerApiCase):
-    """S4: генерация идёт с сидом из строки джобы, а не с дефолтом библиотеки."""
+class TestSeedGeneration(_CppCase):
+    """S4: генерация идёт с сидом из строки джобы, а не с дефолтом библиотеки (фейк yue-server)."""
 
-    def setUp(self):
-        super().setUp()
-        from unittest import mock
-        protocol = types.ModuleType("yue2.protocol")
-        protocol.Sampling = _Sampling
-        mods = {"yue2": mock.MagicMock(), "yue2.protocol": protocol,
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        self.model = _RecordingModel()
-        for name, val in (("_pipe", self.model), ("_load_error", None)):
-            p = mock.patch.object(self.w, name, val)
-            p.start()
-            self.addCleanup(p.stop)
-
-    def _gen_kwargs(self, jid):
+    def _sent_seeds(self, jid):
         self.w._run_job(jid)  # исключение наружу = провал теста
-        calls = [kw for _, kw in self.model.calls
-                 if "cfg_scale" in kw or "semantic_sampling" in kw]
-        self.assertTrue(calls, f"генерация не вызвана: {self.model.calls}")
-        return calls[0]
+        bodies = self._bodies()
+        self.assertEqual(len(bodies), 1, "заявка трека не дошла до yue2.cpp")
+        return bodies[0]["lm_seed"], bodies[0]["seed"]
 
     def test_s4_job_without_seed_generates_with_stored_seed(self):
         jid = _job_id(self, _post_job(self))
         stored = self._row(jid)["seed"]
         self.assertTrue(stored, "сид не сохранён в строке джобы")
-        kw = self._gen_kwargs(jid)
-        self.assertEqual(kw.get("seed"), stored, kw)
-        self.assertNotEqual(kw.get("seed"), LIB_DEFAULT_SEED)
+        self.assertEqual(self._sent_seeds(jid), (stored, stored))
+        self.assertNotEqual(stored, LIB_DEFAULT_SEED)
 
-    def test_s4_explicit_seed_reaches_pipeline(self):
+    def test_s4_explicit_seed_reaches_server(self):
         jid = _job_id(self, _post_job(self, seed=42))
-        self.assertEqual(self._gen_kwargs(jid).get("seed"), 42)
+        self.assertEqual(self._sent_seeds(jid), (42, 42))
 
 
 if __name__ == "__main__":

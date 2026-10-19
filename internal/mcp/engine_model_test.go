@@ -15,14 +15,14 @@ import (
 )
 
 // Спецификация:
-//   - config_set: engine, cpp_model, cpp_low_vram уходят воркеру в POST /config как заданы
-//     (cpp_low_vram — bool; false — тоже значение); отказ воркера — ошибка с его текстом;
-//   - config_get: показывает engine, cpp_model, cpp_low_vram из GET /config воркера;
+//   - config_set: cpp_model, cpp_low_vram уходят воркеру в POST /config как заданы
+//     (cpp_low_vram — bool; false — тоже значение); выбора движка нет (internal-cpp-only);
+//     отказ воркера — ошибка с его текстом;
+//   - config_get: показывает cpp_model, cpp_low_vram из GET /config воркера;
 //   - engine_model_install {name}: POST /engine/models/install?name=<имя>, ждёт окончания,
 //     печатает итог; ошибка воркера → ошибка инструмента с текстом воркера;
-//   - install_worker: engine, cpp_model; сухой прогон показывает выбор (--engine cpp
-//     --cpp-model q8 в команде install.sh); engine вне torch|cpp → ошибка до шагов;
-//     без engine — план без --engine.
+//   - install_worker: cpp_model; сухой прогон показывает выбор (--cpp-model q8 в команде
+//     install.sh); cpp_model вне auto|bf16|q8|q6|q5 → ошибка до шагов; без cpp_model — план без флага.
 // Внешняя граница — HTTP воркера: настоящий yue.Client против фейкового воркера (httptest),
 // инструментный слой не мокается.
 
@@ -104,10 +104,10 @@ func newEngineServer(t *testing.T) (*Server, *engineFakeWorker) {
 	return s, fw
 }
 
-func TestEngineConfigSetSendsEngineFields(t *testing.T) {
+func TestEngineConfigSetSendsModelFields(t *testing.T) {
 	s, fw := newEngineServer(t)
 	out, ok := call(t, s, "config_set", map[string]any{
-		"engine": "cpp", "cpp_model": "q6", "cpp_low_vram": true,
+		"cpp_model": "q6", "cpp_low_vram": true,
 	})
 	if !ok {
 		t.Fatalf("config_set: %s", out)
@@ -117,8 +117,8 @@ func TestEngineConfigSetSendsEngineFields(t *testing.T) {
 		t.Fatalf("POST /config: %d запросов, want 1 (%+v)", len(posts), fw.reqs)
 	}
 	b := posts[0].Body
-	if b["engine"] != "cpp" || b["cpp_model"] != "q6" {
-		t.Fatalf("воркеру ушло %v, want engine=cpp cpp_model=q6", b)
+	if b["cpp_model"] != "q6" {
+		t.Fatalf("воркеру ушло %v, want cpp_model=q6", b)
 	}
 	if v, isBool := b["cpp_low_vram"].(bool); !isBool || !v {
 		t.Fatalf("cpp_low_vram = %#v, want bool true", b["cpp_low_vram"])
@@ -144,10 +144,10 @@ func TestEngineConfigSetLowVramFalseIsSent(t *testing.T) {
 	}
 }
 
-// Задан только движок — остальные поля движка не трогаются.
+// Задана только модель — экономный режим не трогается.
 func TestEngineConfigSetOnlyGivenKeys(t *testing.T) {
 	s, fw := newEngineServer(t)
-	if out, ok := call(t, s, "config_set", map[string]any{"engine": "torch"}); !ok {
+	if out, ok := call(t, s, "config_set", map[string]any{"cpp_model": "bf16"}); !ok {
 		t.Fatalf("config_set: %s", out)
 	}
 	posts := fw.posted("/config")
@@ -155,28 +155,28 @@ func TestEngineConfigSetOnlyGivenKeys(t *testing.T) {
 		t.Fatalf("POST /config: %d запросов, want 1", len(posts))
 	}
 	b := posts[0].Body
-	if b["engine"] != "torch" {
-		t.Fatalf("engine = %v, want torch", b["engine"])
+	if b["cpp_model"] != "bf16" {
+		t.Fatalf("cpp_model = %v, want bf16", b["cpp_model"])
 	}
-	for _, k := range []string{"cpp_model", "cpp_low_vram"} {
+	for _, k := range []string{"engine", "cpp_low_vram"} {
 		if _, has := b[k]; has {
 			t.Fatalf("незаданное %s ушло воркеру: %v", k, b)
 		}
 	}
 }
 
-// Воркер отказал (422 «yue2.cpp не установлен») — ошибка инструмента с его текстом.
+// Воркер отказал (422 «модель не скачана») — ошибка инструмента с его текстом.
 func TestEngineConfigSetWorkerRefusalIsError(t *testing.T) {
 	s, fw := newEngineServer(t)
 	fw.mu.Lock()
 	fw.cfgPostStatus = http.StatusUnprocessableEntity
-	fw.cfgPostBody = `{"detail":"yue2.cpp не установлен"}`
+	fw.cfgPostBody = `{"detail":"модель не скачана: q6"}`
 	fw.mu.Unlock()
-	out, ok := call(t, s, "config_set", map[string]any{"engine": "cpp"})
+	out, ok := call(t, s, "config_set", map[string]any{"cpp_model": "q6"})
 	if ok {
 		t.Fatalf("отказ воркера скрыт: %s", out)
 	}
-	if !strings.Contains(out, "yue2.cpp не установлен") {
+	if !strings.Contains(out, "модель не скачана: q6") {
 		t.Fatalf("причина отказа потеряна: %s", out)
 	}
 }
@@ -185,7 +185,7 @@ func TestEngineConfigGetShowsEngineFields(t *testing.T) {
 	s, fw := newEngineServer(t)
 	fw.mu.Lock()
 	fw.cfg = map[string]any{
-		"engine": "cpp", "cpp_model": "q6", "cpp_low_vram": true, "cpp_available": true,
+		"cpp_model": "q6", "cpp_low_vram": true, "cpp_available": true,
 		"cpp_models": map[string]any{
 			"q6": map[string]any{"file": "YuE2-3B-Q6_K.gguf", "size": 2900000000, "installed": true},
 		},
@@ -195,13 +195,10 @@ func TestEngineConfigGetShowsEngineFields(t *testing.T) {
 	if !ok {
 		t.Fatalf("config_get: %s", out)
 	}
-	for _, want := range []string{"engine", "cpp_model", "q6", "cpp_low_vram"} {
+	for _, want := range []string{"cpp_model", "q6", "cpp_low_vram"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("config_get не показывает %q:\n%s", want, out)
 		}
-	}
-	if !strings.Contains(out, "cpp") {
-		t.Errorf("config_get не показывает движок cpp:\n%s", out)
 	}
 }
 
@@ -259,24 +256,25 @@ func TestEngineModelInstallWithoutNameIsError(t *testing.T) {
 	}
 }
 
-func TestEngineInstallWorkerDryRunShowsEngineChoice(t *testing.T) {
+func TestEngineInstallWorkerDryRunShowsModelChoice(t *testing.T) {
 	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{"engine": "cpp", "cpp_model": "q8"})
+	out, ok := call(t, s, "install_worker", map[string]any{"cpp_model": "q8"})
 	if !ok {
-		t.Fatalf("сухой прогон с engine=cpp: %s", out)
+		t.Fatalf("сухой прогон с cpp_model=q8: %s", out)
 	}
 	if !strings.Contains(out, "СУХОЙ ПРОГОН") {
 		t.Fatalf("без dry_run — не сухой прогон:\n%s", out)
 	}
-	for _, want := range []string{"--engine cpp", "--cpp-model q8"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("план не показывает %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "--cpp-model q8") {
+		t.Errorf("план не показывает --cpp-model q8:\n%s", out)
+	}
+	if strings.Contains(out, "--engine") {
+		t.Errorf("в плане флаг удалённого выбора движка:\n%s", out)
 	}
 }
 
-// Без engine — install.sh без --engine (по умолчанию torch решает install.sh).
-func TestEngineInstallWorkerDryRunWithoutEngineUnchanged(t *testing.T) {
+// Без cpp_model — install.sh без флага (выбор пользователя или рекомендуемую решает install.sh).
+func TestEngineInstallWorkerDryRunWithoutModelUnchanged(t *testing.T) {
 	s, _ := newTestServer(t)
 	out, ok := call(t, s, "install_worker", map[string]any{})
 	if !ok {
@@ -284,31 +282,17 @@ func TestEngineInstallWorkerDryRunWithoutEngineUnchanged(t *testing.T) {
 	}
 	for _, bad := range []string{"--engine", "--cpp-model"} {
 		if strings.Contains(out, bad) {
-			t.Errorf("без engine в плане есть %q:\n%s", bad, out)
+			t.Errorf("без cpp_model в плане есть %q:\n%s", bad, out)
 		}
 	}
 }
 
-func TestEngineInstallWorkerUnknownEngineDryRunIsError(t *testing.T) {
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{"engine": "foo"})
-	if ok {
-		t.Fatalf("engine=foo принят:\n%s", out)
-	}
-	if !strings.Contains(out, "foo") && !strings.Contains(out, "engine") {
-		t.Errorf("ошибка не говорит, что не так с engine: %s", out)
-	}
-	if strings.Contains(out, "СУХОЙ ПРОГОН") || strings.Contains(out, "install.sh") {
-		t.Errorf("при неверном engine показан план:\n%s", out)
-	}
-}
-
-// cpp_model ∈ auto|bf16|q8|q6|q5, иное → ошибка до шагов; cpp_model без engine=cpp → ошибка.
+// cpp_model ∈ auto|bf16|q8|q6|q5, иное → ошибка до шагов.
 func TestEngineInstallWorkerBadCppModelIsError(t *testing.T) {
 	for name, args := range map[string]map[string]any{
-		"cpp_model=q4":         {"engine": "cpp", "cpp_model": "q4"},
-		"cpp_model без engine": {"cpp_model": "q8"},
-		"cpp_model при torch":  {"engine": "torch", "cpp_model": "q8"},
+		"cpp_model=q4":   {"cpp_model": "q4"},
+		"cpp_model=Q8":   {"cpp_model": "Q8"},
+		"cpp_model=int8": {"cpp_model": "int8"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, _ := newTestServer(t)
@@ -326,19 +310,19 @@ func TestEngineInstallWorkerBadCppModelIsError(t *testing.T) {
 // cpp_model=auto допустим (выбор по видеопамяти делает install.sh).
 func TestEngineInstallWorkerCppModelAutoAccepted(t *testing.T) {
 	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{"engine": "cpp", "cpp_model": "auto"})
+	out, ok := call(t, s, "install_worker", map[string]any{"cpp_model": "auto"})
 	if !ok {
 		t.Fatalf("cpp_model=auto отклонено: %s", out)
 	}
-	if !strings.Contains(out, "--engine cpp") {
-		t.Errorf("план не показывает --engine cpp:\n%s", out)
+	if !strings.Contains(out, "--cpp-model auto") {
+		t.Errorf("план не показывает --cpp-model auto:\n%s", out)
 	}
 }
 
-// Настоящий запуск с неверным engine — ни один шаг не выполнен. Команды шагов, которые
+// Настоящий запуск с неверной моделью — ни один шаг не выполнен. Команды шагов, которые
 // могли бы запуститься первыми (проверка GPU, места, копирование), подменены заглушками,
 // пишущими в журнал и падающими.
-func TestEngineInstallWorkerUnknownEngineRunsNoSteps(t *testing.T) {
+func TestEngineInstallWorkerBadCppModelRunsNoSteps(t *testing.T) {
 	stubs := t.TempDir()
 	log := filepath.Join(stubs, "calls.log")
 	for _, name := range []string{"nvidia-smi", "df", "ssh", "scp", "tar"} {
@@ -350,9 +334,8 @@ func TestEngineInstallWorkerUnknownEngineRunsNoSteps(t *testing.T) {
 	t.Setenv("PATH", stubs+":"+os.Getenv("PATH"))
 	base := map[string]any{"dry_run": false, "confirm": true, "whisper": false, "seedvc": false}
 	for name, extra := range map[string]map[string]any{
-		"engine=foo":           {"engine": "foo"},
-		"cpp_model=q4":         {"engine": "cpp", "cpp_model": "q4"},
-		"cpp_model без engine": {"cpp_model": "q8"},
+		"cpp_model=q4":   {"cpp_model": "q4"},
+		"cpp_model=int8": {"cpp_model": "int8"},
 	} {
 		args := map[string]any{}
 		for k, v := range base {

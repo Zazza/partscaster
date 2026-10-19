@@ -1,13 +1,14 @@
 """«Характер исполнения»: temperature (смелость) и cfg (точность)
-на трек. 0 = «по умолчанию»: температура 1.0 библиотеки, cfg = CFG_SCALE модуля
+на трек. 0 = «по умолчанию»: температура 1.0, cfg = CFG_SCALE модуля
 (YUE2_CFG_SCALE, по умолчанию 1.5). Допустимо: temperature 0 или [0.5, 1.5];
 cfg 0 или [1.0, 4.0]; иначе 422. Производные джобы (parent_id, continue)
-наследуют значения родителя, явные значения важнее.
+наследуют значения родителя, явные значения важнее. В генерации характер уходит
+в заявку серверу yue2.cpp: cfg_scale и semantic_sampling.temperature (рядом —
+потолок длины semantic_sampling.max_tokens).
 """
-import sys
-import types
 import unittest
 
+from test_jobs_lifecycle import _Case as _CppCase
 from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase
 
 
@@ -128,93 +129,34 @@ class TestCharacterInherit(_WorkerApiCase):
         self.assertAlmostEqual(got["cfg"], 2.5)
 
 
-class _Sampling:
-    """Заглушка yue2.protocol.Sampling: как в библиотеке, temperature по
-    умолчанию 1.0; хранит все переданные параметры."""
-
-    def __init__(self, **kw):
-        self.temperature = 1.0
-        self.max_tokens = None
-        for k, v in kw.items():
-            setattr(self, k, v)
-
-
-class _RecordingModel:
-    """Пайплайн-заглушка: записывает каждый вызов (имя, kwargs) и прерывает
-    генерацию ошибкой — дальше шага генерации тесту идти не нужно."""
-
-    def __init__(self):
-        self.calls = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
-
-    def _rec(self, name, kw):
-        self.calls.append((name, kw))
-        raise RuntimeError("stop after recording")
-
-    def __call__(self, *a, **kw):
-        self._rec("__call__", kw)
-
-    def __getattr__(self, name):
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return lambda *a, **kw: self._rec(name, kw)
-
-
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestCharacterGeneration(_WorkerApiCase):
-    """W6: _run_job передаёт пайплайну cfg_scale и semantic_sampling.temperature
-    по джобе; 0/0 → CFG_SCALE модуля и температура 1.0."""
+class TestCharacterGeneration(_CppCase):
+    """W6: _run_job передаёт серверу yue2.cpp cfg_scale и semantic_sampling.temperature
+    по джобе; 0/0 → CFG_SCALE модуля и температура 1.0. Фейк yue-server — харнесс test_jobs_lifecycle."""
 
-    def setUp(self):
-        super().setUp()
-        from unittest import mock
-        protocol = types.ModuleType("yue2.protocol")
-        protocol.Sampling = _Sampling
-        yue2 = mock.MagicMock()
-        mods = {"yue2": yue2, "yue2.protocol": protocol,
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        self.model = _RecordingModel()
-        for name, val in (("_pipe", self.model), ("_load_error", None)):
-            p = mock.patch.object(self.w, name, val)
-            p.start()
-            self.addCleanup(p.stop)
-
-    def _gen_kwargs(self, **extra):
-        jid = _job_id(self, _post_job(self, **extra))
+    def _body(self, **extra):
+        jid = self._new(**extra)
         self.w._run_job(jid)  # исключение наружу = провал теста
-        calls = [kw for _, kw in self.model.calls
-                 if "cfg_scale" in kw or "semantic_sampling" in kw]
-        self.assertTrue(calls, f"генерация не вызвана: {self.model.calls}")
-        return calls[0]
+        bodies = self._bodies()
+        self.assertEqual(len(bodies), 1, "заявка трека не дошла до yue2.cpp")
+        return bodies[0]
 
-    def test_w6_job_values_reach_pipeline(self):
-        kw = self._gen_kwargs(temperature=1.15, cfg=2.5)
-        self.assertAlmostEqual(kw.get("cfg_scale"), 2.5)
-        s = kw.get("semantic_sampling")
-        self.assertIsNotNone(s, kw)
-        self.assertAlmostEqual(s.temperature, 1.15)
-        self.assertTrue(s.max_tokens, "бюджет длины (max_tokens) потерян")
+    def test_w6_job_values_reach_server(self):
+        b = self._body(temperature=1.15, cfg=2.5)
+        self.assertAlmostEqual(b["cfg_scale"], 2.5)
+        self.assertAlmostEqual(b["semantic_sampling"]["temperature"], 1.15)
+        self.assertTrue(b["semantic_sampling"]["max_tokens"], "бюджет длины (max_tokens) потерян")
 
     def test_w6_defaults_when_zero(self):
-        kw = self._gen_kwargs()
-        self.assertAlmostEqual(kw.get("cfg_scale"), self.w.CFG_SCALE)
-        s = kw.get("semantic_sampling")
-        self.assertIsNotNone(s, kw)
-        self.assertAlmostEqual(s.temperature, 1.0)
-        self.assertTrue(s.max_tokens, "бюджет длины (max_tokens) потерян")
+        b = self._body()
+        self.assertAlmostEqual(b["cfg_scale"], self.w.CFG_SCALE)
+        self.assertAlmostEqual(b["semantic_sampling"]["temperature"], 1.0)
+        self.assertTrue(b["semantic_sampling"]["max_tokens"], "бюджет длины (max_tokens) потерян")
 
     def test_w6_only_temperature_keeps_default_cfg(self):
-        kw = self._gen_kwargs(temperature=0.8)
-        self.assertAlmostEqual(kw.get("cfg_scale"), self.w.CFG_SCALE)
-        self.assertAlmostEqual(kw["semantic_sampling"].temperature, 0.8)
+        b = self._body(temperature=0.8)
+        self.assertAlmostEqual(b["cfg_scale"], self.w.CFG_SCALE)
+        self.assertAlmostEqual(b["semantic_sampling"]["temperature"], 0.8)
 
 
 if __name__ == "__main__":

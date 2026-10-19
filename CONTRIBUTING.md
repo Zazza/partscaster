@@ -81,9 +81,10 @@ The full rule set, including architecture constraints, is in [AGENTS.md](AGENTS.
      on macOS the MCP server and worker archive are also inside `partscaster.app/Contents/MacOS/`;
    - `worker-<version>.tar.gz` — the worker archive from the Linux build, as a separate file.
 
-   The second engine yue2.cpp (experimental) is built into the worker archive on Linux (in a CUDA 12.8
-   container) and on Windows (with the CUDA toolkit installed in the job). The macOS worker archive comes
-   without it. If that build fails, the package still ships, without yue2.cpp.
+   The generation engine yue2.cpp is built into the worker archive on Linux (in a CUDA 12.8 container) and on
+   Windows (with the CUDA toolkit installed in the job). The macOS worker archive comes without it. Without
+   that build the Windows package is not built (`partscaster-worker.exe` cannot build yue2.cpp itself); the
+   Linux worker archive is built with a warning — `install.sh` builds the program on the GPU machine.
 
 To build a package locally: `make release` (this OS), `make dist-linux`, `make dist-windows` (also works on
 Linux), `make dist-mac` (on a Mac only). Results land in `dist/`.

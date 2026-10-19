@@ -18,20 +18,17 @@ import (
 )
 
 const (
-	UvVersion = "0.12.19"
-	// пакет yue2 (yue2_infer) — не на PyPI: архив коммита YuE, на котором работает воркер
-	YueCommit  = "72272f907522dcca2e97c848d6c8f0d343999183"
+	UvVersion  = "0.12.19"
 	TorchIndex = "https://download.pytorch.org/whl/cu128"
 	PyPIIndex  = "https://pypi.org/simple"
 	Port       = 8091
 )
 
-// пакеты сверх requirements.txt. torch — с явной меткой +cu128: на Windows без неё uv берёт сборку
-// без CUDA с PyPI, даже когда первым указан индекс cu128
+// пакеты сверх requirements.txt. torch (дорожки, SheetSage2, NAM; библиотеки CUDA для yue2.cpp) — с явной
+// меткой +cu128: на Windows без неё uv берёт сборку без CUDA с PyPI, даже когда первым указан индекс cu128
 var extraPackages = []string{
 	"torch==2.10.0+cu128",
 	"torchaudio==2.10.0+cu128",
-	"yue2-infer @ https://github.com/multimodal-art-projection/YuE/archive/" + YueCommit + ".zip",
 	"truststore",
 }
 
@@ -187,17 +184,12 @@ func writeFile(dst string, r io.Reader, mode os.FileMode) error {
 	return f.Close()
 }
 
-func WorkerEnv(home, goos string) map[string]string {
-	env := map[string]string{
+func WorkerEnv(home, _ string) map[string]string {
+	return map[string]string{
 		"PARTSCASTER_DATA_DIR": filepath.Join(home, "data"),
 		"HF_HOME":              filepath.Join(home, "hf-cache"),
 		"PYTHONUTF8":           "1",
 	}
-	if goos == "windows" {
-		// PyTorch под Windows собран без flash-attention, а режим CUDA-графов YuE2 вызывает её напрямую
-		env["YUE2_BACKEND"] = "torch-eager"
-	}
-	return env
 }
 
 // ServeArgs — аргументы python для запуска воркера. truststore — до всего сетевого: модели качаются с

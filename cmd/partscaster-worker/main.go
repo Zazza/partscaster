@@ -2,13 +2,12 @@
 // пакеты и код воркера в папку пользователя, дальше просто запускает воркер. Окно открыто — воркер работает,
 // закрыли — остановлен. Код воркера вшит в программу при сборке (tools/release.sh, пакет Windows).
 //
-//	partscaster-worker [--home ПАПКА] [--lan] [--engine torch|cpp] [--cpp-model q8] [--cpp-low-vram]
+//	partscaster-worker [--home ПАПКА] [--lan] [--cpp-model auto|bf16|q8|q6|q5] [--cpp-low-vram]
 package main
 
 import (
 	"bufio"
 	"embed"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -36,13 +35,24 @@ const needFreeGB = 25
 func main() {
 	homeFlag := flag.String("home", "", "папка установки (Python, пакеты, модели, треки)")
 	lan := flag.Bool("lan", false, "открыть воркер для других компьютеров сети (по умолчанию — только этот)")
-	engineFlag := flag.String("engine", "", "движок генерации: torch (основной) или cpp (yue2.cpp, эксперимент)")
-	cppModelFlag := flag.String("cpp-model", "", "модель yue2.cpp: bf16 | q8 | q6 | q5")
-	cppLowVram := flag.Bool("cpp-low-vram", false, "yue2.cpp в экономном режиме (контекст 8192 — меньше видеопамяти)")
-	flag.Parse()
+	cppModelFlag := flag.String("cpp-model", "", "модель генерации: auto (рекомендуемая) | bf16 | q8 | q6 | q5")
+	cppLowVram := flag.Bool("cpp-low-vram", false, "экономный режим (контекст 8192 — меньше видеопамяти)")
+	// ошибка флага — с подсказкой и паузой: окно с ярлыка иначе закрылось бы сразу (например, ярлык прежних
+	// версий с --engine cpp)
+	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		if strings.Contains(err.Error(), "-engine") {
+			fmt.Println("\nДвижок генерации один (yue2.cpp): флага --engine больше нет, модель — --cpp-model auto|bf16|q8|q6|q5.")
+		}
+		pause()
+		os.Exit(2)
+	}
 
 	fmt.Printf("Partscaster — воркер %s\n\n", version)
-	opts, err := parseEngineFlags(*engineFlag, *cppModelFlag, *cppLowVram)
+	opts, err := parseEngineFlags(*cppModelFlag, *cppLowVram)
 	if err != nil {
 		fmt.Printf("\nОшибка: %v\n", err)
 		pause()
@@ -55,25 +65,16 @@ func main() {
 	}
 }
 
-// engineOptions — выбор движка из флагов (всё пустое — интерактив при первой установке).
+// engineOptions — модель генерации из флагов (пусто — выбор пользователя, без него — вопрос при установке).
 type engineOptions struct {
-	engine     string // "torch" | "cpp" | "" (не задан флагом)
-	cppModel   string // "" — по умолчанию (по видеокарте)
+	cppModel   string // "" — не задана флагом; "auto" — рекомендуемая
 	cppLowVram bool
 }
 
-func parseEngineFlags(engine, cppModel string, lowVram bool) (engineOptions, error) {
-	o := engineOptions{engine: engine, cppModel: cppModel, cppLowVram: lowVram}
-	switch o.engine {
-	case "", "torch", "cpp":
-	default:
-		return o, fmt.Errorf("--engine: %q (допустимо torch или cpp)", o.engine)
-	}
-	if o.cppModel != "" && !workerexe.ValidCppModel(o.cppModel) {
-		return o, fmt.Errorf("--cpp-model: %q (допустимо %s)", o.cppModel, strings.Join(workerexe.CppModels, ", "))
-	}
-	if o.engine != "cpp" && o.cppModel != "" {
-		return o, errors.New("--cpp-model имеет смысл только с --engine cpp")
+func parseEngineFlags(cppModel string, lowVram bool) (engineOptions, error) {
+	o := engineOptions{cppModel: cppModel, cppLowVram: lowVram}
+	if o.cppModel != "" && o.cppModel != "auto" && !workerexe.ValidCppModel(o.cppModel) {
+		return o, fmt.Errorf("--cpp-model: %q (допустимо auto, %s)", o.cppModel, strings.Join(workerexe.CppModels, ", "))
 	}
 	return o, nil
 }
@@ -124,110 +125,99 @@ func start(homeFlag string, lan bool, opts engineOptions) error {
 	return serve(home, workerDir, lan)
 }
 
-// setupEngine — выбор движка (первая установка — вопрос, флаги — молча) и доустановка yue2.cpp:
-// скачивание весов и запись настроек. Ошибка скачивания не отменяет установку — откат на основной.
+// setupEngine — модель генерации yue2.cpp. Скачанный выбор пользователя без флагов не трогается; иначе — модель
+// из флага или ответ на вопрос (Enter — рекомендуемая по видеопамяти). Программа yue2.cpp и модель обязательны:
+// без них воркер не запускается (повторный запуск докачает).
 func setupEngine(home, workerDir string, gpu workerexe.GPU, opts engineOptions) error {
-	cppBin := workerexe.CppBinary(workerDir, "windows")
-	settings := map[string]any{}
-	switch {
-	case opts.engine == "cpp":
-		if cppBin == "" {
-			return errors.New("движок cpp выбран флагом, но в этой сборке нет yue2.cpp (пакет собран без него)")
+	if workerexe.CppBinary(workerDir, "windows") == "" {
+		return errors.New("в этом пакете нет программы yue2.cpp (движок генерации) — скачайте пакет Windows заново")
+	}
+	recModel, recLow, err := recommend(home, workerDir, gpu.MemoryMiB)
+	if err != nil {
+		return fmt.Errorf("рекомендуемая модель: %w", err)
+	}
+	current := workerexe.SettingsModel(home)
+	if opts.cppModel == "" && current != "" && workerexe.ModelInstalledCommand(home, workerDir, current).Run() == nil {
+		// выбор сохраняется; ключ engine прежних версий убирается, экономный режим — по флагу
+		values := map[string]any{"engine": nil}
+		if opts.cppLowVram {
+			values["cpp_low_vram"] = true
 		}
-	case opts.engine == "torch":
-		settings["engine"] = "torch"
-	case workerexe.SettingsExist(home):
-		printEngine(home)
-		return nil // выбор уже сделан при установке
-	default:
-		choice, err := askEngine(cppBin != "", gpu)
-		if err != nil {
+		if err := workerexe.WriteSettings(home, values); err != nil {
 			return err
 		}
-		if choice == "" {
-			settings["engine"] = "torch"
-		} else {
-			settings["engine"] = "cpp"
-			settings["cpp_model"] = choice
-			settings["cpp_low_vram"] = workerexe.LowVramDefault(gpu.MemoryMiB)
-		}
+		printEngine(home)
+		return nil
 	}
-	if settings["engine"] == "cpp" {
-		model, _ := settings["cpp_model"].(string)
-		if model == "" {
-			model = opts.cppModel
-			if model == "" {
-				model = workerexe.DefaultCppModel(gpu.MemoryMiB)
-			}
-			settings["cpp_model"] = model
-		}
-		if !workerexe.ValidCppModel(model) {
-			return fmt.Errorf("модель yue2.cpp: %q (допустимо %s)", model, strings.Join(workerexe.CppModels, ", "))
-		}
-		fmt.Printf("\nСкачивание модели yue2.cpp (%s, несколько гигабайт — зависит от сети)…\n", model)
-		cmd := workerexe.DownloadEngineModel(home, workerDir, model)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("!! модель yue2.cpp не скачалась: %v — воркер работает на основном движке\n", err)
-			settings["engine"] = "torch"
-			delete(settings, "cpp_model")
-			delete(settings, "cpp_low_vram")
-		}
+	model, low := opts.cppModel, recLow
+	switch model {
+	case "":
+		model = askModel(recModel, recLow, gpu)
+	case "auto":
+		model = recModel
 	}
-	if err := workerexe.WriteSettings(home, settings); err != nil {
+	if opts.cppLowVram {
+		low = true
+	}
+	fmt.Printf("\nСкачивание модели %s (несколько гигабайт — зависит от сети)…\n", strings.ToUpper(model))
+	cmd := workerexe.DownloadEngineModel(home, workerDir, model)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("модель %s не скачалась: %w (повторный запуск докачает)", model, err)
+	}
+	// engine: nil — выбор движка из прежних версий убирается: движок теперь один
+	if err := workerexe.WriteSettings(home, map[string]any{"cpp_model": model, "cpp_low_vram": low, "engine": nil}); err != nil {
 		return err
 	}
 	printEngine(home)
 	return nil
 }
 
-// askEngine — вопрос о движке; ответ "" — основной (PyTorch), иначе имя модели yue2.cpp.
-func askEngine(cppAvailable bool, gpu workerexe.GPU) (string, error) {
-	fmt.Println("\nДвижок генерации:")
-	fmt.Println("  [Enter] основной (PyTorch) — лучшее качество, нужно ~11 ГБ видеопамяти")
-	if !cppAvailable {
-		fmt.Println("         yue2.cpp — в этой сборке отсутствует (пакет собран без него)")
-		fmt.Print("Выбор: ")
-		return "", nil
+// recommend — рекомендуемая модель и экономный режим от воркера (engine_cpp.py recommend <МиБ>).
+func recommend(home, workerDir string, vramMiB int) (string, bool, error) {
+	out, err := workerexe.RecommendCommand(home, workerDir, vramMiB).Output()
+	if err != nil {
+		return "", false, err
 	}
-	def := workerexe.DefaultCppModel(gpu.MemoryMiB)
-	low := ""
-	if workerexe.LowVramDefault(gpu.MemoryMiB) {
-		low = ", экономный режим"
+	f := strings.Fields(string(out))
+	if len(f) != 2 || !workerexe.ValidCppModel(f[0]) {
+		return "", false, fmt.Errorf("непонятный ответ %q", strings.TrimSpace(string(out)))
 	}
-	fmt.Printf("  2       yue2.cpp — эксперимент: меньше видеопамяти (модель %s%s)\n", def, low)
-	fmt.Print("Выбор: ")
-	if readLine() != "2" {
-		return "", nil
-	}
-	fmt.Printf("\nМодель yue2.cpp ([Enter] — %s, рекомендовано для %s):\n", def, workerexe.FormatGB(gpu.MemoryMiB))
-	fmt.Println("  q8   — почти без потерь, ~8 ГБ видеопамяти (в экономном режиме ~4,5)")
-	fmt.Println("  q6   — файл меньше (2,9 ГБ), видеопамяти почти как q8 (~7,7 ГБ)")
-	fmt.Println("  q5   — самый маленький файл (2,6 ГБ), видеопамяти ~7,7 ГБ")
-	fmt.Println("  bf16 — без сжатия, ~10 ГБ видеопамяти, файл 7,2 ГБ")
-	fmt.Print("Выбор: ")
-	m := readLine()
-	switch {
-	case m == "":
-		return def, nil
-	case workerexe.ValidCppModel(m):
-		return m, nil
-	}
-	fmt.Printf("«%s» не понял — берём %s\n", m, def)
-	return def, nil
+	return f[0], f[1] == "1", nil
 }
 
-// printEngine — какой движок активен (из настроек воркера).
+// askModel — вопрос о модели при первой установке; Enter — рекомендуемая.
+func askModel(rec string, recLow bool, gpu workerexe.GPU) string {
+	low := ""
+	if recLow {
+		low = ", экономный режим"
+	}
+	fmt.Printf("\nМодель генерации ([Enter] — %s%s, рекомендуется для %s):\n",
+		strings.ToUpper(rec), low, workerexe.FormatGB(gpu.MemoryMiB))
+	fmt.Println("  bf16 — без сжатия, ~10 ГБ видеопамяти, файл 7,2 ГБ")
+	fmt.Println("  q8   — почти без потерь, ~8 ГБ видеопамяти (в экономном режиме ~4,5), файл 3,8 ГБ")
+	fmt.Println("  q6   — файл меньше (2,9 ГБ), видеопамяти почти как q8 (~7,7 ГБ)")
+	fmt.Println("  q5   — самый маленький файл (2,6 ГБ), видеопамяти ~7,7 ГБ")
+	fmt.Print("Выбор: ")
+	m := strings.ToLower(readLine())
+	switch {
+	case m == "":
+		return rec
+	case workerexe.ValidCppModel(m):
+		return m
+	}
+	fmt.Printf("«%s» не понял — берём %s\n", m, rec)
+	return rec
+}
+
+// printEngine — выбранная модель генерации (из настроек воркера).
 func printEngine(home string) {
-	st := map[string]any{}
-	if b, err := os.ReadFile(workerexe.SettingsFile(home)); err == nil {
-		_ = json.Unmarshal(b, &st)
+	mode := ""
+	if workerexe.SettingsLowVram(home) {
+		mode = ", экономный режим"
 	}
-	if st["engine"] == "cpp" {
-		fmt.Printf("Движок: yue2.cpp (%v)\n", st["cpp_model"])
-		return
-	}
-	fmt.Println("Движок: основной (PyTorch).")
+	fmt.Printf("Модель генерации: %s%s (сменить — в настройках приложения).\n",
+		strings.ToUpper(workerexe.SettingsModel(home)), mode)
 }
 
 func checkGPU() (workerexe.GPU, error) {

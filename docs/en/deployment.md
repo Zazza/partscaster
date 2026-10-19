@@ -21,16 +21,17 @@ name is enough — port 8091 is added automatically) and press "Check". On the s
 
 - **NVIDIA GPU with a driver** (`nvidia-smi` must work). Other GPUs are not supported:
   the installers check `nvidia-smi` and stop without it.
-- **VRAM** (generation peak): main engine ~11 GB (measured ~11.4); second engine yue2.cpp — Q8 ~8 GB,
-  low-VRAM mode ~4.5 GB (song up to ~3.5 min). More: [yue2.cpp](#second-generation-engine--yue2cpp-experiment).
+- **VRAM:** from 8 GB. Generation runs on yue2.cpp; the peak depends on the model: BF16 ~10 GB, Q8 ~8 GB,
+  low-VRAM mode ~4.5 GB (song up to ~3.5 min). More: [Generation model](#generation-model--yue2cpp).
 - **Linux worker:** Linux with systemd (tested on Ubuntu), [`uv`](https://docs.astral.sh/uv/) —
   `install.sh` uses it to create the environment and install packages; it does not install `uv` itself. It looks for it
   in `PATH`, then in `~/.local/bin` and `~/.cargo/bin` (where the uv installer puts it; ssh without a login shell does not
   add them to `PATH`). uv downloads
   Python 3.12 by itself. Internet access — for packages and weights.
-- **Disk:** worker base ~17.5 GB (environment ~7.4 + weights ~10) + sample kits ~1.2 GB + room for tracks.
+- **Disk:** worker base up to ~17.8 GB (environment ~7.4 + generation model up to ~7.7 + score and stem weights
+  ~2.7) + sample kits ~1.2 GB + room for tracks.
   Optional components — in the [table below](#components-and-disk-space).
-- **The YuE2 model is open:** weights download from Hugging Face without a token or login.
+- **The YuE2 model is open:** weights (and the generation model in GGUF format) download from Hugging Face without a token or login.
 
 ## Release package
 
@@ -38,14 +39,14 @@ A release is the GitHub Release of tag `vX.Y.Z` (built by `.github/workflows/rel
 
 | File | What is inside |
 |---|---|
-| `partscaster-<version>-linux-<arch>.tar.gz` | app, `partscaster-mcp`, worker archive (with yue2.cpp for Linux, if built), `INSTALL.txt` |
+| `partscaster-<version>-linux-<arch>.tar.gz` | app, `partscaster-mcp`, worker archive (with a ready-made yue2.cpp program for Linux, if built), `INSTALL.txt` |
 | `partscaster-<version>-windows-amd64.zip` | the same for Windows + `partscaster-worker.exe`; the worker archive inside has yue2.cpp for Windows |
 | `partscaster-<version>-darwin-<arch>.tar.gz` | app `partscaster.app` (`partscaster-mcp` and the worker archive are inside `.app/Contents/MacOS/`); no yue2.cpp |
 | `worker-<version>.tar.gz` | worker archive for a Linux machine with a GPU (the same as in the Linux package) |
 
 The worker archives in packages for different OSes differ only in the yue2.cpp program. For a Linux machine with a GPU, take
 `worker-<version>.tar.gz` or the archive from the Linux package: the archive from the Windows package has no Linux program,
-and with `--engine cpp` `install.sh` will start to build it from source.
+and `install.sh` will start to build it from source (needs git, cmake, nvcc).
 
 On the GPU machine:
 
@@ -71,7 +72,7 @@ or built with `make worker-tar` (MCP built from source).
 - To install: `dry_run=false`, `confirm=true` and an explicit choice of `whisper`, `seedvc`, `roformer` (true/false);
   with `roformer=true` — also `stems_model=htdemucs|roformer` (what to use for stems by default).
 - Paths: `hf_home` (weights cache, default `~/yue/hf-cache`), `sep_dir` (RoFormer), `seedvc_dir`;
-  engine — `engine=torch|cpp`, `cpp_model=auto|bf16|q8|q6|q5`.
+  generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one).
 - Before installing, it checks the GPU and free space in the home directory; if there is not enough, the installation
   does not start.
 - `doctor` — what is installed and working now (worker, components, GPU, disk space).
@@ -82,13 +83,12 @@ Inside, this is the same `install.sh` from the archive, plus steps for the compo
 
 | Component | Needed | Disk space | Without it |
 |---|---|---|---|
-| Worker: YuE2 generation, SheetSage2 score, demucs stems | required | ~17.5 GB (environment ~7.4 + weights ~10, downloaded on the first generation) | — |
+| Worker: YuE2 generation on yue2.cpp, SheetSage2 score, demucs stems | required | up to ~17.8 GB (environment ~7.4 + generation model 3.1–7.7 during installation + score and stem weights ~2.7 on first use) | — |
 | Sample kits (drums, basses, orchestra) | installed together with the worker | ~1.2 GB | downloaded on first selection |
 | RoFormer: cleaner stem separation + drums split into parts | optional | ~7.3 GB (environment 6.1 + weights 1.1) | demucs makes the stems, no drum parts |
 | whisper: what a finished track sings — a check for an AI agent (MCP `job_lyrics`) | optional | ~3.2 GB | `job_lyrics` returns an error; "Settings" shows "not found" |
 | Seed-VC: "Album voice" (experiment) | optional | ~10–11 GB after installation, ~14 GB during it | the "Album voice" block with a "not installed" note |
 | NAM: amplifiers in the sound engine | optional | a package folder without torch | only the `amp` block is unavailable |
-| yue2.cpp: second engine | optional | model 2.6–7.2 GB + VAE 0.5 GB | the main engine works |
 
 Hugging Face weights (`HF_HOME`), RoFormer and Seed-VC can live on another disk — then you need less space on the
 home disk.
@@ -101,28 +101,29 @@ The worker ships as a versioned archive. Its `install.sh` does both installation
    even earlier — see below);
 2. puts the code into `~/partscaster/releases/<time>-<version>/`;
 3. creates the environment `~/yue/.venv` (`uv venv --python 3.12`) if it does not exist, and installs the packages from
-   `requirements.txt` from the PyTorch cu128 index (including the model package `yue2-infer` — an archive of a pinned
-   YuE commit from GitHub) — only for a new environment or a changed `requirements.txt`
+   `requirements.txt` from the PyTorch cu128 index (torch is needed for stems, score transcription, Seed-VC and NAM;
+   generation itself runs in the yue2.cpp program) — only for a new environment or a changed `requirements.txt`
    (fingerprint — `~/partscaster/.requirements.sha256`, without comments and blank lines: editing the text does not
    reinstall packages);
 4. creates `~/partscaster/worker.env` if it does not exist, with one line `HF_HOME=` (default
    `~/yue/hf-cache`, `--hf-home DIR` — another directory; the tilde is expanded — systemd does not understand it);
-5. atomically switches the link `~/partscaster/current` to the new version and installs the unit
+5. installs the yue2.cpp program and the generation model (see [Generation model](#generation-model--yue2cpp)); if that
+   fails, the installation stops with an error and the previous version stays active;
+6. atomically switches the link `~/partscaster/current` to the new version and installs the unit
    `~/.config/systemd/user/partscaster-worker.service`;
-6. installs sample kits (`kits_install.py`; if it fails, the next run or the app downloads them);
-7. with `--engine` — sets up the generation engine (see yue2.cpp);
+7. installs sample kits (`kits_install.py`; if it fails, the next run or the app downloads them);
 8. keeps 3 previous versions and deletes the rest;
 9. restarts the service and waits up to ~30 s for an answer from `/health` (`--no-start` — without starting).
 
-The model loads not at startup, but on the first generation (the weights download at that time too).
+The generation model starts not when the worker starts, but on the first generation. Score and stem weights
+download on first use.
 
 | Parameter | What it does |
 |---|---|
 | `--no-start` | install without starting the service |
 | `--hf-home DIR` | weights cache directory for a new `worker.env` |
-| `--engine torch\|cpp` | generation engine; without the parameter the engine does not change (new installation — main engine) |
-| `--cpp-model auto\|bf16\|q8\|q6\|q5` | yue2.cpp model (only with `--engine cpp`), default `auto` |
-| `--cpp-low-vram` | yue2.cpp low-VRAM mode (only with `--engine cpp`) |
+| `--cpp-model auto\|bf16\|q8\|q6\|q5` | generation model; `auto` — recommended by VRAM. Without the parameter — the one chosen earlier, if downloaded, otherwise the recommended one |
+| `--cpp-low-vram` | turn on low-VRAM mode (without the parameter — as recommended for the card) |
 | `--rollback` | `~/partscaster/current/install.sh --rollback` — go back to the previous version |
 
 Paths are changed with installer variables: `PARTSCASTER_HOME` (default `~/partscaster`) and
@@ -178,11 +179,10 @@ Set them in `~/partscaster/worker.env` (example — `worker.env.example` in the 
 |---|---|---|
 | `PARTSCASTER_DATA_DIR` | `~/partscaster/data` (the unit sets `<PARTSCASTER_HOME>/data`) | SQLite database, tracks, worker settings, kits, yue2.cpp models |
 | `PARTSCASTER_HOME` | `~/partscaster` (set by the unit) | installation directory; the worker looks there for the yue2.cpp program built by `install.sh` (`yue2cpp-src`) |
-| `HF_HOME` | `~/yue/hf-cache` (`install.sh` writes it into a new `worker.env`); without the line — `~/.cache/huggingface` | Hugging Face weights cache (YuE2, SheetSage2, demucs) |
-| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (set by the unit) | PyTorch VRAM allocation mode |
+| `HF_HOME` | `~/yue/hf-cache` (`install.sh` writes it into a new `worker.env`); without the line — `~/.cache/huggingface` | Hugging Face weights cache (SheetSage2 and MERT, demucs); generation models live in `PARTSCASTER_CPP_MODELS` |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (set by the unit) | PyTorch VRAM allocation mode (stems, score transcription) |
 | `YUE2_MAX_TOKENS` | `16000` | semantic token budget per song ≈ maximum length (16000 — up to ~10 min; VRAM peak grows with length) |
 | `YUE2_CFG_SCALE` | `1.5` | how closely to follow the style (classifier-free guidance): higher — more exact, but drier |
-| `YUE2_BACKEND` | `torch` | main engine mode: `torch`, `torch-eager` (without CUDA graphs; the Windows worker sets it), `vllm` |
 | `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | interpreter of the whisper environment |
 | `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | interpreter of the RoFormer environment |
 | `PARTSCASTER_SEP_MODELS` | `~/sep-models` | RoFormer and DrumSep weights (~1.1 GB, downloaded on the first separation) |
@@ -294,24 +294,41 @@ directory. Files download through direct links from raw.githubusercontent.com (t
 `linn`, `cr78`, `simmons`) and `synthbass` are synthesized by the worker itself, without network. Kit contents and licenses —
 in [effects.md](effects.md).
 
-## Second generation engine — yue2.cpp (experiment)
+## Generation model — yue2.cpp
 
-Less VRAM — for 8–12 GB cards or a GPU shared with other programs. The same seed
-on another engine gives a different song; notes and continuations carry over.
+Songs are generated by [yue2.cpp](https://github.com/ServeurpersoCom/yue2.cpp) — the YuE2-3B model in GGUF format.
+The former PyTorch engine is gone. The model comes in four sizes:
 
-- **Installation:** `install.sh --engine cpp [--cpp-model auto|bf16|q8|q6|q5] [--cpp-low-vram]`. `auto` — by
-  the VRAM of the first card: ≥ 11.5 GB → Q8; 7.5–11.5 GB → Q8 in low-VRAM mode; less → Q5 in low-VRAM mode.
-  `--engine torch` — go back to the main engine.
-- **VRAM at peak** (song 2:47): BF16 ~10 GB, Q8 ~8, Q6 and Q5 ~7.7; low-VRAM mode — Q8 ~4.5,
-  Q6 and Q5 ~4.2. Main engine — ~11.4.
+| Model | File | VRAM at peak (song 2:47) |
+|---|---|---|
+| BF16 — uncompressed | 7.2 GB | ~10 GB |
+| Q8 — almost lossless | 3.8 GB | ~8 GB |
+| Q6 | 2.9 GB | ~7.7 GB |
+| Q5 | 2.6 GB | ~7.7 GB |
+
+A VAE (0.5 GB) is downloaded with every model. **Low-VRAM mode** (a smaller model context) — ~4.5 GB of VRAM
+with Q8, song up to ~3.5 min. Q6 and Q5 save almost no VRAM but sound rougher, so they are not recommended,
+but you can choose them.
+
+- **Recommended model** — by the VRAM of the first card: from 11.5 GB ("12 GB" cards) — BF16; from 9.5 GB
+  ("10 GB" cards) — Q8; less, or the amount is unknown — Q8 in low-VRAM mode. It is only a hint: any model
+  can be chosen. The recommendation comes from one piece of worker code (`python engine_cpp.py recommend [MiB]`);
+  both installers use it, and the app's "Settings" show it.
+- **Installation:** `install.sh` without parameters installs the recommended model; `--cpp-model bf16|q8|q6|q5` —
+  your own, `--cpp-low-vram` — low-VRAM mode. A repeated installation (update) does not touch the model you have
+  already chosen and downloaded. If there is no model (for example, the worker used to run on PyTorch), the
+  recommended one is installed.
 - **Program:** a ready-made build from the worker archive (`worker-<version>/yue2cpp/`, CUDA 12.8; the CUDA libraries
   come from the worker environment, the CUDA development package is not needed). If it is missing or does not start, `install.sh`
   builds the pinned commit in `$PARTSCASTER_HOME/yue2cpp-src` (needs git, cmake, nvcc, ~10 min).
-  If that fails, the worker is installed and works on the main engine.
+  The program and the model are required: if they are not installed, the installation fails and the previous version
+  stays active; a repeated run resumes the model download.
 - **Models** — in `<data>/yue2cpp-models` (`PARTSCASTER_CPP_MODELS`), downloaded with a checksum check:
-  during installation, from the app ("Settings" → "Generation engine" → "Download") or with MCP `engine_model_install`.
-- **Switching** — the app's "Settings" or MCP `config_set engine=cpp|torch`; takes effect from the next
-  generation. The main engine stays installed.
+  during installation, from the app ("Settings" → "Generation model" → "Download") or with MCP `engine_model_install`.
+- **Changing the model** — the app's "Settings" or MCP `config_set cpp_model=… cpp_low_vram=…`; takes effect from the
+  next generation. The same seed on another model gives a different performance; notes and continuations carry over.
+- **Old tracks** (made by the former PyTorch engine) are continued and rebuilt on yue2.cpp from their notes;
+  a repeat with the same seed will sound different.
 
 ## Worker on Windows without WSL — partscaster-worker.exe
 
@@ -321,8 +338,8 @@ while the window is open, the worker works; close it, and the worker stops (no P
 - **First run:** checks the GPU (`nvidia-smi`) and disk space (~25 GB needed), lets you choose a folder (default
   `%LOCALAPPDATA%\partscaster-worker`, the choice is remembered; another one — `--home D:\partscaster-worker`). Into the folder
   it installs uv (pinned version, sha256 check), Python 3.12, the `venv` environment and packages:
-  `requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128`, the `yue2` package (archive of a pinned YuE commit),
-  `truststore`. The YuE2 model (~10 GB) downloads on the first generation.
+  `requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128` (stems, score transcription; the yue2.cpp program also takes
+  the CUDA libraries from them), `truststore`. Then the generation model downloads (see below).
 - **After that:** starts in seconds. Packages are reinstalled only if `requirements.txt` or
   the pinned versions changed (fingerprint — `packages.sha256`). A new program version puts new code into `app\`;
   data (`data\`), models (`hf-cache\`) and packages stay.
@@ -330,12 +347,12 @@ while the window is open, the worker works; close it, and the worker stops (no P
   has no authentication, so by default it is reachable only from this PC).
 - **Certificates:** uv takes them from the Windows store (`UV_SYSTEM_CERTS`), Python — through `truststore`;
   downloads work even where an antivirus or proxy replaces HTTPS certificates.
-- **Engine:** on the first installation the program asks — main engine (PyTorch in
-  `YUE2_BACKEND=torch-eager` mode: PyTorch for Windows is built without flash-attention) or yue2.cpp. The yue2.cpp option
-  is there only if the package has `yue2cpp\yue-server.exe`. Model by card memory — same as `install.sh`: from 11.5 GB —
-  q8; 7.5–11.5 GB — q8 in low-VRAM mode; less — q5 in low-VRAM mode. The weights download right away, the choice is written to `data\settings.json` and is not
-  asked again. Without questions: `--engine cpp --cpp-model q8 [--cpp-low-vram]` or `--engine torch`.
-  To change it later — in the app's "Settings".
+- **Generation model:** on the first installation the program asks for the model and shows the one recommended for
+  this card (the same recommendation as `install.sh`); Enter — the recommended one, or the name of any (`bf16`, `q8`,
+  `q6`, `q5`). The model downloads right away, the choice is written to `data\settings.json` and is not asked again
+  while the model is in place. Without the question: `--cpp-model auto|bf16|q8|q6|q5 [--cpp-low-vram]`.
+  The yue2.cpp program (`yue2cpp\yue-server.exe`) is part of the package; without it or without a downloaded model
+  the worker does not start — a repeated run resumes the download. To change the model later — in the app's "Settings".
 - The program does not install optional components (whisper, RoFormer, Seed-VC); it does not install sample kits
   in advance — they download on first selection.
 
@@ -389,7 +406,9 @@ Requirements: Go 1.24+, Node.js 20+, [Wails CLI v2](https://wails.io) of the sam
 | `make dist-mac` | Mac only | `partscaster-<version>-darwin-<arch>.tar.gz` |
 
 Before the package, yue2.cpp is built if it is not in `dist/` yet: on Linux — if docker is available, on Windows —
-if CUDA Toolkit (`nvcc`) is available. If that fails, the worker archive ships without the second engine; this is not an error.
+if CUDA Toolkit (`nvcc`) is available. The Windows package is not built without a ready-made build:
+`partscaster-worker.exe` cannot build the program itself. The Linux worker archive is built without it, with a
+warning — `install.sh` builds the program on the GPU machine.
 The release in CI starts from a `v*` tag, which a human sets and pushes; each OS package is built on its own
 runner.
 

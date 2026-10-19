@@ -248,16 +248,16 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 
 | Инструмент | Параметры | Что делает |
 |---|---|---|
-| `config_get` | — | Адрес воркера, пути данных и движки воркера |
-| `config_set` | server_url, stems_auto, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; `stems_auto` — когда делать дорожки: `studio` (при открытии студии) / `always` (сразу у каждого готового трека) / `manual`; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент: меньше видеопамяти, тот же сид даёт другую песню), `cpp_model`, `cpp_low_vram` — со следующей генерации |
-| `engine_model_install` | **name** | Скачать модель yue2.cpp: `bf16` (7,2 ГБ), `q8` (3,8 ГБ), `q6` (2,9 ГБ), `q5` (2,6 ГБ). Ждёт конца загрузки; потом — `config_set engine=cpp cpp_model=<имя>` |
+| `config_get` | — | Адрес воркера, пути данных, модель генерации (выбранная и рекомендуемая для видеокарты) и движки воркера |
+| `config_set` | server_url, stems_auto, stems_model, fx_engine, cpp_model, cpp_low_vram | `server_url` сохраняется и в настройки приложения; `stems_auto` — когда делать дорожки: `studio` (при открытии студии) / `always` (сразу у каждого готового трека) / `manual`; `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `cpp_model` — модель генерации (любая скачанная: `bf16`, `q8`, `q6`, `q5`; рекомендуемая для карты — в `config_get`; тот же сид на другой модели даёт другое исполнение), `cpp_low_vram` — экономный режим; модель и режим — со следующей генерации |
+| `engine_model_install` | **name** | Скачать модель yue2.cpp: `bf16` (7,2 ГБ), `q8` (3,8 ГБ), `q6` (2,9 ГБ), `q5` (2,6 ГБ). Ждёт конца загрузки; потом — `config_set cpp_model=<имя>` |
 
 ### Установка и диагностика
 
 | Инструмент | Параметры | Что делает |
 |---|---|---|
 | `doctor` | host | Проверка окружения: доступен ли воркер и какие компоненты у него стоят, ffmpeg, Go, Node; на машине с видеокартой (`host` — по ssh) — GPU и видеопамять, место на диске. Версия воркера |
-| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, roformer, stems_model, engine, cpp_model, hf_home, seedvc_dir, sep_dir | Поставить воркер (Ubuntu + NVIDIA/CUDA). По умолчанию сухой прогон: агент показывает план и спрашивает, нужны ли whisper (~3,2 ГБ), Seed-VC (~11 ГБ) и RoFormer (~7,3 ГБ, веса некоммерческие), а при RoFormer — какой моделью делать дорожки. Установка — `dry_run=false`, `confirm=true` и явные `whisper`/`seedvc`/`roformer`. Перед установкой проверяются GPU и место на диске. Каталоги по умолчанию: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` и `~/sep-models` |
+| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, roformer, stems_model, cpp_model, hf_home, seedvc_dir, sep_dir | Поставить воркер (Ubuntu + NVIDIA/CUDA). По умолчанию сухой прогон: агент показывает план и спрашивает, нужны ли whisper (~3,2 ГБ), Seed-VC (~11 ГБ) и RoFormer (~7,3 ГБ, веса некоммерческие), а при RoFormer — какой моделью делать дорожки. Установка — `dry_run=false`, `confirm=true` и явные `whisper`/`seedvc`/`roformer`. Перед установкой проверяются GPU и место на диске. Модель генерации — `cpp_model=auto|bf16|q8|q6|q5` (без неё — выбранная раньше, если скачана, иначе рекомендуемая по видеопамяти). Каталоги по умолчанию: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` и `~/sep-models` |
 | `install_app` | dry_run, confirm | Собрать приложение на этом ПК (`wails build`; нужны Go, Node, wails CLI). По умолчанию сухой прогон |
 
 ## Рецепты работы

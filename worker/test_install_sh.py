@@ -4,6 +4,11 @@
 sleep) — заглушки в PATH, пишут вызовы в журнал. `uv venv <путь>` создаёт venv-заглушку,
 её python тоже пишет вызовы (так видно kits_install.py). Распакованный каталог —
 из архива tools/worker-tar.sh (явная версия), для каждой версии — копия с её VERSION.
+Модель генерации (yue2.cpp) установщик ставит всегда; здесь это граница, а не предмет проверки:
+python venv отвечает на `engine_cpp.py recommend|installed|download` как исправный воркер
+(рекомендация «q8 1», скачанная модель помечается файлом installed-<модель> в каталоге заглушек),
+в каталоге версии лежит рабочая заглушка программы yue2cpp/yue-server. Выбор модели, отказ без
+программы/модели — test_install_engine и test_cpp_only.
 
 Что должно работать:
 I1. Установка: current → $PARTSCASTER_HOME/releases/<YYYYmmddHHMMSS>-<ver> (атомарная ссылка),
@@ -57,12 +62,23 @@ if [ "$name" = uv ] && [ "$1" = pip ] && [ -f "$STUB_DIR/fail-uv-pip" ]; then ex
 exit 0
 """
 
+# ответы engine_cpp.py исправного воркера (вставляется в заглушки python venv): рекомендация,
+# проверка «модель скачана», загрузка (fail-download — сбой; удачная помечает модель скачанной)
+ENGINE_CPP_SH = r"""case "$1" in *engine_cpp.py)
+  case "$2" in
+    recommend) echo "q8 1";;
+    installed) [ -f "$STUB_DIR/installed-$3" ] || exit 1;;
+    download) [ -f "$STUB_DIR/fail-download" ] && exit 1; touch "$STUB_DIR/installed-$3";;
+  esac
+  exit 0;;
+esac
+"""
+
 # python venv-заглушки: пишет вызов; kits_install.py падает, если есть fail-kits.
 VENV_PY = r"""#!/bin/sh
 { echo "== venv-python"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
 case "$1" in *kits_install.py) [ -f "$STUB_DIR/fail-kits" ] && exit 1;; esac
-exit 0
-"""
+""" + ENGINE_CPP_SH + "exit 0\n"
 
 
 def _template_dir(tmp):
@@ -80,6 +96,8 @@ def _template_dir(tmp):
     d = ext / "worker-0.0.0-tpl"
     if not (d / "install.sh").is_file():
         raise AssertionError(f"no install.sh in archive: {sorted(x.name for x in d.iterdir())}")
+    # настоящая сборка yue2.cpp из dist/ машины (если есть) не нужна: версии получают заглушку
+    shutil.rmtree(d / "yue2cpp", ignore_errors=True)
     return d
 
 
@@ -124,6 +142,10 @@ class _InstallCase(unittest.TestCase):
         (d / "VERSION").write_text(ver + "\n")
         if requirements is not None:
             (d / "requirements.txt").write_text(requirements)
+        # программа yue2.cpp из архива: заглушка отвечает на --help кодом 0 — сборка не нужна
+        (d / "yue2cpp").mkdir()
+        (d / "yue2cpp" / "yue-server").write_text(STUB)
+        (d / "yue2cpp" / "yue-server").chmod(0o755)
         return d
 
     def env(self, **extra):
@@ -351,8 +373,7 @@ VENV_PY_HEALTH = r"""#!/bin/sh
 code="$*"
 if [ $# -eq 0 ] || [ "$1" = - ]; then code=$(cat); printf '%s\n' "$code" >> "$STUB_LOG"; fi
 case "$code" in *localhost:8091/health*) [ -f "$STUB_DIR/fail-health" ] && exit 1;; esac
-exit 0
-"""
+""" + ENGINE_CPP_SH + "exit 0\n"
 
 TOOLS = ("bash", "sh", "env", "sed", "date", "cp", "mv", "ln", "mkdir", "rm", "rmdir", "tr", "sha256sum",
          "cut", "ls", "sort", "awk", "tail", "head", "cat", "readlink", "basename", "dirname", "id", "seq",
@@ -542,9 +563,11 @@ class TestInstallReleases(_InstallCase):
                          'echo $((t + n)) > "$STUB_DIR/clock"\n')
         for f in (date, sleep):
             f.chmod(0o755)
-        tpl_dirs = sorted(x.name for x in self.template.iterdir() if x.is_dir())
+        tpl_dirs = None  # каталоги распакованной версии (шаблон + заглушка yue2cpp/)
         for _ in range(2):  # без паузы run_sh — прямой запуск
-            p = subprocess.run(["bash", str(self.make_version("1.0.0") / "install.sh"), "--no-start"],
+            ver = self.make_version("1.0.0")
+            tpl_dirs = sorted(x.name for x in ver.iterdir() if x.is_dir())
+            p = subprocess.run(["bash", str(ver / "install.sh"), "--no-start"],
                                cwd=self.home, env=self.env(), capture_output=True, text=True, timeout=120)
             self.assertEqual(p.returncode, 0, f"{p.stdout}\n{p.stderr}")
             if _ == 0:

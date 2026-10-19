@@ -1,60 +1,66 @@
-// Второй движок генерации yue2.cpp (ЭКСПЕРИМЕНТ): метка трека, предупреждение «повторить» на другом движке,
+// Модель генерации (yue2.cpp): метка модели у трека, предупреждение «повторить» на другой модели,
 // список моделей для настроек. Чистые функции; тексты — через общий i18n.
 import { useI18n } from './i18n/index.js'
 
 const MODEL_ORDER = ['bf16', 'q8', 'q6', 'q5']
+// старые треки (engine "" или "torch") сделаны прежним движком на PyTorch
+const LEGACY = 'PyTorch'
 
-/** Метка движка трека: «yue2.cpp Q8»; PyTorch и старые треки (engine "") — ''. */
-export function engineLabel(job) {
+/** Модель трека: "cpp-q8" → "q8"; старые треки — ''. */
+function trackModel(job) {
   const e = (job && job.engine) || ''
-  return e.startsWith('cpp-') ? 'yue2.cpp ' + e.slice(4).toUpperCase() : ''
+  return e.startsWith('cpp-') ? e.slice(4) : ''
 }
 
-/** Движок трека в виде метки: у старых треков пусто — это PyTorch. */
-function trackEngine(job) {
-  return (job && job.engine) || 'torch'
+/** Текущая модель воркера из его конфига; конфиг не загружен — ''. */
+export function currentModel(config) {
+  return (config && config.cpp_model) || ''
 }
 
 /**
- * Предупреждение перед «Повторить»: сид повторяет исполнение только на том же движке и той же модели.
- * currentEngine — действующий движок ("torch" | "cpp-q8" …); неизвестен (конфиг не загружен) — ''.
+ * Метка модели у трека — только когда она отличается от текущей (повтор по сиду прозвучит иначе):
+ * «BF16», «Q8»…; старые треки — «PyTorch». Конфиг не загружен — '' (ложной метки нет).
  */
-export function retryWarning(job, currentEngine) {
-  if (!currentEngine || trackEngine(job) === currentEngine) return ''
-  return useI18n().t('engine.retryWarning')
+export function modelBadge(job, config) {
+  const cur = currentModel(config)
+  if (!cur) return ''
+  const m = trackModel(job)
+  if (m === cur) return ''
+  return m ? m.toUpperCase() : LEGACY
 }
 
-/** Действующий движок из конфига воркера в виде метки трека ("torch" | "cpp-q8"); старый воркер — ''. */
-export function currentEngineLabel(config) {
-  if (!config || !config.engine) return ''
-  return config.engine === 'cpp' ? 'cpp-' + (config.cpp_model || 'q8') : 'torch'
+/** Предупреждение перед «Повторить»: сид повторяет исполнение только на той же модели. */
+export function retryWarning(job, config) {
+  return modelBadge(job, config) ? useI18n().t('engine.retryWarning') : ''
 }
 
-/** Модели yue2.cpp для выбора: [{value, label, installed}] в порядке bf16, q8, q6, q5; нет cpp_models — []. */
+/**
+ * Модели для выбора: [{value, label, installed, recommended}] в порядке bf16, q8, q6, q5; нет cpp_models — [].
+ * recommended — рекомендуемая для карты воркера (cpp_recommended); выбрать можно любую.
+ */
 export function modelOptions(config) {
   const models = (config && config.cpp_models) || {}
+  const rec = (config && config.cpp_recommended && config.cpp_recommended.model) || ''
   const { t, locale } = useI18n()
   return MODEL_ORDER.filter((n) => models[n]).map((n) => {
     const m = models[n]
     const gb = (Number(m.size || 0) / 1e9).toFixed(1)
     const size = locale.value === 'ru' ? gb.replace('.', ',') : gb
+    const state = m.installed ? t('engine.model.installed') : t('engine.model.notInstalled')
     return {
       value: n,
       installed: !!m.installed,
+      recommended: n === rec,
       label: t('engine.modelOption', {
         name: n.toUpperCase(),
         size,
-        state: m.installed ? t('engine.model.installed') : t('engine.model.notInstalled'),
+        state: n === rec ? state + ', ' + t('engine.model.recommended') : state,
       }),
     }
   })
 }
 
-/**
- * Что отправить воркеру при сохранении выбора движка: основной — только engine (модель yue2.cpp не трогается,
- * её скачанность не проверяется — иначе «Сохранить» без моделей падал бы 422); yue2.cpp — с моделью и режимом.
- */
-export function engineConfig(engine, cppModel, cppLowVram) {
-  if (engine !== 'cpp') return { engine: 'torch' }
-  return { engine: 'cpp', cpp_model: cppModel, cpp_low_vram: !!cppLowVram }
+/** Что отправить воркеру при сохранении: модель и экономный режим. */
+export function modelConfig(model, lowVram) {
+  return { cpp_model: model, cpp_low_vram: !!lowVram }
 }

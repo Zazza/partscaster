@@ -22,7 +22,6 @@ const CONFIG = {
   stems_pref: 'htdemucs',
   stems_model: 'htdemucs',
   roformer_available: true,
-  engine: 'torch',
   cpp_model: 'q8',
   cpp_low_vram: false,
   cpp_available: false,

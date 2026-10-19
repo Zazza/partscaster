@@ -1,9 +1,8 @@
 # Окружение воркера (Ubuntu + CUDA; torch — с CUDA-индексом, см. docs/ru/deployment.md):
 #   uv pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu128 \
 #     --extra-index-url https://pypi.org/simple
-# пакет модели yue2 (yue2_infer) — не на PyPI: архив закреплённого коммита YuE (тот же, что ставит программа
-# воркера Windows: internal/workerexe.YueCommit — тест сверяет)
-yue2-infer @ https://github.com/multimodal-art-projection/YuE/archive/72272f907522dcca2e97c848d6c8f0d343999183.zip
+# генерация — программой yue2.cpp (не пакет Python); torch нужен дорожкам, SheetSage2 (pretty_midi, mir_eval),
+# Seed-VC и NAM
 fastapi
 uvicorn
 soundfile

@@ -1,8 +1,9 @@
-"""Partscaster worker — API вокруг резидентной YuE2Pipeline (:8091, 0.0.0.0).
+"""Partscaster worker — API вокруг модели YuE2 на движке yue2.cpp (:8091, 0.0.0.0).
 
-Держит модель загруженной между запросами; очередь задач живёт здесь же
+Держит сервер yue2.cpp с моделью запущенным между запросами; очередь задач живёт здесь же
 (SQLite), так что закрытие desktop-приложения не прерывает генерации."""
 import contextlib
+import functools
 import hashlib
 import html
 import json
@@ -79,10 +80,7 @@ CFG_RANGE = (1.0, 4.0)
 
 app = FastAPI(title="partscaster-worker")
 
-_pipe = None
 _pipe_lock = threading.Lock()   # одна операция с моделью одновременно
-_load_lock = threading.Lock()
-_load_error: str | None = None
 
 
 def _save_gen_pos(op) -> None:
@@ -401,30 +399,6 @@ init_db()
 _migrate()
 
 
-def _get_pipe():
-    global _pipe, _load_error
-    with _load_lock:
-        if _pipe is None:
-            _stop_cpp()   # видеопамять — одному движку
-            if _load_error:
-                raise HTTPException(503, f"model load failed earlier: {_load_error}")
-            # torch-eager — на Windows: PyTorch там собран без flash-attention, которую зовут CUDA-графы YuE2
-            backend = os.environ.get("YUE2_BACKEND", "torch")
-            if backend not in YUE2_BACKENDS:
-                raise HTTPException(503, f"YUE2_BACKEND={backend!r}: нужно одно из {', '.join(YUE2_BACKENDS)}")
-            from yue2 import YuE2Pipeline
-            try:
-                t0 = time.time()
-                _pipe = YuE2Pipeline.from_pretrained(
-                    MODEL_ID, vae=MODEL_VAE, device="cuda", backend=backend,
-                ).__enter__()
-                log.info("pipeline loaded in %.1fs", time.time() - t0)
-            except Exception as e:  # noqa: BLE001
-                _load_error = str(e)
-                raise HTTPException(503, f"model load failed: {e}") from e
-        return _pipe
-
-
 def _audio_duration(path: Path) -> float:
     try:
         import soundfile as sf
@@ -453,26 +427,6 @@ def _make_formats(job_dir: Path) -> tuple[str, str]:
 _cancel_flags: dict[int, threading.Event] = {}
 _progress: dict[int, dict] = {}
 _state_lock = threading.Lock()
-
-
-def _on_token_cb(job_id: int):
-    """Счётчик токенов/фазы из колбэка пайплайна (plan/generate_semantic).
-
-    plan_end фиксирует последний токен фазы плана: семантические токены =
-    tokens - plan_end. Смешивать нельзя — план короткий, семантика длинная,
-    и процент от смешанного счётчика доезжал до 99% задолго до конца."""
-    counters = {"phase": "load", "tokens": 0, "plan_end": None}
-
-    def on_token(*args):
-        for a in args:
-            if isinstance(a, str):
-                new_phase = "plan" if "abc" in a.lower() else "semantic"
-                if new_phase == "semantic" and counters["plan_end"] is None:
-                    counters["plan_end"] = counters["tokens"]
-                counters["phase"] = new_phase
-        counters["tokens"] += 1
-
-    return on_token, counters
 
 
 def _sem_tokens(counters: dict) -> int:
@@ -535,94 +489,12 @@ def _cont_steps(cont_from, n_tokens: int) -> int:
     return max(1, min(n_tokens, round(float(cont_from or 0) * SEM_TOK_PER_SEC)))
 
 
-def _continue_song(pipe, row, request):
-    """«Продолжение с места»: шаги модели родителя до cont_from подаются как
-    уже сыгранные, дальше модель продолжает сама (другой сид; при req_abc —
-    изменённый план; стиль — строки трека, с припиской). До отметки — то же
-    исполнение, склейки нет (проверено: #195, #196)."""
-    import dataclasses
-
-    import numpy as np
-    from yue2.pipeline import SemanticResult, SongResult, SymbolicPlan
-    from yue2.protocol import CODEC_OFFSET, CONTEXT, Sampling, negative_prefix, token_prefixes
-
-    src = JOBS_DIR / str(row["parent_id"])
-    tokens = [int(t) for t in np.load(src / "semantic.npy")]
-    k = _cont_steps(row["cont_from"], len(tokens))
-    try:
-        saved = SymbolicPlan.load(src)
-    except (OSError, ValueError, KeyError):
-        saved = None
-    if saved is None:
-        # родитель сделан yue2.cpp (нет plan.json/abc_tokens.npy): план — из его score.abc (или новый план),
-        # как при изменённом плане; ноты до отметки — те же
-        score = src / "score.abc"
-        abc = request.get("abc") or (score.read_text(encoding="utf-8") if score.is_file() else None)
-        kw = {"cot": row["cot"] if abc else "off", "seed": int(request.get("seed") or row["seed"] or LIB_DEFAULT_SEED)}
-        if request.get("cfg_scale"):
-            kw["cfg_scale"] = request["cfg_scale"]
-        plan = pipe.plan(style=request.get("style") or row["style"], lyrics=row["lyrics"], abc=abc, **kw)
-        req = plan.request
-    else:
-        # стиль — из строки нового трека (стиль родителя + приписка «что изменить в
-        # звучании»)
-        req = dataclasses.replace(saved.request, style=request.get("style") or saved.request.style,
-                                  seed=int(request.get("seed") or saved.request.seed),
-                                  cfg_scale=request.get("cfg_scale", saved.request.cfg_scale))
-    if saved is not None and request.get("abc"):
-        plan = pipe.plan(request=dataclasses.replace(req, abc=request["abc"]))
-    elif saved is not None:
-        plan = SymbolicPlan(req, saved.abc, saved.abc_ids,
-                            token_prefixes(req, pipe.tokenizer, saved.abc_ids), saved.timing, saved.truncated)
-    forced = [t + CODEC_OFFSET for t in tokens[:k]]
-    prefix = plan.prefix + forced
-    negative = None
-    if plan.request.guidance != 1:
-        negative = negative_prefix(plan.request, pipe.tokenizer, plan.abc_ids) + forced
-    budget = request["semantic_sampling"].max_tokens if request.get("semantic_sampling") else MAX_SEM_TOKENS
-    room = CONTEXT - max(len(prefix), len(negative or []))
-    temperature = request["semantic_sampling"].temperature if request.get("semantic_sampling") else 1.0
-    sampling = Sampling(max_tokens=max(200, min(budget - k, room)), temperature=temperature)
-    ids, timing, truncated = pipe._generate(
-        prefix, sampling, plan.request.seed, "semantic", negative=negative,
-        cfg_scale=plan.request.guidance, legacy_off=plan.request.cot == "off",
-        cancelled=request.get("cancelled"), on_token=request.get("on_token"))
-    semantic = SemanticResult(plan, tokens[:k] + [int(t) - CODEC_OFFSET for t in ids], timing, truncated)
-    latents = pipe.synthesize(semantic, cancelled=request.get("cancelled"))
-    audio = pipe.decode(latents)
-    config = pipe.effective_config(plan.request, None, sampling)
-    return SongResult(audio, 48000, semantic, latents, config, pipe.weights,
-                      {"semantic": timing}, f"continue-{row['parent_id']}-{k}")
-
-
 def _is_cuda_oom(e: BaseException) -> bool:
     low = str(e).lower()
     return "out of memory" in low and "cuda" in low
 
 
-def _unload_pipe() -> None:
-    """Выгрузить модель и вернуть видеопамять (вызывать под _pipe_lock).
-    После нехватки памяти упавшая генерация оставляла в модели ~1,4 ГБ, и
-    следующие джобы падали даже на свободном GPU; модель загрузится заново
-    при следующей джобе (~12 с)."""
-    global _pipe
-    if _pipe is None:
-        return
-    try:
-        _pipe.__exit__(None, None, None)
-    except Exception:  # noqa: BLE001 - выгрузка всё равно продолжается
-        log.exception("pipeline close failed")
-    _pipe = None
-    import gc
-    gc.collect()
-    try:
-        import torch
-        torch.cuda.empty_cache()
-    except Exception:  # noqa: BLE001 - без torch/CUDA освобождать нечего
-        pass
-
-
-_cpp: "engine_cpp.CppServer | None" = None   # сервер yue2.cpp; ведётся под _pipe_lock, как _pipe
+_cpp: "engine_cpp.CppServer | None" = None   # сервер yue2.cpp; ведётся под _pipe_lock
 
 
 def _stop_cpp() -> None:
@@ -637,13 +509,13 @@ def _stop_cpp() -> None:
 
 
 def _get_cpp() -> "engine_cpp.CppServer":
-    """Сервер yue2.cpp с моделью и режимом из настроек (вызывать под _pipe_lock). Модель PyTorch перед ним
-    выгружается; смена модели/режима — новый процесс к этой генерации."""
+    """Сервер yue2.cpp с моделью и режимом из настроек (вызывать под _pipe_lock); смена модели/режима — новый
+    процесс к этой генерации."""
     global _cpp
     name, low = cpp_model_pref(), cpp_low_vram_pref()
     binary = engine_cpp.find_binary()
     if binary is None:
-        raise RuntimeError("yue2.cpp не установлен — переключите движок на основной (PyTorch) в настройках")
+        raise RuntimeError("yue2.cpp не установлен — переустановите воркер (install.sh или partscaster-worker)")
     if not engine_cpp.model_installed(name):
         raise RuntimeError(f"модель yue2.cpp {name} не скачана — скачайте её в настройках")
     d = engine_cpp.models_dir()
@@ -652,7 +524,6 @@ def _get_cpp() -> "engine_cpp.CppServer":
     if _cpp is not None and (not _cpp.running or _cpp.key() != srv.key()):
         _stop_cpp()
     if _cpp is None:
-        _unload_pipe()
         srv.start()
         _cpp = srv
         log.info("yue2.cpp started: %s%s", engine_cpp.MODELS[name]["file"], " (economy)" if low else "")
@@ -688,15 +559,15 @@ def _cpp_log_cb(counters: dict):
 class _CppSong:
     """Итог генерации yue2.cpp в форме, которую ждёт _run_job: save_artifacts и truncated."""
 
-    def __init__(self, parts: dict, meta: dict):
-        self.parts, self.meta, self.truncated = parts, meta, False
+    def __init__(self, parts: dict, meta: dict, truncated: bool = False):
+        self.parts, self.meta, self.truncated = parts, meta, truncated
 
     def save_artifacts(self, job_dir: Path) -> None:
         engine_cpp.save_artifacts(job_dir, self.parts, self.meta)
 
 
 def _cpp_render(cpp, row, request: dict, job_dir: Path, budget: int, counters: dict, cancel_ev) -> _CppSong:
-    """Трек или продолжение на yue2.cpp: та же заявка, что у PyTorch (стиль с припиской, план, сид, характер)."""
+    """Трек или продолжение на yue2.cpp: стиль с припиской, план, сид, характер исполнения."""
     low = cpp.low_vram
     if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"]):
         body = engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], budget, low,
@@ -707,7 +578,12 @@ def _cpp_render(cpp, row, request: dict, job_dir: Path, budget: int, counters: d
     parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
     meta = {"model": cpp.model_path.name, "engine": _cpp_label(cpp), "low_vram": low,
             "request": {k: v for k, v in body.items() if k != "source_tokens"}}
-    return _CppSong(parts, meta)
+    # обрезан — модель упёрлась в потолок шагов, не закончив песню сама: ответ yue2.cpp этого факта не несёт,
+    # а шагов в нём вся песня (у продолжения — с сыгранными до отметки, как и потолок). #792 (черновик): 450 из 450
+    # Черновик и кусок для вклейки короткие по замыслу (потолок и есть их длина) — не «обрезаны»
+    cap = int(body["semantic_sampling"]["max_tokens"])
+    truncated = _auto_retry_ok(row) and len(engine_cpp.semantic_of(parts["replay"])) >= cap
+    return _CppSong(parts, meta, truncated)
 
 
 def _cpp_plan(cpp, style: str, lyrics: str, cot: str, seed: int) -> str:
@@ -746,10 +622,11 @@ def is_instrumental_job(style: str, lyrics: str) -> bool:
 
 def job_budget(draft: bool, max_tokens: int, role: "str | None", lyrics: str = "") -> int:
     """Бюджет семантических токенов джобы — потолок, а не длина: длину трека задаёт число секций.
-    Превью — ~18 с (450). Кусок — ровно до конца окна + хвост (минимум 200 шагов держит
-    _continue_song). Полная генерация — не меньше MIN_FULL_TOKENS: ниже модель обрывает трек до
+    Превью — ~18 с (450). Кусок — ровно до конца окна + хвост (минимум 200 новых шагов держит
+    engine_cpp.continue_request). Полная генерация — не меньше MIN_FULL_TOKENS: ниже модель обрывает трек до
     финала; заглушка «без слов» — по числу секций, max_tokens не учитывается. Всё — с потолком
-    MAX_SEM_TOKENS: KV-кеш yue2 выделяется под весь бюджет заранее, и на 16 ГБ больше не помещается."""
+    MAX_SEM_TOKENS: кэш модели выделяется под весь бюджет заранее (в экономном режиме потолок ниже —
+    engine_cpp.LOW_VRAM_BUDGET)."""
     if draft:
         return 450
     if role == "fragment":
@@ -786,6 +663,28 @@ def _gpu_holders():
     return holders
 
 
+def _gpu_mem_mib() -> "tuple[int, int] | None":
+    """(свободно, всего) МиБ первой карты по nvidia-smi; None — спросить не вышло. Не через torch: CUDA-контекст
+    в процессе воркера занял бы видеопамять, а модель живёт в отдельном процессе yue2.cpp."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+        free, total = (int(v.strip()) for v in out.splitlines()[0].split(","))
+    except Exception:  # noqa: BLE001 - nvidia-smi нет/упал/ответ не разобран: цифр просто нет
+        return None
+    return free, total
+
+
+def _own_gpu_pids() -> set[int]:
+    """Процессы воркера на карте: он сам и его сервер yue2.cpp."""
+    pids = {os.getpid()}
+    srv = _cpp
+    if srv is not None and srv.proc is not None:
+        pids.add(srv.proc.pid)
+    return pids
+
+
 def friendly_error(e: BaseException) -> str:
     """Текст ошибки для человека. Нехватка видеопамяти: если карту держат чужие
     процессы (Ollama, Stable Diffusion) — «GPU занят» со свободной/общей памятью
@@ -795,19 +694,16 @@ def friendly_error(e: BaseException) -> str:
     if not _is_cuda_oom(e):
         return s
     mem = ""
-    try:
-        import torch
-        free, total = torch.cuda.mem_get_info()
-        mem = f" (свободно {free / 2**30:.1f} из {total / 2**30:.1f} ГБ)"
-    except Exception:  # noqa: BLE001 - без torch/CUDA — сообщение без цифр
-        pass
+    if (gm := _gpu_mem_mib()) is not None:
+        mem = f" (свободно {gm[0] / 1024:.1f} из {gm[1] / 1024:.1f} ГБ)"
     holders = _gpu_holders()
+    own = _own_gpu_pids()
     # «сам воркер» — только когда список держателей непустой и в нём нет чужих: пустой список
     # (карта свободна по nvidia-smi — так бывает в WSL без работающей модели) не доказывает вину
-    if holders and all(pid == os.getpid() for pid, _ in holders):
+    if holders and all(pid in own for pid, _ in holders):
         return (f"Не хватило видеопамяти самому воркеру{mem}: модель и бюджет длины трека "
-                "не поместились. Уменьшите длительность в форме нового трека (или поднимите "
-                "YUE2_MAX_TOKENS на карте побольше) и нажмите «повторить».")
+                "не поместились. Включите экономный режим или выберите модель поменьше в настройках, "
+                "либо уменьшите длительность в форме нового трека, и нажмите «повторить».")
     return (f"GPU занят: не хватило видеопамяти{mem}. Освободите память от других программ "
             "(модель в Ollama, Stable Diffusion и т. п.) и нажмите «повторить».")
 
@@ -840,9 +736,13 @@ def _run_job(job_id: int):
         while True:
             row = _job_row(job_id)   # сид мог смениться авторетраем
             can_retry = _auto_retry_ok(row)
+            # повтор — только если серверу реально уйдёт потолок больше: в экономном режиме он урезан
+            # (engine_cpp.LOW_VRAM_BUDGET), и повтор с тем же потолком и сидом обрезался бы так же
+            low = cpp_low_vram_pref()
             res = _render_attempt(job_id, row, job_dir, budget, cancel_ev,
                                   retry_truncated=can_retry and "truncated" not in retried
-                                  and retry_budget(budget) > budget)
+                                  and engine_cpp.cap_budget(retry_budget(budget), low)
+                                  > engine_cpp.cap_budget(budget, low))
             if res is None:
                 return   # отмена или ошибка — итог уже в строке
             if res == "retry":
@@ -883,47 +783,35 @@ def _reset_for_leak_retry(job_id: int, row, leak: str) -> None:
         conn.execute("UPDATE jobs SET seed=?, vocal_leak='', truncated=0 WHERE id=?", (seed, job_id))
 
 
-def _own_plan(cpp, pipe, request: dict, row) -> str:
+def _own_plan(cpp, request: dict, row) -> str:
     """План, который воркер строит сам (драматургия, инструментал): тот же, что модель написала бы в треке."""
-    if cpp is not None:
-        return _cpp_plan(cpp, request["style"], request["lyrics"], row["cot"], row["seed"] or LIB_DEFAULT_SEED)
-    return pipe.plan(style=request["style"], lyrics=request["lyrics"], cot=row["cot"],
-                     **({"seed": row["seed"]} if row["seed"] else {})).abc
+    return _cpp_plan(cpp, request["style"], request["lyrics"], row["cot"], row["seed"] or LIB_DEFAULT_SEED)
 
 
 def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, retry_truncated: bool):
     """Один прогон генерации. None — отмена/ошибка (итог в строке); "retry" — обрезан, звук не
     сохраняем; "truncated" / "ok" — звук и форматы записаны, статус ещё running."""
-    on_token, counters = _on_token_cb(job_id)
+    # стадия и шаги семантики — из журнала yue2.cpp (_cpp_log_cb): plan_end — где кончился план, tokens — шаги
+    counters = {"phase": "load", "tokens": 0, "plan_end": None}
     watch_stop = _progress_watcher(job_id, counters, time.time(), budget)
     try:  # noqa: SIM105 - очистка состояния после любого исхода
         with gpu_queue(f"render {job_id}"), _pipe_lock:
-            # движок — тот, что в настройках к началу генерации; трек помнит, каким сделан
-            cpp = pipe = None
-            if engine_pref() == "cpp":
-                # метка — до запуска сервера: упавшая на старте джоба помнит, каким движком её делали
-                _set_job_engine(job_id, engine_cpp.engine_label(cpp_model_pref()))
-                cpp = _get_cpp()
-                _set_job_engine(job_id, _cpp_label(cpp))
-            else:
-                pipe = _get_pipe()
-                _set_job_engine(job_id, "torch")
-            counters["phase"] = "plan"
-            request = {"style": row["style"], "lyrics": row["lyrics"], "cot": row["cot"],
-                       "on_token": on_token,
-                       "cancelled": lambda: cancel_ev.is_set()}
-            cfg = row["cfg"] or CFG_SCALE
-            if cfg > 0:
-                request["cfg_scale"] = cfg
-            # бюджет длины и смелость игры — параметры Sampling, не запроса
+            # модель — та, что в настройках к началу генерации; трек помнит, какой сделан.
+            # Метка — до запуска сервера: упавшая на старте джоба помнит, какой моделью её делали
+            _set_job_engine(job_id, engine_cpp.engine_label(cpp_model_pref()))
             try:
-                from yue2.protocol import Sampling
-                request["semantic_sampling"] = Sampling(max_tokens=budget,
-                                                        temperature=row["temperature"] or 1.0)
-            except ImportError:
-                pass
-            if row["seed"]:
-                request["seed"] = row["seed"]
+                cpp = _get_cpp()
+            except Exception as e:  # noqa: BLE001 - нет программы/модели, сервер не встал: итог — в строке трека
+                log.exception("job %s: yue2.cpp не запустился", job_id)
+                _mark_failed(job_id, e)
+                if _is_cuda_oom(e):
+                    _stop_cpp()
+                return None
+            _set_job_engine(job_id, _cpp_label(cpp))
+            counters["phase"] = "plan"
+            # стиль, текст и план — то, что воркер может поменять (драматургия, инструментал); остальное
+            # (сид, характер, бюджет) заявка yue2.cpp берёт из строки трека
+            request = {"style": row["style"], "lyrics": row["lyrics"]}
             continuation = row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"])
             own_plan = False
             if row["req_abc"]:
@@ -940,7 +828,7 @@ def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, ret
                 # драматургия: строим план сами, правим темп/вокал по дуге —
                 # и рендерим по своему ABC (механизм req_abc)
                 counters["phase"] = "arc-plan"
-                plan_abc = _own_plan(cpp, pipe, request, row)
+                plan_abc = _own_plan(cpp, request, row)
                 request["style"] = arc.style_with_arc(request["style"], row["arc"])
                 request["abc"] = arc.apply_arc(plan_abc, row["arc"])
                 own_plan = True
@@ -950,7 +838,7 @@ def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, ret
                 # и без нот у Vocal голосу нечего петь (теги «no vocals» её не останавливали, #1031)
                 if "abc" not in request:
                     counters["phase"] = "arc-plan"
-                    request["abc"] = _own_plan(cpp, pipe, request, row)
+                    request["abc"] = _own_plan(cpp, request, row)
                     own_plan = True
                 request["abc"] = mute_voice(request["abc"], "Vocal")
                 log.info("job %s: instrumental — Vocal muted in plan", job_id)
@@ -959,28 +847,14 @@ def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, ret
             t0 = time.time()
             failure = ""
             try:
-                try:
-                    # кусок с отметкой (cont_from) — продолжение трека, только короче; старый кусок — с нуля
-                    if cpp is not None:
-                        song = _cpp_render(cpp, row, request, job_dir, budget, counters, cancel_ev)
-                    else:
-                        song = _continue_song(pipe, row, request) if continuation else pipe(**request)
-                    # через counters: сторож прогресса раз в 2 с пишет стадию оттуда
-                    # и затёр бы прямую запись в _progress
-                    counters["phase"] = "finalize"
-                    with _state_lock:
-                        _progress.setdefault(job_id, {})["stage"] = "finalize"
-                except TypeError as te:
-                    # старые сборки yue2 могут не знать cfg_scale — без него
-                    if "cfg_scale" in str(te):
-                        log.warning("yue2 pipeline не поддерживает cfg_scale (%s); дефолт библиотеки", te)
-                        request.pop("cfg_scale", None)
-                        song = pipe(**request)
-                    else:
-                        raise
+                # кусок с отметкой (cont_from) — продолжение трека, только короче; старый кусок — с нуля
+                song = _cpp_render(cpp, row, request, job_dir, budget, counters, cancel_ev)
+                # через counters: сторож прогресса раз в 2 с пишет стадию оттуда
+                # и затёр бы прямую запись в _progress
+                counters["phase"] = "finalize"
+                with _state_lock:
+                    _progress.setdefault(job_id, {})["stage"] = "finalize"
                 truncated = song.truncated
-                if isinstance(truncated, dict):
-                    truncated = any(truncated.values())
                 if truncated and retry_truncated:
                     return "retry"   # обрезанный звук не сохраняем: повтор перепишет каталог
                 # дорожки и кэш ролла — от прошлого звука (авторетрай, «повторить» после отмены на дорожках)
@@ -998,9 +872,8 @@ def _render_attempt(job_id: int, row, job_dir: Path, budget: int, cancel_ev, ret
                 _mark_failed(job_id, e)
                 failure = "oom" if _is_cuda_oom(e) else "error"
             if failure:
-                # выгрузка — после except: там стек ошибки ещё держит тензоры генерации
+                # нехватка памяти: сервер останавливается целиком — следующая генерация запустит его заново
                 if failure == "oom":
-                    _unload_pipe()
                     _stop_cpp()
                 return None
             audio = job_dir / "audio.flac"
@@ -1296,7 +1169,6 @@ def _startup():
 @app.on_event("shutdown")
 def _shutdown():
     with _pipe_lock:
-        _unload_pipe()
         _stop_cpp()
 
 
@@ -1357,8 +1229,8 @@ class ConfigIn(BaseModel):
     stems_auto: str | None = None    # когда делать дорожки: studio | always | manual
     stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
-    # движок генерации: torch (основной) | cpp (yue2.cpp — эксперимент), его модель и экономный режим (~4,5 ГБ)
-    engine: str | None = None
+    # модель генерации yue2.cpp (bf16 | q8 | q6 | q5) и экономный режим (~4,5 ГБ); поле engine старых клиентов
+    # (выбор движка) не объявлено — pydantic его молча отбрасывает
     cpp_model: str | None = None
     cpp_low_vram: bool | None = None
 
@@ -1375,8 +1247,8 @@ def _load_settings() -> dict:
 
 
 def _save_settings(st: dict) -> None:
-    """Атомарно (временный файл + rename): чтение во время записи не видит полфайла — иначе выбор (движок,
-    модель дорожек) на миг откатывался к умолчанию."""
+    """Атомарно (временный файл + rename): чтение во время записи не видит полфайла — иначе выбор (модель
+    генерации, модель дорожек) на миг откатывался к умолчанию."""
     SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = SETTINGS_PATH.with_name(f".{SETTINGS_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1390,15 +1262,6 @@ def stems_pref() -> str:
     """Чем делать дорожки по умолчанию: htdemucs (быстро) или roformer (чище, ~4,5× дольше)."""
     v = _load_settings().get("stems_model", MODEL_DEMUCS)
     return v if v in STEMS_CHOICES else MODEL_DEMUCS
-
-
-ENGINE_CHOICES = ("torch", "cpp")
-
-
-def engine_pref() -> str:
-    """Движок генерации: torch (основной, по умолчанию) или cpp (yue2.cpp — эксперимент)."""
-    v = _load_settings().get("engine", "torch")
-    return v if v in ENGINE_CHOICES else "torch"
 
 
 def cpp_model_pref() -> str:
@@ -1470,12 +1333,25 @@ def get_config():
         "fx_engine": fx_engine_enabled(),
         "fx_preview": True,   # воркер умеет превью движка (страница «Инструменты»); старый — нет поля
         "fx_phrases": True,   # фразы по кругу для страницы «Инструменты» (/fx/phrases)
-        "engine": engine_pref(),
         "cpp_model": cpp_model_pref(),
         "cpp_low_vram": cpp_low_vram_pref(),
         "cpp_available": engine_cpp.find_binary() is not None,
         "cpp_models": engine_cpp.models_info(),
+        "cpp_recommended": _cpp_recommended(),
     }
+
+
+@functools.cache
+def _gpu_vram_mib() -> int:
+    """Видеопамять первой карты в МиБ (0 — неизвестно); не меняется, пока воркер жив: nvidia-smi — один раз."""
+    return engine_cpp.gpu_vram_mib()
+
+
+def _cpp_recommended() -> dict:
+    """Рекомендуемая модель для этой карты — подсказка в настройках, сама ничего не выбирает."""
+    mib = _gpu_vram_mib()
+    model, low = engine_cpp.recommend(mib)
+    return {"model": model, "low_vram": low, "vram_mib": mib}
 
 
 @app.post("/config")
@@ -1501,21 +1377,16 @@ def set_config(req: ConfigIn):
         st = _load_settings()
         st["fx_engine"] = bool(req.fx_engine)
         _save_settings(st)
-    if req.engine is not None or req.cpp_model is not None or req.cpp_low_vram is not None:
+    if req.cpp_model is not None or req.cpp_low_vram is not None:
         st = _load_settings()
-        engine = req.engine if req.engine is not None else engine_pref()
-        model = req.cpp_model if req.cpp_model is not None else cpp_model_pref()
-        if engine not in ENGINE_CHOICES:
-            raise HTTPException(422, f"engine must be one of {', '.join(ENGINE_CHOICES)}")
-        if model not in engine_cpp.MODELS:
-            raise HTTPException(422, f"cpp_model must be one of {', '.join(engine_cpp.MODEL_NAMES)}")
-        # yue2.cpp включается только готовым: программа запускается, модель и VAE на месте;
-        # идущая генерация не трогается — новый движок/модель со следующей
-        if engine == "cpp" and engine_cpp.find_binary() is None:
-            raise HTTPException(422, "yue2.cpp не установлен (программы нет или она не запускается)")
-        if (engine == "cpp" or req.cpp_model is not None) and not engine_cpp.model_installed(model):
-            raise HTTPException(422, f"модель не скачана: {model} — сначала скачайте её")
-        st.update(engine=engine, cpp_model=model)
+        if req.cpp_model is not None:
+            if req.cpp_model not in engine_cpp.MODELS:
+                raise HTTPException(422, f"cpp_model must be one of {', '.join(engine_cpp.MODEL_NAMES)}")
+            # выбирается только скачанная модель; идущая генерация не трогается — новая модель со следующей
+            if not engine_cpp.model_installed(req.cpp_model):
+                raise HTTPException(422, f"модель не скачана: {req.cpp_model} — сначала скачайте её")
+            st["cpp_model"] = req.cpp_model
+        st.pop("engine", None)   # выбор движка из прежних версий — движок теперь один
         if req.cpp_low_vram is not None:
             st["cpp_low_vram"] = bool(req.cpp_low_vram)
         _save_settings(st)
@@ -1525,16 +1396,20 @@ def set_config(req: ConfigIn):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": _pipe is not None or (_cpp is not None and _cpp.running),
-            "load_error": _load_error}
+    return {"status": "ok", "model_loaded": _model_loaded()}
+
+
+def _model_loaded() -> bool:
+    """Модель в видеопамяти — запущен сервер yue2.cpp."""
+    return _cpp is not None and _cpp.running
 
 
 # Версия API воркера: растёт при НЕсовместимом изменении (клиент старше воркера перестаёт работать);
 # приложение и MCP сверяют её со своей и подсказывают, что обновить.
 WORKER_API = 1
-MODEL_ID = "m-a-p/YuE2-3B"
-MODEL_VAE = "m-a-p/YuE2-Vae"
-YUE2_BACKENDS = ("torch", "torch-eager", "vllm")
+# метка модели старых треков (engine "" или "torch" — сделаны прежним движком на PyTorch): для рецепта — по ней
+# импорт видит, что модель другая, и предлагает воспроизвести по плану нот
+LEGACY_TORCH_LABEL = "m-a-p/YuE2-3B@pytorch"
 
 
 def _read_version(d: Path) -> str:
@@ -1562,17 +1437,7 @@ _SOURCE_HASH = _source_hash(_WORKER_DIR)
 
 def _model_label() -> str:
     """Модель генерации и версия движка — от них зависит, как прозвучит тот же сид."""
-    if engine_pref() == "cpp":
-        return engine_cpp.model_label(cpp_model_pref())
-    return _torch_label()
-
-
-def _torch_label() -> str:
-    try:
-        from importlib.metadata import version
-        return f"{MODEL_ID}@yue2-{version('yue2')}"
-    except Exception:  # noqa: BLE001 — пакета нет (тесты, машина без модели): только имя модели
-        return MODEL_ID
+    return engine_cpp.model_label(cpp_model_pref())
 
 
 @app.get("/version")
@@ -1583,7 +1448,7 @@ def get_version():
         "api": WORKER_API,
         "source_hash": _SOURCE_HASH,
         "model": _model_label(),
-        "engine": engine_cpp.engine_label(cpp_model_pref()) if engine_pref() == "cpp" else "torch",
+        "engine": engine_cpp.engine_label(cpp_model_pref()),
         "components": {"whisper": cfg["whisper_available"], "seedvc": cfg["seedvc_available"],
                        "roformer": cfg["roformer_available"]},
         "stems_model": cfg["stems_model"],
@@ -1685,14 +1550,8 @@ def stats():
     """Сводка для статус-бара приложения: VRAM, очередь джоб, текущая джоба,
     ожидающие в очереди к GPU. Лёгкий — опрашивается раз в несколько секунд."""
     vram_total = vram_used = None
-    try:
-        import torch
-        if torch.cuda.is_available():
-            free, total = torch.cuda.mem_get_info()
-            vram_total = round(total / 1024 / 1024)
-            vram_used = round((total - free) / 1024 / 1024)
-    except Exception:  # noqa: BLE001 - CPU-воркер или CUDA недоступна: VRAM просто нет
-        pass
+    if (gm := _gpu_mem_mib()) is not None:
+        vram_total, vram_used = gm[1], gm[1] - gm[0]
     with db_lock, db() as conn:
         counts = dict(conn.execute(
             "SELECT status, COUNT(*) FROM jobs GROUP BY status").fetchall())
@@ -1708,7 +1567,7 @@ def stats():
                    "progress_pct": p.get("progress_pct"),
                    "tok_per_s": p.get("tok_per_s")}
         break
-    return {"model_loaded": _pipe is not None,
+    return {"model_loaded": _model_loaded(),
             "vram_total": vram_total, "vram_used": vram_used,
             "queue": {"queued": counts.get("queued", 0), "running": counts.get("running", 0)},
             "running": running,
@@ -2055,7 +1914,7 @@ def plan(req: PlanIn):
     """Только стадия плана: возвращает ABC до рендера (GPU, но без синтеза звука).
 
     Синхронный: ждёт освобождения GPU, если идёт рендер. При холодном старте
-    включает загрузку модели, первый вызов может занять пару минут.
+    запускает сервер yue2.cpp с моделью — первый вызов дольше.
     """
     if req.cot == "off":
         raise HTTPException(422, "plan requires cot=full or cot=melody (off does not produce ABC)")
@@ -2064,19 +1923,11 @@ def plan(req: PlanIn):
     seed = req.seed or random.randrange(1, 2**31)
     with gpu_queue("plan"), _pipe_lock:
         t0 = time.time()
-        if engine_pref() == "cpp":
-            try:
-                abc = _cpp_plan(_get_cpp(), req.style, req.lyrics, req.cot, seed)
-            except RuntimeError as e:   # нехватка памяти — сервер уже остановлен (CppServer), текст — для человека
-                raise HTTPException(503, friendly_error(e)) from e
-            return {"abc": abc, "truncated": False, "seconds": round(time.time() - t0, 1), "seed": seed}
-        pipe = _get_pipe()
-        result = pipe.plan(style=req.style, lyrics=req.lyrics, cot=req.cot, seed=seed)
-    truncated = result.truncated
-    if isinstance(truncated, dict):
-        truncated = any(truncated.values())
-    return {"abc": result.abc, "truncated": bool(truncated), "seconds": round(time.time() - t0, 1),
-            "seed": seed}
+        try:
+            abc = _cpp_plan(_get_cpp(), req.style, req.lyrics, req.cot, seed)
+        except RuntimeError as e:   # нет программы/модели, нехватка памяти (сервер уже остановлен) — текст для человека
+            raise HTTPException(503, friendly_error(e)) from e
+    return {"abc": abc, "truncated": False, "seconds": round(time.time() - t0, 1), "seed": seed}
 
 
 def _job_dict(row) -> dict:
@@ -2753,8 +2604,8 @@ def job_preview(job_id: int, body: dict):
     a, b = int(from_s * LATENT_HZ), max(int(to_s * LATENT_HZ), int(from_s * LATENT_HZ) + 1)
     with gpu_queue(f"preview {job_id}"), _pipe_lock:
         try:
-            # латенты у движков общие ([T,64]): декодирует тот, что включён
-            audio = _get_cpp().decode(z[a:b, :]) if engine_pref() == "cpp" else _get_pipe().decode(z[a:b, :])
+            # латенты [T,64] — те же и у старых треков прежнего движка: декодирует yue2.cpp
+            audio = _get_cpp().decode(z[a:b, :])
         except Exception as e:  # noqa: BLE001
             raise HTTPException(500, f"decode failed: {e}") from e
     fname = f"preview-{from_s:.0f}-{to_s:.0f}.flac"
@@ -4946,7 +4797,7 @@ def job_recipe(job_id: int):
     # сид повторяет исполнение только на том же движке: в рецепт — движок корня, не текущий
     eng = (root or {}).get("engine") or ""
     name = eng[4:] if eng.startswith("cpp-") else ""
-    model = engine_cpp.model_label(name) if name in engine_cpp.MODELS else _torch_label()
+    model = engine_cpp.model_label(name) if name in engine_cpp.MODELS else LEGACY_TORCH_LABEL
     try:
         out = recipe.build_recipe(jobs, ops, root_id, model, ver["stems_model"],
                                   time.strftime("%Y-%m-%dT%H:%M:%S%z"))

@@ -1,34 +1,38 @@
-"""Выбор движка при установке воркера.
+"""Модель генерации yue2.cpp при установке воркера (карточка internal-cpp-only, усл. 5, 6).
 
-install.sh --engine torch|cpp (по умолчанию torch), --cpp-model auto|bf16|q8|q6|q5, --cpp-low-vram.
+install.sh всегда ставит программу yue2.cpp и модель: --cpp-model auto|bf16|q8|q6|q5 (auto или не задан —
+рекомендуемая по видеопамяти из engine_cpp.recommend), --cpp-low-vram — экономный режим принудительно.
 Песочница — та же, что в test_install_sh (временный HOME, заглушки в PATH, журнал вызовов), плюс:
 - nvidia-smi печатает объём видеопамяти (МиБ) из файла <заглушки>/vram, если в аргументах есть memory.total;
-- venv-python дополнительно пишет каталог запуска и PARTSCASTER_DATA_DIR/PARTSCASTER_CPP_MODELS в py-ctx.log;
-- программа yue2.cpp из архива — <каталог версии>/yue2cpp/yue-server (заглушка; fail-yue-server → код 1);
+- python venv — test_cpp_only.CPP_VENV_PY: recommend/installed — настоящий engine_cpp.py, download —
+  фейковая загрузка (файлы модели нужного размера, без сети; fail-download → код 1); каждый вызов с каталогом
+  запуска и PARTSCASTER_DATA_DIR/PARTSCASTER_CPP_MODELS пишется в py-ctx.log;
+- программа yue2.cpp из архива — <каталог версии>/yue2cpp/yue-server (заглушка; "broken" — код 1 без Usage);
 - git, cmake, nvcc — заглушки (сеть и настоящая сборка не нужны): git clone/init создаёт каталог,
   cmake --build кладёт собранную программу в $PARTSCASTER_HOME/yue2cpp-src/build/yue-server .
 
-Что должно работать:
-E1. Без --engine: settings.json данных не создаётся и не меняется, engine_cpp.py download не вызывается,
-    программа yue2.cpp не ищется/не собирается. --engine torch пишет engine=torch, cpp_model и
-    cpp_low_vram не трогает, загрузки нет.
-E2. --engine cpp --cpp-model auto (и --engine cpp без --cpp-model): видеопамять — первая строка
-    nvidia-smi; ≥ 11776 МиБ → q8 и cpp_low_vram false; 7680–11775 → q8 и true; < 7680 → q5 и true.
-    В $PARTSCASTER_HOME/data/settings.json — engine "cpp", cpp_model, cpp_low_vram; прочие ключи сохраняются.
-E3. Явная модель (--cpp-model q6) — без авто, экономный режим false; --cpp-low-vram → true.
-    --cpp-model / --cpp-low-vram без --engine cpp → код 2 до изменений.
-E4. Модель качается: <venv>/bin/python engine_cpp.py download <имя> из каталога установленной версии,
-    в каталог данных этой установки; повторный запуск зовёт download снова (проверка «уже есть» — внутри).
+Что должно работать. Рекомендация по видеопамяти, --engine как неизвестный параметр, повтор со скачанной
+выбранной моделью, старая установка на PyTorch, прочие ключи settings.json — test_cpp_only (ТК12); здесь — остальное:
+E3. Явная модель: каждое имя (bf16, q8, q6, q5) принимается и скачивается; явная модель не заменяется
+    рекомендуемой и на малой видеопамяти, экономный режим при этом — как рекомендовано для карты;
+    --cpp-low-vram с явной моделью → экономный режим.
+E4. Модель качается: <venv>/bin/python engine_cpp.py download <имя> из каталога устанавливаемой версии,
+    в каталог данных этой установки ($PARTSCASTER_HOME/data); повтор без флагов при скачанной выбранной
+    модели — проверка «скачана» этой модели и без загрузки.
 E5. Программа из архива отвечает на --help → она и берётся, сборки нет (git/cmake не зовутся).
-E6. Программы нет (или не запускается) и нет nvcc → код 0, воркер установлен, сообщение
-    «yue2.cpp не собран: нужны git, cmake, nvcc», в settings.json нет engine=cpp.
+E6. Программы нет (или не запускается) и нет nvcc → ненулевой код, сообщение «yue2.cpp не собран: нужны
+    git, cmake, nvcc», модель не качается; новая версия не включается (current и settings.json прежние,
+    каталога новой версии нет — --rollback её не выберет).
 E7. Программы нет, git/cmake/nvcc есть → сборка закреплённого коммита c893629; повтор при уже собранной
     программе — без пересборки; пометка $PARTSCASTER_HOME/yue2cpp-src/.commit с другим коммитом → пересборка.
-E9. Загрузка модели не удалась → код 0, воркер установлен, «модель yue2.cpp не скачана», нет engine=cpp.
-E8. Неизвестное значение (--cpp-model q4, --engine foo) → код 2 до любых изменений.
+E8. Неизвестная модель (--cpp-model q4) → код 2 до любых изменений; параметр без значения — ошибка.
+E9. Загрузка модели не удалась → ненулевой код, «не скачана» в выводе; новая версия не включается
+    (current и выбор модели прежние); при первой установке current не появляется, воркер не запускается.
 """
 import json
+import os
 import shutil
+import sys
 import unittest
 from pathlib import Path
 
@@ -40,15 +44,6 @@ NVIDIA_SMI = r"""#!/bin/sh
 { echo "== nvidia-smi"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
 [ -f "$STUB_DIR/fail-nvidia-smi" ] && exit 1
 case "$*" in *memory.total*) cat "$STUB_DIR/vram";; esac
-exit 0
-"""
-
-# venv-python: как в test_install_sh, плюс контекст вызова (каталог, переменные данных) в py-ctx.log
-VENV_PY = r"""#!/bin/sh
-{ echo "== venv-python"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
-printf '%s\t%s\t%s\t%s\n' "$PWD" "${PARTSCASTER_DATA_DIR-}" "${PARTSCASTER_CPP_MODELS-}" "$*" >> "$STUB_DIR/py-ctx.log"
-case "$1" in *kits_install.py) [ -f "$STUB_DIR/fail-kits" ] && exit 1;; esac
-case "$1" in *engine_cpp.py) [ -f "$STUB_DIR/fail-download" ] && exit 1;; esac
 exit 0
 """
 
@@ -77,7 +72,11 @@ class _EngineCase(base._InstallCase):
         nv = self.stubs / "nvidia-smi"
         nv.write_text(NVIDIA_SMI)
         nv.chmod(0o755)
-        (self.stubs / "venv-python").write_text(VENV_PY)
+        # python venv с настоящим engine_cpp (recommend/installed) и фейковой загрузкой — из test_cpp_only;
+        # импорт здесь, а не в начале модуля: test_cpp_only сам импортирует этот модуль
+        import test_cpp_only
+        (self.stubs / "venv-python").write_text(test_cpp_only.CPP_VENV_PY.replace("__REAL_PY__", sys.executable))
+        (self.stubs / "fake_download.py").write_text(test_cpp_only.FAKE_DOWNLOAD)
         (self.stubs / "server-ok").write_text(base.STUB)
         (self.stubs / "yue-home").write_text(str(self.yue_home))
         self.set_vram(16 * GIB)
@@ -105,7 +104,9 @@ class _EngineCase(base._InstallCase):
         """Каталог версии; server: "ok" — программа yue2.cpp в архиве работает, "broken" — есть,
         но не запускается, None — архив без yue2cpp/."""
         d = super().make_version(ver, requirements)
-        if server is not None:
+        if server is None:
+            shutil.rmtree(d / "yue2cpp", ignore_errors=True)
+        else:
             (d / "yue2cpp").mkdir(exist_ok=True)
             p = d / "yue2cpp" / "yue-server"
             p.write_text(base.STUB if server == "ok" else "#!/bin/sh\nexit 1\n")
@@ -130,166 +131,66 @@ class _EngineCase(base._InstallCase):
             out.append((cwd, data, models, args.split(" ")))
         return out
 
+    def engine_calls(self, cmd):
+        """Аргументы вызовов engine_cpp.py <cmd> последнего запуска: [[cmd, …]]."""
+        return [a[1:] for n, a in self.calls()
+                if n == "venv-python" and a and Path(a[0]).name == "engine_cpp.py" and a[1:2] == [cmd]]
+
     def downloads(self):
         """Аргументы вызовов engine_cpp.py download последнего запуска: [[download, имя, …]]."""
-        return [a[1:] for n, a in self.calls()
-                if n == "venv-python" and a and Path(a[0]).name == "engine_cpp.py"
-                and a[1:2] == ["download"]]
+        return self.engine_calls("download")
 
-    def assert_cpp(self, model, low_vram):
+    def assert_model(self, model, low_vram):
         st = self.settings()
-        self.assertEqual(st.get("engine"), "cpp", st)
+        self.assertNotIn("engine", st, st)
         self.assertEqual(st.get("cpp_model"), model, st)
         self.assertIs(st.get("cpp_low_vram"), low_vram, st)
 
-    def assert_no_cpp_engine(self):
-        if self.settings_path.exists():
-            self.assertNotEqual(self.settings().get("engine"), "cpp", self.settings_path.read_text())
+    def model_files(self, data=None):
+        d = (data or self.data) / "yue2cpp-models"
+        return sorted(x.name for x in d.iterdir()) if d.is_dir() else []
 
-
-class TestDefaultEngine(_EngineCase):
-    """E1: без --engine ничего не меняется."""
-
-    def test_no_engine_no_settings_no_download(self):
-        self.install("1.0.0", "--no-start")
-        self.assertFalse(self.settings_path.exists(), "settings.json created without --engine")
-        self.assertEqual(self.downloads(), [], self.calls())
-
-    def test_no_engine_existing_settings_unchanged(self):
-        self.data.mkdir(parents=True)
-        pre = '{"stems_model": "roformer", "engine": "cpp", "cpp_model": "q6"}'
-        self.settings_path.write_text(pre, encoding="utf-8")
-        self.install("1.0.0", "--no-start")
-        self.assertEqual(self.settings_path.read_text(encoding="utf-8"), pre)
-        self.assertEqual(self.downloads(), [], self.calls())
-
-    def test_no_engine_does_not_build(self):
-        self.add_build_tools()
-        self.install("1.0.0", "--no-start", server=None)
-        self.assertEqual([n for n, _ in self.calls() if n in ("git", "cmake", "nvcc")], [])
-
-    def test_engine_torch_writes_torch_without_download(self):
-        """Явный выбор torch записывается."""
-        self.install("1.0.0", "--no-start", "--engine", "torch")
-        self.assertEqual(self.downloads(), [], self.calls())
-        self.assertEqual(self.settings().get("engine"), "torch")
-
-    def test_engine_torch_keeps_cpp_choices(self):
-        """Возврат на torch не стирает выбранную модель и экономный режим."""
-        self.data.mkdir(parents=True)
-        self.settings_path.write_text(
-            '{"engine": "cpp", "cpp_model": "q6", "cpp_low_vram": true, "stems_model": "roformer"}',
-            encoding="utf-8")
-        self.install("1.0.0", "--no-start", "--engine", "torch")
-        st = self.settings()
-        self.assertEqual(st.get("engine"), "torch", st)
-        self.assertEqual(st.get("cpp_model"), "q6", st)
-        self.assertIs(st.get("cpp_low_vram"), True, st)
-        self.assertEqual(st.get("stems_model"), "roformer", st)
-        self.assertEqual(self.downloads(), [], self.calls())
-
-
-class TestAutoModel(_EngineCase):
-    """E2: --cpp-model auto по видеопамяти."""
-
-    def check(self, mib, model, low_vram, args=("--cpp-model", "auto")):
-        self.set_vram(*(mib if isinstance(mib, tuple) else (mib,)))
-        self.install("1.0.0", "--no-start", "--engine", "cpp", *args)
-        self.assert_cpp(model, low_vram)
-        self.assertEqual([d[:2] for d in self.downloads()], [["download", model]], self.calls())
-
-    def test_16gb_q8(self):
-        self.check(16 * GIB, "q8", False)
-
-    def test_10gb_q8_low_vram(self):
-        self.check(10 * GIB, "q8", True)
-
-    def test_6gb_q5_low_vram(self):
-        self.check(6 * GIB, "q5", True)
-
-    def test_boundary_12gb_card_reports_less(self):
-        """Карта «12 ГБ» сообщает 12282 МиБ — это ещё не экономный режим."""
-        self.check(12282, "q8", False)
-
-    def test_boundary_11776_not_low_vram(self):
-        self.check(11776, "q8", False)
-
-    def test_boundary_11775_low_vram(self):
-        self.check(11775, "q8", True)
-
-    def test_boundary_7680_q8_low_vram(self):
-        self.check(7680, "q8", True)
-
-    def test_boundary_7679_q5_low_vram(self):
-        self.check(7679, "q5", True)
-
-    def test_first_gpu_line_used(self):
-        """Несколько карт — берётся первая строка (воркер работает на cuda:0)."""
-        self.check((16 * GIB, 6 * GIB), "q8", False)
-
-    def test_first_gpu_line_used_small_first(self):
-        self.check((6 * GIB, 16 * GIB), "q5", True)
-
-    def test_engine_cpp_without_model_is_auto(self):
-        """--engine cpp без --cpp-model = auto."""
-        self.check(6 * GIB, "q5", True, args=())
-
-    def test_engine_cpp_without_model_is_auto_big(self):
-        self.check(16 * GIB, "q8", False, args=())
-
-    def test_vram_read_from_nvidia_smi(self):
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "auto")
-        queries = [a for n, a in self.calls() if n == "nvidia-smi" and any("memory.total" in x for x in a)]
-        self.assertTrue(queries, self.calls())
-
-    def test_other_settings_kept(self):
-        self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"stems_model": "roformer", "fx_engine": false}', encoding="utf-8")
-        self.set_vram(10 * GIB)
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "auto")
-        st = self.settings()
-        self.assertEqual(st.get("stems_model"), "roformer", st)
-        self.assertIs(st.get("fx_engine"), False, st)
-        self.assert_cpp("q8", True)
+    def assert_not_switched(self, p, before_link, before_settings):
+        """Сбой обновления: ненулевой код, current и settings.json прежние, каталог новой версии убран."""
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertEqual(os.readlink(self.current()), before_link)
+        self.assertEqual(self.settings_path.read_text(encoding="utf-8"), before_settings)
+        vers = [m.group(1) for m in map(base.RELEASE_RE.match, self.releases()) if m]
+        self.assertEqual(vers, ["1.0.0"], self.releases())
 
 
 class TestExplicitModel(_EngineCase):
     """E3: явная модель и экономный режим."""
 
-    def test_explicit_q6_no_auto(self):
-        self.set_vram(16 * GIB)
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q6")
-        self.assert_cpp("q6", False)
-        self.assertEqual([d[:2] for d in self.downloads()], [["download", "q6"]], self.calls())
-
-    def test_explicit_model_overrides_small_vram(self):
-        """Явная модель без флага — экономный режим false даже на малой видеопамяти."""
-        self.set_vram(6 * GIB)  # авто дало бы q5 + экономный
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q6")
-        self.assert_cpp("q6", False)
-
     def test_every_model_name_accepted(self):
         for name in ("bf16", "q8", "q6", "q5"):
             with self.subTest(name=name):
-                self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", name)
+                self.install("1.0.0", "--no-start", "--cpp-model", name)
                 self.assertEqual(self.settings().get("cpp_model"), name)
                 self.assertEqual([d[:2] for d in self.downloads()], [["download", name]], self.calls())
 
-    def test_low_vram_flag(self):
-        self.set_vram(16 * GIB)  # авто дало бы false
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "auto", "--cpp-low-vram")
-        self.assert_cpp("q8", True)
+    def test_explicit_model_not_replaced_on_small_vram(self):
+        """Явная модель на карте 8 ГБ не заменяется рекомендуемой; экономный режим — как рекомендовано."""
+        self.set_vram(8188)  # рекомендация — q8 + экономный
+        self.install("1.0.0", "--no-start", "--cpp-model", "bf16")
+        self.assert_model("bf16", True)
+        self.assertEqual([d[:2] for d in self.downloads()], [["download", "bf16"]], self.calls())
+
+    def test_explicit_model_big_card_not_low_vram(self):
+        self.set_vram(16 * GIB)  # рекомендация — без экономного режима
+        self.install("1.0.0", "--no-start", "--cpp-model", "q5")
+        self.assert_model("q5", False)
 
     def test_low_vram_flag_with_explicit_model(self):
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "bf16", "--cpp-low-vram")
-        self.assert_cpp("bf16", True)
+        self.install("1.0.0", "--no-start", "--cpp-model", "bf16", "--cpp-low-vram")
+        self.assert_model("bf16", True)
 
 
 class TestModelDownload(_EngineCase):
-    """E4: загрузка модели кодом воркера."""
+    """E4, E9: загрузка модели кодом воркера."""
 
     def test_download_from_version_dir_with_venv_python(self):
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8")
         rel = (self.yue_home / "releases" / self.current_release()).resolve()
         dl = [c for c in self.py_ctx() if c[3][0].endswith("engine_cpp.py") and c[3][1:2] == ["download"]]
         self.assertEqual(len(dl), 1, self.py_ctx())
@@ -301,100 +202,83 @@ class TestModelDownload(_EngineCase):
         """Каталог моделей по умолчанию — <данные>/yue2cpp-models: данные — те, что у юнита."""
         x = Path(self._td.name) / "other-home"
         (self.stubs / "yue-home").write_text(str(x))
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", PARTSCASTER_HOME=str(x))
-        dl = [c for c in self.py_ctx() if c[3][0].endswith("engine_cpp.py")]
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8", PARTSCASTER_HOME=str(x))
+        dl = [c for c in self.py_ctx() if c[3][0].endswith("engine_cpp.py") and c[3][1:2] == ["download"]]
         self.assertEqual(len(dl), 1, self.py_ctx())
         _, data, models, _ = dl[0]
         want = x / "data"
         self.assertTrue(data == str(want) or (models and Path(models).is_relative_to(want)),
                         f"download not pointed at {want}: "
                         f"PARTSCASTER_DATA_DIR={data!r} PARTSCASTER_CPP_MODELS={models!r}")
-        self.assertEqual(self.settings(want / "settings.json").get("engine"), "cpp")
+        self.assertEqual(self.settings(want / "settings.json").get("cpp_model"), "q8")
+        self.assertTrue(self.model_files(want), "модель не в каталоге данных этой установки")
+        self.assertFalse(self.data.exists(), "тронуты данные по умолчанию при другом PARTSCASTER_HOME")
 
-    def test_download_failure_not_fatal(self):
-        """Загрузка не удалась — воркер установлен, движок не переключён."""
+    def test_rerun_without_flags_no_download(self):
+        """Повтор без флагов: проверяется, скачана ли выбранная модель; скачана — загрузки нет."""
+        self.install("1.0.0", "--no-start", "--cpp-model", "q6")
+        self.install("1.0.1", "--no-start")
+        self.assertEqual(self.downloads(), [], self.calls())
+        self.assertEqual(self.engine_calls("installed"), [["installed", "q6"]], self.calls())
+        self.assertEqual(base.RELEASE_RE.match(self.current_release()).group(1), "1.0.1")
+
+    def test_download_failure_keeps_previous_version(self):
+        """Обновление: новая модель не скачалась — действующими остаются прежняя версия и прежний выбор."""
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8")
+        before_link, before_st = os.readlink(self.current()), self.settings_path.read_text(encoding="utf-8")
         (self.stubs / "fail-download").touch()
-        p = self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
+        p = self.install("1.0.1", "--no-start", "--cpp-model", "q6", ok=False)
         self.assertEqual(len(self.downloads()), 1, self.calls())
-        self.assertEqual(base.RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
-        self.assertIn("модель yue2.cpp не скачана", p.stdout + p.stderr)
-        self.assert_no_cpp_engine()
+        self.assertIn("не скачана", p.stdout + p.stderr)
+        self.assert_not_switched(p, before_link, before_st)
 
-    def test_download_failure_keeps_other_settings(self):
+    def test_download_failure_fresh_no_current(self):
+        """Первая установка: модель не скачалась — current не появляется, версия не остаётся, воркер не запущен."""
         (self.stubs / "fail-download").touch()
-        self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"stems_model": "roformer"}', encoding="utf-8")
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
-        self.assertEqual(self.settings().get("stems_model"), "roformer")
-        self.assert_no_cpp_engine()
-
-    def test_rerun_calls_download_again(self):
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
-        self.assertEqual(len(self.downloads()), 1, self.calls())
-        self.install("1.0.1", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
-        self.assertEqual(len(self.downloads()), 1, self.calls())
-        self.assert_cpp("q8", False)
+        p = self.install("1.0.0", ok=False)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertFalse(self.current().exists() or self.current().is_symlink(), "current без модели")
+        self.assertEqual(self.releases(), [])
+        self.assertEqual([a for n, a in self.calls() if n == "systemctl" and "restart" in a], [])
 
 
 class TestBinary(_EngineCase):
-    """E5, E6, E7: программа yue2.cpp — из архива, сборка или понятная ошибка."""
+    """E5, E6, E7: программа yue2.cpp — из архива, сборка или отказ без включения версии."""
 
     MSG = "yue2.cpp не собран: нужны git, cmake, nvcc"
 
     def test_archive_binary_used_no_build(self):
         self.add_build_tools()
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8")
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8")
         self.assertEqual([n for n, _ in self.calls() if n in ("git", "cmake", "nvcc")], [])
         helps = [a for n, a in self.calls() if n == "yue-server" and "--help" in a]
         self.assertTrue(helps, f"archive yue-server not checked with --help: {self.calls()}")
-        self.assert_cpp("q8", False)
+        self.assert_model("q8", False)
 
-    def assert_not_built(self, p):
-        self.assertEqual(base.RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
+    def check_no_program(self, server):
+        """Прежняя версия работает; у новой нет рабочей программы, nvcc нет — отказ, прежняя остаётся."""
+        self.no_nvcc_guard()
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8")
+        before_link, before_st = os.readlink(self.current()), self.settings_path.read_text(encoding="utf-8")
+        self.add_build_tools(nvcc=False)
+        p = self.install("1.0.1", "--no-start", "--cpp-model", "q6", server=server, ok=False)
         self.assertIn(self.MSG, p.stdout + p.stderr)
-        self.assert_no_cpp_engine()
+        self.assert_not_switched(p, before_link, before_st)
+        self.assertEqual(self.downloads(), [], "модель качается, хотя программы нет")
 
     def test_no_binary_no_nvcc(self):
-        self.no_nvcc_guard()
-        self.add_build_tools(nvcc=False)
-        p = self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
-        self.assert_not_built(p)
+        self.check_no_program(None)
 
     def test_broken_binary_no_nvcc(self):
-        self.no_nvcc_guard()
-        self.add_build_tools(nvcc=False)
-        p = self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server="broken")
-        self.assert_not_built(p)
-
-    def test_no_binary_no_nvcc_keeps_previous_engine_settings(self):
-        self.no_nvcc_guard()
-        self.add_build_tools(nvcc=False)
-        self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"stems_model": "roformer"}', encoding="utf-8")
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
-        self.assertEqual(self.settings().get("stems_model"), "roformer")
-        self.assert_no_cpp_engine()
-
-    # прежний выбор yue2.cpp, а новая версия без рабочей программы и без сборки — основной движок,
-    # иначе генерации падали бы на неработающем cpp
-    def test_failed_setup_resets_previous_cpp_to_torch(self):
-        self.no_nvcc_guard()
-        self.add_build_tools(nvcc=False)
-        self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"engine": "cpp", "cpp_model": "q8", "stems_model": "roformer"}',
-                                      encoding="utf-8")
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
-        st = self.settings()
-        self.assertEqual(st.get("engine"), "torch")
-        self.assertEqual(st.get("stems_model"), "roformer")
+        self.check_no_program("broken")
 
     def test_build_from_pinned_commit(self):
         self.add_build_tools()
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8", server=None)
         gits = [a for n, a in self.calls() if n == "git"]
         self.assertTrue(any(any("c893629" in x for x in a) for a in gits), f"pinned commit not used: {gits}")
         self.assertTrue(self.called("cmake"), self.calls())
-        self.assert_cpp("q8", False)
+        self.assert_model("q8", False)
 
     def put_built(self, commit=None):
         """Программа, собранная прошлым запуском; commit — пометка yue2cpp-src/.commit (None — нет)."""
@@ -409,53 +293,40 @@ class TestBinary(_EngineCase):
         """Пометки нет — программа берётся как есть."""
         self.add_build_tools()
         self.put_built()
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8", server=None)
         self.assertEqual([n for n, _ in self.calls() if n in ("git", "cmake")], [])
-        self.assert_cpp("q8", False)
+        self.assert_model("q8", False)
 
     def test_built_pinned_commit_not_rebuilt(self):
         self.add_build_tools()
         self.put_built("c893629")
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8", server=None)
         self.assertEqual([n for n, _ in self.calls() if n in ("git", "cmake")], [])
-        self.assert_cpp("q8", False)
+        self.assert_model("q8", False)
 
     def test_built_other_commit_rebuilt(self):
         """Пометка другого коммита — пересборка закреплённого."""
         self.add_build_tools()
         self.put_built("0123abc")
-        self.install("1.0.0", "--no-start", "--engine", "cpp", "--cpp-model", "q8", server=None)
+        self.install("1.0.0", "--no-start", "--cpp-model", "q8", server=None)
         gits = [a for n, a in self.calls() if n == "git"]
         self.assertTrue(any(any("c893629" in x for x in a) for a in gits), f"pinned commit not rebuilt: {gits}")
         self.assertTrue(self.called("cmake"), self.calls())
-        self.assert_cpp("q8", False)
+        self.assert_model("q8", False)
 
 
 class TestBadValues(_EngineCase):
     """E8: неизвестные значения — код 2 до изменений."""
 
-    def assert_refused(self, *args):
-        p = self.install("1.0.0", "--no-start", *args, ok=False)
+    def test_unknown_model(self):
+        p = self.install("1.0.0", "--no-start", "--cpp-model", "q4", ok=False)
         self.assertEqual(p.returncode, 2, f"{p.stdout}\n{p.stderr}")
         self.assertFalse((self.yue_home / "releases").exists(), "releases/ created despite bad option")
         self.assertFalse(self.settings_path.exists())
         self.assertEqual([n for n, _ in self.calls() if n in ("uv", "systemctl", "venv-python")], [])
 
-    def test_unknown_model(self):
-        self.assert_refused("--engine", "cpp", "--cpp-model", "q4")
-
-    def test_unknown_engine(self):
-        self.assert_refused("--engine", "foo")
-
-    def test_cpp_options_without_engine_cpp(self):
-        """Параметры yue2.cpp без --engine cpp — ошибка до изменений."""
-        for args in (("--cpp-model", "q8"), ("--cpp-low-vram",), ("--engine", "torch", "--cpp-model", "q8"),
-                     ("--engine", "torch", "--cpp-low-vram")):
-            with self.subTest(args=args):
-                self.assert_refused(*args)
-
     def test_missing_values(self):
-        for args in (("--engine",), ("--engine", "cpp", "--cpp-model")):
+        for args in (("--cpp-model",), ("--hf-home",)):
             with self.subTest(args=args):
                 p = self.install("1.0.0", "--no-start", *args, ok=False)
                 self.assertNotEqual(p.returncode, 0, p.stdout)

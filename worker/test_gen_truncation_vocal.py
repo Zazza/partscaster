@@ -8,33 +8,35 @@ G1. job_budget(draft, max_tokens, role, lyrics=""): полная генерац�
     раньше (пол 200, потолок MAX_SEM_TOKENS).
 G2. retry_budget(b) = min(int(b × 1.6), MAX_SEM_TOKENS).
 G3. Колонка jobs.truncated (INTEGER DEFAULT 0), миграция повторяемая.
-G4. Обрезанная полная генерация — ОДИН авторетрай с retry_budget(бюджета);
-    если ретрай не больше исходного — ретрая нет; повтор снова обрезан →
-    truncated=1. draft и fragment не ретраятся. truncated-dict — обрезано,
-    если обрезан хоть один этап. GET /jobs и GET /jobs/{id} отдают
-    "truncated": bool.
+G4. Обрезанная полная генерация — ОДИН авторетрай с retry_budget(бюджета)
+    (новая заявка серверу yue2.cpp с большим потолком семантики); если ретрай не
+    больше исходного — ретрая нет; повтор снова обрезан → truncated=1. draft и
+    fragment не ретраятся. GET /jobs и GET /jobs/{id} отдают "truncated": bool.
 G5. is_instrumental_job(style, lyrics): в лирике нет слов И (тег
     [Instrumental] или «instrumental»/«no vocals» в стиле).
 G6. abcparse.mute_voice(abc, "Vocal"): ноты голоса Vocal → паузы той же
     длительности, аккорды на месте; остальное байт-в-байт.
-G7. Инструментальная джоба: в пайплайн уходит план с заглушённым Vocal
-    (свой план воркер строит сам; прикреплённый файл request.abc не меняется);
-    cot="off" — без плана; песня со словами — abc не передаётся.
+G7. Инструментальная джоба: в заявку трека серверу yue2.cpp уходит план с
+    заглушённым Vocal (свой план воркер строит сам — заявкой «только план» с сидом
+    трека; прикреплённый файл request.abc не меняется); cot="off" — без плана;
+    песня со словами — abc не передаётся.
 G8. Инструментал (не draft, не fragment) с утечкой голоса — ОДИН авторетрай с
     сидом seed+1 (сид 0/NULL → новый ненулевой), дорожки пересчитываются,
     vocal_leak сбрасывается; снова утечка — метка остаётся. Статус «готово» —
     только после проверки голоса.
 
-Модель (yue2), torch и разделение на дорожки — внешние границы, подменяются;
-громкость дорожки голоса задаёт фейковое разделение, проверка голоса — настоящая.
+Программа yue-server (фейк из test_engine_cpp; план в ответе — PLAN) и разделение на дорожки —
+внешние границы, подменяются; громкость дорожки голоса задаёт фейковое разделение, проверка
+голоса — настоящая. Факта обрезания в ответе yue2.cpp нет (фейк его не выражает), поэтому в G4
+он ставится поверх настоящей генерации через сервер (_on_render).
 """
-import types
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import abcparse
-from test_jobs_lifecycle import _Case, _FakePipe, _FakeSong
+from test_jobs_lifecycle import _Case, plan_bodies
 from test_pure import _HAS_WORKER_DEPS, _WorkerDbCase
 
 INSTRUMENTAL_STYLE = "instrumental post-rock, clean guitar"
@@ -301,33 +303,13 @@ class TestMigrateTruncated(_WorkerDbCase):
 # ---------------------------------------------------------------- генерация: общие заготовки
 
 
-class _Song(_FakeSong):
-    """Готовый трек с заданным фактом обрезания (bool или dict по этапам)."""
-
-    def __init__(self, truncated=False):
-        super().__init__()
-        self.truncated = truncated
-
-
-class _PlanPipe(_FakePipe):
-    """Пайплайн, который умеет строить план: plan(**kw) → объект с .abc."""
-
-    def __init__(self, *script, plan_abc=PLAN):
-        super().__init__(*script)
-        self.plan_abc = plan_abc
-        self.plans = []
-
-    def plan(self, **kw):
-        self.plans.append(dict(kw))
-        return types.SimpleNamespace(abc=self.plan_abc)
-
-
 class _GenCase(_Case):
     def setUp(self):
         super().setUp()
         p = mock.patch.object(self.w, "MAX_SEM_TOKENS", 16000)
         p.start()
         self.addCleanup(p.stop)
+        self._scenario(abc=PLAN)   # план, который модель пишет (и отдаёт заявке «только план»)
         # громкость дорожки голоса на каждое разделение: True — голос слышен
         self.loud = []
         self.status_at_separate = []
@@ -345,6 +327,26 @@ class _GenCase(_Case):
             sf.write(str(Path(out_dir) / "stem-vocals.flac"), np.stack([tone, tone], axis=1), sr)
         return res
 
+    def _on_render(self, hook):
+        """hook(row) — перед каждой генерацией трека (заявка идёт фейку yue-server как есть);
+        вернул bool — факт обрезания этого прогона."""
+        real = self.w._cpp_render
+
+        def render(cpp, row, *a, **kw):
+            flag = hook(row)
+            song = real(cpp, row, *a, **kw)
+            if flag is not None:
+                song.truncated = flag
+            return song
+        p = mock.patch.object(self.w, "_cpp_render", render)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _truncated(self, *flags):
+        """Обрезан ли каждый очередной прогон (дальше — не обрезан)."""
+        script = list(flags)
+        self._on_render(lambda row: script.pop(0) if script else False)
+
     def _run(self, **extra):
         jid = self._new(**extra)
         self._set_status(jid, "running")
@@ -356,12 +358,76 @@ class _GenCase(_Case):
         self._set_status(jid, "running")
         return jid
 
-    @staticmethod
-    def _budget(kw):
-        return kw["semantic_sampling"].max_tokens
+    def _budgets(self):
+        return [b["semantic_sampling"]["max_tokens"] for b in self._bodies()]
 
 
 # ---------------------------------------------------------------- G4 обрезание
+
+
+@unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
+class TestCppTruncationSource(_GenCase):
+    """Источник обрезания (internal-cpp-only): ответ yue2.cpp факта не несёт — трек обрезан, когда шагов
+    семантики в ответе столько же, сколько потолок заявки (модель не закончила песню сама); только у полного
+    трека — черновик и кусок короткие по замыслу."""
+
+    def _semantic(self, n):
+        self._scenario(abc=PLAN, semantic=",".join(["7"] * n))
+
+    def test_steps_at_cap_retried_with_bigger_budget(self):
+        self._semantic(6000)       # первый прогон упёрся в потолок 6000; повтор с потолком 9600 — уже нет
+        jid = self._run(max_tokens=6000)
+        self.assertEqual(self._budgets(), [6000, 9600], "обрезанный по потолку трек не повторён")
+        self.assertIs(self._status(jid)["truncated"], False)
+
+    def test_steps_below_cap_not_truncated(self):
+        self._semantic(5999)
+        jid = self._run(max_tokens=6000)
+        self.assertEqual(self._budgets(), [6000])
+        self.assertIs(self._status(jid)["truncated"], False)
+
+    def test_economy_no_retry_with_same_cap(self):
+        """Экономный режим: потолок урезан до LOW_VRAM_BUDGET — повтор ушёл бы с тем же потолком и тем же сидом
+        и обрезался бы так же; трек остаётся обрезанным после одного прогона."""
+        self.settings.write_text(json.dumps({"cpp_model": "q8", "cpp_low_vram": True}))
+        cap = self.e.LOW_VRAM_BUDGET
+        self._semantic(cap)
+        jid = self._run(max_tokens=6000)
+        self.assertEqual(self._budgets(), [cap], "в экономном режиме повтор с тем же потолком")
+        self.assertIs(self._status(jid)["truncated"], True)
+
+    def test_continuation_at_cap_retried(self):
+        """Продолжение: в ответе вся песня (сыгранное до отметки + новое), потолок тоже считает сыгранное."""
+        parent = self._job(duration=60.0)
+        r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": 10.0})
+        self.assertLess(r.status_code, 300, r.text)
+        jid = self._children(parent)[0]["id"]
+        # длина продолжения ниже потолка воркера — повтору есть куда расти (без длины потолок уже максимальный)
+        with self._conn() as c:
+            c.execute("UPDATE jobs SET max_tokens=6000 WHERE id=?", (jid,))
+        self._set_status(jid, "running")
+        first = self._new_cap_of(jid)
+        self._semantic(first)
+        self.w._run_job(jid)
+        budgets = self._budgets()
+        self.assertEqual(budgets[0], first)
+        self.assertEqual(len(budgets), 2, "обрезанное продолжение не повторено")
+        self.assertGreater(budgets[1], first)
+        self.assertIs(self._status(jid)["truncated"], False)
+
+    def _new_cap_of(self, jid):
+        """Потолок первой заявки продолжения — как его считает воркер (бюджет джобы + сыгранное)."""
+        row = self._row(jid)
+        budget = self.w.job_budget(bool(row["draft"]), row["max_tokens"], row["role"], row["lyrics"])
+        k = round(float(row["cont_from"]) * self.e.FPS)
+        return max(budget, k + 200)
+
+    def test_draft_at_cap_not_truncated(self):
+        """Черновик короткий по замыслу: 450 из 450 — его длина, а не обрыв (без метки «обрезан» и повтора)."""
+        self._semantic(450)
+        jid = self._run(draft=1)
+        self.assertEqual(self._budgets(), [450])
+        self.assertIs(self._status(jid)["truncated"], False)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
@@ -369,34 +435,32 @@ class TestTruncationRetry(_GenCase):
     """ТК3–ТК8: факт обрезания, один авторетрай с большим бюджетом."""
 
     def test_tk3_not_truncated_single_call(self):
-        pipe = self._use_pipe(_FakePipe(_Song(False)))
+        self._truncated(False)
         jid = self._run(max_tokens=6000)
         got = self._status(jid)
         self.assertEqual(got["status"], "done", got)
         self.assertIs(got["truncated"], False)
         self.assertEqual(self._row(jid)["truncated"], 0)
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(len(self._bodies()), 1)
 
     def test_tk4_truncated_then_ok(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         jid = self._run(max_tokens=6000)
-        self.assertEqual(len(pipe.calls), 2, "обрезанная генерация не повторена")
-        self.assertEqual(self._budget(pipe.calls[0]), 6000)
-        self.assertEqual(self._budget(pipe.calls[1]), 9600)  # int(6000 × 1.6)
+        self.assertEqual(self._budgets(), [6000, 9600], "обрезанная генерация не повторена с бюджетом × 1,6")
         got = self._status(jid)
         self.assertEqual(got["status"], "done", got)
         self.assertIs(got["truncated"], False)
         self.assertEqual(self._row(jid)["truncated"], 0)
 
     def test_tk4_retry_budget_clamped(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         self._run(max_tokens=12000)
-        self.assertEqual([self._budget(k) for k in pipe.calls], [12000, 16000])
+        self.assertEqual(self._budgets(), [12000, 16000])
 
     def test_tk5_truncated_twice(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(True), _Song(False)))
+        self._truncated(True, True, False)
         jid = self._run(max_tokens=6000)
-        self.assertEqual(len(pipe.calls), 2, "третьего прогона быть не должно")
+        self.assertEqual(len(self._bodies()), 2, "третьего прогона быть не должно")
         got = self._status(jid)
         self.assertEqual(got["status"], "done", got)
         self.assertIs(got["truncated"], True)
@@ -405,59 +469,41 @@ class TestTruncationRetry(_GenCase):
         self.assertIs(listed[jid]["truncated"], True)
 
     def test_list_reports_false_for_whole_track(self):
-        self._use_pipe(_FakePipe(_Song(False)))
+        self._truncated(False)
         jid = self._run(max_tokens=6000)
         listed = {j["id"]: j for j in self.client.get("/jobs").json()}
         self.assertIs(listed[jid]["truncated"], False)
 
-    def test_tk6_dict_any_stage_is_truncated(self):
-        pipe = self._use_pipe(_FakePipe(_Song({"abc": False, "semantic": True}), _Song(False)))
-        jid = self._run(max_tokens=6000)
-        self.assertEqual(len(pipe.calls), 2, "обрезание одного этапа не распознано")
-        self.assertIs(self._status(jid)["truncated"], False)
-
-    def test_tk6_dict_twice_marks_truncated(self):
-        cut = {"abc": False, "semantic": True}
-        self._use_pipe(_FakePipe(_Song(cut), _Song(cut)))
-        jid = self._run(max_tokens=6000)
-        self.assertEqual(self._row(jid)["truncated"], 1)
-
-    def test_tk6_dict_all_false_not_truncated(self):
-        pipe = self._use_pipe(_FakePipe(_Song({"abc": False, "semantic": False})))
-        jid = self._run(max_tokens=6000)
-        self.assertEqual(len(pipe.calls), 1)
-        self.assertEqual(self._row(jid)["truncated"], 0)
-
     def test_tk7_draft_no_retry(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         jid = self._run(draft=True)
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(len(self._bodies()), 1)
         self.assertEqual(self._row(jid)["truncated"], 1)
         self.assertIs(self._status(jid)["truncated"], True)
 
     def test_tk7_fragment_no_retry(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         jid = self._new()
         with self._conn() as c:
             c.execute("UPDATE jobs SET status='running', role='fragment', max_tokens=1000 WHERE id=?", (jid,))
         self.w._run_job(jid)
-        self.assertEqual(len(pipe.calls), 1)
-        self.assertEqual(self._budget(pipe.calls[0]), 1000)
+        self.assertEqual(self._budgets(), [1000])
         self.assertEqual(self._row(jid)["truncated"], 1)
 
     def test_tk8_budget_already_max_no_retry(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         jid = self._run()  # без max_tokens → MAX_SEM_TOKENS
-        self.assertEqual(self._budget(pipe.calls[0]), 16000)
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(self._budgets(), [16000])
         self.assertEqual(self._row(jid)["truncated"], 1)
 
     def test_retry_same_job_same_folder(self):
-        pipe = self._use_pipe(_FakePipe(_Song(True), _Song(False)))
+        self._truncated(True, False)
         before = self.client.get("/jobs").json()
         jid = self._run(max_tokens=6000)
-        self.assertEqual(len(pipe.calls), 2)
-        self.assertEqual(set(pipe.dirs), {str(jid)}, "артефакты ретрая — в папке той же джобы")
+        self.assertEqual(len(self._bodies()), 2)
+        self.assertEqual([d.name for d in self.jobs_dir.iterdir() if d.is_dir()], [str(jid)],
+                         "артефакты ретрая — в папке той же джобы")
+        self.assertTrue((self.jobs_dir / str(jid) / "audio.flac").is_file())
         self.assertEqual(len(self.client.get("/jobs").json()), len(before) + 1, "ретрай создал новую джобу")
 
 
@@ -469,39 +515,38 @@ class TestInstrumentalPlan(_GenCase):
     """ТК12, ТК13: инструментал рендерится по плану без нот Vocal."""
 
     def test_tk12_builds_plan_and_mutes_vocal(self):
-        pipe = self._use_pipe(_PlanPipe())
         jid = self._run(style=INSTRUMENTAL_STYLE, lyrics=STUB_3, seed=77)
         self.assertEqual(self._status(jid)["status"], "done")
-        self.assertEqual(len(pipe.plans), 1, "план не построен")
-        sent = pipe.calls[0].get("abc")
-        self.assertIsNotNone(sent, "пайплайн не получил план")
+        plans = plan_bodies(self.fake_dir)
+        self.assertEqual(len(plans), 1, "план не построен")
+        self.assertEqual(plans[0]["seed"], 77, "план строится с сидом трека")
+        sent = self._bodies()[0].get("abc")
+        self.assertIsNotNone(sent, "заявка трека без плана")
         self.assertEqual(_vocal_notes(sent), 0, "в плане инструментала поёт Vocal")
         self.assertEqual(_ins_notes(sent), _ins_notes(PLAN))
         self.assertEqual(sent, abcparse.mute_voice(PLAN, "Vocal"))
 
     def test_tk12_no_vocals_style_empty_lyrics(self):
-        pipe = self._use_pipe(_PlanPipe())
         self._run(style="ambient, no vocals", lyrics="")
-        self.assertEqual(_vocal_notes(pipe.calls[0].get("abc") or PLAN), 0)
+        sent = self._bodies()[0].get("abc")
+        self.assertIsNotNone(sent, "заявка трека без плана")
+        self.assertEqual(_vocal_notes(sent), 0)
 
     def test_tk12_song_with_words_no_abc(self):
-        pipe = self._use_pipe(_PlanPipe())
         self._run(style=INSTRUMENTAL_STYLE, lyrics=WORDS)
-        self.assertEqual(pipe.plans, [])
-        self.assertNotIn("abc", pipe.calls[0])
+        self.assertEqual(plan_bodies(self.fake_dir), [])
+        self.assertNotIn("abc", self._bodies()[0])
 
     def test_cot_off_no_plan(self):
-        pipe = self._use_pipe(_PlanPipe())
         jid = self._run(style=INSTRUMENTAL_STYLE, lyrics=STUB_3, cot="off")
         self.assertEqual(self._status(jid)["status"], "done")
-        self.assertEqual(pipe.plans, [])
-        self.assertNotIn("abc", pipe.calls[0])
+        self.assertEqual(plan_bodies(self.fake_dir), [])
+        self.assertNotIn("abc", self._bodies()[0])
 
     def test_tk13_attached_abc_muted_file_untouched(self):
-        pipe = self._use_pipe(_PlanPipe())
         jid = self._run(style=INSTRUMENTAL_STYLE, lyrics=STUB_3, abc=PLAN)
-        self.assertEqual(pipe.plans, [], "при прикреплённом плане свой не строится")
-        sent = pipe.calls[0].get("abc")
+        self.assertEqual(plan_bodies(self.fake_dir), [], "при прикреплённом плане свой не строится")
+        sent = self._bodies()[0].get("abc")
         self.assertIsNotNone(sent)
         self.assertEqual(_vocal_notes(sent), 0)
         self.assertEqual(_ins_notes(sent), _ins_notes(PLAN))
@@ -521,33 +566,29 @@ class TestVocalLeakRetry(_GenCase):
         body.update(extra)
         return body
 
+    def _seeds(self):
+        return [b["seed"] for b in self._bodies()]
+
     def test_tk14_leak_then_clean(self):
-        seen = {}
+        status_at_render = []
+        self._on_render(lambda row: status_at_render.append(self._row(row["id"])["status"]))
         self.loud = [True, False]
-
-        def second(kw):
-            seen["status"] = self._row(jid)["status"]
-            return _Song(False)
-
-        pipe = self._use_pipe(_PlanPipe(_Song(False), second))
         jid = self._prepare(**self._instrumental())
         self.w._run_job(jid)
-        self.assertEqual(len(pipe.calls), 2, "утечка голоса не перегенерирована")
-        self.assertEqual(pipe.calls[0].get("seed"), 1234)
-        self.assertEqual(pipe.calls[1].get("seed"), 1235)
+        self.assertEqual(self._seeds(), [1234, 1235], "утечка голоса не перегенерирована с сидом + 1")
         self.assertEqual(len(self.separations), 2, "дорожки не пересчитаны")
         got = self._status(jid)
         self.assertEqual(got["status"], "done", got)
         self.assertFalse(self._row(jid)["vocal_leak"], "метка голоса не сброшена")
         # условие 8: «готово» — только после проверки голоса
-        self.assertNotEqual(seen["status"], "done", "трек «готов», пока перегенерируется")
+        self.assertEqual(len(status_at_render), 2)
+        self.assertNotEqual(status_at_render[1], "done", "трек «готов», пока перегенерируется")
         self.assertNotIn("done", self.status_at_separate)
 
     def test_tk15_leak_twice(self):
         self.loud = [True, True, True]
-        pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False), _Song(False)))
         jid = self._run(**self._instrumental())
-        self.assertEqual(len(pipe.calls), 2, "ретрай по голосу — только один")
+        self.assertEqual(len(self._bodies()), 2, "ретрай по голосу — только один")
         self.assertTrue(self._row(jid)["vocal_leak"], "метка голоса пропала")
         self.assertEqual(self._status(jid)["status"], "done")
 
@@ -556,33 +597,29 @@ class TestVocalLeakRetry(_GenCase):
         import numpy as np
         import soundfile as sf
         self.loud = [True, False]
-        pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False)))
         jid = self._prepare(**self._instrumental())
         jdir = self.jobs_dir / str(jid)
         jdir.mkdir(parents=True, exist_ok=True)
         sf.write(str(jdir / "stem-vocals.flac"), np.zeros((4410, 2), dtype="float32"), 44100)
         self.w._run_job(jid)
         self.assertGreaterEqual(len(self.separations), 1, "дорожки нового звука не построены")
-        self.assertEqual(len(pipe.calls), 2, "голос в новом звуке не проверен")
+        self.assertEqual(len(self._bodies()), 2, "голос в новом звуке не проверен")
 
     def test_tk16_song_with_words_no_retry(self):
         self.loud = [True, True]
-        pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False)))
         jid = self._run(style=INSTRUMENTAL_STYLE, lyrics=WORDS, seed=1234)
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(len(self._bodies()), 1)
         self.assertEqual(self._status(jid)["status"], "done")
 
     def test_draft_no_leak_retry(self):
         self.loud = [True, True]
-        pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False)))
         self._run(**self._instrumental(draft=True))
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(len(self._bodies()), 1)
 
     def test_clean_instrumental_single_call(self):
         self.loud = [False]
-        pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False)))
         jid = self._run(**self._instrumental())
-        self.assertEqual(len(pipe.calls), 1)
+        self.assertEqual(len(self._bodies()), 1)
         self.assertEqual(len(self.separations), 1)
         self.assertNotIn("done", self.status_at_separate)
         self.assertEqual(self._status(jid)["status"], "done")
@@ -592,15 +629,16 @@ class TestVocalLeakRetry(_GenCase):
             with self.subTest(seed=seed):
                 self.loud = [True, False]
                 self.separations.clear()
-                pipe = self._use_pipe(_PlanPipe(_Song(False), _Song(False)))
+                before = len(self._bodies())
                 jid = self._prepare(**self._instrumental())
                 with self._conn() as c:
                     c.execute("UPDATE jobs SET seed=? WHERE id=?", (seed, jid))
                 self.w._run_job(jid)
-                self.assertEqual(len(pipe.calls), 2)
-                retry_seed = pipe.calls[1].get("seed")
-                self.assertTrue(retry_seed, f"ретрай без нового сида: {retry_seed!r}")
-                self.assertNotEqual(retry_seed, 0)
+                seeds = self._seeds()[before:]
+                self.assertEqual(len(seeds), 2)
+                self.assertTrue(seeds[1], f"ретрай без нового сида: {seeds[1]!r}")
+                self.assertNotEqual(seeds[1], seeds[0], "ретрай с тем же сидом")
+                self.assertTrue(self._row(jid)["seed"], "новый сид не записан в строку трека")
 
 
 if __name__ == "__main__":

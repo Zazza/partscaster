@@ -42,11 +42,11 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| GET | `/health` | `{status, model_loaded, load_error}` — жив ли воркер, загружена ли модель, ошибка загрузки |
-| GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: версия сборки (файл `VERSION` архива, без него `dev`), версия API (клиенты сверяют её со своей), отпечаток кода, модель генерации, движок (`torch` или `cpp-q8` и т. п.), что установлено |
-| GET | `/config` | Текущие настройки: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `stems_auto`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `engine`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}` |
-| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `stems_auto` — когда делать дорожки: `studio` (при открытии студии, по умолчанию; делит клиент), `always` (сразу у каждого готового полного трека и импорта — отдельной операцией очереди после генерации; черновики и куски вклеек — нет), `manual` (иное — 422); `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `engine` — `torch` или `cpp` (yue2.cpp, эксперимент), `cpp_model` — `bf16` / `q8` / `q6` / `q5`, `cpp_low_vram`. `engine=cpp` без программы или без скачанной модели — 422. Смена движка — со следующей генерации |
-| GET | `/stats` | Сводка для строки состояния: `{model_loaded, vram_total, vram_used (МБ), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}` |
+| GET | `/health` | `{status, model_loaded}` — жив ли воркер, запущен ли сервер yue2.cpp с моделью |
+| GET | `/version` | `{version, api, source_hash, model, engine, components: {whisper, seedvc, roformer}, stems_model}`: версия сборки (файл `VERSION` архива, без него `dev`), версия API (клиенты сверяют её со своей), отпечаток кода, модель генерации (файл GGUF и коммит yue2.cpp), метка текущей модели `cpp-<модель>` (`cpp-bf16`, `cpp-q8` и т. п.), что установлено |
+| GET | `/config` | Текущие настройки: `data_dir`, `whisper_py`, `whisper_available`, `seedvc_dir`, `seedvc_available`, `stems_auto`, `auto_stems_instrumental`, `stems_pref` (выбор пользователя), `stems_model` (чем дорожки делаются на деле), `roformer_available`, `fx_engine`, `fx_preview`, `fx_phrases`, `cpp_model`, `cpp_low_vram`, `cpp_available` (программа yue2.cpp запускается), `cpp_models` `{имя: {file, size, installed}}`, `cpp_recommended` `{model, low_vram, vram_mib}` — рекомендуемая модель для первой видеокарты (`vram_mib` 0 — объём неизвестен); только подсказка, сама ничего не выбирает |
+| POST | `/config` | Меняет переданные поля, отвечает как GET. Поля: `stems_auto` — когда делать дорожки: `studio` (при открытии студии, по умолчанию; делит клиент), `always` (сразу у каждого готового полного трека и импорта — отдельной операцией очереди после генерации; черновики и куски вклеек — нет), `manual` (иное — 422); `auto_stems_instrumental` — у треков без голоса сразу делать дорожки и проверять, не пролез ли голос (по умолчанию да); `stems_model` — `htdemucs` или `roformer`; `fx_engine` — движок эффектов вкл/выкл; `cpp_model` — модель генерации `bf16` / `q8` / `q6` / `q5` (любая скачанная; нескачанная или неизвестная — 422), `cpp_low_vram` — экономный режим. Смена модели — со следующей генерации. Поле `engine` от старых клиентов игнорируется |
+| GET | `/stats` | Сводка для строки состояния: `{model_loaded, vram_total, vram_used (МБ), queue: {queued, running}, running: {job_id, title, stage, progress_pct, tok_per_s}, gpu_waiting}`; `model_loaded` — запущен сервер yue2.cpp, видеопамять — первой карты по `nvidia-smi` |
 | POST | `/engine/models/install?name=` | Скачать модель yue2.cpp и VAE (`bf16` / `q8` / `q6` / `q5`), закреплённые файлы с проверкой sha256; уже скачанная — без сети. Ждёт конца загрузки → `{name, installed, cpp_models}`. Неизвестное имя — 422, сумма не сошлась или сбой сети — 502 |
 | GET | `/engine/models/progress` | Идущая загрузка модели `{name, file, done, total}` или `{}` |
 
@@ -115,7 +115,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 | `head_id` | Основная версия песни (у корня) |
 | `voice_src` | Трек, чей голос подставлен в версию; пусто — свой голос |
 | `req_abc` | Трек рендерился по своему плану (`request.abc`) |
-| `engine` | Чем сделан: `torch`, `cpp-bf16` / `cpp-q8` / `cpp-q6` / `cpp-q5`; пусто у старых — PyTorch. Сид повторяет исполнение только на том же движке |
+| `engine` | Какой моделью сделан: `cpp-bf16` / `cpp-q8` / `cpp-q6` / `cpp-q5`; у старых треков прежнего движка PyTorch — `torch` или пусто. Сид повторяет исполнение только на той же модели |
 | `has_draft` | У трека есть черновик студии — незаконченная работа (см. «Черновик студии») |
 | `mixes` | Число готовых миксов студии (`overdub-inst-*.flac`: вклейки, эффекты на дорожки) |
 | `sound_presets` | `[{id, status: pending/running/done/error, child_id, error}]` |
@@ -298,7 +298,7 @@ client, created_at, started_at, finished_at}`; `source` — `app` / `mcp` / `oth
 |---|---|---|
 | POST | `/jobs/{id}/ops` | `{op, params, result, refs}` → `{id}` — запись журнала. `op`: `submit`, `continue`, `fragment`, `overdub`, `variant_track`, `fx`, `minus` (старые рецепты: при импорте шаг пропускается), `update`, `set_head`, `rebuild_sections`, `envelope`, `splice`, `dsp_apply`, `pedals`, `sound_preset`; иное — 422, нет трека — 404 |
 | GET | `/jobs/{id}/ops` | Журнал трека по порядку `[{id, job_id, op, params, result, refs, created_at}]` |
-| GET | `/jobs/{id}/recipe` | Рецепт всей песни трека (от корня). 422 — цепочка версий оборвана удалённой версией или в песне есть то, что рецептом не переносится (черновик, импорт чужого аудио, «голос альбома») |
+| GET | `/jobs/{id}/recipe` | Рецепт всей песни трека (от корня). 422 — цепочка версий оборвана удалённой версией или в песне есть то, что рецептом не переносится (черновик, импорт чужого аудио, «голос альбома»). Поле `worker_model` — модель корня песни; у треков прежнего движка PyTorch — `m-a-p/YuE2-3B@pytorch`: модель не совпадёт с текущей, и импорт предложит режим «по плану нот» |
 | POST | `/recipes/import` | `{recipe, mode: seed/plan}` → `{id}` — новая сессия импорта; чужой формат — 422 |
 | GET | `/recipes/imports` | Сессии импорта `[{id, title, status, progress, error, mode, root_job_id, created_at, finished_at}]` |
 | GET | `/recipes/imports/{id}` | То же плюс `recipe` и `state` ведущего |

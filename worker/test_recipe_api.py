@@ -6,7 +6,8 @@ J1. POST /jobs/{id}/ops {op, params: obj, result: str, refs: [int]} → {id}; op
     GET /jobs/{id}/ops → [{id, op, params, result, refs, created_at}] по порядку записи.
 E1. GET /jobs/{id}/recipe: корень песни (по parent_id/overdub_of до верха) — из
     столбцов; plan_abc = текст score.abc, abc = текст request.abc (если был, иначе
-    null); worker_model/stems_model — как в /version; потомки — из журнала (n-id).
+    null); worker_model — метка модели, которой сделан корень (у трека текущей модели —
+    как model в /version); stems_model — как в /version; потомки — из журнала (n-id).
 E2. Отказы 422: корень — черновик; корень — импорт чужого аудио; в песне есть
     версия role=voice. Трека нет — 404.
 I1. POST /recipes/import {recipe, mode: seed|plan} → {id}; чужой format/version → 422.
@@ -166,8 +167,10 @@ class TestRecipeExport(_RecipeCase):
 
     def test_root_and_header(self):
         root, cont, var = self._song()
-        rec = self._recipe(root)
         ver = self.client.get("/version").json()
+        with self._conn() as c:   # корень сделан текущей моделью воркера
+            c.execute("UPDATE jobs SET engine=? WHERE id=?", (ver["engine"], root))
+        rec = self._recipe(root)
         self.assertEqual(rec["format"], "yue-track-recipe")
         self.assertEqual(rec["version"], 1)
         self.assertTrue(rec["exported_at"])

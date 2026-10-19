@@ -7,21 +7,21 @@ POST /jobs/{id}/continue с to_sec — кусок вместо продолже�
   - to_sec не число (NaN/inf) → 422, не 500;
   - без to_sec — role='continue', max_tokens 0;
   - у родителя без шагов модели (нет semantic.npy) — 4xx, как у «продолжить».
-_run_job:
-  - строка role='fragment' с cont_from идёт через _continue_song;
-  - старый фрагмент без cont_from — обычный вызов пайплайна, _continue_song не зовётся.
-Бюджет внутри _continue_song (max_tokens − k, ≥ 200) снаружи не наблюдаем без библиотеки yue2 —
-тестом не покрыт.
-  - бюджет куска — без общего минимума 500: в request["semantic_sampling"].max_tokens у фрагмента
-    уходит max(200, max_tokens) (400 → 400); у обычной джобы минимум 500 остаётся (400 → 500);
+_run_job (заявка серверу yue2.cpp — engine_cpp.continue_request):
+  - строка role='fragment' с cont_from — продолжение: ноты родителя (его semantic.npy) уходят
+    как сыгранные (source_tokens), отметка — source_end = cont_from;
+  - старый фрагмент без cont_from — обычная заявка трека с нуля, без нот родителя;
+  - бюджет куска — без общего минимума полного трека: semantic_sampling.max_tokens у фрагмента =
+    max(max_tokens, шагов до отметки + 200) — сыгранное входит в потолок, новых шагов не меньше
+    200 (400 при отметке 5 с → 400; отметка 10 с, конец 11 с → 450); у обычной джобы минимум
+    полного трека остаётся (400 → 6000);
   - название куска — с обрезанным концом (to_sec за концом трека → в названии длина трека).
+Программа yue-server — фейк (харнесс test_jobs_lifecycle).
 """
-import sqlite3
-import sys
-import types
 import unittest
 
-from test_character import _RecordingModel, _Sampling
+from test_engine_cpp import _tokens as _sent_tokens
+from test_jobs_lifecycle import _Case as _CppCase
 from test_pure import _HAS_WORKER_DEPS, _SEM_TOK_PER_SEC_SPEC, _WorkerApiCase
 
 TAIL_S = 2  # спецификация: хвост куска FRAGMENT_TAIL_S
@@ -112,69 +112,39 @@ class TestFragmentSubmit(_WorkerApiCase):
         self.assertEqual(r.status_code, 404)
 
 
-class _FragmentRunCase(_WorkerApiCase):
-    """Общая подготовка _run_job: заглушки yue2/torch и пайплайн-самописец."""
-
-    def setUp(self):
-        super().setUp()
-        from unittest import mock
-        self.mock = mock
-        protocol = types.ModuleType("yue2.protocol")
-        protocol.Sampling = _Sampling
-        mods = {"yue2": mock.MagicMock(), "yue2.protocol": protocol,
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        self.model = _RecordingModel()
-        for name, val in (("_pipe", self.model), ("_load_error", None)):
-            p = mock.patch.object(self.w, name, val)
-            p.start()
-            self.addCleanup(p.stop)
-        p = mock.patch.object(self.w, "_get_pipe", lambda: self.model)
-        p.start()
-        self.addCleanup(p.stop)
-
-    def _fake_continue(self):
-        calls = []
-
-        def fake(*a, **kw):
-            calls.append((a, kw))
-            raise RuntimeError("stop after _continue_song")
-        p = self.mock.patch.object(self.w, "_continue_song", fake)
-        p.start()
-        self.addCleanup(p.stop)
-        return calls
+class _FragmentRunCase(_CppCase):
+    """Общая подготовка _run_job: фейк yue-server с моделью."""
 
     def _fragment_via_api(self, from_sec, to_sec):
         parent = self._job(duration=60.0)
         r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": from_sec, "to_sec": to_sec})
         self.assertLess(r.status_code, 300, r.text)
-        return self._children(parent)[0]["id"]
+        return parent, self._children(parent)[0]["id"]
 
-    def _pipeline_generations(self):
-        return [kw for _, kw in self.model.calls if "semantic_sampling" in kw or "cfg_scale" in kw]
+    def _render(self, jid):
+        """_run_job → единственная заявка трека серверу."""
+        self.w._run_job(jid)  # исключение наружу = провал теста
+        got = self._row(jid)
+        self.assertEqual(got["status"], "done", got["error"])
+        bodies = self._bodies()
+        self.assertEqual(len(bodies), 1, "заявка трека не дошла до yue2.cpp")
+        return bodies[0]
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestFragmentRun(_FragmentRunCase):
-    """_run_job: фрагмент с cont_from — через _continue_song; без cont_from — обычный пайплайн."""
+    """_run_job: фрагмент с cont_from — продолжение по нотам родителя; без cont_from — с нуля."""
 
-    def test_fragment_with_cont_from_uses_continue_song(self):
-        calls = self._fake_continue()
-        jid = self._fragment_via_api(10.0, 20.0)
-        self.w._run_job(jid)  # исключение наружу = провал теста
-        self.assertEqual(len(calls), 1, "фрагмент с cont_from не пошёл через _continue_song")
-        args = list(calls[0][0]) + list(calls[0][1].values())
-        rows = [a for a in args if isinstance(a, (sqlite3.Row, dict)) and "role" in a.keys()]
-        self.assertTrue(rows, f"строка джобы не передана в _continue_song: {args}")
-        self.assertEqual(rows[0]["id"], jid)
-        self.assertEqual(rows[0]["role"], "fragment")
-        self.assertAlmostEqual(rows[0]["cont_from"], 10.0)
-        self.assertEqual(self._pipeline_generations(), [], "кусок сгенерирован заново с нуля")
+    def test_fragment_with_cont_from_continues_parent(self):
+        import numpy as np
+        parent, jid = self._fragment_via_api(10.0, 20.0)
+        body = self._render(jid)
+        self.assertIn("source_tokens", body, "кусок сгенерирован заново с нуля")
+        want = np.load(self.jobs_dir / str(parent) / "semantic.npy").tolist()
+        self.assertEqual(_sent_tokens(body["source_tokens"]), want, "ноты родителя не дошли до сервера")
+        self.assertAlmostEqual(float(body["source_end"]), 10.0)
 
-    def test_fragment_without_cont_from_uses_pipeline(self):
-        calls = self._fake_continue()
+    def test_fragment_without_cont_from_from_scratch(self):
         parent = self._job(duration=60.0, semantic=False)
         with self._conn() as c:
             cur = c.execute(
@@ -182,48 +152,39 @@ class TestFragmentRun(_FragmentRunCase):
                 "VALUES ('кусок', 'queued', 'dark rock', '[verse] la la', 10, ?, 'fragment', "
                 "'2026-01-01T00:00:00')", (parent,))
             jid = cur.lastrowid
-        self.w._run_job(jid)  # исключение наружу = провал теста
-        self.assertEqual(calls, [], "старый фрагмент без cont_from ушёл в _continue_song")
-        self.assertTrue(self._pipeline_generations(), f"пайплайн не вызван: {self.model.calls}")
+        body = self._render(jid)
+        self.assertNotIn("source_tokens", body, "старый фрагмент без cont_from ушёл в продолжение")
+        self.assertNotIn("source_end", body)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestFragmentReviewR1(_FragmentRunCase):
     """Бюджет куска и название с обрезанным концом."""
 
-    def _capture_request(self):
-        requests = []
-
-        def fake(pipe, row, request):
-            requests.append(request)
-            raise RuntimeError("stop after _continue_song")
-        p = self.mock.patch.object(self.w, "_continue_song", fake)
-        p.start()
-        self.addCleanup(p.stop)
-        return requests
-
-    def test_fragment_budget_400_not_raised_to_500(self):
-        requests = self._capture_request()
-        jid = self._fragment_via_api(5.0, 14.0)   # (14 + 2) · 25 = 400
+    def test_fragment_budget_400_not_raised_to_full_minimum(self):
+        _, jid = self._fragment_via_api(5.0, 14.0)   # (14 + 2) · 25 = 400
         self.assertEqual(self._row(jid)["max_tokens"], 400)
-        self.w._run_job(jid)  # исключение наружу = провал теста
-        self.assertEqual(len(requests), 1, "фрагмент не пошёл через _continue_song")
-        s = requests[0]["semantic_sampling"]
-        self.assertEqual(s.max_tokens, 400, "короткому куску поднят бюджет до общего минимума")
+        body = self._render(jid)
+        self.assertIn("source_tokens", body, "фрагмент не пошёл продолжением")
+        self.assertEqual(body["semantic_sampling"]["max_tokens"], 400,
+                         "короткому куску поднят бюджет до общего минимума")
+
+    def test_fragment_at_least_200_new_steps(self):
+        _, jid = self._fragment_via_api(10.0, 11.0)   # (11 + 2) · 25 = 325 < 250 сыгранных + 200
+        self.assertEqual(self._row(jid)["max_tokens"], 325)
+        body = self._render(jid)
+        self.assertEqual(body["semantic_sampling"]["max_tokens"], 450)
 
     def test_regular_job_budget_400_raised_to_full_minimum(self):
-        calls = self._fake_continue()
         with self._conn() as c:
             jid = c.execute(
                 "INSERT INTO jobs (title, status, style, lyrics, duration_sec, max_tokens, created_at) "
                 "VALUES ('обычная', 'queued', 'dark rock', '[verse] la la', 16, 400, "
                 "'2026-01-01T00:00:00')").lastrowid
-        self.w._run_job(jid)  # исключение наружу = провал теста
-        self.assertEqual(calls, [])
-        gens = self._pipeline_generations()
-        self.assertTrue(gens, f"пайплайн не вызван: {self.model.calls}")
+        body = self._render(jid)
+        self.assertNotIn("source_tokens", body)
         # полный трек — не меньше 6000: ниже модель обрывает трек до финала
-        self.assertEqual(gens[0]["semantic_sampling"].max_tokens, 6000)
+        self.assertEqual(body["semantic_sampling"]["max_tokens"], 6000)
 
     def test_title_has_clamped_end(self):
         parent = self._job(duration=60.0)

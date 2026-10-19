@@ -1,11 +1,12 @@
 [Unit]
-Description=Partscaster Worker (API :8091, резидентная YuE2Pipeline)
+Description=Partscaster Worker (API :8091, генерация YuE2 на yue2.cpp)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 # код — текущая версия из архива (install.sh переключает ссылку current); данные и worker.env — в ~/partscaster
 WorkingDirectory=%h/partscaster/current
+# режим выделения видеопамяти torch (дорожки, разбор нот); модель генерации — в своём процессе yue2.cpp
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # данные — рядом с кодом (install.sh подставляет свой PARTSCASTER_HOME); worker.env главнее, его PARTSCASTER_DATA_DIR побеждает
 Environment="PARTSCASTER_DATA_DIR=%h/partscaster/data"

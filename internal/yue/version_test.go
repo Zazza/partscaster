@@ -30,7 +30,7 @@ func workerStub(t *testing.T, version string) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/health":
-			_, _ = w.Write([]byte(`{"status":"ok","model_loaded":true,"load_error":""}`))
+			_, _ = w.Write([]byte(`{"status":"ok","model_loaded":true}`))
 		case "/version":
 			if version == "" {
 				http.NotFound(w, r)

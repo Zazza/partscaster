@@ -1,6 +1,7 @@
-// Выбор движка генерации при установке partscaster-worker: yue2.cpp (меньше видеопамяти) вместо основного
-// PyTorch. Бинарник yue-server приходит из архива воркера (собирает релиз), веса скачивает сам воркер
-// (worker/engine_cpp.py download) — здесь только пути, дефолты по видеокарте и запись настроек.
+// Модель генерации (yue2.cpp) при установке partscaster-worker. Бинарник yue-server приходит из архива воркера
+// (собирает релиз), веса скачивает сам воркер (worker/engine_cpp.py download), рекомендуемую модель по
+// видеопамяти тоже даёт он (engine_cpp.py recommend — единственное место порогов); здесь — пути, команды и
+// запись настроек.
 package workerexe
 
 import (
@@ -9,22 +10,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 )
 
 // CppModels — модели yue2.cpp (файл-манифест весов — worker/engine_cpp.py MODELS; порядок = меню).
 var CppModels = []string{"bf16", "q8", "q6", "q5"}
 
-// SettingsFile — настройки воркера (engine/cpp_model/cpp_low_vram читает yue_worker._load_settings).
+// SettingsFile — настройки воркера (cpp_model/cpp_low_vram читает yue_worker._load_settings).
 func SettingsFile(home string) string { return filepath.Join(home, "data", "settings.json") }
 
-// WriteSettings атомарно пишет settings.json: существующие ключи сохраняются, переданные — перекрывают.
+// WriteSettings атомарно пишет settings.json: существующие ключи сохраняются, переданные — перекрывают,
+// переданные со значением nil — удаляются.
 func WriteSettings(home string, values map[string]any) error {
 	p := SettingsFile(home)
-	current := map[string]any{}
-	if b, err := os.ReadFile(p); err == nil {
-		_ = json.Unmarshal(b, &current) // битый файл — начинаем с пустого
-	}
+	current := readSettings(home)
 	for k, v := range values {
+		if v == nil {
+			delete(current, k)
+			continue
+		}
 		current[k] = v
 	}
 	b, err := json.MarshalIndent(current, "", "  ")
@@ -41,13 +45,28 @@ func WriteSettings(home string, values map[string]any) error {
 	return os.Rename(tmp, p)
 }
 
-// SettingsExist — установка уже была: движок выбрали, вопросов больше не задаём.
-func SettingsExist(home string) bool {
-	_, err := os.Stat(SettingsFile(home))
-	return err == nil
+func readSettings(home string) map[string]any {
+	current := map[string]any{}
+	if b, err := os.ReadFile(SettingsFile(home)); err == nil {
+		_ = json.Unmarshal(b, &current) // битый файл — начинаем с пустого
+	}
+	return current
 }
 
-// CppBinary — бинарник yue2.cpp из архива воркера, nil — в этом пакете движка нет.
+// SettingsModel — выбранная модель генерации ("" — не выбрана: новая установка или установка прежних версий
+// с движком PyTorch).
+func SettingsModel(home string) string {
+	m, _ := readSettings(home)["cpp_model"].(string)
+	return m
+}
+
+// SettingsLowVram — выбран экономный режим.
+func SettingsLowVram(home string) bool {
+	v, _ := readSettings(home)["cpp_low_vram"].(bool)
+	return v
+}
+
+// CppBinary — бинарник yue2.cpp из архива воркера, "" — в этом пакете его нет (пакет собран неправильно).
 func CppBinary(workerDir, goos string) string {
 	exe := ""
 	if goos == "windows" {
@@ -60,24 +79,26 @@ func CppBinary(workerDir, goos string) string {
 	return ""
 }
 
-// Пороги — как у install.sh (cpp_auto_model): 12 ГБ карта сообщает ~12282 МиБ, 8 ГБ — ~8188.
-const (
-	cppRoomyMiB = 11776 // от 11,5 ГБ: q8 в обычном режиме
-	cppTightMiB = 7680  // от 7,5 ГБ: q8 в экономном; меньше — q5 в экономном
-)
-
-// DefaultCppModel — модель по объёму карты, как install.sh: q8 «почти без потерь» везде, где помещается
-// (q6/q5 экономят файл, а не видеопамять: ~7,7 ГБ против ~8 у q8 на песне 2:47); q5 — только на картах
-// меньше 7,5 ГБ, и то в экономном режиме.
-func DefaultCppModel(vramMiB int) string {
-	if vramMiB < cppTightMiB {
-		return "q5"
+// EngineCppCommand — `python engine_cpp.py <args>` из venv в каталоге кода воркера, с окружением воркера.
+func EngineCppCommand(home, workerDir string, args ...string) *exec.Cmd {
+	cmd := exec.Command(VenvPython(home, goosHere), append([]string{"engine_cpp.py"}, args...)...)
+	cmd.Dir = workerDir
+	cmd.Env = os.Environ()
+	for k, v := range WorkerEnv(home, goosHere) {
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	return "q8"
+	return cmd
 }
 
-// LowVramDefault — экономный режим (контекст 8192, ~4,5 ГБ видеопамяти) для карт меньше 11,5 ГБ, как install.sh.
-func LowVramDefault(vramMiB int) bool { return vramMiB < cppRoomyMiB }
+// RecommendCommand — рекомендуемая модель для карты vramMiB: печатает «<модель> <0|1>» (1 — экономный режим).
+func RecommendCommand(home, workerDir string, vramMiB int) *exec.Cmd {
+	return EngineCppCommand(home, workerDir, "recommend", strconv.Itoa(vramMiB))
+}
+
+// ModelInstalledCommand — код выхода 0, если модель и VAE уже скачаны.
+func ModelInstalledCommand(home, workerDir, model string) *exec.Cmd {
+	return EngineCppCommand(home, workerDir, "installed", model)
+}
 
 // DownloadEngineModel — скачать веса модели+VAE (engine_cpp.py download) в консоль out.
 // pythonFromVenv — готовая команда питона из venv (VenvPython); WorkerEnv задаёт PARTSCASTER_DATA_DIR/HF_HOME.

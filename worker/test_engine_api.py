@@ -1,45 +1,43 @@
-"""Второй движок yue2.cpp через API воркера.
+"""Движок генерации yue2.cpp через API воркера.
 
 Что должно работать:
-C1. GET /config: engine (нет — torch), cpp_model (нет — q8), cpp_low_vram (нет — false),
-    cpp_available (программа есть и запускается), cpp_models {имя: {file, size, installed}}.
-    POST /config: неизвестное значение → 422; engine=cpp без программы → 422 «yue2.cpp не
-    установлен»; engine=cpp / cpp_model с нескачанной моделью (или без VAE) → 422 «модель не
-    скачана»; иначе 200, значения в settings.json данных.
+C1. GET /config: cpp_model (нет — q8), cpp_low_vram (нет — false), cpp_available (программа есть
+    и запускается), cpp_models {имя: {file, size, installed}}. POST /config: cpp_model со
+    скачанной моделью без VAE → 422 «модель не скачана»; иначе 200, значения в settings.json
+    данных (installed — по файлам); прочие поля настроек выбор модели не трогают.
+    (Отказы по имени/нескачанной модели, старое поле engine — test_cpp_only ТК4/ТК5.)
 C2. POST /engine/models/install?name=: качает модель и VAE (есть с верной суммой — без
     сети); сумма не сошлась → 502, нет ни файла, ни .part; неизвестное имя → 422; две загрузки
     одной модели — по очереди (файл скачан один раз). GET /engine/models/progress →
     {name, file, done, total} во время загрузки, {} после.
 C3. Воркер сам запускает yue-server ($PARTSCASTER_CPP_BIN) на 127.0.0.1 с --model/--vae модели из
-    настроек; экономный режим → --max-seq 8192; смена модели → следующая генерация на новом
-    процессе, старый остановлен; идущую генерацию смена не трогает; перед стартом yue2.cpp
-    модель PyTorch выгружается; перед загрузкой PyTorch yue2.cpp остановлен.
+    настроек; экономный режим → --max-seq 8192; сервер переиспользуется между джобами; смена
+    модели → следующая генерация на новом процессе, старый остановлен; идущую генерацию смена
+    не трогает.
 C4. Джоба на yue2.cpp: done, файлы audio.flac/score.abc/semantic.npy/latent.npy/
     request.json/config.json, jobs.engine = "cpp-q8" (пишется при старте); черновик — 450 шагов;
-    отмена → cancel на сервер, статус canceled; failed с «out of memory» в журнале → ошибка про
-    нехватку видеопамяти, сервер остановлен; торч-джоба → "torch"; старый трек — "".
+    экономный режим — потолок семантики меньше контекста 8192; отмена → cancel на сервер, статус
+    canceled; failed с «out of memory» в журнале → ошибка про нехватку видеопамяти, сервер
+    остановлен (и в «только план»); иная ошибка — error без слов о памяти; старый трек — "".
     Прогресс — по строкам журнала («[AR] Semantic 100/1000» → semantic, 10 %).
-    yue2.cpp продолжает трек PyTorch по semantic.npy и score.abc.
-C5. /version: model — метка действующего движка, engine; рецепт: worker_model — по
-    движку корня трека, не текущему.
-C6. PyTorch продолжает трек без plan.json: план строится из score.abc (pipe.plan с abc).
+    (Продолжение старого трека PyTorch на yue2.cpp — test_cpp_only ТК10.)
+C5. /version: model — метка модели yue2.cpp из настроек, engine — cpp-<модель>; рецепт:
+    worker_model — по модели корня трека, не текущей (у продолжения — тоже по корню).
 
 Внешние границы — программа yue-server (скрипт-фейк из test_engine_cpp), HTTP-источник моделей
 (локальный сервер; адрес источника подставляется обёрткой вокруг engine_cpp.download — контракт
-не задаёт другого способа), пайплайн yue2/torch (заглушки, как в test_jobs_lifecycle).
+не задаёт другого способа), nvidia-smi (_gpu_vram_mib).
 """
 import json
 import os
-import sys
 import threading
-import types
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_character import _job_id, _post_job, _Sampling
-from test_engine_cpp import (DEFAULT_ABC, MODEL_FILES, VAE_BYTES, VAE_FILE, FakeModelSource,
-                             _tokens, fake_requests, fake_starts, kill_fakes, make_fake_server,
+from test_character import _job_id, _post_job
+from test_engine_cpp import (MODEL_FILES, VAE_BYTES, VAE_FILE, FakeModelSource,
+                             fake_requests, fake_starts, kill_fakes, make_fake_server,
                              model_bytes, opt_value, patch_model_sums, pid_alive, place_model,
                              synth_bodies, wait_until)
 from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase
@@ -49,21 +47,12 @@ OOM_LINE = "ggml_cuda_compute_forward: CUDA error: out of memory"
 
 def _setup_cpp(case):
     """Общая подготовка: данные/настройки во временном каталоге, env движка туда же,
-    заглушки yue2/torch, закреплённые суммы — на маленькие файлы теста."""
+    закреплённые суммы — на маленькие файлы теста; видеопамять (nvidia-smi) неизвестна."""
     tmp = Path(case._td.name)
-    protocol = types.ModuleType("yue2.protocol")
-    protocol.Sampling = _Sampling
-    case.yue2 = mock.MagicMock()
-    mods = {"yue2": case.yue2, "yue2.protocol": protocol,
-            "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-    p = mock.patch.dict(sys.modules, mods)
-    p.start()
-    case.addCleanup(p.stop)
     data = tmp / "cfg"
     data.mkdir(exist_ok=True)
     case.settings = data / "settings.json"
-    for name, val in (("_pipe", None), ("_load_error", None),
-                      ("DATA_DIR", data), ("SETTINGS_PATH", case.settings)):
+    for name, val in (("DATA_DIR", data), ("SETTINGS_PATH", case.settings), ("_gpu_vram_mib", lambda: 0)):
         p = mock.patch.object(case.w, name, val)
         p.start()
         case.addCleanup(p.stop)
@@ -79,6 +68,13 @@ def _setup_cpp(case):
     patch_model_sums(case, engine_cpp, ("q8", "q6"))
     case.fake_dir = tmp / "fake"
     case.addCleanup(kill_fakes, case.fake_dir)
+    case.addCleanup(_stop_server, case.w)
+
+
+def _stop_server(w):
+    """Сервер yue2.cpp, запущенный воркером в тесте, — остановить (не переходит в следующий тест)."""
+    with w._pipe_lock:
+        w._stop_cpp()
 
 
 def _use_fake(case, **scenario):
@@ -132,10 +128,10 @@ class _CppCase(_WorkerApiCase):
         return r.json()
 
     def _cpp(self, model="q8", low_vram=False, **scenario):
-        """Движок yue2.cpp в настройках, модель скачана, фейк-программа на месте."""
+        """Модель yue2.cpp в настройках и скачана, фейк-программа на месте."""
         _use_fake(self, **scenario)
         place_model(self.models, self.e, model)
-        _write_settings(self, engine="cpp", cpp_model=model, cpp_low_vram=low_vram)
+        _write_settings(self, cpp_model=model, cpp_low_vram=low_vram)
 
     def _release(self):
         (self.fake_dir / "release").write_text("1")
@@ -152,7 +148,6 @@ class TestEngineConfig(_CppCase):
     def test_defaults_without_settings(self):
         self.assertFalse(self.settings.exists())
         c = self._cfg()
-        self.assertEqual(c["engine"], "torch")
         self.assertEqual(c["cpp_model"], "q8")
         self.assertIs(c["cpp_low_vram"], False)
         self.assertIs(c["cpp_available"], False)
@@ -163,81 +158,41 @@ class TestEngineConfig(_CppCase):
             self.assertIsInstance(m["size"], int)
             self.assertIs(m["installed"], False, n)
 
-    def test_unknown_values_422(self):
-        for body in ({"engine": "foo"}, {"cpp_model": "q4"}, {"cpp_model": "Q8"}):
-            r = self.client.post("/config", json=body)
-            self.assertEqual(r.status_code, 422, (body, r.text))
-        c = self._cfg()
-        self.assertEqual((c["engine"], c["cpp_model"]), ("torch", "q8"))
-
-    def test_cpp_without_program_422(self):
-        place_model(self.models, self.e, "q8")
-        r = self.client.post("/config", json={"engine": "cpp"})
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertIn("yue2.cpp не установлен", r.text)
-        self.assertEqual(self._cfg()["engine"], "torch")
-
     def test_broken_program_not_available(self):
         _use_fake(self, broken=True)
         place_model(self.models, self.e, "q8")
         self.assertIs(self._cfg()["cpp_available"], False, "программа есть, но не запускается")
-        r = self.client.post("/config", json={"engine": "cpp"})
-        self.assertEqual(r.status_code, 422, r.text)
 
-    def test_cpp_without_model_422(self):
+    def test_model_without_vae_422(self):
         _use_fake(self)
-        self.assertIs(self._cfg()["cpp_available"], True)
-        r = self.client.post("/config", json={"engine": "cpp"})
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertIn("модель не скачана", r.text)
-        self.assertEqual(self._cfg()["engine"], "torch")
-
-    def test_cpp_without_vae_422(self):
-        _use_fake(self)
-        place_model(self.models, self.e, "q8", vae=False)
-        r = self.client.post("/config", json={"engine": "cpp"})
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertIn("модель не скачана", r.text)
-
-    def test_cpp_model_not_downloaded_422(self):
-        _use_fake(self)
-        place_model(self.models, self.e, "q8")
+        place_model(self.models, self.e, "q6", vae=False)
         r = self.client.post("/config", json={"cpp_model": "q6"})
         self.assertEqual(r.status_code, 422, r.text)
         self.assertIn("модель не скачана", r.text)
         self.assertEqual(self._cfg()["cpp_model"], "q8")
 
-    def test_cpp_ok_persists(self):
+    def test_ok_persists_and_installed_flags(self):
         _use_fake(self)
         place_model(self.models, self.e, "q8")
-        r = self.client.post("/config", json={"engine": "cpp", "cpp_model": "q8", "cpp_low_vram": True})
+        r = self.client.post("/config", json={"cpp_model": "q8", "cpp_low_vram": True})
         self.assertEqual(r.status_code, 200, r.text)
         c = self._cfg()
-        self.assertEqual(c["engine"], "cpp")
+        self.assertEqual(c["cpp_model"], "q8")
         self.assertIs(c["cpp_low_vram"], True)
+        self.assertIs(c["cpp_available"], True)
         self.assertIs(c["cpp_models"]["q8"]["installed"], True)
         self.assertIs(c["cpp_models"]["q6"]["installed"], False)
         st = json.loads(self.settings.read_text())
-        self.assertEqual(st["engine"], "cpp")
         self.assertEqual(st["cpp_model"], "q8")
         self.assertIs(st["cpp_low_vram"], True)
 
-    def test_switch_model_and_back_to_torch(self):
+    def test_old_fields_keep_model_choice(self):
         _use_fake(self)
-        place_model(self.models, self.e, "q8")
         place_model(self.models, self.e, "q6")
-        self.assertEqual(self.client.post("/config", json={"engine": "cpp"}).status_code, 200)
-        r = self.client.post("/config", json={"cpp_model": "q6"})
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(self._cfg()["cpp_model"], "q6")
-        r = self.client.post("/config", json={"engine": "torch"})
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(json.loads(self.settings.read_text())["engine"], "torch")
-
-    def test_old_fields_still_work(self):
+        self.assertEqual(self.client.post("/config", json={"cpp_model": "q6"}).status_code, 200)
         r = self.client.post("/config", json={"auto_stems_instrumental": False})
         self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(self._cfg()["engine"], "torch")
+        self.assertEqual(self._cfg()["cpp_model"], "q6")
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
@@ -398,32 +353,6 @@ class TestEngineServerLifecycle(_CppCase):
         self.assertEqual(Path(opt_value(st[1]["argv"], "--model")), self.models / MODEL_FILES["q6"])
         self.assertEqual(opt_value(st[1]["argv"], "--max-seq"), "8192")
 
-    def test_torch_after_cpp_stops_server(self):
-        from test_jobs_lifecycle import _FakePipe
-        self._cpp("q8")
-        self._run(self._new())
-        pid = fake_starts(self.fake_dir)[0]["pid"]
-        self.assertEqual(self.client.post("/config", json={"engine": "torch"}).status_code, 200)
-        pipe = _FakePipe()
-        self.yue2.YuE2Pipeline.from_pretrained.return_value.__enter__.return_value = pipe
-        jid = self._new()
-        self._run(jid)
-        self.assertEqual(self._get(jid)["status"], "done")
-        self.assertEqual(len(pipe.calls), 1, "торч-джоба не дошла до пайплайна")
-        self.assertTrue(wait_until(lambda: not pid_alive(pid), 10), "yue2.cpp не остановлен при PyTorch")
-
-    def test_torch_unloaded_before_cpp(self):
-        from test_jobs_lifecycle import _FakePipe
-        pipe = _FakePipe()
-        self.w._pipe = pipe
-        self._cpp("q8")
-        jid = self._new()
-        self._run(jid)
-        self.assertEqual(self._get(jid)["status"], "done")
-        self.assertTrue(pipe.exited, "модель PyTorch не выгружена перед yue2.cpp")
-        self.assertIsNone(self.w._pipe)
-        self.assertEqual(pipe.calls, [])
-
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestCppJob(_CppCase):
@@ -529,67 +458,28 @@ class TestCppJob(_CppCase):
         self.assertTrue(ok, seen)
         self.assertEqual(seen["stage"], "semantic")
 
-    def test_torch_job_engine(self):
-        from test_jobs_lifecycle import _FakePipe
-        seen = {}
-
-        def gen(kw):
-            from test_jobs_lifecycle import _FakeSong
-            seen["engine"] = self._row(jid)["engine"]
-            return _FakeSong()
-
-        self.w._pipe = _FakePipe(gen)
-        jid = self._new()
-        self._run(jid)
-        self.assertEqual(seen.get("engine"), "torch", "движок пишется при старте генерации")
-        self.assertEqual(self._get(jid)["engine"], "torch")
-
     def test_old_track_engine_empty(self):
         jid = self._job(semantic=False)
         self.assertEqual(self._get(jid)["engine"], "")
-
-    def test_cpp_continues_torch_track(self):
-        import numpy as np
-        self._cpp("q8")
-        parent = self._job(duration=60.0)
-        with self._conn() as c:
-            c.execute("UPDATE jobs SET engine='torch' WHERE id=?", (parent,))
-        pdir = self.jobs_dir / str(parent)
-        (pdir / "score.abc").write_text(DEFAULT_ABC, encoding="utf-8")
-        self.assertFalse((pdir / "plan.json").exists())
-        r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": 30.0})
-        self.assertLess(r.status_code, 300, r.text)
-        kid = self._children(parent)[0]["id"]
-        with self._conn() as c:
-            c.execute("UPDATE jobs SET status='running' WHERE id=?", (kid,))
-        self._run(kid)
-        got = self._get(kid)
-        self.assertEqual(got["status"], "done", got.get("error"))
-        self.assertEqual(got["engine"], "cpp-q8")
-        body = synth_bodies(self.fake_dir)[0]
-        self.assertEqual(_tokens(body["source_tokens"]), np.load(pdir / "semantic.npy").tolist())
-        self.assertAlmostEqual(float(body["source_end"]), 30.0)
-        self.assertEqual(body["abc"], DEFAULT_ABC)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestEngineVersion(_CppCase):
 
-    def test_torch_default(self):
-        v = self.client.get("/version").json()
-        self.assertEqual(v["engine"], "torch")
-        self.assertNotIn("yue2.cpp", v["model"])
-        self.assertTrue(v["model"].startswith("m-a-p/YuE2-3B"), v["model"])
-
-    def test_cpp(self):
-        _use_fake(self)
-        place_model(self.models, self.e, "q8")
-        self.assertEqual(self.client.post("/config", json={"engine": "cpp"}).status_code, 200)
+    def test_default_model(self):
         v = self.client.get("/version").json()
         self.assertEqual(v["engine"], "cpp-q8")
+        self.assertEqual(v["model"], self.e.model_label("q8"))
+
+    def test_selected_model(self):
+        _use_fake(self)
+        place_model(self.models, self.e, "q6")
+        self.assertEqual(self.client.post("/config", json={"cpp_model": "q6"}).status_code, 200)
+        v = self.client.get("/version").json()
+        self.assertEqual(v["engine"], "cpp-q6")
         self.assertIn("yue2.cpp", v["model"])
-        self.assertIn(MODEL_FILES["q8"], v["model"])
-        self.assertEqual(v["model"], "Serveurperso/YuE2-GGUF:YuE2-3B-Q8_0.gguf@yue2.cpp-c893629")
+        self.assertIn(MODEL_FILES["q6"], v["model"])
+        self.assertEqual(v["model"], "Serveurperso/YuE2-GGUF:YuE2-3B-Q6_K.gguf@yue2.cpp-c893629")
 
 
 try:
@@ -600,7 +490,7 @@ except ImportError:   # без окружения воркера
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestRecipeEngineLabel(_RecipeCase):
-    """worker_model рецепта — метка движка корня трека, не текущего."""
+    """worker_model рецепта — метка модели корня трека, не текущей и не модели продолжения."""
 
     def setUp(self):
         super().setUp()
@@ -611,107 +501,12 @@ class TestRecipeEngineLabel(_RecipeCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()["worker_model"]
 
-    def test_cpp_root_on_torch_worker(self):
-        root = self._mk(engine="cpp-q8")
-        wm = self._model(root)
-        self.assertIn("yue2.cpp", wm)
-        self.assertIn(MODEL_FILES["q8"], wm)
-
-    def test_old_root_on_cpp_worker(self):
-        _use_fake(self)
-        place_model(self.models, self.e, "q8")
-        self.assertEqual(self.client.post("/config", json={"engine": "cpp"}).status_code, 200)
-        root = self._mk(engine="")
-        wm = self._model(root)
-        self.assertNotIn("yue2.cpp", wm)
-        self.assertTrue(wm.startswith("m-a-p/YuE2-3B"), wm)
-
     def test_child_follows_root(self):
+        # воркер настроен на q8, корень сделан q6, продолжение — q8: в рецепте модель корня
         root = self._mk(engine="cpp-q6")
-        kid = self._mk(parent_id=root, role="continue", engine="torch")
+        kid = self._mk(parent_id=root, role="continue", engine="cpp-q8")
         self._post_op(root, "continue", {"from_sec": 10.0, "parent_id": root, "seed": 1}, f"job:{kid}")
         self.assertIn(MODEL_FILES["q6"], self._model(kid))
-
-
-class _PlanCalled(RuntimeError):
-    pass
-
-
-class _PlanRecorder:
-    """Пайплайн PyTorch: записывает pipe.plan и останавливает генерацию."""
-
-    def __init__(self):
-        self.plans = []
-        self.tokenizer = mock.MagicMock()
-        self.weights = {}
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        pass
-
-    def plan(self, *a, **kw):
-        self.plans.append((a, kw))
-        raise _PlanCalled("stop after plan")
-
-    def __call__(self, **kw):
-        raise AssertionError("продолжение не должно идти через новый трек с нуля")
-
-    def __getattr__(self, name):
-        if name.startswith("__"):
-            raise AttributeError(name)
-        raise AssertionError(f"генерация до плана: pipe.{name}")
-
-
-def _plan_abc(args, kw):
-    """abc из вызова pipe.plan: аргументом abc= или полем request (объект или dict)."""
-    if kw.get("abc"):
-        return kw["abc"]
-    req = kw.get("request", args[0] if args else None)
-    if isinstance(req, dict):
-        return req.get("abc")
-    return getattr(req, "abc", None)
-
-
-@unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestCrossContinueTorch(_CppCase):
-
-    def setUp(self):
-        super().setUp()
-        # yue2.pipeline: как библиотека — без plan.json сохранённый план не читается
-        pipeline = mock.MagicMock()
-
-        def load(d):
-            if not (Path(d) / "plan.json").is_file():
-                raise FileNotFoundError(str(Path(d) / "plan.json"))
-            return mock.MagicMock()
-
-        pipeline.SymbolicPlan.load.side_effect = load
-        protocol = mock.MagicMock()
-        protocol.Sampling = _Sampling
-        p = mock.patch.dict(sys.modules, {"yue2.pipeline": pipeline, "yue2.protocol": protocol})
-        p.start()
-        self.addCleanup(p.stop)
-
-    def test_plan_from_score_abc(self):
-        parent = self._job(duration=60.0)
-        with self._conn() as c:
-            c.execute("UPDATE jobs SET engine='cpp-q8' WHERE id=?", (parent,))
-        pdir = self.jobs_dir / str(parent)
-        (pdir / "score.abc").write_text(DEFAULT_ABC, encoding="utf-8")
-        r = self.client.post(f"/jobs/{parent}/continue", json={"from_sec": 30.0})
-        self.assertLess(r.status_code, 300, r.text)
-        kid = self._children(parent)[0]["id"]
-        with self._conn() as c:
-            c.execute("UPDATE jobs SET status='running' WHERE id=?", (kid,))
-        pipe = _PlanRecorder()
-        self.w._pipe = pipe
-        self._run(kid)
-        got = self._get(kid)
-        self.assertTrue(pipe.plans, f"pipe.plan не вызван; итог: {got.get('status')} {got.get('error')}")
-        self.assertEqual(_plan_abc(*pipe.plans[0]), DEFAULT_ABC)
-        self.assertNotIn("plan.json", got.get("error") or "")
 
 
 if __name__ == "__main__":

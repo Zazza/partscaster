@@ -3,18 +3,18 @@
 A1. POST /jobs с непустым abc и arc ∈ {build, wave, burst} → 200: джоба создана,
     arc сохранён в строке, req_abc='request.abc', jobs/<id>/request.abc —
     ровно присланный abc.
-A2. Генерация такой джобы: пайплайн получает abc == arc.apply_arc(abc, arc) и
-    style == arc.style_with_arc(style, arc); request.abc на диске не меняется
-    (файл пользователя не трогаем).
-A3. abc без arc → пайплайн получает исходный abc и исходный style.
+A2. Генерация такой джобы: заявка серверу yue2.cpp получает abc == arc.apply_arc(abc, arc)
+    и style == arc.style_with_arc(style, arc); request.abc на диске не меняется
+    (файл пользователя не трогаем); свой план («только план») не строится.
+A3. abc без arc → заявка получает исходный abc и исходный style.
 A4. arc с cot="off" — 422 (драматургии нужен план), с abc и без.
 """
-import sys
-import types
 import unittest
 
 import arc as arcmod
-from test_character import _job_id, _post_job, _RecordingModel, _Sampling
+from test_character import _job_id, _post_job
+from test_jobs_lifecycle import _Case as _CppCase
+from test_jobs_lifecycle import plan_bodies
 from test_pure import ABC, _HAS_WORKER_DEPS, _WorkerApiCase
 
 ARCS = ("build", "wave", "burst")
@@ -63,76 +63,43 @@ class TestArcAbcSubmit(_WorkerApiCase):
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestArcAbcGeneration(_WorkerApiCase):
-    """Что получает пайплайн при генерации джобы с abc."""
-
-    def setUp(self):
-        super().setUp()
-        from unittest import mock
-        protocol = types.ModuleType("yue2.protocol")
-        protocol.Sampling = _Sampling
-        mods = {"yue2": mock.MagicMock(), "yue2.protocol": protocol,
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        self.model = _RecordingModel()
-        for name, val in (("_pipe", self.model), ("_load_error", None)):
-            p = mock.patch.object(self.w, name, val)
-            p.start()
-            self.addCleanup(p.stop)
+class TestArcAbcGeneration(_CppCase):
+    """Что получает сервер yue2.cpp (фейк yue-server) при генерации джобы с abc."""
 
     def _run(self, **extra):
+        before = len(self._bodies())
         jid = _job_id(self, _post_job(self, **extra))
         self.w._run_job(jid)  # исключение наружу = провал теста
-        self.assertTrue(self.model.calls, "пайплайн не вызван")
-        return jid
+        bodies = self._bodies()[before:]
+        self.assertEqual(len(bodies), 1, "заявка трека не дошла до yue2.cpp")
+        self.assertEqual(self._row(jid)["status"], "done", self._row(jid)["error"])
+        return jid, bodies[0]
 
-    def _passed_values(self):
-        """Все строковые значения, переданные пайплайну (имя аргумента —
-        деталь реализации, проверяем, что значение до модели дошло)."""
-        vals = []
-        for _, kw in self.model.calls:
-            for v in kw.values():
-                if isinstance(v, str):
-                    vals.append(v)
-        return vals
-
-    def _abc_passed(self):
-        return [v for v in self._passed_values() if v.lstrip().startswith("X:")]
-
-    def test_a2_pipeline_gets_arc_applied_abc_and_style(self):
+    def test_a2_server_gets_arc_applied_abc_and_style(self):
         for a in ARCS:
             with self.subTest(arc=a):
-                self.model.calls.clear()
                 want_abc = arcmod.apply_arc(ABC, a)
                 self.assertNotEqual(want_abc, ABC, "пример ABC не чувствителен к дуге")
                 want_style = arcmod.style_with_arc(STYLE, a)
                 self.assertNotEqual(want_style, STYLE)
-                self._run(abc=ABC, arc=a)
-                abcs = self._abc_passed()
-                self.assertTrue(abcs, f"abc не дошёл до пайплайна: {self.model.calls}")
-                self.assertEqual(set(abcs), {want_abc})
-                self.assertIn(want_style, self._passed_values(), self.model.calls)
-                self.assertNotIn(STYLE, self._passed_values(),
-                                 "в пайплайн ушёл стиль без дуги")
+                _, body = self._run(abc=ABC, arc=a)
+                self.assertEqual(body.get("abc"), want_abc)
+                self.assertEqual(body["style"], want_style, "в заявку ушёл стиль без дуги")
+        self.assertEqual(plan_bodies(self.fake_dir), [], "при прикреплённом плане свой не строится")
 
     def test_a2_request_abc_file_unchanged(self):
         for a in ARCS:
             with self.subTest(arc=a):
-                jid = self._run(abc=ABC, arc=a)
+                jid, _ = self._run(abc=ABC, arc=a)
                 f = self.jobs_dir / str(jid) / "request.abc"
                 self.assertEqual(f.read_text(), ABC)
 
     def test_a3_abc_without_arc_passed_as_is(self):
         for extra in ({}, {"arc": ""}):
             with self.subTest(**extra):
-                self.model.calls.clear()
-                self._run(abc=ABC, **extra)
-                abcs = self._abc_passed()
-                self.assertTrue(abcs, f"abc не дошёл до пайплайна: {self.model.calls}")
-                self.assertEqual(set(abcs), {ABC})
-                self.assertIn(STYLE, self._passed_values(), self.model.calls)
+                _, body = self._run(abc=ABC, **extra)
+                self.assertEqual(body.get("abc"), ABC)
+                self.assertEqual(body["style"], STYLE)
 
 
 if __name__ == "__main__":

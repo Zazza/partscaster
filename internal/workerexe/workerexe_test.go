@@ -18,11 +18,11 @@ import (
 //   - uv скачивается с проверкой sha256;
 //   - пакеты ставятся один раз: отпечаток (requirements + закреплённые версии)
 //     решает, нужна ли переустановка;
-//   - uv pip: torch/torchaudio 2.10.0+cu128, yue2-infer архивом коммита YuE,
-//     truststore; индекс cu128 основной, PyPI дополнительный;
+//   - uv pip: torch/torchaudio 2.10.0+cu128, truststore; индекс cu128 основной, PyPI дополнительный
+//     (пакета модели yue2-infer нет — генерация на yue2.cpp, internal-cpp-only);
 //   - nvidia-smi разбирается в имя/память/драйвер, мусор — ошибка;
 //   - архив воркера распаковывается в каталог версии, выход за каталог — отказ;
-//   - окружение воркера живёт в папке установки, на Windows backend torch-eager;
+//   - окружение воркера живёт в папке установки;
 //   - запуск: truststore до uvicorn, 127.0.0.1:8091 (--lan → 0.0.0.0);
 //   - выбранная папка запоминается.
 
@@ -173,19 +173,6 @@ func TestPipInstallArgs(t *testing.T) {
 		}
 	}
 
-	yue := 0
-	for _, a := range args {
-		if strings.HasPrefix(a, "yue2-infer @ ") {
-			yue++
-			if !strings.Contains(a, YueCommit) || !strings.HasSuffix(a, ".zip") {
-				t.Errorf("yue2-infer не архивом коммита %s: %q", YueCommit, a)
-			}
-		}
-	}
-	if yue != 1 {
-		t.Errorf("yue2-infer должен быть ровно один раз, найдено %d: %q", yue, args)
-	}
-
 	if i := testIndexOf(args, "--index-url"); i < 0 || i+1 >= len(args) || args[i+1] != TorchIndex {
 		t.Errorf("нет пары --index-url %s: %q", TorchIndex, args)
 	}
@@ -198,9 +185,6 @@ func TestPinnedConstants(t *testing.T) {
 	// Закреплённые версии — часть условия 3 карточки.
 	if UvVersion != "0.12.19" {
 		t.Errorf("UvVersion = %q", UvVersion)
-	}
-	if !strings.HasPrefix(YueCommit, "72272f9") || len(YueCommit) != 40 {
-		t.Errorf("YueCommit = %q", YueCommit)
 	}
 	if TorchIndex != "https://download.pytorch.org/whl/cu128" {
 		t.Errorf("TorchIndex = %q", TorchIndex)
@@ -419,12 +403,6 @@ func TestWorkerEnv(t *testing.T) {
 		if env["PYTHONUTF8"] != "1" {
 			t.Errorf("%s: PYTHONUTF8=%q", goos, env["PYTHONUTF8"])
 		}
-	}
-	if got := WorkerEnv(home, "windows")["YUE2_BACKEND"]; got != "torch-eager" {
-		t.Errorf("windows: YUE2_BACKEND=%q, ждали torch-eager", got)
-	}
-	if v, ok := WorkerEnv(home, "linux")["YUE2_BACKEND"]; ok {
-		t.Errorf("linux: YUE2_BACKEND не должен задаваться, есть %q", v)
 	}
 }
 

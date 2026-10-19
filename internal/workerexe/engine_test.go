@@ -7,26 +7,26 @@ import (
 	"testing"
 )
 
-// Спецификация выбора движка partscaster-worker.exe (карточка internal-partscaster-worker-exe, ТК9–ТК12):
-//   - настройки воркера пишутся атомарно, существующие ключи сохраняются (TК9);
-//   - settings.json в папке установки — признак «выбор уже сделан» (ТК10);
+// Спецификация модели генерации partscaster-worker.exe (карточки internal-partscaster-worker-exe, ТК9–ТК11,
+// и internal-cpp-only):
+//   - настройки воркера пишутся атомарно, существующие ключи сохраняются, ключ со значением nil удаляется (TК9);
+//   - выбранная модель и экономный режим читаются из settings.json; нет файла/ключа — не выбрана (ТК10);
 //   - бинарник yue2.cpp ищется в каталоге кода воркера: yue2cpp/yue-server(.exe на Windows) (ТК11);
-//   - модель по умолчанию и экономный режим — по объёму карты, пороги как у install.sh:
-//     ≥ 11776 МиБ — q8 обычный, 7680…11775 — q8 экономный, меньше — q5 экономный (ТК12, internal-fix-found п.2);
+//   - рекомендуемая модель — у воркера (engine_cpp.py recommend, recommend_test.go); своих порогов здесь нет;
 //   - имя модели — из манифеста bf16/q8/q6/q5.
 
 // --- ТК9: WriteSettings ---
 
 func TestWriteSettingsCreatesAndMerges(t *testing.T) {
 	home := t.TempDir()
-	if err := WriteSettings(home, map[string]any{"engine": "cpp", "cpp_model": "q6", "cpp_low_vram": true}); err != nil {
+	if err := WriteSettings(home, map[string]any{"engine": "torch", "stems_model": "roformer", "cpp_model": "q6"}); err != nil {
 		t.Fatal(err)
 	}
-	if !SettingsExist(home) {
-		t.Fatal("settings.json не появился")
+	if SettingsModel(home) != "q6" || SettingsLowVram(home) {
+		t.Fatalf("модель/режим = %q/%v, want q6/false", SettingsModel(home), SettingsLowVram(home))
 	}
-	// второй запуск перекрывает переданное, сохраняя остальное
-	if err := WriteSettings(home, map[string]any{"engine": "torch"}); err != nil {
+	// второй запуск перекрывает переданное, удаляет nil и сохраняет остальное
+	if err := WriteSettings(home, map[string]any{"engine": nil, "cpp_model": "bf16", "cpp_low_vram": true}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(SettingsFile(home))
@@ -34,16 +34,19 @@ func TestWriteSettingsCreatesAndMerges(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	for _, want := range []string{`"engine": "torch"`, `"cpp_model": "q6"`, `"cpp_low_vram": true`} {
+	for _, want := range []string{`"stems_model": "roformer"`, `"cpp_model": "bf16"`, `"cpp_low_vram": true`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("settings.json = %s, без %s", got, want)
 		}
+	}
+	if strings.Contains(got, `"engine"`) {
+		t.Fatalf("settings.json = %s: ключ engine не удалён", got)
 	}
 }
 
 func TestWriteSettingsCreatesDataDir(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "nested", "home")
-	if err := WriteSettings(home, map[string]any{"engine": "torch"}); err != nil {
+	if err := WriteSettings(home, map[string]any{"cpp_model": "q8"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, "data", "settings.json")); err != nil {
@@ -51,11 +54,19 @@ func TestWriteSettingsCreatesDataDir(t *testing.T) {
 	}
 }
 
-// --- ТК10: SettingsExist ---
+// --- ТК10: выбранная модель ---
 
-func TestSettingsExistFalseOnFreshHome(t *testing.T) {
-	if SettingsExist(t.TempDir()) {
-		t.Fatal("в чистой папке настройки уже есть")
+func TestSettingsModelEmptyOnFreshHome(t *testing.T) {
+	home := t.TempDir()
+	if m := SettingsModel(home); m != "" {
+		t.Fatalf("в чистой папке выбрана модель %q", m)
+	}
+	// установка прежних версий: движок PyTorch, модели нет
+	if err := WriteSettings(home, map[string]any{"engine": "torch"}); err != nil {
+		t.Fatal(err)
+	}
+	if m := SettingsModel(home); m != "" {
+		t.Fatalf("у установки на PyTorch выбрана модель %q", m)
 	}
 }
 
@@ -87,40 +98,6 @@ func TestCppBinary(t *testing.T) {
 		}
 		if got := CppBinary(dir, other); got != "" {
 			t.Fatalf("%s: найден бинарник чужой ОС", other)
-		}
-	}
-}
-
-// --- ТК12: дефолты по видеокарте ---
-
-// Пороги — как у install.sh (карточка internal-fix-found, условие 2):
-// ≥ 11776 МиБ — q8 обычный; 7680…11775 — q8 экономный; меньше — q5 экономный.
-var vramCases = []struct {
-	mib  int
-	want string
-	low  bool
-}{
-	{6 * 1024, "q5", true},
-	{7679, "q5", true},
-	{7680, "q8", true},
-	{11775, "q8", true},
-	{11776, "q8", false},
-	{16 * 1024, "q8", false},
-	{24 * 1024, "q8", false},
-}
-
-func TestDefaultCppModelByVRAM(t *testing.T) {
-	for _, tc := range vramCases {
-		if got := DefaultCppModel(tc.mib); got != tc.want {
-			t.Errorf("DefaultCppModel(%d МиБ) = %s, want %s", tc.mib, got, tc.want)
-		}
-	}
-}
-
-func TestLowVramDefault(t *testing.T) {
-	for _, tc := range vramCases {
-		if got := LowVramDefault(tc.mib); got != tc.low {
-			t.Errorf("LowVramDefault(%d МиБ) = %v, want %v", tc.mib, got, tc.low)
 		}
 	}
 }

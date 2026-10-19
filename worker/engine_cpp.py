@@ -1,11 +1,12 @@
-"""Второй движок генерации — yue2.cpp (GGML), ЭКСПЕРИМЕНТ: модели, программа, сервер, заявки, разбор ответа.
+"""Движок генерации — yue2.cpp (GGML): модели, программа, сервер, заявки, разбор ответа, рекомендуемая модель.
 
-Модель та же (YuE2-3B), движок другой: меньше видеопамяти (Q8 ~8 ГБ, экономный режим ~4,5 ГБ против ~11 ГБ у
-PyTorch) и быстрее. Сид между движками и между моделями yue2.cpp НЕ переносится — другое исполнение; ноты
+Модель YuE2-3B в формате GGUF: BF16 ~10 ГБ видеопамяти, Q8 ~8 ГБ, экономный режим ~4,5 ГБ. Сид между моделями
+НЕ переносится — другое исполнение (как и у старых треков, сделанных прежним движком на PyTorch); ноты
 (semantic) переносятся: продолжение и пересчёт идут по ним.
 
 Сервер yue2.cpp (yue-server) запускает и гасит сам воркер — только 127.0.0.1, свободный порт. Без torch: модуль
-грузится и там, где модели нет (тесты, установка). Из командной строки: python engine_cpp.py download <модель>.
+грузится и там, где модели нет (тесты, установка). Из командной строки:
+python engine_cpp.py download <модель> | installed <модель> | recommend [МиБ видеопамяти].
 """
 from __future__ import annotations
 
@@ -49,6 +50,32 @@ VAE = {"file": "YuE2-Vae-F32.gguf", "size": 530497344,
        "sha256": "93e49dfb1970e89ad64cacb17cf13b5d05f6bb30ef7ed3adae3050bcb728638a"}
 MODEL_NAMES = tuple(MODELS)
 
+# рекомендуемая модель по видеопамяти (замеры пика на песне 2:47, RTX 4070 Ti S: BF16 ~10,0 ГБ, Q8 ~8,0, Q6/Q5
+# ~7,7, Q8 в экономном ~4,5): Q6/Q5 почти не экономят память — не рекомендуются, но выбрать их можно
+RECOMMEND_BF16_MIB = 11776  # карты «12 ГБ» (сообщают ~12282 МиБ) и больше
+RECOMMEND_Q8_MIB = 9728     # карты «10 ГБ»; меньше (и неизвестно) — Q8 в экономном режиме
+
+
+def recommend(vram_mib: int) -> tuple[str, bool]:
+    """Рекомендуемая модель и экономный режим для карты с vram_mib МиБ (0 — неизвестно). Только подсказка:
+    пользователь вправе выбрать любую модель. Единственное место порогов — установщики зовут CLI recommend."""
+    if vram_mib >= RECOMMEND_BF16_MIB:
+        return "bf16", False
+    if vram_mib >= RECOMMEND_Q8_MIB:
+        return "q8", False
+    return "q8", True
+
+
+def gpu_vram_mib() -> int:
+    """Видеопамять первой карты (воркер работает на cuda:0) по nvidia-smi; нет nvidia-smi или ответа — 0."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0  # нет драйвера — видеопамять неизвестна, рекомендация осторожная
+    digits = "".join(c for c in (out.splitlines() or [""])[0] if c.isdigit())
+    return int(digits) if digits else 0
+
 FPS = 25                # семантических шагов на секунду звука
 LATENT_DIM = 64
 LOW_VRAM_SEQ = 8192     # экономный режим: контекст модели (КЭШ — главный расход памяти после весов)
@@ -64,7 +91,7 @@ ABC_SAMPLING = {"temperature": 0.7, "top_p": 0.9, "top_k": 30, "repetition_penal
 
 
 def _semantic_sampling(budget: int, temperature: float, min_tokens: int = 200) -> dict:
-    # как у PyTorch-воркера (config.json трека): совпадают настройки — сравнимо и исполнение по характеру
+    # те же настройки, что у прежних треков (config.json трека): сравнимо и исполнение по характеру
     return {"temperature": temperature, "top_p": 0.95, "top_k": 100, "repetition_penalty": 1.2,
             "penalty_window": 50, "min_tokens": min(min_tokens, budget), "max_tokens": budget}
 
@@ -252,7 +279,7 @@ def model_label(name: str) -> str:
 def _base(style: str, lyrics: str, cot: str, seed: int, cfg: float, budget: int, temperature: float) -> dict:
     return {
         "style": style, "lyrics": lyrics, "cot": cot or "full",
-        # сид один на трек, как у PyTorch: им и ноты, и шум звука
+        # сид один на трек: им и ноты, и шум звука
         "lm_seed": int(seed), "seed": int(seed),
         "cfg_scale": float(cfg or DEFAULT_CFG), "steps": 32,
         # длину держит потолок семантики, не секунды
@@ -263,7 +290,8 @@ def _base(style: str, lyrics: str, cot: str, seed: int, cfg: float, budget: int,
     }
 
 
-def _cap(budget: int, low_vram: bool) -> int:
+def cap_budget(budget: int, low_vram: bool) -> int:
+    """Потолок шагов, который реально уйдёт серверу: в экономном режиме не больше LOW_VRAM_BUDGET."""
     return min(budget, LOW_VRAM_BUDGET) if low_vram else budget
 
 
@@ -272,7 +300,7 @@ def build_request(row, budget: int, low_vram: bool, abc: str | None = None, *, s
     """Заявка трека: стиль/текст/режим плана строки, свой план (req_abc или драматургия), сид, характер, потолок."""
     body = _base(style if style is not None else row["style"], row["lyrics"], row["cot"],
                  seed if seed is not None else (row["seed"] or 0), row["cfg"] or cfg_default,
-                 _cap(int(budget), low_vram), row["temperature"])
+                 cap_budget(int(budget), low_vram), row["temperature"])
     if abc:
         body["abc"] = abc
     return body
@@ -281,17 +309,18 @@ def build_request(row, budget: int, low_vram: bool, abc: str | None = None, *, s
 def continue_request(row, parent_dir: Path, cont_from: float, budget: int, low_vram: bool,
                      abc: str | None = None, *, style: str | None = None, cfg_default: float = DEFAULT_CFG) -> dict:
     """Продолжение с отметки: ноты родителя до отметки подаются как сыгранные, дальше модель пишет сама (новый сид,
-    новый план или план родителя) — тот же механизм, что у PyTorch (_continue_song). Звук всей песни пересчитывается."""
+    новый план или план родителя). Родитель может быть и старым треком прежнего движка: нужны только semantic.npy
+    и score.abc. Звук всей песни пересчитывается."""
     import numpy as np
     tokens = [int(t) for t in np.load(Path(parent_dir) / "semantic.npy")]
     k = max(1, min(len(tokens), round(float(cont_from or 0) * FPS)))
     if abc is None:
         p = Path(parent_dir) / "score.abc"
         abc = p.read_text(encoding="utf-8") if p.is_file() else None
-    # бюджет считает и сыгранное; не меньше 200 новых шагов — как у PyTorch
+    # бюджет считает и сыгранное; не меньше 200 новых шагов
     total = max(int(budget), k + 200)
     body = _base(style if style is not None else row["style"], row["lyrics"], row["cot"], row["seed"] or 0,
-                 row["cfg"] or cfg_default, _cap(total, low_vram), row["temperature"])
+                 row["cfg"] or cfg_default, cap_budget(total, low_vram), row["temperature"])
     body["source_tokens"] = ",".join(map(str, tokens))
     body["source_start"] = 0.0
     body["source_end"] = k / FPS
@@ -606,8 +635,19 @@ class CppServer:
 
 
 def _cli(argv: list[str]) -> int:
+    if argv[:1] == ["recommend"] and len(argv) <= 2:
+        try:
+            mib = int(argv[1]) if len(argv) == 2 else gpu_vram_mib()
+        except ValueError:
+            print(f"видеопамять в МиБ — целое число, а не {argv[1]!r}", file=sys.stderr)
+            return 2
+        model, low = recommend(mib)
+        print(f"{model} {int(low)}")
+        return 0
+    if len(argv) == 2 and argv[0] == "installed":   # код 0 — модель и VAE на месте (установщик: не перекачивать)
+        return 0 if model_installed(argv[1]) else 1
     if len(argv) != 2 or argv[0] != "download":
-        print("usage: engine_cpp.py download <bf16|q8|q6|q5>", file=sys.stderr)
+        print("usage: engine_cpp.py download <bf16|q8|q6|q5> | installed <модель> | recommend [МиБ]", file=sys.stderr)
         return 2
     name = argv[1]
     if name not in MODELS:

@@ -64,7 +64,7 @@ worker: ## деплой воркера на GPU-машину (PARTSCASTER_DEPLOY
 worker-tar: ## архив воркера dist/worker-<версия>.tar.gz (код + install.sh)
 	./tools/worker-tar.sh dist $(VERSION)
 
-yue2cpp: ## готовая сборка yue2.cpp (второй движок, эксперимент) в dist/ для архива воркера; нужен docker
+yue2cpp: ## готовая сборка yue2.cpp (движок генерации) в dist/ для архива воркера; нужен docker
 	./tools/yue2cpp-build.sh
 
 release: ## релизный пакет под эту ОС в dist/ (приложение + partscaster-mcp + архив воркера)

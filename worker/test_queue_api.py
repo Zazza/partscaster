@@ -19,7 +19,8 @@
 - Старт воркера: queued генерации — в очередь по queue_pos, старые без места — по id;
   running → error (ТК6, ТК11).
 
-Внешние границы подменяются: разделение на дорожки (demucs_separate), поток queue_loop.
+Внешние границы подменяются: разделение на дорожки (demucs_separate), поток queue_loop, программа
+yue-server (фейк из test_engine_cpp — в регрессии запоздалой отмены).
 Очередь воркера — глобальный экземпляр opqueue.OpQueue; между тестами он очищается
 только через публичное API модуля.
 """
@@ -30,7 +31,7 @@ from unittest import mock
 
 from test_character import _job_id, _post_job
 from test_jobs_lifecycle import _Case as _LifeCase
-from test_jobs_lifecycle import _FakePipe, _FakeSong
+from test_jobs_lifecycle import cancel_requests
 from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase, _WorkerDbCase
 
 FINAL = {"done", "error", "canceled", "interrupted"}
@@ -675,23 +676,19 @@ class TestLateRenderCancelAndRetry(_LifeCase):
     """Регрессия: отмена, опоздавшая к концу прогона, не отменяет повторную генерацию."""
 
     def test_late_cancel_does_not_cancel_retry(self):
-        seen = []
-
-        def honest(kw):  # пайплайн честно смотрит на флаг отмены
-            seen.append(kw["cancelled"]())
-            return InterruptedError("canceled") if seen[-1] else _FakeSong()
-
-        pipe = self._use_pipe(_FakePipe(RuntimeError("boom"), honest))
+        self._scenario(mode="failed", log_lines=["boom"])
         jid = self._new()
         self._run_queue_once()
         self.assertEqual(self._status(jid)["status"], "error")
         # запоздалый запрос отмены: флаг рендера ставится уже после конца прогона
         self.w._flag_render_cancel(jid)
+        self._scenario()   # сервер yue2.cpp снова исправен
         r = self.client.post(f"/jobs/{jid}/retry")
         self.assertEqual(r.status_code, 200, r.text)
         self._run_queue_once()
-        self.assertEqual(len(pipe.calls), 2)
-        self.assertEqual(seen, [False], "повторный прогон увидел старую отмену")
+        self.assertEqual(len(self._bodies()), 2)
+        # воркер смотрит на флаг отмены всю генерацию: старая отмена ушла бы серверу заявкой cancel
+        self.assertEqual(cancel_requests(self.fake_dir), [], "повторный прогон увидел старую отмену")
         self.assertEqual(self._status(jid)["status"], "done")
 
 

@@ -250,16 +250,16 @@ edit log after each successful change.
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `config_get` | — | Worker address, worker data paths and engines |
-| `config_set` | server_url, stems_auto, stems_model, fx_engine, engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `engine` — `torch` or `cpp` (yue2.cpp, experiment: less video memory, the same seed gives a different song), `cpp_model`, `cpp_low_vram` — from the next generation |
-| `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set engine=cpp cpp_model=<name>` |
+| `config_get` | — | Worker address, worker data paths, generation model (chosen and recommended for the GPU) and worker engines |
+| `config_set` | server_url, stems_auto, stems_model, fx_engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `cpp_model` — generation model (any downloaded one: `bf16`, `q8`, `q6`, `q5`; the one recommended for the card is in `config_get`; the same seed on another model gives a different performance), `cpp_low_vram` — low-VRAM mode; model and mode — from the next generation |
+| `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set cpp_model=<name>` |
 
 ### Installation and diagnostics
 
 | Tool | Parameters | What it does |
 |---|---|---|
 | `doctor` | host | Environment check: is the worker available and which components it has, ffmpeg, Go, Node; on the machine with the graphics card (`host` — over ssh) — GPU and video memory, disk space. Worker version |
-| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, roformer, stems_model, engine, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB), Seed-VC (~11 GB) and RoFormer (~7.3 GB, non-commercial weights) are needed, and with RoFormer — which model should make the stems. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`/`roformer`. GPU and disk space are checked before installation. Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` |
+| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, roformer, stems_model, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB), Seed-VC (~11 GB) and RoFormer (~7.3 GB, non-commercial weights) are needed, and with RoFormer — which model should make the stems. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`/`roformer`. GPU and disk space are checked before installation. Generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one by VRAM). Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` |
 | `install_app` | dry_run, confirm | Build the app on this PC (`wails build`; needs Go, Node, wails CLI). A dry run by default |
 
 ## Work recipes

@@ -1582,8 +1582,10 @@ class TestRetryJob(_WorkerApiCase):
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestFriendlyError(_WorkerDbCase):
     """friendly_error(e): «CUDA out of memory» (любой регистр) → человеческое
-    сообщение с «GPU занят» и «повторить», без исключений даже без torch или
-    при сбое запроса к CUDA; любое другое исключение → str(e) как есть."""
+    сообщение с «GPU занят» и «повторить», без исключений и без цифр, когда
+    nvidia-smi не ответил; цифры свободной/общей памяти — от nvidia-smi
+    (_gpu_mem_mib, не torch); держит карту только сам воркер или его сервер
+    yue2.cpp — «самому воркеру»; любое другое исключение → str(e) как есть."""
 
     OOM_TEXTS = ("CUDA out of memory. Tried to allocate 2.00 GiB",
                  "cuda OUT OF MEMORY",
@@ -1598,40 +1600,34 @@ class TestFriendlyError(_WorkerDbCase):
         for text in self.OOM_TEXTS:
             self._assert_friendly(self.w.friendly_error(RuntimeError(text)))
 
-    def _broken_torch(self):
-        """torch, у которого любой запрос к CUDA падает."""
-        import types
-
-        def boom(*a, **kw):
-            raise RuntimeError("CUDA driver failure")
-
-        cuda = types.SimpleNamespace(
-            is_available=boom, mem_get_info=boom, memory_allocated=boom,
-            memory_reserved=boom, max_memory_allocated=boom,
-            get_device_properties=boom, device_count=boom, empty_cache=boom,
-            memory_summary=boom)
-        return types.SimpleNamespace(cuda=cuda)
-
-    def _with_torch(self, fake):
-        """Подменить torch и в sys.modules, и в модуле воркера (если он там)."""
-        import sys
+    def test_oom_without_nvidia_smi(self):
         from unittest import mock
-        stack = contextlib.ExitStack()
-        stack.enter_context(mock.patch.dict(sys.modules, {"torch": fake}))
-        if hasattr(self.w, "torch"):
-            stack.enter_context(mock.patch.object(self.w, "torch", fake))
-        return stack
-
-    def test_oom_without_torch(self):
-        with self._with_torch(None):  # import torch → ImportError
+        with mock.patch.object(self.w, "_gpu_mem_mib", return_value=None), \
+                mock.patch.object(self.w, "_gpu_holders", return_value=None):
             for text in self.OOM_TEXTS:
-                self._assert_friendly(self.w.friendly_error(RuntimeError(text)))
+                msg = self.w.friendly_error(RuntimeError(text))
+                self._assert_friendly(msg)
+                self.assertNotIn("свободно", msg)
 
-    def test_oom_when_cuda_query_fails(self):
-        with self._with_torch(self._broken_torch()):
-            for text in self.OOM_TEXTS:
-                self._assert_friendly(self.w.friendly_error(RuntimeError(text)))
+    def test_oom_memory_from_nvidia_smi(self):
+        from unittest import mock
+        with mock.patch.object(self.w, "_gpu_mem_mib", return_value=(2048, 12288)), \
+                mock.patch.object(self.w, "_gpu_holders", return_value=None):
+            msg = self.w.friendly_error(RuntimeError("CUDA out of memory"))
+        self._assert_friendly(msg)
+        self.assertIn("свободно 2.0 из 12.0 ГБ", msg)
 
+    def test_oom_own_cpp_server_holder_honest_message(self):
+        """Карту держит только сервер yue2.cpp этого воркера — это тоже «сам воркер»."""
+        import types
+        from unittest import mock
+        srv = types.SimpleNamespace(proc=types.SimpleNamespace(pid=4242))
+        with mock.patch.object(self.w, "_cpp", srv), \
+                mock.patch.object(self.w, "_gpu_holders", return_value=[(4242, 7.9)]):
+            msg = self.w.friendly_error(RuntimeError("CUDA out of memory"))
+        self.assertIn("самому воркеру", msg)
+        self.assertIn("экономный режим", msg)
+        self.assertNotIn("Ollama", msg)
 
     def test_oom_self_holder_honest_message(self):
         """Держит только сам воркер — без обвинения соседей, с подсказкой про длину."""
@@ -1665,7 +1661,7 @@ class TestFriendlyError(_WorkerDbCase):
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
 class TestJobBudget(_WorkerDbCase):
     """job_budget: превью — 450; без длины — MAX_SEM_TOKENS; явная длина — с потолком
-    MAX_SEM_TOKENS (KV-кес yue2 выделяется под весь бюджет заранее — 16 ГБ не вмещают
+    MAX_SEM_TOKENS (кэш модели выделяется под весь бюджет заранее — 16 ГБ не вмещают
     модель и 16000); кусок — свой минимум, полный трек — не меньше 6000."""
 
     def test_draft_preview(self):
@@ -2064,101 +2060,8 @@ class TestAutoStemsInstrumentalConfig(_WorkerApiCase):
         self.assertIs(self.client.get("/config").json()["auto_stems_instrumental"], True)
 
 
-class _FakeModel:
-    """Модель-заглушка: контекст-менеджер, любой другой метод бросает self.err.
-    Счётчик exits — сколько раз модель выгружали через __exit__."""
-
-    def __init__(self, err=None, exit_err=None):
-        self.err = err
-        self.exit_err = exit_err
-        self.exits = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.exits.append(args)
-        if self.exit_err:
-            raise self.exit_err
-
-    def __call__(self, *a, **kw):
-        raise self.err
-
-    def __getattr__(self, name):
-        def boom(*a, **kw):
-            raise self.err
-        return boom
-
-
-@unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class TestUnloadOnOom(_WorkerApiCase):
-    """_run_job: при «CUDA out of memory» (любой регистр) джоба error с
-    «GPU занят…», модель выгружается (__exit__(None, None, None), _pipe=None)
-    и следующая джоба грузит её заново; при другой ошибке модель остаётся;
-    сбой __exit__ не мешает выгрузке и не вылетает из _run_job."""
-
-    def setUp(self):
-        super().setUp()
-        import sys
-        from unittest import mock
-        self.mock = mock
-        # yue2 и torch в окружении тестов нет — подменяем на заглушки;
-        # from_pretrained отдаёт новую модель (для повторной загрузки)
-        self.from_pretrained = mock.MagicMock(side_effect=lambda *a, **kw: _FakeModel())
-        yue2 = mock.MagicMock()
-        yue2.YuE2Pipeline.from_pretrained = self.from_pretrained
-        mods = {"yue2": yue2, "yue2.protocol": mock.MagicMock(),
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        for name, val in (("_pipe", None), ("_load_error", None)):
-            p = mock.patch.object(self.w, name, val)
-            p.start()
-            self.addCleanup(p.stop)
-
-    def _run_with(self, model):
-        """Модель уже загружена, джоба в очереди → _run_job, вернуть строку джобы."""
-        self.w._pipe = model
-        jid = self._job(semantic=False, status="queued")
-        self.w._run_job(jid)  # исключение наружу = провал теста
-        return self._row(jid)
-
-    def test_oom_marks_error_and_unloads(self):
-        for text in ("CUDA out of memory. Tried to allocate 2.00 GiB", "cuda OUT OF MEMORY"):
-            model = _FakeModel(err=RuntimeError(text))
-            row = self._run_with(model)
-            self.assertEqual(row["status"], "error", text)
-            self.assertTrue(row["error"].startswith("GPU занят"), row["error"])
-            self.assertEqual(model.exits, [(None, None, None)], text)
-            self.assertIsNone(self.w._pipe, text)
-
-    def test_other_error_keeps_model(self):
-        model = _FakeModel(err=RuntimeError("bad abc"))
-        row = self._run_with(model)
-        self.assertEqual(row["status"], "error")
-        self.assertIn("bad abc", row["error"])
-        self.assertIs(self.w._pipe, model)
-        self.assertEqual(model.exits, [])
-
-    def test_next_load_after_oom_is_fresh(self):
-        old = _FakeModel(err=RuntimeError("CUDA out of memory"))
-        self._run_with(old)
-        self.from_pretrained.assert_not_called()
-        new = self.w._get_pipe()
-        self.assertEqual(self.from_pretrained.call_count, 1)
-        self.assertIsNot(new, old)
-        self.assertIs(self.w._pipe, new)
-
-    def test_exit_failure_still_unloads(self):
-        model = _FakeModel(err=RuntimeError("CUDA out of memory"),
-                           exit_err=RuntimeError("CUDA error: illegal memory access"))
-        row = self._run_with(model)
-        self.assertEqual(row["status"], "error")
-        self.assertTrue(row["error"].startswith("GPU занят"), row["error"])
-        self.assertEqual(len(model.exits), 1)
-        self.assertIsNone(self.w._pipe)
-
+# Нехватка видеопамяти в генерации (сервер yue2.cpp останавливается, следующий трек запускает его
+# заново; иная ошибка сервер не трогает) — test_jobs_lifecycle (L3) и test_engine_api (C4).
 
 # POST /jobs/{id}/dsp?label=… хранит подпись, GET /jobs/{id}/dsp её отдаёт
 # ("" — без подписи и у старых вариантов); label длиннее 300 → 422.

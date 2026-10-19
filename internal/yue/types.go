@@ -53,7 +53,7 @@ type Service interface {
 	InstallFxKit(ctx context.Context, name string) (map[string]any, error)
 	// FxKitProgress — прогресс идущей установки набора ({} — нет)
 	FxKitProgress(ctx context.Context) (map[string]any, error)
-	// второй движок генерации yue2.cpp (ЭКСПЕРИМЕНТ): загрузка модели и её прогресс ({} — нет)
+	// модель генерации (yue2.cpp): загрузка на воркер и её прогресс ({} — нет)
 	InstallEngineModel(ctx context.Context, name string) (map[string]any, error)
 	EngineModelProgress(ctx context.Context) (map[string]any, error)
 	// фразы страницы «Инструменты»: круг через цепочку, играет по кругу
@@ -181,7 +181,6 @@ type Job struct {
 type HealthInfo struct {
 	Status      string `json:"status"`
 	ModelLoaded bool   `json:"model_loaded"`
-	LoadError   string `json:"load_error"`
 }
 
 // StatsRunning — идущая джоба в сводке /stats (нет рендера — nil).

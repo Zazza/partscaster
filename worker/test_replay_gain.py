@@ -6,14 +6,14 @@
   - overdub_gain 0,5 → _mix_overdub вызывается с 0,5, у родителя появляется overdub-<id>.flac;
   - overdub_gain NULL (старые строки) → 0,5.
 
-Тяжёлое (пайплайн YuE, ffmpeg-форматы, анализ метрик) подменено; файлы аудио — настоящие короткие flac.
+Тяжёлое (форматы ffmpeg, анализ метрик) подменено; генерация — через фейк программы yue-server
+(харнесс test_jobs_lifecycle: настоящая заявка, в ответе — тон 220 Гц, 48 кГц, 0,5 с); файлы аудио —
+настоящие короткие flac.
 """
-import sys
-import types
 import unittest
 
-from test_character import _Sampling
-from test_pure import _HAS_WORKER_DEPS, _WorkerApiCase
+from test_jobs_lifecycle import _Case as _CppCase
+from test_pure import _HAS_WORKER_DEPS
 
 SR = 48000
 
@@ -27,57 +27,16 @@ def _write_flac(path, amp=0.2, seconds=0.5):
     sf.write(str(path), np.stack([tone, tone], axis=1), SR)
 
 
-class _Song:
-    """Результат пайплайна: пишет audio.flac в каталог джобы."""
-    truncated = False
-
-    def save_artifacts(self, job_dir):
-        _write_flac(job_dir / "audio.flac", amp=0.3)
-
-
-class _Plan:
-    abc = "X:1\nL:1/32\nV: Vocal\nV: Ins\nK:C\nV: Vocal\nc32|\nV: Ins\nC32|\n"
-
-
-class _Pipe:
-    def __init__(self):
-        self.calls = 0
-
-    def plan(self, **kw):
-        # трек «без слов» воркер рендерит по своему плану (голос в нём заглушён)
-        return _Plan()
-
-    def __call__(self, **kw):
-        self.calls += 1
-        return _Song()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        pass
-
-
 _UNSET = object()
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")
-class _ReplayRunCase(_WorkerApiCase):
+class _ReplayRunCase(_CppCase):
     def setUp(self):
         super().setUp()
         from unittest import mock
         self.mock = mock
-        protocol = types.ModuleType("yue2.protocol")
-        protocol.Sampling = _Sampling
-        mods = {"yue2": mock.MagicMock(), "yue2.protocol": protocol,
-                "yue2.pipeline": mock.MagicMock(), "torch": mock.MagicMock()}
-        p = mock.patch.dict(sys.modules, mods)
-        p.start()
-        self.addCleanup(p.stop)
-        self.pipe = _Pipe()
-        patches = [("_pipe", self.pipe), ("_load_error", None),
-                   ("_get_pipe", lambda: self.pipe),
-                   ("_make_formats", lambda *a, **kw: ("", "")),
+        patches = [("_make_formats", lambda *a, **kw: ("", "")),
                    ("auto_stems_instrumental", lambda *a, **kw: False)]
         if hasattr(self.w, "analyze_file"):
             patches.append(("analyze_file", lambda *a, **kw: {}))
@@ -130,7 +89,7 @@ class TestReplayGain(_ReplayRunCase):
         calls = self._spy_mix()
         parent, child = self._overdub_row(gain=0.0)
         self.w._run_job(child)  # исключение наружу = провал теста
-        self.assertEqual(self.pipe.calls, 1, "рендер не состоялся — тест ничего не проверил")
+        self.assertEqual(len(self._bodies()), 1, "рендер не состоялся — тест ничего не проверил")
         self.assertEqual(calls, [], "gain 0 (кавер) — смешивания с оригиналом быть не должно")
         self.assertFalse((self.jobs_dir / str(parent) / f"overdub-{child}.flac").exists())
         row = self._row(child)
@@ -151,14 +110,18 @@ class TestReplayGain(_ReplayRunCase):
         self.assertEqual(self._row(child)["status"], "done")
 
     def test_gain_other_value_sets_layer_level(self):
-        # родитель — тон 220 Гц с амплитудой 0,2, слой — тот же тон 0,3 в фазе: в миксе 0,2 + gain·0,3
+        # родитель — тон 220 Гц с амплитудой 0,2, слой (ответ yue2.cpp) — тот же тон в фазе:
+        # в миксе 0,2 + gain·(амплитуда слоя)
         import numpy as np
         import soundfile as sf
         parent, child = self._overdub_row(gain=0.3)
         self.w._run_job(child)
+        layer, _ = sf.read(str(self.jobs_dir / str(child) / "audio.flac"), always_2d=True)
+        layer_amp = float(np.abs(layer).max())
+        self.assertGreater(layer_amp, 0.1, "слой тихий — проверка уровня ничего не покажет")
         y, sr = sf.read(str(self.jobs_dir / str(parent) / f"overdub-{child}.flac"), always_2d=True)
         body = y[:int(0.4 * sr)]   # до кроссфейда в конце
-        self.assertAlmostEqual(float(np.abs(body).max()), 0.2 + 0.3 * 0.3, delta=0.01)
+        self.assertAlmostEqual(float(np.abs(body).max()), 0.2 + 0.3 * layer_amp, delta=0.01)
 
     def test_gain_null_mixes_with_half(self):
         calls = self._spy_mix()
@@ -173,7 +136,7 @@ class TestReplayGain(_ReplayRunCase):
         calls = self._spy_mix()
         jid = self._job(duration=1.0, semantic=False, status="queued")
         self.w._run_job(jid)
-        self.assertEqual(self.pipe.calls, 1)
+        self.assertEqual(len(self._bodies()), 1)
         self.assertEqual(calls, [], "обычная джоба не смешивается")
 
 

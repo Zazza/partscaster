@@ -17,11 +17,11 @@ if transcription worked (otherwise the studio has a "Create score" button). With
 
 ## Hardware
 
-- **NVIDIA graphics card only** (the installer checks `nvidia-smi`). The main engine takes up to ~11.4 GB
-  of video memory, yue2.cpp — from ~4.5 GB in economy mode.
+- **NVIDIA graphics card only** (the installer checks `nvidia-smi`), from 8 GB of video memory. The generation model
+  takes at peak: BF16 ~10 GB, Q8 ~8 GB, economy mode ~4.5 GB (a song up to ~3.5 minutes).
 - **Track length is limited** by the model budget (16000 tokens, variable `YUE2_MAX_TOKENS`). When memory runs out, the worker
-  says what is to blame: the track length itself (reduce the duration) or other programs on the graphics card (for example,
-  Stable Diffusion — free the memory).
+  says what is to blame: the track length itself (turn on economy mode, choose a smaller model or reduce the duration)
+  or other programs on the graphics card (for example, Stable Diffusion — free the memory).
 
 ## Security
 
@@ -40,8 +40,6 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
 
 - **Album voice** (Seed-VC): the voice is recognizable, but it shakes, and inside phrases the music suffers a little. An optional
   component of ~11 GB.
-- **yue2.cpp**: the same seed gives a different song (only notes and continuations carry over); economy mode — a song up to
-  ~3.5 minutes. The Windows package built on Linux comes without yue2.cpp.
 
 ## Model and sound
 
@@ -52,6 +50,9 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
   the processed one.
 - **SheetSage2 transcription** is accurate on a simple texture; on a dense mix the chords and sections are approximate.
 - **A plan can be longer than the sound**: bars past the end of the track are dimmed in the roll.
+- **A seed repeats the performance only on the same generation model.** Another model (BF16, Q8…) with the same seed
+  sings differently; old tracks made by the former PyTorch engine cannot be repeated by seed — continuations and
+  rebuilds from their notes work.
 - **Quick effects:** the reverb and delay tail past the end of the track is cut off (the length does not change); "Transpose" (Транспонирование) and
   "Octaver" (Октавер) need ffmpeg with `rubberband` (without it — an ffmpeg error); pedals process the guitar cut out of the
   mix — distortion on top of distortion can sound like mush.
@@ -65,6 +66,7 @@ Partscaster code — [MIT](../../LICENSE). Model weights are not part of the rep
 | YuE2 | CC BY-NC 4.0 **with an additional permission from the model authors**: musicians and content creators may monetize the generated songs (License section in the README [github.com/multimodal-art-projection/YuE](https://github.com/multimodal-art-projection/YuE)) |
 | BS-RoFormer-SW, DrumSep (stem separation) | CC BY-NC / BY-NC-SA — non-commercial, without such a permission |
 | SheetSage2 (transcription) | CC BY-NC — non-commercial, without such a permission |
+| yue2.cpp (the generation program; the GGUF models are the same YuE2 weights, YuE2 terms) | MIT |
 | Demucs | MIT |
 | Seed-VC | GPL-3.0 |
 

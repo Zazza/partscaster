@@ -8,7 +8,8 @@ Partscaster @VERSION@ — установка / installation
 1. Воркер (на машине с GPU):
      tar xzf worker-@VERSION@.tar.gz
      ./worker-@VERSION@/install.sh
-   Ставит окружение и пакеты (первый раз — долго, веса модели качаются при первом запуске),
+   Ставит окружение, пакеты, программу yue2.cpp и модель генерации — рекомендуемую для вашей видеокарты
+   (первый раз — долго; другая модель: --cpp-model bf16|q8|q6|q5, экономный режим: --cpp-low-vram),
    запускает службу на порту 8091. Обновление — то же самое с новым архивом;
    откат на предыдущую версию: ~/partscaster/current/install.sh --rollback
    Необязательные компоненты (тексты треков, чистое разделение дорожек) ставит AI-агент
@@ -17,11 +18,11 @@ Partscaster @VERSION@ — установка / installation
    Windows без WSL: запустите partscaster-worker.exe (двойной щелчок). Первый раз он сам поставит
    Python и пакеты (~25 ГБ вместе с моделью), дальше просто запускает воркер; окно открыто —
    воркер работает, закрыли — остановлен. Адрес воркера в приложении — 127.0.0.1.
-   При первой установке спросит движок: основной или yue2.cpp (эксперимент, меньше видеопамяти,
-   модель по объёму карты; без вопросов — флаги --engine cpp --cpp-model q8).
+   При первой установке спросит модель генерации: Enter — рекомендуемая для вашей видеокарты
+   (без вопроса — флаг --cpp-model auto или имя модели: bf16, q8, q6, q5).
 
 2. Приложение: запустите partscaster. В «Настройках» введите адрес воркера
-   (например 192.168.1.5 — порт 8091 подставится) и нажмите «Проверить».
+   (например 192.0.2.10 — порт 8091 подставится) и нажмите «Проверить».
 
 3. AI-агенты: «Настройки» → «Для AI-агентов» — готовый конфиг и кнопка
    «Подключить к Claude Code». partscaster-mcp берёт адрес воркера из настроек приложения.
@@ -32,10 +33,12 @@ Package contents: the app, partscaster-mcp (MCP server for AI agents) and the wo
 for an NVIDIA GPU machine (Linux, CUDA).
 
 1. Worker (on the GPU machine): tar xzf worker-@VERSION@.tar.gz && ./worker-@VERSION@/install.sh
+   It installs the environment, packages, the yue2.cpp program and the generation model recommended for
+   your graphics card (another model: --cpp-model bf16|q8|q6|q5; economy mode: --cpp-low-vram).
    Windows without WSL: run partscaster-worker.exe — it installs Python and packages on first run (~25 GB
    with the model), then just starts the worker while its window is open. Worker address: 127.0.0.1.
-   On first run it asks for the engine: main PyTorch or yue2.cpp (experimental, less VRAM; flags
-   --engine cpp --cpp-model q8 skip the question).
+   On first run it asks for the generation model: Enter — the one recommended for your graphics card
+   (--cpp-model auto or a model name — bf16, q8, q6, q5 — skips the question).
    Update — the same with a newer archive; rollback: ~/partscaster/current/install.sh --rollback
 2. App: run partscaster, enter the worker address in Settings, press "Check".
 3. AI agents: Settings → "For AI agents" — config snippets and "Connect to Claude Code".

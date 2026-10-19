@@ -23,12 +23,15 @@ func RegisterStudioTools(s *Server) {
 	registerRecipeTools(s)
 	s.Register(Tool{
 		Name:        "config_get",
-		Description: "Текущие настройки: адрес воркера, пути данных и движки воркера.",
+		Description: "Текущие настройки: адрес воркера, пути данных, модель генерации (выбранная и рекомендуемая для карты) и движки воркера.",
 		InputSchema: props(nil),
 		Handler: func(s *Server, _ map[string]any) (string, error) {
 			out := map[string]any{"server_url": s.client.GetURL()}
 			if cfg, err := s.client.WorkerConfig(context.Background()); err == nil {
 				out["worker"] = cfg
+				if hint := modelHint(cfg); hint != "" {
+					out["model"] = hint
+				}
 			} else {
 				out["worker"] = "недоступен: " + err.Error()
 			}
@@ -41,16 +44,16 @@ func RegisterStudioTools(s *Server) {
 		Description: "Настройки: server_url — адрес воркера (сохраняется и в settings приложения); " +
 			"stems_auto — когда делать дорожки трека (studio — при открытии студии | always — сразу у каждого готового трека | manual — вручную); " +
 			"stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
-			"engine — движок генерации (torch | cpp — yue2.cpp, ЭКСПЕРИМЕНТ), cpp_model, cpp_low_vram — со следующей генерации.",
+			"cpp_model — модель генерации (любая скачанная; рекомендуемая для карты — в config_get), cpp_low_vram — экономный режим; " +
+			"модель и режим — со следующей генерации.",
 		InputSchema: props(map[string]any{
 			"server_url":  prop("адрес воркера, напр. http://gpu-host:8091", "string"),
 			"stems_auto":  prop("когда делать дорожки: studio (при открытии студии) | always (сразу у каждого готового трека) | manual (вручную)", "string"),
 			"stems_model": prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
 			"fx_engine":   prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
-			"engine": prop("движок генерации: torch — основной | cpp — yue2.cpp, ЭКСПЕРИМЕНТ (меньше видеопамяти; "+
-				"тот же сид даёт другую песню, ноты и продолжения переносятся). cpp — только с установленной программой и скачанной моделью", "string"),
-			"cpp_model":    prop("модель yue2.cpp: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install)", "string"),
-			"cpp_low_vram": prop("экономный режим yue2.cpp (~4,5 ГБ видеопамяти, песня до ~3,5 мин)", "boolean"),
+			"cpp_model": prop("модель генерации: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install). "+
+				"Тот же сид на другой модели даёт другое исполнение; ноты и продолжения переносятся", "string"),
+			"cpp_low_vram": prop("экономный режим (~4,5 ГБ видеопамяти, песня до ~3,5 мин)", "boolean"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			if u := argString(args, "server_url"); u != "" {
@@ -66,9 +69,6 @@ func RegisterStudioTools(s *Server) {
 			}
 			if v, ok := args["fx_engine"].(bool); ok {
 				cfg["fx_engine"] = v
-			}
-			if v := argString(args, "engine"); v != "" {
-				cfg["engine"] = v
 			}
 			if v := argString(args, "cpp_model"); v != "" {
 				cfg["cpp_model"] = v
@@ -87,9 +87,9 @@ func RegisterStudioTools(s *Server) {
 
 	s.Register(Tool{
 		Name: "engine_model_install",
-		Description: "Скачать модель второго движка генерации yue2.cpp (ЭКСПЕРИМЕНТ) на воркер с проверкой суммы: " +
-			"bf16 (7,2 ГБ, эталон), q8 (3,8 ГБ, почти без потерь, ~8 ГБ видеопамяти), q6 (2,9 ГБ), q5 (2,6 ГБ). " +
-			"Ждёт конца загрузки (минуты); готовая модель не качается заново. Потом — config_set engine=cpp cpp_model=<имя>.",
+		Description: "Скачать модель генерации (yue2.cpp) на воркер с проверкой суммы: " +
+			"bf16 (7,2 ГБ, без сжатия, ~10 ГБ видеопамяти), q8 (3,8 ГБ, почти без потерь, ~8 ГБ), q6 (2,9 ГБ), q5 (2,6 ГБ). " +
+			"Ждёт конца загрузки (минуты); готовая модель не качается заново. Потом — config_set cpp_model=<имя>.",
 		InputSchema: props(map[string]any{
 			"name": prop("модель: bf16 | q8 | q6 | q5", "string"),
 		}, "name"),
@@ -102,7 +102,7 @@ func RegisterStudioTools(s *Server) {
 			if err != nil {
 				return "", fmt.Errorf("модель %s не скачана: %w", name, err)
 			}
-			return fmt.Sprintf("модель %s скачана. Включить: config_set engine=cpp cpp_model=%s\n%s", name, name, toJSON(out)), nil
+			return fmt.Sprintf("модель %s скачана. Выбрать: config_set cpp_model=%s\n%s", name, name, toJSON(out)), nil
 		},
 	})
 
@@ -806,4 +806,26 @@ func (s *Server) applyDsp(jobID int64, chainID string, params map[string]float64
 // applySteps — цепочка эффектов по порядку на весь трек: вариант dsp-pedals.flac.
 func (s *Server) applySteps(jobID int64, steps []dsp.Step) (*yue.DspVariant, error) {
 	return studio.ApplySteps(context.Background(), s.client, jobID, steps, "")
+}
+
+// modelHint — модель генерации человеческой строкой: выбранная и рекомендуемая для карты воркера
+// (cpp_recommended; у старого воркера поля нет — "").
+func modelHint(cfg map[string]any) string {
+	rec, ok := cfg["cpp_recommended"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	name := func(m any, low any) string {
+		s, _ := m.(string)
+		if b, _ := low.(bool); b {
+			return strings.ToUpper(s) + " (экономный режим)"
+		}
+		return strings.ToUpper(s)
+	}
+	card := "видеопамять неизвестна"
+	if mib, _ := rec["vram_mib"].(float64); mib > 0 { // числа JSON — float64; карта «12 ГБ» сообщает 12282 МиБ
+		card = fmt.Sprintf("карта %.0f ГБ", mib/1024)
+	}
+	return fmt.Sprintf("выбрана %s; рекомендуемая для этой машины (%s) — %s",
+		name(cfg["cpp_model"], cfg["cpp_low_vram"]), card, name(rec["model"], rec["low_vram"]))
 }
