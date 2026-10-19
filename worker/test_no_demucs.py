@@ -677,7 +677,7 @@ esac
 case "$1" in *kits_install.py) [ -f "$STUB_DIR/fail-kits" ] && exit 1;; esac
 """ + base.ENGINE_CPP_SH + "exit 0\n"
 
-SEP_PKGS = ("audio-separator[gpu]==0.47.0", "audioread")
+SEP_PKGS = ("audio-separator[gpu]==0.47.0", "audioread", "imageio-ffmpeg==0.6.0")  # ffmpeg — машинам без системного
 
 
 class _SepInstallCase(base._InstallCase):
@@ -827,10 +827,6 @@ class TestInstallShText(unittest.TestCase):
         self.assertNotIn("PARTSCASTER_STEMS_MODEL", text)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestInstallSepDirFlag(_SepInstallCase):
     """усл. 7: install.sh --sep-dir DIR — окружение DIR/venv, веса DIR/models; пути пишутся в worker.env, если их
     там ещё нет (заданное раньше не перетирается), перед дописыванием — перевод строки в конце файла."""
@@ -861,3 +857,6 @@ class TestInstallSepDirFlag(_SepInstallCase):
         self.assertIn(f"PARTSCASTER_SEP_MODELS={d / 'models'}", lines)
         self.assertEqual(self.sep_pips(), [], self.calls())   # своё окружение без отпечатка — не переустанавливается
 
+
+if __name__ == "__main__":
+    unittest.main()

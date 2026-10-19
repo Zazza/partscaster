@@ -12,7 +12,8 @@ import (
 // Карточка internal-no-demucs, усл. 6 — окружение разделения RoFormer на Windows.
 //
 // Тест-кейсы (ТК → условие карточки):
-//   ТК30 (усл. 5, 6) SepPackages закреплены: audio-separator[gpu]==0.47.0 и audioread;
+//   ТК30 (усл. 5, 6) SepPackages закреплены: audio-separator[gpu]==0.47.0, audioread и imageio-ffmpeg==0.6.0
+//                  (ffmpeg машинам без системного — кросс-ревью internal-no-demucs);
 //   ТК31 (усл. 6)  InstallSep(home, uv, out): uv venv в <home>/sep-venv; uv pip install --python <python
 //                  sep-venv> с SepPackages и индексом cu128 (--torch-backend cu128, как у основного окружения);
 //                  после успеха NeedSepInstall=false;
@@ -99,7 +100,7 @@ func hasArgs(args []string, seq ...string) bool {
 // --- ТК30 ---
 
 func TestSepPackagesPinned(t *testing.T) {
-	for _, want := range []string{"audio-separator[gpu]==0.47.0", "audioread"} {
+	for _, want := range []string{"audio-separator[gpu]==0.47.0", "audioread", "imageio-ffmpeg==0.6.0"} {
 		found := false
 		for _, p := range SepPackages {
 			if p == want {
