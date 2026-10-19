@@ -351,32 +351,44 @@ but you can choose them.
 
 ## Worker on Windows without WSL — partscaster-worker.exe
 
-The Windows package has `partscaster-worker.exe` next to the app. A double click opens a console window:
-while the window is open, the worker works; close it, and the worker stops (no Python process stays in the background). There is no autostart.
+The Windows package has `partscaster-worker.exe` next to the app — one program without a console: the first run opens
+an installation window, after that it lives as a tray icon (by the clock). The worker runs until the program is closed
+from the icon menu. There is no autostart at Windows sign-in.
 
-- **First run:** checks the GPU (`nvidia-smi`) and disk space (~30 GB needed), lets you choose a folder (default
-  `%LOCALAPPDATA%\partscaster-worker`, the choice is remembered; another one — `--home D:\partscaster-worker`). Into the folder
-  it installs uv (pinned version, sha256 check), Python 3.12, the `venv` environment and packages:
-  `requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128` (score transcription; the yue2.cpp program also takes
-  the CUDA libraries from them), `truststore`. Then the generation model downloads (see below).
-- **After that:** starts in seconds. Packages are reinstalled only if `requirements.txt` or
-  the pinned versions changed (fingerprint — `packages.sha256`). A new program version puts new code into `app\`;
-  data (`data\`), models (`hf-cache\`) and packages stay.
-- **Address:** `127.0.0.1:8091` — in the app, enter `127.0.0.1`. For other machines on the network — `--lan` (the worker
-  has no authentication, so by default it is reachable only from this PC).
+- **Installation window** (first run):
+  1. welcome and a GPU check (`nvidia-smi`; no NVIDIA — a clear message and exit);
+  2. folder: default `%LOCALAPPDATA%\partscaster-worker`, «Browse…», free/needed space (~30 GB); the choice is remembered;
+  3. generation model: `bf16`, `q8`, `q6`, `q5` with the file size, the one recommended for this card is marked (the
+     thresholds are the same as in `install.sh`: the program reads them from `engine_cpp.py` of the embedded code, no
+     Python needed); an «economy mode» checkbox;
+  4. access: «this computer only» or «from other computers on the network» (the worker has no authentication — this PC
+     only by default);
+  5. installation: stages «Python and packages» → «Stem separation» → «Generation model» → «Start», a «what is
+     happening» line and an expandable log; on failure — the error text and «Retry» (resumes);
+  6. done: the address for the app and «Copy».
+
+  You can close the window during installation: the program asks whether to abort; the next run resumes.
+- **What goes into the folder:** uv (pinned version, sha256 check), Python 3.12, the `venv` environment with packages
+  (`requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128` — score transcription; the yue2.cpp program also takes the CUDA
+  libraries from them; `truststore`), the stem separation environment `sep-venv` (torch with CUDA, cu128 index) with the
+  RoFormer/DrumSep weights in `sep-models`, the generation model in `data\yue2cpp-models`. Worker code is in `app\`,
+  tracks and settings — in `data\`.
+- **Tray icon:** worker state («starting» / «running» / «stopped with an error»), the address for the app (click — to the
+  clipboard), «Access from other computers on the network» (checkbox; the worker restarts with the new address), «Log»
+  (opens `logs\worker.log` in Notepad; the previous run — `worker.1.log`), «Exit» (asks if a generation is running;
+  the queue is kept and continues on the next start). Starting the program again while the worker runs shows «already
+  running».
+- **After that:** starts straight into the tray. Packages are reinstalled only if their set changed (fingerprints —
+  `packages.sha256`, `sep-packages.sha256`); a new program version with new packages shows the window with installation
+  progress, without questions.
+- **Flags** (for a shortcut): `--home FOLDER`, `--lan`, `--cpp-model auto|bf16|q8|q6|q5`, `--cpp-low-vram` — a given flag
+  fills its window step.
 - **Certificates:** uv takes them from the Windows store (`UV_SYSTEM_CERTS`), Python — through `truststore`;
   downloads work even where an antivirus or proxy replaces HTTPS certificates.
-- **Generation model:** on the first installation the program asks for the model and shows the one recommended for
-  this card (the same recommendation as `install.sh`); Enter — the recommended one, or the name of any (`bf16`, `q8`,
-  `q6`, `q5`). The model downloads right away, the choice is written to `data\settings.json` and is not asked again
-  while the model is in place. Without the question: `--cpp-model auto|bf16|q8|q6|q5 [--cpp-low-vram]`.
-  The yue2.cpp program (`yue2cpp\yue-server.exe`) is part of the package; without it or without a downloaded model
-  the worker does not start — a repeated run resumes the download. To change the model later — in the app's "Settings".
-- **Stem separation** is always installed: the `sep-venv` environment in the installation folder (torch with CUDA,
-  the cu128 index, as in the main environment) and the RoFormer/DrumSep weights in `sep-models`. A repeated run
-  reinstalls the packages only if their set changed; if it fails, the worker does not start — a repeated run resumes.
-- The program does not install optional components (whisper, Seed-VC); it does not install sample kits
-  in advance — they download on first selection.
+- The yue2.cpp program (`yue2cpp\yue-server.exe`) is part of the package. To change the model later — in the app's
+  "Settings".
+- The program does not install optional components (whisper, Seed-VC); it does not install sample kits in advance —
+  they download on first selection.
 
 ## Worker in WSL2
 

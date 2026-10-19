@@ -1,7 +1,6 @@
 // Модель генерации (yue2.cpp) при установке partscaster-worker. Бинарник yue-server приходит из архива воркера
-// (собирает релиз), веса скачивает сам воркер (worker/engine_cpp.py download), рекомендуемую модель по
-// видеопамяти тоже даёт он (engine_cpp.py recommend — единственное место порогов); здесь — пути, команды и
-// запись настроек.
+// (собирает релиз), веса скачивает сам воркер (worker/engine_cpp.py download), пороги рекомендуемой модели —
+// тоже в engine_cpp.py (их читает launcher.go); здесь — пути, команды и запись настроек.
 package workerexe
 
 import (
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 )
 
 // CppModels — модели yue2.cpp (файл-манифест весов — worker/engine_cpp.py MODELS; порядок = меню).
@@ -83,16 +81,12 @@ func CppBinary(workerDir, goos string) string {
 func EngineCppCommand(home, workerDir string, args ...string) *exec.Cmd {
 	cmd := exec.Command(VenvPython(home, goosHere), append([]string{"engine_cpp.py"}, args...)...)
 	cmd.Dir = workerDir
+	HideConsole(cmd)
 	cmd.Env = os.Environ()
 	for k, v := range WorkerEnv(home, goosHere) {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	return cmd
-}
-
-// RecommendCommand — рекомендуемая модель для карты vramMiB: печатает «<модель> <0|1>» (1 — экономный режим).
-func RecommendCommand(home, workerDir string, vramMiB int) *exec.Cmd {
-	return EngineCppCommand(home, workerDir, "recommend", strconv.Itoa(vramMiB))
 }
 
 // ModelInstalledCommand — код выхода 0, если модель и VAE уже скачаны.
@@ -107,6 +101,7 @@ func DownloadEngineModel(home, workerDir, model string) *exec.Cmd {
 		"engine_cpp.download(sys.argv[1], lambda f, d, t: print(f'{f}: {d}/{t}', flush=True))"
 	cmd := exec.Command(VenvPython(home, goosHere), "-c", code, model)
 	cmd.Dir = workerDir
+	HideConsole(cmd)
 	cmd.Env = os.Environ()
 	for k, v := range WorkerEnv(home, goosHere) {
 		cmd.Env = append(cmd.Env, k+"="+v)

@@ -3,18 +3,18 @@ package workerexe
 import (
 	"errors"
 	"os"
+	"os/exec"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// BindToJob привязывает процесс к объекту задания Windows, который закрывается вместе с этой программой:
-// закрыли окно или программа упала — Python-воркер (и запущенный им yue-server) завершаются, а не висят
-// в фоне с занятой видеопамятью.
-func BindToJob(p *os.Process) error {
+// killOnCloseJob — объект задания, который при закрытии дескриптора завершает все свои процессы.
+func killOnCloseJob() (windows.Handle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
 		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
@@ -23,15 +23,47 @@ func BindToJob(p *os.Process) error {
 	}
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
 		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
-		return err
+		_ = windows.CloseHandle(job) // задание не настроилось — закрыть пустое
+		return 0, err
 	}
-	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(p.Pid))
+	return job, nil
+}
+
+// BindSelfToJob — эта программа и все её потомки (uv, Python, yue-server) в одном задании: программа вышла
+// («Выход» в трее, «Прервать» установку, сбой) — потомки завершаются, а не держат видеопамять и папку.
+func BindSelfToJob() error {
+	job, err := killOnCloseJob()
 	if err != nil {
 		return err
 	}
-	defer windows.CloseHandle(h)
-	// дескриптор задания не закрывается: его закроет система при выходе программы — это и есть сигнал
-	return windows.AssignProcessToJobObject(job, h)
+	// дескриптор не закрывается: его закроет система при выходе программы — это и есть сигнал
+	return windows.AssignProcessToJobObject(job, windows.CurrentProcess())
+}
+
+// KillTreeOnClose — процесс p со всеми потомками в своём задании; возвращённая функция их завершает (перезапуск
+// воркера из трея: Python и запущенный им yue-server останавливаются вместе).
+func KillTreeOnClose(p *os.Process) (func(), error) {
+	job, err := killOnCloseJob()
+	if err != nil {
+		return func() { _ = p.Kill() }, err
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(p.Pid))
+	if err != nil {
+		_ = windows.CloseHandle(job)
+		return func() { _ = p.Kill() }, err
+	}
+	defer func() { _ = windows.CloseHandle(h) }() // дескриптор процесса нужен только для привязки к заданию
+	if err := windows.AssignProcessToJobObject(job, h); err != nil {
+		_ = windows.CloseHandle(job)
+		return func() { _ = p.Kill() }, err
+	}
+	return func() { _ = windows.CloseHandle(job) }, nil
+}
+
+// HideConsole — дочерний процесс без своего консольного окна: программа воркера сама без консоли, и иначе каждый
+// запуск uv/python/nvidia-smi мелькал бы чёрным окном.
+func HideConsole(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 }
 
 func FreeBytes(dir string) (uint64, error) {

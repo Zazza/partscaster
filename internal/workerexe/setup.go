@@ -179,6 +179,7 @@ func InstallPackages(home, uv, requirementsPath string, out io.Writer) error {
 func run(out io.Writer, env []string, dir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = env, dir, out, out
+	HideConsole(cmd)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s %s: %w", filepath.Base(name), args[0], err)
 	}
@@ -189,6 +190,7 @@ func run(out io.Writer, env []string, dir, name string, args ...string) error {
 func ServeCommand(home, workerDir string, lan bool) *exec.Cmd {
 	cmd := exec.Command(venvPythonHere(home), ServeArgs(lan)...)
 	cmd.Dir = workerDir
+	HideConsole(cmd)
 	cmd.Env = os.Environ()
 	for k, v := range WorkerEnv(home, goosHere) {
 		cmd.Env = append(cmd.Env, k+"="+v)

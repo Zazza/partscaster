@@ -62,10 +62,19 @@ func InstallSep(home, uv string, out io.Writer) error {
 	return os.WriteFile(sepFingerprintFile(home), []byte(sepFingerprint()+"\n"), 0o644)
 }
 
+// SepReadyCommand — код 0, если веса разделения на месте целиком (sep_run.py ready; без сети и видеокарты).
+func SepReadyCommand(home, workerDir string) *exec.Cmd {
+	cmd := exec.Command(SepPython(home, goosHere), "sep_run.py", "ready", SepModelsDir(home))
+	cmd.Dir = workerDir
+	HideConsole(cmd)
+	return cmd
+}
+
 // SepDownloadCommand — скачать веса обеих моделей (sep_run.py download) без видеокарты; есть — не качает.
 func SepDownloadCommand(home, workerDir string) *exec.Cmd {
 	cmd := exec.Command(SepPython(home, goosHere), "sep_run.py", "download", SepModelsDir(home))
 	cmd.Dir = workerDir
+	HideConsole(cmd)
 	cmd.Env = os.Environ()
 	for k, v := range WorkerEnv(home, goosHere) {
 		cmd.Env = append(cmd.Env, k+"="+v)

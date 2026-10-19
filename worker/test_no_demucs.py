@@ -508,7 +508,12 @@ class Separator:
         name = str(args[0] if args else kw.get("model_filename"))
         d = self.kw.get("model_file_dir")
         _log({"download": name, "dir": d})
-        # как библиотека: файл пишется сразу в каталог весов; сбой — оборванный файл остаётся
+        # как библиотека: веса и конфиг модели пишутся сразу в каталог весов; сбой — оборванный файл весов остаётся
+        conf = {"BS-Roformer-SW.ckpt": "BS-Roformer-SW.yaml",
+                "MDX23C-DrumSep-aufr33-jarredou.ckpt": "config_drumsep_mdx23c.yaml"}.get(name)
+        if conf:
+            with open(os.path.join(d, conf), "w") as f:
+                f.write("cfg")
         with open(os.path.join(d, name), "wb") as f:
             f.write(b"part" if os.environ.get("FAKE_SEP_FAIL") else b"full")
         if os.environ.get("FAKE_SEP_FAIL"):
@@ -607,6 +612,27 @@ class TestSepRunDownload(unittest.TestCase):
         p = self._run()
         self.assertEqual(p.returncode, 0, f"{p.stdout}\n{p.stderr}")
         self.assertEqual({r["download"] for r in self._records() if "download" in r}, {drum})
+
+    def test_ready_only_when_both_complete(self):
+        """`sep_run.py ready` (проверка программы Windows при старте): 0 — обе модели на месте, иначе 1; без сети."""
+        def ready():
+            return subprocess.run([sys.executable, str(WORKER_DIR / "sep_run.py"), "ready", str(self.models)],
+                                  capture_output=True, text=True, timeout=60).returncode
+        self.models.mkdir()
+        self.assertEqual(ready(), 1)
+        self.assertEqual(self._run().returncode, 0)   # скачали обе
+        self.assertEqual(ready(), 0)
+        (self.models / f".{self.MODELS[1]}.ok").unlink()
+        (self.models / self.MODELS[1]).write_bytes(b"part")    # оборванная вторая
+        self.assertEqual(ready(), 1)
+        self.assertEqual(self._run().returncode, 0)   # докачали
+        self.assertEqual(ready(), 0)
+        (self.models / self.MODELS[0]).unlink()                # файл удалили, отметка .ok осталась
+        self.assertEqual(ready(), 1, "одна отметка без файла весов — не «на месте»")
+        self.log.unlink()
+        self.assertEqual(self._run().returncode, 0)   # установка докачивает удалённое, несмотря на отметку
+        self.assertIn(self.MODELS[0], {r["download"] for r in self._records() if "download" in r})
+        self.assertEqual(ready(), 0)
 
     def test_no_system_ffmpeg_uses_bundled(self):
         """Нет системного ffmpeg — берётся из пакета imageio-ffmpeg (кросс-ревью: без ffmpeg установка падала)."""

@@ -15,11 +15,11 @@ Partscaster @VERSION@ — установка / installation
    Необязательные компоненты (тексты треков, «голос альбома») ставит AI-агент
    инструментом install_worker — или по docs/ru/deployment.md (docs/en/deployment.md).
 
-   Windows без WSL: запустите partscaster-worker.exe (двойной щелчок). Первый раз он сам поставит
-   Python и пакеты (~25 ГБ вместе с моделью), дальше просто запускает воркер; окно открыто —
-   воркер работает, закрыли — остановлен. Адрес воркера в приложении — 127.0.0.1.
-   При первой установке спросит модель генерации: Enter — рекомендуемая для вашей видеокарты
-   (без вопроса — флаг --cpp-model auto или имя модели: bf16, q8, q6, q5).
+   Windows без WSL: запустите partscaster-worker.exe (двойной щелчок). Первый раз откроется окно
+   установки: папка, модель генерации (рекомендуемая для видеокарты отмечена), доступ из сети; дальше
+   оно само поставит Python, пакеты, разделение на дорожки и модель (~30 ГБ). Потом воркер работает
+   значком в трее (у часов): там адрес для приложения, журнал и «Выход». Адрес воркера в приложении —
+   127.0.0.1 (или адрес из меню значка, если приложение на другом компьютере).
 
 2. Приложение: запустите partscaster. В «Настройках» введите адрес воркера
    (например 192.0.2.10 — порт 8091 подставится) и нажмите «Проверить».
@@ -35,10 +35,11 @@ for an NVIDIA GPU machine (Linux, CUDA).
 1. Worker (on the GPU machine): tar xzf worker-@VERSION@.tar.gz && ./worker-@VERSION@/install.sh
    It installs the environment, packages, the yue2.cpp program and the generation model recommended for
    your graphics card (another model: --cpp-model bf16|q8|q6|q5; economy mode: --cpp-low-vram).
-   Windows without WSL: run partscaster-worker.exe — it installs Python and packages on first run (~25 GB
-   with the model), then just starts the worker while its window is open. Worker address: 127.0.0.1.
-   On first run it asks for the generation model: Enter — the one recommended for your graphics card
-   (--cpp-model auto or a model name — bf16, q8, q6, q5 — skips the question).
+   Windows without WSL: run partscaster-worker.exe — on first run an installation window opens: folder,
+   generation model (the one recommended for your graphics card is marked), network access; then it installs
+   Python, packages, stem separation and the model (~30 GB). After that the worker lives as a tray icon (by the
+   clock): the address for the app, the log and «Exit». Worker address: 127.0.0.1 (or the one from the icon menu if
+   the app is on another computer).
    Update — the same with a newer archive; rollback: ~/partscaster/current/install.sh --rollback
 2. App: run partscaster, enter the worker address in Settings, press "Check".
 3. AI agents: Settings → "For AI agents" — config snippets and "Connect to Claude Code".

@@ -3,6 +3,7 @@ module partscaster
 go 1.24
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/sys v0.30.0
 )

@@ -1,0 +1,61 @@
+/* Окно установки воркера — цвета и фаски как у приложения Partscaster (frontend/src/style.css, тёмная тема). */
+:root {
+  --bg: #08080c; --panel: #1e1e27; --panel2: #2b2b37; --border: #454556;
+  --bevel-hi: #56566a; --bevel-lo: #101015;
+  --text: #f2f3f7; --muted: #c9cbd8; --accent: #e8674a; --ok: #4caf7d; --err: #e8674a;
+  --lcd-bg: #14100a; --lcd-text: #ffbe3d; --lcd-glow: rgba(255, 190, 61, .35);
+  --play-grad: linear-gradient(180deg, #ffd27a, var(--lcd-text) 45%, #c98a1a); --play-fg: #1a1408;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
+  font: 14px/1.5 'Segoe UI', system-ui, sans-serif; }
+.top { display: flex; gap: 12px; align-items: center; padding: 14px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--bevel-lo); }
+.top img { filter: drop-shadow(0 0 6px var(--lcd-glow)); }
+.top h1 { margin: 0; font-size: 18px; color: var(--lcd-text); letter-spacing: .5px; }
+.sub { color: var(--muted); font-size: 12px; }
+main { flex: 1; overflow: auto; padding: 18px 20px; }
+h2 { margin: 0 0 10px; font-size: 16px; }
+h2.gap { margin-top: 18px; }
+p { margin: 0 0 10px; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--border); border-top-color: var(--bevel-hi);
+  border-left-color: var(--bevel-hi); padding: 10px 12px; color: var(--text); }
+.card.bad { border-color: var(--err); color: var(--err); }
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+input[type=text] { flex: 1; background: var(--lcd-bg); color: var(--lcd-text); border: 1px solid var(--border);
+  border-top-color: var(--bevel-lo); border-left-color: var(--bevel-lo); padding: 7px 9px;
+  font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size: 13px; }
+.hint { font-size: 12px; }
+.hint.warn { color: var(--lcd-text); }
+.options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.opt { display: flex; gap: 8px; align-items: baseline; background: var(--panel); border: 1px solid var(--border);
+  padding: 8px 10px; cursor: pointer; }
+.opt:hover { border-color: var(--bevel-hi); }
+.opt span { color: var(--muted); font-size: 12px; }
+.opt .rec { color: var(--lcd-text); font-size: 12px; }
+.check { display: flex; gap: 8px; align-items: center; color: var(--muted); }
+.stages { list-style: none; padding: 0; margin: 0 0 12px; }
+.stages li { padding: 4px 0 4px 26px; position: relative; color: var(--muted); }
+.stages li::before { content: '○'; position: absolute; left: 4px; }
+.stages li.cur { color: var(--text); font-weight: 600; }
+.stages li.cur::before { content: '⟳'; color: var(--lcd-text); }
+.stages li.ok::before { content: '✓'; color: var(--ok); }
+.stages li.bad { color: var(--err); }
+.stages li.bad::before { content: '✕'; color: var(--err); }
+.now { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size: 12px; color: var(--lcd-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 18px; }
+.fail { border: 1px solid var(--err); padding: 8px 10px; margin-bottom: 10px; }
+.fail p:first-child { color: var(--err); }
+pre { background: var(--lcd-bg); color: var(--muted); border: 1px solid var(--border); padding: 8px;
+  height: 200px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
+.addr { flex: 1; background: var(--lcd-bg); color: var(--lcd-text); padding: 8px 10px; border: 1px solid var(--border);
+  font-size: 14px; }
+.error { color: var(--err); margin-top: 10px; }
+.bottom { display: flex; gap: 8px; padding: 12px 20px; background: var(--panel); border-top: 1px solid var(--bevel-hi); }
+.grow { flex: 1; }
+button { font: inherit; cursor: pointer; padding: 7px 16px; border: 1px solid var(--border); color: var(--text);
+  background: var(--panel2); border-top-color: var(--bevel-hi); border-left-color: var(--bevel-hi); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--play-grad); color: var(--play-fg); font-weight: 600; border-color: #c98a1a; }
+button.link { background: none; border: none; color: var(--muted); padding: 0; text-decoration: underline; }

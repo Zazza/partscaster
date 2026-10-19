@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Partscaster — установка воркера</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <img src="logo.png" alt="" width="40" height="40">
+  <div>
+    <h1>Partscaster</h1>
+    <div class="sub">Установка воркера <span id="ver"></span></div>
+  </div>
+</header>
+
+<main>
+  <!-- 1. приветствие и видеокарта -->
+  <section id="s-welcome" class="step">
+    <h2>Добро пожаловать</h2>
+    <p>Воркер — часть Partscaster, которая генерирует музыку на видеокарте этого компьютера. Установка займёт
+      несколько гигабайт и некоторое время — всё ставится в одну папку, в систему ничего не прописывается.</p>
+    <p class="card" id="gpu"></p>
+  </section>
+
+  <!-- 2. папка -->
+  <section id="s-home" class="step" hidden>
+    <h2>Папка установки</h2>
+    <p>Сюда лягут Python, пакеты, модели и ваши треки.</p>
+    <div class="row">
+      <input id="home" type="text" spellcheck="false">
+      <button id="browse" class="ghost">Выбрать…</button>
+    </div>
+    <p class="hint" id="free"></p>
+  </section>
+
+  <!-- 3. модель и доступ -->
+  <section id="s-choices" class="step" hidden>
+    <h2>Модель генерации</h2>
+    <div id="models" class="options"></div>
+    <label class="check"><input id="low" type="checkbox"> Экономный режим — меньше видеопамяти (~4,5 ГБ), песня до ~3,5 мин</label>
+    <p class="hint">Модель можно сменить потом в настройках приложения.</p>
+    <h2 class="gap">Доступ</h2>
+    <div class="options">
+      <label class="opt"><input type="radio" name="lan" value="0"> <b>Только этот компьютер</b>
+        <span>приложение Partscaster стоит здесь же</span></label>
+      <label class="opt"><input type="radio" name="lan" value="1"> <b>С других компьютеров в сети</b>
+        <span>приложение на другом компьютере; можно сменить в меню значка в трее</span></label>
+    </div>
+  </section>
+
+  <!-- 4. установка -->
+  <section id="s-install" class="step" hidden>
+    <h2 id="inst-title">Установка</h2>
+    <ol id="stages" class="stages"></ol>
+    <p class="now" id="now"></p>
+    <div id="fail" class="fail" hidden>
+      <p id="fail-text"></p>
+      <p class="hint">Уже скачанное не пропадёт — «Повторить» продолжит с того же места.</p>
+    </div>
+    <button id="toggle-log" class="link">Подробнее ▾</button>
+    <pre id="log" hidden></pre>
+  </section>
+
+  <!-- 5. готово -->
+  <section id="s-done" class="step" hidden>
+    <h2>Готово</h2>
+    <p>Воркер запустится и будет работать в фоне — его значок появится в трее (у часов). Оттуда — журнал, доступ из
+      сети и выход.</p>
+    <p>В приложении Partscaster укажите адрес воркера:</p>
+    <div class="row">
+      <code id="addr" class="addr"></code>
+      <button id="copy" class="ghost">Скопировать</button>
+    </div>
+  </section>
+
+  <p class="error" id="err" hidden></p>
+</main>
+
+<footer class="bottom">
+  <button id="back" class="ghost" hidden>Назад</button>
+  <span class="grow"></span>
+  <button id="retry" class="primary" hidden>Повторить</button>
+  <button id="openlog" class="ghost" hidden>Открыть журнал</button>
+  <button id="next" class="primary">Далее</button>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

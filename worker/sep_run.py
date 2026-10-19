@@ -5,6 +5,7 @@ YuE2 они бы конфликтовали. Подпроцесс к тому ж
 
     python sep_run.py <аудио> <каталог_выхода> <каталог_весов>
     python sep_run.py download <каталог_весов>   — только скачать веса обеих моделей (установка; без видеокарты)
+    python sep_run.py ready <каталог_весов>      — код 0, если веса обеих моделей на месте целиком (без сети)
 
 Пишет в каталог выхода сырые дорожки модели как есть (<имя>.wav, частота
 модели) и печатает последней строкой JSON:
@@ -66,6 +67,21 @@ def _run(model: str, src: Path, out_dir: Path, models_dir: Path, prefix: str) ->
     return out
 
 
+def _complete(models_dir: Path, model: str) -> bool:
+    """Веса model на месте целиком: файл и конфиг есть и либо отметка .ok (скачано целиком), либо (скачаны до
+    отметок) полный размер. Одна отметка без файлов — не на месте (файлы удалили)."""
+    size, conf = KNOWN_WEIGHTS[model]
+    ckpt = models_dir / model
+    if not (ckpt.is_file() and (models_dir / conf).is_file()):
+        return False
+    return (models_dir / f".{model}.ok").is_file() or ckpt.stat().st_size == size
+
+
+def ready(models_dir: Path) -> bool:
+    """Обе модели на месте — разделению ничего не нужно качать."""
+    return all(_complete(models_dir, m) for m in (MAIN_MODEL, DRUM_MODEL))
+
+
 def download(models_dir: Path) -> None:
     """Веса обеих моделей в каталог весов; скачанное целиком помечено .<модель>.ok и не качается заново.
     audio-separator пишет файл сразу на место и потом верит одному его наличию — оборванная загрузка выглядела бы
@@ -75,13 +91,11 @@ def download(models_dir: Path) -> None:
     _ensure_ffmpeg(models_dir)
     for model in (MAIN_MODEL, DRUM_MODEL):
         mark = models_dir / f".{model}.ok"
-        size, conf = KNOWN_WEIGHTS[model]
-        ckpt = models_dir / model
-        if not mark.is_file() and ckpt.is_file() and ckpt.stat().st_size == size and (models_dir / conf).is_file():
-            mark.touch()   # скачаны раньше, целиком
-        if mark.is_file():
+        if _complete(models_dir, model):
+            mark.touch()   # на месте целиком (и скачанные до отметок — тоже)
             print(f"веса {model}: на месте", flush=True)
             continue
+        mark.unlink(missing_ok=True)   # отметка без файлов весов — не в счёт: качаем заново
         tmp = models_dir / f".{model}.partial"
         shutil.rmtree(tmp, ignore_errors=True)   # остаток оборванной загрузки
         tmp.mkdir()
@@ -94,6 +108,8 @@ def download(models_dir: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) == 3 and argv[1] == "ready":
+        return 0 if ready(Path(argv[2])) else 1
     if len(argv) == 3 and argv[1] == "download":
         try:
             download(Path(argv[2]))
