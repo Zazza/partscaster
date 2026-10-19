@@ -63,8 +63,11 @@ func (p *player) Load(id int64, wavBytes []byte, dur time.Duration) error {
 	// расширение по содержимому: pw-play (libsndfile) определяет формат по
 	// заголовку, но имя файла оставляем честным для прозрачности
 	ext := ".wav"
-	if len(wavBytes) >= 4 && string(wavBytes[:4]) == "fLaC" {
+	switch {
+	case len(wavBytes) >= 4 && string(wavBytes[:4]) == "fLaC":
 		ext = ".flac"
+	case isMP3(wavBytes): // встроенные клипы окна знакомства
+		ext = ".mp3"
 	}
 	f, err := os.CreateTemp("", fmt.Sprintf("partscaster-%d-*%s", id, ext))
 	if err != nil {
@@ -85,6 +88,14 @@ func (p *player) Load(id int64, wavBytes []byte, dur time.Duration) error {
 	p.offset = 0
 	p.mu.Unlock()
 	return nil
+}
+
+// isMP3 — mp3 по началу файла: тег ID3 или заголовок кадра MPEG (11 бит синхронизации).
+func isMP3(b []byte) bool {
+	if len(b) >= 3 && string(b[:3]) == "ID3" {
+		return true
+	}
+	return len(b) >= 2 && b[0] == 0xFF && b[1]&0xE0 == 0xE0
 }
 
 // killLocked останавливает воспроизведение, но НЕ удаляет загруженный файл —

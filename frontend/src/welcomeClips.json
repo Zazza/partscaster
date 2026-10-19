@@ -1,0 +1,72 @@
+{
+  "steps": [
+    {
+      "id": "form",
+      "title": { "ru": "Добавить партию", "en": "Add a part" },
+      "pairs": [
+        {
+          "id": "guitar",
+          "title": { "ru": "Вступает блюзовая гитара", "en": "The blues guitar comes in" },
+          "before": "01-guitar-before.mp3",
+          "after": "01-guitar-after.mp3",
+          "before_label": { "ru": "только акустика", "en": "acoustic only" },
+          "after_label": { "ru": "с блюзовой гитарой", "en": "with blues guitar" },
+          "dur": 12.02
+        },
+        {
+          "id": "band",
+          "title": { "ru": "Возвращаются барабаны", "en": "The drums come back" },
+          "before": "08-band-before.mp3",
+          "after": "08-band-after.mp3",
+          "before_label": { "ru": "гитара и голос", "en": "guitar and voice" },
+          "after_label": { "ru": "с барабанами и басом", "en": "with drums and bass" },
+          "dur": 13.03
+        }
+      ]
+    },
+    {
+      "id": "fills",
+      "title": { "ru": "Сбивки и провалы", "en": "Fills and drops" },
+      "pairs": [
+        {
+          "id": "fill",
+          "title": { "ru": "Барабанная сбивка", "en": "Drum fill" },
+          "before": "06-fill-before.mp3",
+          "after": "06-fill-after.mp3",
+          "before_label": { "ru": "без сбивки", "en": "no fill" },
+          "after_label": { "ru": "со сбивкой", "en": "with fill" },
+          "dur": 11.04
+        },
+        {
+          "id": "drop",
+          "title": { "ru": "Провал перед соло", "en": "A drop before the solo" },
+          "before": "02-drop-before.mp3",
+          "after": "02-drop-after.mp3",
+          "before_label": { "ru": "без провала", "en": "no drop" },
+          "after_label": { "ru": "провал и вход соло", "en": "drop and solo entry" },
+          "dur": 18.02
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "title": { "ru": "Голос", "en": "Vocals" },
+      "pairs": [
+        {
+          "id": "shout",
+          "title": { "ru": "Случайный выкрик", "en": "A random shout" },
+          "before": "01-shout-before.mp3",
+          "after": "01-shout-after.mp3",
+          "before_label": { "ru": "с выкриком", "en": "with the shout" },
+          "after_label": { "ru": "вырезан", "en": "cut out" },
+          "dur": 6.02
+        }
+      ]
+    },
+    {
+      "id": "presets",
+      "title": { "ru": "Пресеты звука", "en": "Sound presets" },
+      "pairs": []
+    }
+  ]
+}

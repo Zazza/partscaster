@@ -28,6 +28,8 @@ const (
 	loopSeconds = 180.0
 	// phraseLoopID — «id трека» круга фразы в плеере: не совпадает ни с одной джобой
 	phraseLoopID int64 = 1 << 40
+	// welcomeClipID — «id трека» клипа окна знакомства в плеере: не джоба и не круг фразы
+	welcomeClipID int64 = 1 << 41
 )
 
 var audioFileFilter = []runtime.FileFilter{

@@ -1306,7 +1306,8 @@ function onWindowClick(e) {
              :info="planInfo"
              @close="planOpen = false" @use="usePlanAbc" @new-plan="makePlan" @from-track="transcribeFromTrack" />
   <MetricsModal ref="metricsModal" :jobs="jobs" />
-  <WelcomeModal v-if="welcome" :tab="welcome" @close="closeWelcome" />
+  <WelcomeModal v-if="welcome" :tab="welcome" @close="closeWelcome"
+                @new-track="(d) => { closeWelcome(d); openNewTrack() }" />
   <MyStylesModal v-if="myStylesOpen" @close="myStylesOpen = false"
                  @apply="(item) => { applyPreset(item, 'slots'); myStylesOpen = false }" />
   <ConfirmModal />

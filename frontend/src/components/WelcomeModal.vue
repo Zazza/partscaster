@@ -1,20 +1,43 @@
 <script setup>
-// Окно при запуске: «Что это» (смысл приложения в пяти пунктах) и справа
-// «Что нового» (новости версии). Когда показывать — решает welcome.js.
-import { ref, watch } from 'vue'
+// Окно при запуске: «Что это» по шагам (что за приложение → примеры было/стало → видеокарты)
+// и справа «Что нового» (новости версии). Когда показывать — решает welcome.js; шаги примеров
+// и их клипы — welcomeClips.json (welcomeSteps.js).
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { api } from '../api.js'
 import { useI18n } from '../i18n/index.js'
+import { usePlayer } from '../composables/usePlayer.js'
 import { RELEASE_NOTES } from '../releaseNotes.js'
+import { visibleSteps, WELCOME_CLIP_ID } from '../welcomeSteps.js'
+import CLIPS from '../welcomeClips.json'
+import WelcomeClip from './WelcomeClip.vue'
 
 const props = defineProps({ tab: { type: String, default: 'about' } })
-const emit = defineEmits(['close'])   // close(dontShow: boolean)
+const emit = defineEmits(['close', 'new-track'])   // close(dontShow), new-track(dontShow)
 const { t, locale } = useI18n()
+const { playerState, nowPlayingKey, refreshPlayer } = usePlayer()
 
 const cur = ref(props.tab)
 watch(() => props.tab, (v) => { cur.value = v })
 const dontShow = ref(false)
-const POINTS = ['plan', 'edit', 'versions', 'sound', 'agent']
 const notes = RELEASE_NOTES[0]
+const steps = visibleSteps(CLIPS)
+const step = ref(0)
+const st = computed(() => steps[step.value])
+const tr = (o) => (o && (o[locale.value] || o.ru)) || ''
+
+// клип окна играет — стоп при смене шага/вкладки и закрытии; чужой трек не трогаем
+function stopClip() {
+  if (playerState.value.job_id !== WELCOME_CLIP_ID || !nowPlayingKey.value.startsWith('welcome:')) return
+  api.stopAudio().catch(() => { /* плеер уже остановлен — нечего делать */ })
+  nowPlayingKey.value = ''
+  refreshPlayer()
+}
+watch([step, cur], stopClip)
+onBeforeUnmount(stopClip)
+
+const go = (i) => { step.value = Math.max(0, Math.min(steps.length - 1, i)) }
 const close = () => emit('close', dontShow.value)
+const newTrack = () => emit('new-track', dontShow.value)
 </script>
 
 <template>
@@ -32,15 +55,32 @@ const close = () => emit('close', dontShow.value)
       </div>
 
       <div v-if="cur === 'about'" class="welcome-body">
-        <h2 class="welcome-title">{{ t('welcome.title') }}</h2>
-        <p class="welcome-lead">{{ t('welcome.lead') }}</p>
-        <dl class="welcome-points">
-          <template v-for="p in POINTS" :key="p">
-            <dt>{{ t('welcome.' + p + '.title') }}</dt>
-            <dd>{{ t('welcome.' + p + '.body') }}</dd>
-          </template>
-        </dl>
-        <p class="muted welcome-start">{{ t('welcome.start') }}</p>
+        <template v-if="st.id === 'about'">
+          <h2 class="welcome-title">{{ t('welcome.title') }}</h2>
+          <p class="welcome-lead">{{ t('welcome.about.goal') }}</p>
+          <p class="welcome-lead">{{ t('welcome.about.how') }}</p>
+          <p class="welcome-lead muted">{{ t('welcome.about.name') }}</p>
+          <p class="welcome-lead">{{ t('welcome.about.next') }}</p>
+        </template>
+
+        <template v-else-if="st.id === 'gpu'">
+          <h2 class="welcome-title">{{ t('welcome.gpu.title') }}</h2>
+          <p class="welcome-lead">{{ t('welcome.gpu.worker') }}</p>
+          <p class="welcome-lead welcome-tight">{{ t('welcome.gpu.models') }}</p>
+          <ul class="welcome-news">
+            <li>{{ t('welcome.gpu.bf16') }}</li>
+            <li>{{ t('welcome.gpu.q8') }}</li>
+            <li>{{ t('welcome.gpu.low') }}</li>
+          </ul>
+          <p class="welcome-lead welcome-agent muted">{{ t('welcome.gpu.agent') }}</p>
+          <button class="primary" @click="newTrack"><AppIcon name="plus" /> {{ t('welcome.newTrack') }}</button>
+        </template>
+
+        <template v-else>
+          <h2 class="welcome-title">{{ tr(st.title) }}</h2>
+          <p class="muted welcome-hint">{{ t('welcome.example.hint') }}</p>
+          <WelcomeClip v-for="p in st.pairs" :key="p.id" :pair="p" />
+        </template>
       </div>
 
       <div v-else class="welcome-body">
@@ -48,6 +88,16 @@ const close = () => emit('close', dontShow.value)
         <ul class="welcome-news">
           <li v-for="(item, i) in notes[locale] || notes.ru" :key="i">{{ item }}</li>
         </ul>
+      </div>
+
+      <div v-if="cur === 'about'" class="welcome-steps">
+        <button class="ghost small-btn" :disabled="step === 0" @click="go(step - 1)">{{ t('welcome.prev') }}</button>
+        <span class="welcome-dots">
+          <button v-for="(s, i) in steps" :key="s.id" class="welcome-dot" :class="{ on: i === step }"
+                  :title="t('welcome.step', { n: i + 1 })" :aria-label="t('welcome.step', { n: i + 1 })" @click="go(i)"></button>
+        </span>
+        <button class="ghost small-btn" :style="{ visibility: step < steps.length - 1 ? 'visible' : 'hidden' }"
+                @click="go(step + 1)">{{ t('welcome.next') }}</button>
       </div>
 
       <div class="modal-actions welcome-actions">
@@ -67,19 +117,20 @@ const close = () => emit('close', dontShow.value)
 .welcome-logo { width: 32px; height: 32px; flex: none; filter: drop-shadow(0 0 6px var(--lcd-glow)); }
 .welcome-tabs { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .welcome-tabs .on { color: var(--text); border-color: var(--accent); }
-.welcome-body { overflow-y: auto; min-height: 0; }
+/* высота тела — одна на все шаги: кнопки шагов не прыгают при листании */
+.welcome-body { overflow-y: auto; min-height: 300px; }
 .welcome-modal h2.welcome-title { margin: 0 0 6px; padding: 0; background: none; border: none; text-shadow: none;
   font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--accent-text); }
-.welcome-lead { margin: 0 0 14px; line-height: 1.5; max-width: 62ch; }
-.welcome-points { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; }
-.welcome-points dt { font-weight: 600; white-space: nowrap; }
-.welcome-points dd { margin: 0; color: var(--muted); line-height: 1.45; }
-.welcome-start { margin: 14px 0 0; }
+.welcome-lead { margin: 0 0 12px; line-height: 1.5; max-width: 62ch; }
+.welcome-tight { margin-bottom: 6px; }
+.welcome-agent { margin-top: 12px; }
+.welcome-hint { margin: 0 0 4px; }
 .welcome-news { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+.welcome-steps { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.welcome-dots { display: inline-flex; gap: 8px; }
+.welcome-dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid var(--border);
+  background: transparent; cursor: pointer; }
+.welcome-dot.on { background: var(--accent); border-color: var(--accent); }
 .welcome-actions { align-items: center; }
 .welcome-dont { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-@media (max-width: 560px) {
-  .welcome-points { grid-template-columns: 1fr; gap: 2px; }
-  .welcome-points dd { margin-bottom: 8px; }
-}
 </style>

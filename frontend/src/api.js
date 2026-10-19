@@ -10,7 +10,7 @@ import {
   YueVoiceCreate, YueVoices, YueVoiceDelete, YueVariantToTrack, YueVocalContour, YueJobTones, YuePlanCheck, YueJobGrid, YueSplice, YueContinueJob, YueFragmentJob, YueSetHead, YueRenameJob, YueRetryJob, YueSetJobFolder, YueVoiceConvert, YueVoicePreview, YueRebuildSections, YueDspVariantDelete, YueVolumeEnvelope,
   YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
-  YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
+  YuePlayWelcomeClip, YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
   YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
 } from './wailsjs/go/main/App'
@@ -149,6 +149,8 @@ export const api = {
   // «голос альбома», прослушать кусок: {ref_job_id, from, to} → {file, from, to}
   voicePreview: (id, params) => YueVoicePreview(id, params),
   playFile: (id, file, dur) => YuePlayFile(id, file, dur),
+  // клип «было/стало» окна знакомства (встроен в приложение) с секунды start
+  playWelcomeClip: (name, start, dur) => YuePlayWelcomeClip(name, start, dur),
   playAudio: (id) => YuePlayAudio(id),
   stopAudio: () => YueStopAudio(),
   toggleAudio: () => YueToggleAudio(),

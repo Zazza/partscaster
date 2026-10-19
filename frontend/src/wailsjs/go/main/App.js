@@ -250,6 +250,10 @@ export function YuePlayPreview(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['YuePlayPreview'](arg1, arg2, arg3, arg4);
 }
 
+export function YuePlayWelcomeClip(arg1, arg2, arg3) {
+  return window['go']['main']['App']['YuePlayWelcomeClip'](arg1, arg2, arg3);
+}
+
 export function YueQueueCancel(arg1) {
   return window['go']['main']['App']['YueQueueCancel'](arg1);
 }
