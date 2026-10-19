@@ -102,6 +102,25 @@ function logLine(text) {
   if (text.trim()) $('now').textContent = text
 }
 
+// человекочитаемые байты: «3,8 ГБ», «530 МБ» — сырые числа в окне не читаются
+function human(n) {
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(1).replace('.', ',') + ' ГБ'
+  if (n >= 1024 ** 2) return Math.round(n / 1024 ** 2) + ' МБ'
+  return Math.round(n / 1024) + ' КБ'
+}
+
+function hideProgress() {
+  $('prog').hidden = true
+  $('prog-fill').style.width = '0'
+}
+
+window.runtime.EventsOn('progress', (p) => {
+  const pct = p.total > 0 ? Math.floor((100 * p.done) / p.total) : 0
+  $('prog').hidden = false
+  $('prog-fill').style.width = pct + '%'
+  $('prog-text').textContent = `${p.file} — ${human(p.done)} из ${human(p.total)} (${pct}%)`
+})
+
 async function start() {
   setError('')
   // экран установки — до вызова: события этапов и быстрый сбой могут прийти раньше ответа Start
@@ -127,12 +146,14 @@ async function start() {
 window.runtime.EventsOn('stage', (n) => {
   curStage = n
   markStage(n, 'cur')
+  hideProgress()
   if (n < STAGES.length) $('now').textContent = STAGES[n] + '…'
 })
 window.runtime.EventsOn('line', logLine)
 window.runtime.EventsOn('failed', (text) => {
   phase = 'failed'
   markStage(curStage, 'bad')
+  hideProgress()
   $('inst-title').textContent = 'Установка не закончилась'
   $('fail-text').textContent = text
   $('fail').hidden = false
@@ -140,6 +161,7 @@ window.runtime.EventsOn('failed', (text) => {
 })
 window.runtime.EventsOn('done', (addr) => {
   phase = 'done'
+  hideProgress()
   markStage(STAGES.length, '')
   $('addr').textContent = addr
   show('done')

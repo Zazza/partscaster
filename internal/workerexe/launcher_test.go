@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -104,8 +105,8 @@ func TestRecommendFromSourceMissing(t *testing.T) {
 
 // --- ТК4–ТК7: этапы установки ---
 
-// fakeReporter — журнал событий в порядке прихода: "stage:<N>" и "line:<текст>". Под мьютексом: строки
-// могут приходить из другой горутины.
+// fakeReporter — журнал событий в порядке прихода: "stage:<N>", "line:<текст>" и "progress:<файл>:<из>/<всего>".
+// Под мьютексом: строки могут приходить из другой горутины.
 type fakeReporter struct {
 	mu     sync.Mutex
 	events []string
@@ -121,6 +122,12 @@ func (r *fakeReporter) Line(text string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, "line:"+text)
+}
+
+func (r *fakeReporter) Progress(file string, done, total int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, fmt.Sprintf("progress:%s:%d/%d", file, done, total))
 }
 
 func (r *fakeReporter) all() []string {
@@ -571,5 +578,55 @@ func TestReleaseBuildsWorkerExeWindowsGUI(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("в tools/release.sh нет строки go build ... partscaster-worker.exe")
+	}
+}
+
+// --- ход скачивания: строки «файл: из/всего» идут Progress-ом, остальное — Line ---
+
+func TestParseProgress(t *testing.T) {
+	for _, tc := range []struct {
+		line        string
+		file        string
+		done, total int64
+		ok          bool
+	}{
+		{"YuE2-3B-Q8_0.gguf: 3731452607/3810233064", "YuE2-3B-Q8_0.gguf", 3731452607, 3810233064, true},
+		{"YuE2-Vae-F32.gguf: 0/530497344", "YuE2-Vae-F32.gguf", 0, 530497344, true},
+		{"веса модели: скачаны", "", 0, 0, false}, // не числа
+		{"модель q8: 12/10", "", 0, 0, false},     // из > всего
+		{"пакеты: 5/0", "", 0, 0, false},          // всего 0
+		{"без префикса 123/456", "", 0, 0, false}, // нет «: »
+		{"a: 1/2/3", "", 0, 0, false},             // лишний слэш
+	} {
+		f, d, tot, ok := parseProgress(tc.line)
+		if ok != tc.ok || f != tc.file || d != tc.done || tot != tc.total {
+			t.Errorf("parseProgress(%q) = (%q,%d,%d,%v), ждали (%q,%d,%d,%v)",
+				tc.line, f, d, tot, ok, tc.file, tc.done, tc.total, tc.ok)
+		}
+	}
+}
+
+func TestRunLinesRoutesProgress(t *testing.T) {
+	rep := &fakeReporter{}
+	err := runLines(context.Background(), func(_ context.Context, w io.Writer) error {
+		fmt.Fprint(w, "Скачивание модели Q8…\n")
+		fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 1048576/3810233064\n")
+		fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 2097152/3810233064\n")
+		fmt.Fprint(w, "YuE2-Vae-F32.gguf: 530497344/530497344\n")
+		fmt.Fprint(w, "готово\n")
+		return nil
+	}, rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"line:Скачивание модели Q8…",
+		"progress:YuE2-3B-Q8_0.gguf:1048576/3810233064",
+		"progress:YuE2-3B-Q8_0.gguf:2097152/3810233064",
+		"progress:YuE2-Vae-F32.gguf:530497344/530497344",
+		"line:готово",
+	}
+	if got := rep.all(); !reflect.DeepEqual(got, want) {
+		t.Errorf("события = %v, ждали %v", got, want)
 	}
 }

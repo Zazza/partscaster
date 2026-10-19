@@ -45,6 +45,11 @@ input[type=text] { flex: 1; background: var(--lcd-bg); color: var(--lcd-text); b
 .stages li.bad::before { content: '✕'; color: var(--err); }
 .now { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size: 12px; color: var(--lcd-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 18px; }
+.prog { margin: 4px 0 10px; }
+.prog .bar { height: 14px; background: var(--lcd-bg); border: 1px solid var(--border);
+  border-top-color: var(--bevel-lo); border-left-color: var(--bevel-lo); }
+.prog .fill { height: 100%; width: 0; background: var(--play-grad); transition: width .3s; }
+.prog .hint { margin: 4px 0 0; }
 .fail { border: 1px solid var(--err); padding: 8px 10px; margin-bottom: 10px; }
 .fail p:first-child { color: var(--err); }
 pre { background: var(--lcd-bg); color: var(--muted); border: 1px solid var(--border); padding: 8px;

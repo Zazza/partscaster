@@ -98,10 +98,13 @@ const (
 	StageStart                 // запуск воркера (его сообщает сам запуск, не RunInstall)
 )
 
-// Reporter — куда установка сообщает этап и строки вывода (окно установки и журнал).
+// Reporter — куда установка сообщает этап, строки вывода и ход скачивания (окно установки и журнал).
 type Reporter interface {
 	Stage(s Stage)
 	Line(text string)
+	// Progress — скачивание большого файла: file — имя, done/total — байты. Приходит часто (каждый мегабайт):
+	// потребитель сам решает, как часто показывать; неProgress-строки идут через Line.
+	Progress(file string, done, total int64)
 }
 
 // InstallSteps — шаги установки; каждый сам пропускает уже сделанное, поэтому «Повторить» безопасно.
@@ -130,7 +133,8 @@ func RunInstall(ctx context.Context, steps InstallSteps, rep Reporter) error {
 }
 
 // runLines — шаг с выводом через трубу: строки уходят в rep.Line до того, как шаг вернётся
-// (и неполная последняя строка тоже).
+// (и неполная последняя строка тоже). Строки хода скачивания («файл: 123/456» — engine_cpp.py
+// печатает по мегабайту) идут в rep.Progress: иначе окно и журнал утонут в тысячах строк.
 func runLines(ctx context.Context, run func(context.Context, io.Writer) error, rep Reporter) error {
 	pr, pw := io.Pipe()
 	done := make(chan struct{})
@@ -139,7 +143,12 @@ func runLines(ctx context.Context, run func(context.Context, io.Writer) error, r
 		sc := bufio.NewScanner(pr)
 		sc.Buffer(make([]byte, 64*1024), 1024*1024)
 		for sc.Scan() {
-			rep.Line(strings.TrimRight(sc.Text(), "\r"))
+			line := strings.TrimRight(sc.Text(), "\r")
+			if f, d, t, ok := parseProgress(line); ok {
+				rep.Progress(f, d, t)
+				continue
+			}
+			rep.Line(line)
 		}
 		_, _ = io.Copy(io.Discard, pr) // слишком длинная строка — дочитать, чтобы шаг не встал на записи
 	}()
@@ -147,6 +156,28 @@ func runLines(ctx context.Context, run func(context.Context, io.Writer) error, r
 	_ = pw.Close() // закрытие своей трубы: ошибки нет
 	<-done
 	return err
+}
+
+// parseProgress — строка вида «YuE2-3B-Q8_0.gguf: 3731452607/3810233064» (engine_cpp.py download).
+func parseProgress(line string) (file string, done, total int64, ok bool) {
+	i := strings.LastIndex(line, ": ")
+	if i <= 0 {
+		return "", 0, 0, false
+	}
+	rest := line[i+2:]
+	slash := strings.IndexByte(rest, '/')
+	if slash <= 0 || strings.IndexByte(rest[slash+1:], '/') >= 0 {
+		return "", 0, 0, false
+	}
+	d, err := strconv.ParseInt(rest[:slash], 10, 64)
+	if err != nil {
+		return "", 0, 0, false
+	}
+	t, err := strconv.ParseInt(rest[slash+1:], 10, 64)
+	if err != nil || t <= 0 || d < 0 || d > t {
+		return "", 0, 0, false
+	}
+	return strings.TrimSpace(line[:i]), d, t, true
 }
 
 // --- настройки запуска ---

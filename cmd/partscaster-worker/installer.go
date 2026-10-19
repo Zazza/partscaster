@@ -329,10 +329,15 @@ func (i *Installer) emit(event string, data any) {
 	}
 }
 
-// windowReporter — этапы и строки установки: в окно и в журнал.
+// windowReporter — этапы и строки установки: в окно и в журнал. Скачивание — событием progress
+// не чаще раза в 300 мс (engine_cpp.py печатает ход каждым мегабайтом — тысячи строк за модель);
+// в журнал — каждым изменением десятка процентов и в конце файла.
 type windowReporter struct {
 	i   *Installer
 	log *os.File
+
+	lastEmit time.Time // троттлинг событий в окно
+	lastPct  int       // последняя записанная в журнал десятка процентов
 }
 
 func (r *windowReporter) Stage(s workerexe.Stage) {
@@ -343,6 +348,31 @@ func (r *windowReporter) Stage(s workerexe.Stage) {
 func (r *windowReporter) Line(text string) {
 	sayln(r.log, text)
 	r.i.emit("line", text)
+}
+
+func (r *windowReporter) Progress(file string, done, total int64) {
+	now := time.Now()
+	if done < total && now.Sub(r.lastEmit) < 300*time.Millisecond {
+		return
+	}
+	r.lastEmit = now
+	r.i.emit("progress", map[string]any{"file": file, "done": done, "total": total})
+	if pct := int(100 * done / total); pct/10 != r.lastPct/10 || done == total {
+		r.lastPct = pct
+		say(r.log, "  %s: %s из %s (%d%%)\n", file, humanBytes(done), humanBytes(total), pct)
+	}
+}
+
+// humanBytes — «3,8 ГБ» / «530 МБ»: байты в лоб не читаются.
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f ГБ", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%d МБ", n/(1<<20))
+	default:
+		return fmt.Sprintf("%d КБ", n/(1<<10))
+	}
 }
 
 func checkGPU() (workerexe.GPU, error) {
