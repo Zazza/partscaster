@@ -49,7 +49,12 @@ HASH="$(go run ./cmd/srchash)"
 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS -X main.buildHash=$HASH" -o "build/bin/partscaster-mcp$EXE" ./cmd/partscaster-mcp
 if [[ "$GOOS" == "windows" ]]; then
   # partscaster-worker.exe — воркер без WSL: код воркера вшивается в программу (go:embed из payload/); окно установки
-  # (Wails — теги desktop,production) и значок в трее, без консоли (-H windowsgui); cgo не нужен
+  # (Wails — теги desktop,production) и значок в трее, без консоли (-H windowsgui); cgo не нужен.
+  # Иконка exe и сведения о файле — ресурсом .syso (go-winres): go build подхватывает его сам; перегенерация —
+  # из cmd/partscaster-worker/icon.ico (рисует tools/make-worker-icon.py)
+  (cd cmd/partscaster-worker && go tool go-winres simply --icon icon.ico --manifest none \
+    --product-name "Partscaster Worker" --file-description "Partscaster — воркер (установка и трей)" \
+    --product-version "$VERSION" --arch "$GOARCH")
   PAYLOAD=cmd/partscaster-worker/payload
   mkdir -p "$PAYLOAD"
   rm -f "$PAYLOAD"/worker-*.tar.gz
