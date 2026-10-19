@@ -54,7 +54,7 @@ New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $rel = "$build/Release"
 if (-not (Test-Path "$rel/yue-server.exe")) { $rel = $build }   # едино-конфигурная сборка кладёт рядом
 Copy-Item "$rel/yue-server.exe" $Out
-Copy-Item "$rel"/*.dll $Out -ErrorAction SilentlyContinue       # libggml*.dll и ggml*.dll — рядом с exe
-if (-not (Test-Path "$Out/libggml-cuda.dll")) { Write-Host '!! libggml-cuda.dll не найден — проверьте сборку' }
+Copy-Item "$rel\*.dll" $Out        # ggml*.dll — рядом с exe (wildcard внутри кавычек: снаружи PS 5.1 его не склеит)
+if (-not (Test-Path "$Out/ggml-cuda.dll")) { Write-Host '!! ggml-cuda.dll не найден — проверьте сборку' }
 $Commit | Out-File -Encoding ascii "$Out/COMMIT"
 Write-Host $Out
