@@ -1076,3 +1076,31 @@ class TestParseAndSave(_EnvCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContextOverflow(_EnvCase):
+    """Не влезающий в контекст запрос: _fail разбирает числа из журнала сервера в CppContextOverflow,
+    fit_budget даёт бюджет по остатку (None — остаток мал). Воркер по ним повторяет с меньшим бюджетом:
+    бюджет — потолок, а не длина, сервер же резервирует его целиком и отказывает."""
+
+    def _fail_with_log(self, text: str):
+        logf = self.tmp / "yue-server.log"
+        logf.write_text(text, encoding="utf-8")
+        srv = self.e.CppServer(self.tmp / "bin", self.tmp / "m.gguf", self.tmp / "v.gguf", False, log_path=logf)
+        return srv._fail(False)
+
+    def test_fail_parses_numbers(self):
+        e = self._fail_with_log("[Store] Load LM\n[AR] FATAL: prefix 4187 + budget 5400 + end exceeds context 8192\n")
+        self.assertIsInstance(e, self.e.CppContextOverflow)
+        self.assertEqual((e.prefix, e.budget, e.context), (4187, 5400, 8192))
+
+    def test_fail_without_numbers_is_generic(self):
+        e = self._fail_with_log("[AR] FATAL: something else\n")
+        self.assertNotIsInstance(e, self.e.CppContextOverflow)
+        self.assertIn("something else", str(e))
+
+    def test_fit_budget(self):
+        err = self.e.CppContextOverflow(4187, 5400, 8192)
+        self.assertEqual(self.e.fit_budget(err, 5400), 8192 - 4187 - self.e.CONTEXT_FIT_MARGIN)
+        self.assertEqual(self.e.fit_budget(err, 3000), 3000)      # меньше остатка — не трогаем
+        self.assertIsNone(self.e.fit_budget(self.e.CppContextOverflow(7500, 5400, 8192), 5400))

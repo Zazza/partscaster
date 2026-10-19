@@ -407,6 +407,30 @@ class CppOOM(RuntimeError):
     """Нехватка видеопамяти у yue2.cpp (в тексте «CUDA out of memory» — его узнаёт friendly_error воркера)."""
 
 
+class CppContextOverflow(RuntimeError):
+    """Запрос не помещается в контекст сервера: «prefix N + budget M + end exceeds context C» — сервер резервирует
+    весь бюджет заранее и отклоняет заявку целиком. Числа — из журнала: по ним воркер повторяет с меньшим
+    бюджетом (длину песни задаёт число секций, бюджет — только потолок)."""
+
+    def __init__(self, prefix: int, budget: int, context: int):
+        super().__init__(f"prefix {prefix} + budget {budget} + end exceeds context {context}")
+        self.prefix, self.budget, self.context = prefix, budget, context
+
+
+# запас на «+ end» и округления токенизатора при подгоне бюджета под остаток контекста
+CONTEXT_FIT_MARGIN = 128
+# меньше такого бюджета песня не успевает дойти до финала — подгонять смысла нет, честная ошибка
+CONTEXT_FIT_MIN = 1000
+
+
+def fit_budget(err: CppContextOverflow, budget: int) -> int | None:
+    """Бюджет, влезающий в контекст после префикса; None — остаток слишком мал для осмысленной песни."""
+    fit = err.context - err.prefix - CONTEXT_FIT_MARGIN
+    if fit < CONTEXT_FIT_MIN:
+        return None
+    return min(budget, fit)
+
+
 _OOM_MARKS = ("out of memory", "cudamalloc", "failed to allocate", "cuda error 2")
 
 
@@ -558,9 +582,9 @@ class CppServer:
         low = tail.lower()
         if any(m in low for m in _OOM_MARKS):
             return CppOOM(f"CUDA out of memory (yue2.cpp): {tail[-400:]}")
-        if "exceeds context" in low and low_vram_hint:
-            return RuntimeError("экономный режим yue2.cpp: песня не помещается в память модели — сократите текст "
-                                "или план, уменьшите длину, либо выключите экономный режим в настройках")
+        m = re.search(r"prefix (\d+) \+ budget (\d+) \+ end exceeds context (\d+)", tail)
+        if m:
+            return CppContextOverflow(*map(int, m.groups()))
         return RuntimeError(f"yue2.cpp: генерация не удалась: {tail[-600:]}")
 
     def _follow_logs(self, stop: threading.Event, router: _LogRouter) -> None:

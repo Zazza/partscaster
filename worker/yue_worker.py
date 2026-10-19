@@ -569,13 +569,29 @@ class _CppSong:
 def _cpp_render(cpp, row, request: dict, job_dir: Path, budget: int, counters: dict, cancel_ev) -> _CppSong:
     """Трек или продолжение на yue2.cpp: стиль с припиской, план, сид, характер исполнения."""
     low = cpp.low_vram
-    if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"]):
-        body = engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], budget, low,
-                                           request.get("abc"), style=request["style"], cfg_default=CFG_SCALE)
-    else:
-        body = engine_cpp.build_request(row, budget, low, request.get("abc"), style=request["style"],
+
+    def build(b: int) -> dict:
+        if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"]):
+            return engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], b, low,
+                                               request.get("abc"), style=request["style"], cfg_default=CFG_SCALE)
+        return engine_cpp.build_request(row, b, low, request.get("abc"), style=request["style"],
                                         seed=row["seed"] or LIB_DEFAULT_SEED, cfg_default=CFG_SCALE)
-    parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
+
+    body = build(budget)
+    try:
+        parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
+    except engine_cpp.CppContextOverflow as e:
+        # бюджет — потолок, а не длина (длину задаёт число секций), но сервер резервирует его целиком:
+        # не влезло с потолком — один повтор с бюджетом по остатку контекста
+        fit = engine_cpp.fit_budget(e, budget)
+        if fit is None:
+            raise RuntimeError("экономный режим yue2.cpp: песня не помещается в память модели — сократите текст "
+                               "или план, уменьшите длину, либо выключите экономный режим в настройках") from e
+        log.info("job %s: бюджет %d → %d под контекст yue2.cpp (префикс %d)", row["id"], budget, fit, e.prefix)
+        budget = fit
+        counters["budget"] = fit
+        body = build(fit)
+        parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
     meta = {"model": cpp.model_path.name, "engine": _cpp_label(cpp), "low_vram": low,
             "request": {k: v for k, v in body.items() if k != "source_tokens"}}
     # обрезан — модель упёрлась в потолок шагов, не закончив песню сама: ответ yue2.cpp этого факта не несёт,
