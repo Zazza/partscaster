@@ -307,10 +307,10 @@ where the stem is replaced with the processed one, `solo` — only the stem; `fr
 the track is bit-identical.
 
 **Instrument replacement depends on separation.** The engine replaces the stem exactly, but what the separator put into
-other stems keeps sounding with the original sound. With Demucs, the guitar leaks into the bass a lot (measured on one
-track: 72 % of the 0.4–4 kHz band of the bass is the same guitar), and the processed guitar lies on top of it as a quiet
-copy. With RoFormer the trace in the bass is small (16 %), and the replacement is audible — for the engine, make stems
-with RoFormer (settings → "stem separation" or `make_stems model=roformer`).
+other stems keeps sounding with the original sound. With RoFormer the guitar trace in the bass is small (measured on one
+track: 16 % of the 0.4–4 kHz band of the bass), and the replacement is audible. In old tracks separated earlier by Demucs
+the guitar leaked into the bass a lot (72 %), and the processed guitar lies on top of it as a quiet copy — split such
+tracks again ("split in more detail" in the studio).
 
 ### Drums: hit replacement
 
@@ -388,8 +388,8 @@ pitch from the name, and folds the stem notes outside the kit range by octaves i
 Replacement limits: a legato note change right after the previous note — the pluck comes up to 10 ms after the note
 start. A note that enters in the first 20–40 ms of the window over the tail of another one sometimes sounds up to 8 ms
 early. A legato note change in the first ~100 ms of the window gives no separate pluck (in the studio rebuild the smooth
-window entry covers it, in the preview you hear it). The block works best on a RoFormer stem: on a Demucs "bass" with
-leaked guitar the pitch is detected worse.
+window entry covers it, in the preview you hear it). The block works best on a fresh split: on the "bass" of an old (Demucs)
+split with leaked guitar the pitch is detected worse.
 
 ### Guitarist by chords
 
@@ -424,7 +424,7 @@ it. A mono input gets one take.
 
 The part is computed without a GPU in seconds and cached with the track (`guitar-part.json`; a new guitar stem or a new
 plan — recalculation). To see it: `GET /jobs/{id}/guitar_part`, MCP `guitar_part`. Limit: if the YuE2 guitar went into
-another stem during separation (Demucs on metal — into the bass), the new guitar sounds only where the guitar stem has
+another stem during separation (with the old Demucs split on metal — into the bass), the new guitar sounds only where the guitar stem has
 hits.
 
 Ready-made guitarists (the "Guitarist fits in by chords" section):

@@ -107,9 +107,9 @@ class _Case(_WorkerApiCase):
         self.settings.write_text(json.dumps({"cpp_model": "q8"}))
         self.addCleanup(kill_fakes, self.fake_dir)
         self.addCleanup(self._stop_server)
-        # дорожки — внешняя граница (demucs/roformer на GPU)
+        # дорожки — внешняя граница (RoFormer на GPU)
         self.separations = []
-        p = mock.patch.object(self.w, "demucs_separate", side_effect=self._fake_separate)
+        p = mock.patch.object(self.w, "split_stems", side_effect=self._fake_separate)
         p.start()
         self.addCleanup(p.stop)
         self.separate_error = None
@@ -135,7 +135,7 @@ class _Case(_WorkerApiCase):
         srv = self.w._cpp
         return srv.proc.pid if srv is not None and srv.running else None
 
-    def _fake_separate(self, audio, out_dir, **kw):
+    def _fake_separate(self, audio, out_dir):
         self.separations.append(Path(audio))
         if self.separate_error:
             raise self.separate_error
@@ -398,7 +398,7 @@ class TestRunJobBranches(_Case):
         self.assertEqual(self.separations, [])
 
     def test_stems_failure_keeps_track_done(self):
-        self.separate_error = RuntimeError("demucs crashed")
+        self.separate_error = RuntimeError("разделение на дорожки (RoFormer) не удалось: sep_run exit 1")
         jid = self._run(style=INSTRUMENTAL)
         self.assertEqual(len(self.separations), 1)
         got = self._status(jid)

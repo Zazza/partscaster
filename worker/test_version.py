@@ -9,8 +9,9 @@ V3. api — целое WORKER_API ≥ 1.
 V4. source_hash — 12 hex sha256 по коду воркера: *.py (кроме test_*.py) и *.json в
     каталоге воркера (не рекурсивно); меняется при правке .py/.json, не зависит от
     test_*.py и прочих файлов.
-V5. components и stems_model — та же правда, что /config (whisper_available,
-    seedvc_available, roformer_available, stems_model).
+V5. components — та же правда, что /config (whisper_available, seedvc_available,
+    roformer_available); stems_model — постоянная модель дорожек «bs-roformer-sw» (выбора модели
+    нет, в /config её нет — карточка internal-no-demucs, усл. 3).
 """
 import re
 import shutil
@@ -67,7 +68,8 @@ class TestVersionEndpoint(_WorkerApiCase):
         self.assertEqual(v["components"]["whisper"], c["whisper_available"])
         self.assertEqual(v["components"]["seedvc"], c["seedvc_available"])
         self.assertEqual(v["components"]["roformer"], c["roformer_available"])
-        self.assertEqual(v["stems_model"], c["stems_model"])
+        self.assertEqual(v["stems_model"], "bs-roformer-sw")
+        self.assertNotIn("stems_model", c)
 
 
 @unittest.skipUnless(_HAS_WORKER_DEPS, "нужны fastapi/httpx/numpy (окружение воркера)")

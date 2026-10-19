@@ -3,7 +3,7 @@ package mcp
 import (
 	"archive/tar"
 	"compress/gzip"
-	"encoding/json"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,9 +174,9 @@ func diskNumbers(t *testing.T, steps []step) []float64 {
 // install_worker ставит воркер архивом.
 //
 // План: проверки GPU/места → (при host) локальный шаг scp архива на машину → распаковка →
-// install.sh --no-start --hf-home <раскрытый путь> → прежние шаги компонентов, настройка,
-// systemd, health. Файлы воркера по одному не копируются. Seed-VC берёт скрипт из
-// ~/partscaster/current/.
+// install.sh --no-start --hf-home <раскрытый путь> [--sep-dir <каталог>] (база воркера, разделение на
+// дорожки, модель генерации) → шаги необязательных компонентов (whisper, Seed-VC), systemd, health.
+// Файлы воркера по одному не копируются. Seed-VC берёт скрипт из ~/partscaster/current/.
 
 // testArchive — путь к архиву воркера для чистых проверок плана (файл не читается).
 const testArchive = "/tmp/yue-test/worker-9.9.9-test.tar.gz"
@@ -185,15 +185,11 @@ const testArchive = "/tmp/yue-test/worker-9.9.9-test.tar.gz"
 const remoteHost = "user@gpu-host"
 
 func planBase(host string, whisper, seedvc bool, hfHome, seedvcDir string) (string, []step) {
-	return workerInstallPlanFull(host, testArchive, whisper, seedvc, false, hfHome, seedvcDir, "", "")
+	return workerInstallPlanFull(host, testArchive, whisper, seedvc, hfHome, seedvcDir, "")
 }
 
-func planRF(host string, whisper, seedvc, roformer bool, hfHome, seedvcDir string) (string, []step) {
-	return workerInstallPlanFull(host, testArchive, whisper, seedvc, roformer, hfHome, seedvcDir, "", "")
-}
-
-func planSep(host string, whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir string) (string, []step) {
-	return workerInstallPlanFull(host, testArchive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, "")
+func planSep(host string, whisper, seedvc bool, hfHome, seedvcDir, sepDir string) (string, []step) {
+	return workerInstallPlanFull(host, testArchive, whisper, seedvc, hfHome, seedvcDir, sepDir)
 }
 
 func TestInstallPlanFirstStepsCheckGPUAndDisk(t *testing.T) {
@@ -274,8 +270,8 @@ func TestInstallPlanNoPerFileCopy(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"", remoteHost} {
 		for mask := 0; mask < 8; mask++ {
-			_, steps := workerInstallPlanFull(host, testArchive, mask&1 != 0, mask&2 != 0, mask&4 != 0,
-				"~/h", "~/s", "", "")
+			sepDir := map[bool]string{true: "/data/sep", false: ""}[mask&4 != 0]
+			_, steps := workerInstallPlanFull(host, testArchive, mask&1 != 0, mask&2 != 0, "~/h", "~/s", sepDir)
 			for _, st := range steps {
 				for _, bad := range []string{"worker/*.py", "worker/*.json", "cp worker/", "worker/phrases"} {
 					if strings.Contains(st.cmd, bad) {
@@ -303,7 +299,7 @@ func installShIndex(t *testing.T, steps []step) int {
 func TestInstallPlanRemoteCopiesArchiveFirst(t *testing.T) {
 	t.Parallel()
 	archive := "/home/me/Yue builds/worker-1.2.3.tar.gz"
-	_, steps := workerInstallPlanFull(remoteHost, archive, false, false, false, "~/h", "~/s", "", "")
+	_, steps := workerInstallPlanFull(remoteHost, archive, false, false, "~/h", "~/s", "")
 	if len(steps) < 4 {
 		t.Fatalf("plan too short: %d", len(steps))
 	}
@@ -334,7 +330,7 @@ func TestInstallPlanRemoteScpArchiveOneArg(t *testing.T) {
 	}
 	dir := filepath.Join(t.TempDir(), "my builds")
 	archive := filepath.Join(dir, "worker-1.2.3.tar.gz")
-	_, steps := workerInstallPlanFull(remoteHost, archive, false, false, false, "~/h", "~/s", "", "")
+	_, steps := workerInstallPlanFull(remoteHost, archive, false, false, "~/h", "~/s", "")
 	if len(steps) < 3 {
 		t.Fatalf("plan too short: %d", len(steps))
 	}
@@ -370,18 +366,18 @@ func TestInstallPlanLocalNoScp(t *testing.T) {
 	}
 }
 
-// install.sh — после проверок (и scp), до шагов компонентов, настройки, systemd и health.
+// install.sh — после проверок (и scp), до шагов необязательных компонентов, systemd и health.
 func TestInstallPlanInstallShBeforeComponents(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"", remoteHost} {
-		_, steps := workerInstallPlanFull(host, testArchive, true, true, true, "~/h", "~/s", "/data/sep", "roformer")
+		_, steps := workerInstallPlanFull(host, testArchive, true, true, "~/h", "~/s", "/data/sep")
 		k := installShIndex(t, steps)
 		if k < 2 {
 			t.Errorf("host=%q: install.sh step #%d must come after GPU/disk checks", host, k)
 		}
 		for i, st := range steps[:k] {
 			n := strings.ToLower(st.name)
-			for _, later := range []string{"whisper", "seed-vc", "roformer", "systemd", "health", "настройка"} {
+			for _, later := range []string{"whisper", "seed-vc", "systemd", "health"} {
 				if strings.Contains(n, later) {
 					t.Errorf("host=%q: step #%d %q must come after install.sh (#%d)", host, i, st.name, k)
 				}
@@ -462,7 +458,7 @@ func TestInstallWorkerDryRunExecutesNothing(t *testing.T) {
 			t.Run(host+map[bool]string{true: "/archive", false: "/no-archive"}[withArchive], func(t *testing.T) {
 				log := trapAll(t)
 				s, _ := newTestServer(t)
-				args := map[string]any{"host": host, "whisper": false, "seedvc": false, "roformer": false}
+				args := map[string]any{"host": host, "whisper": false, "seedvc": false}
 				if withArchive {
 					args["archive"] = dummyArchive(t)
 				}
@@ -485,7 +481,7 @@ func TestInstallWorkerDryRunShowsArchiveScp(t *testing.T) {
 	s, _ := newTestServer(t)
 	archive := dummyArchive(t)
 	out, ok := call(t, s, "install_worker", map[string]any{"host": remoteHost, "archive": archive,
-		"whisper": false, "seedvc": false, "roformer": false})
+		"whisper": false, "seedvc": false})
 	if !ok {
 		t.Fatalf("dry run must succeed, got error: %s", out)
 	}
@@ -496,9 +492,16 @@ func TestInstallWorkerDryRunShowsArchiveScp(t *testing.T) {
 }
 
 // dummyArchive — файл-архив для аргумента archive (содержимое не читается: команды подменены).
+// Каталог — не t.TempDir: его путь содержит имя теста, а путь архива попадает в план, и проверки текста плана
+// (например, «без demucs» в TestNoDemucs…) ловили бы имя теста.
 func dummyArchive(t *testing.T) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "worker-9.9.9-test.tar.gz")
+	dir, err := os.MkdirTemp("", "worker-archive-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	p := filepath.Join(dir, "worker-9.9.9-test.tar.gz")
 	if err := os.WriteFile(p, []byte("not a real archive"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -587,8 +590,8 @@ func writeTarGz(t *testing.T, path, top string, files map[string]tarFile) {
 }
 
 // plan — план локальной установки (host="") с архивом песочницы.
-func (sb *installSandbox) plan(whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir, stemsModel string) []step {
-	_, steps := workerInstallPlanFull("", sb.archive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
+func (sb *installSandbox) plan(whisper, seedvc bool, hfHome, seedvcDir, sepDir string) []step {
+	_, steps := workerInstallPlanFull("", sb.archive, whisper, seedvc, hfHome, seedvcDir, sepDir)
 	return steps
 }
 
@@ -670,7 +673,7 @@ func installShHFHome(t *testing.T, calls string) string {
 func TestInstallPlanInstallShGetsExpandedHFHome(t *testing.T) {
 	t.Parallel()
 	sb := newInstallSandbox(t)
-	_, calls := sb.run(t, sb.plan(false, false, false, "~/yue/hf-cache", "~/s", "", ""))
+	_, calls := sb.run(t, sb.plan(false, false, "~/yue/hf-cache", "~/s", ""))
 	if got, want := installShHFHome(t, calls), filepath.Join(sb.home, "yue", "hf-cache"); got != want {
 		t.Errorf("install.sh --hf-home %q, want %q", got, want)
 	}
@@ -688,7 +691,7 @@ func TestInstallPathsTildeExpandsForInstallSh(t *testing.T) {
 		t.Run(in, func(t *testing.T) {
 			t.Parallel()
 			sb := newInstallSandbox(t)
-			_, calls := sb.run(t, sb.plan(false, false, false, in, "~/s", "", ""))
+			_, calls := sb.run(t, sb.plan(false, false, in, "~/s", ""))
 			want := in
 			switch {
 			case in == "~":
@@ -728,25 +731,85 @@ func shellQuoteTest(p string) string {
 	return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
 }
 
-// RoFormer ставится только по выбору.
+// Разделение на дорожки (RoFormer) — обязательная часть воркера: его ставит install.sh из архива
+// (окружение, пакеты, веса), отдельного шага и выбора нет. sep_dir — каталог разделения: уходит в install.sh
+// флагом --sep-dir <каталог> (install.sh пишет пути в worker.env); без sep_dir флага нет (install.sh берёт
+// пути из worker.env или ~/sep-venv и ~/sep-models). Место: без sep_dir разделение (~sizeSepGB) — на домашнем
+// диске, с sep_dir — не на нём.
 
-func TestInstallPlanRoformerOnlyWhenChosen(t *testing.T) {
-	t.Parallel()
-	_, off := planRF("", true, true, false, "~/h", "~/s")
-	if st, ok := findNamed(off, "roformer"); ok {
-		t.Errorf("RoFormer step present with roformer=false: %+v", st)
+// installShSepDir — значение --sep-dir единственного вызова install.sh ("" и false — флага нет).
+func installShSepDir(t *testing.T, calls string) (string, bool) {
+	t.Helper()
+	inv := invocations(calls, "install.sh")
+	if len(inv) != 1 {
+		t.Fatalf("install.sh вызван %d раз, want 1; журнал заглушек:\n%s", len(inv), calls)
 	}
-	_, on := planRF("", false, false, true, "~/h", "~/s")
-	if _, ok := findNamed(on, "roformer"); !ok {
-		names := make([]string, 0, len(on))
-		for _, st := range on {
-			names = append(names, st.name)
+	args := inv[0]
+	for i, a := range args {
+		if a == "--sep-dir" {
+			if i+1 >= len(args) {
+				t.Fatalf("--sep-dir без значения: %q", args)
+			}
+			return args[i+1], true
 		}
-		t.Errorf("RoFormer step missing with roformer=true; steps: %q", names)
+	}
+	return "", false
+}
+
+// Разделение ставится всегда и только шагом install.sh: отдельного шага окружения RoFormer нет,
+// шагов записи путей разделения в worker.env в плане нет (это делает install.sh), план отмечает разделение.
+func TestInstallPlanSepAlwaysViaInstallSh(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"", remoteHost} {
+		for _, sepDir := range []string{"", "/data/sep"} {
+			plan, steps := planSep(host, true, true, "~/h", "~/s", sepDir)
+			k := installShIndex(t, steps)
+			if !strings.Contains(strings.ToLower(steps[k].name), "разделение") {
+				t.Errorf("host=%q sep_dir=%q: шаг install.sh не говорит, что ставит разделение: %q", host, sepDir, steps[k].name)
+			}
+			for i, st := range steps {
+				if i == k {
+					continue
+				}
+				if strings.Contains(strings.ToLower(st.name), "roformer") || strings.Contains(st.cmd, "audio-separator") ||
+					strings.Contains(st.cmd, "sep-venv") {
+					t.Errorf("host=%q sep_dir=%q: отдельный шаг разделения %q: %s", host, sepDir, st.name, st.cmd)
+				}
+				if strings.Contains(st.cmd, "PARTSCASTER_SEP_PY") || strings.Contains(st.cmd, "PARTSCASTER_SEP_MODELS") {
+					t.Errorf("host=%q sep_dir=%q: шаг %q пишет пути разделения в worker.env — это дело install.sh", host, sepDir, st.name)
+				}
+			}
+			if !strings.Contains(plan, "[x] разделение на дорожки RoFormer") {
+				t.Errorf("host=%q sep_dir=%q: план не отмечает обязательное разделение RoFormer:\n%s", host, sepDir, plan)
+			}
+			if strings.Contains(strings.ToLower(plan), "demucs") {
+				t.Errorf("host=%q sep_dir=%q: план упоминает Demucs:\n%s", host, sepDir, plan)
+			}
+		}
 	}
 }
 
-func TestInstallPlanRoformerDisk(t *testing.T) {
+// sep_dir → в шаге install.sh флаг --sep-dir '<каталог>', план называет каталог; без sep_dir — флага нет.
+func TestInstallSepDirFlag(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"", remoteHost} {
+		plan, steps := planSep(host, false, false, "~/h", "~/s", "/data/sep")
+		if cmd := steps[installShIndex(t, steps)].cmd; !strings.Contains(cmd, "--sep-dir '/data/sep'") {
+			t.Errorf("host=%q: install.sh без --sep-dir '/data/sep': %s", host, cmd)
+		}
+		if !strings.Contains(plan, "/data/sep/venv") || !strings.Contains(plan, "/data/sep/models") {
+			t.Errorf("host=%q: план не называет каталог разделения /data/sep:\n%s", host, plan)
+		}
+		_, steps = planSep(host, false, false, "~/h", "~/s", "")
+		if cmd := steps[installShIndex(t, steps)].cmd; strings.Contains(cmd, "--sep-dir") {
+			t.Errorf("host=%q: без sep_dir install.sh получил --sep-dir: %s", host, cmd)
+		}
+	}
+}
+
+// Без sep_dir разделение (~sizeSepGB) — на домашнем диске; с sep_dir требование к домашнему диску меньше
+// ровно на него.
+func TestInstallPlanSepDisk(t *testing.T) {
 	t.Parallel()
 	growth := func(a, b []float64) float64 {
 		if len(a) != len(b) {
@@ -760,173 +823,16 @@ func TestInstallPlanRoformerDisk(t *testing.T) {
 		return 0
 	}
 	for _, c := range []struct{ whisper, seedvc bool }{{false, false}, {true, true}} {
-		_, old := planBase("", c.whisper, c.seedvc, "~/h", "~/s")
-		_, off := planRF("", c.whisper, c.seedvc, false, "~/h", "~/s")
-		_, on := planRF("", c.whisper, c.seedvc, true, "~/h", "~/s")
-		no, nf, nn := diskNumbers(t, old), diskNumbers(t, off), diskNumbers(t, on)
-		if d := growth(no, nf); d != 0 {
-			t.Errorf("whisper=%v seedvc=%v: roformer=false must not change disk requirement, got %+.1f (%v -> %v)",
-				c.whisper, c.seedvc, d, no, nf)
-		}
-		if d := growth(nf, nn); d < 6 || d > 8 {
-			t.Errorf("whisper=%v seedvc=%v: roformer should add ~7 GB to disk requirement, got %+.1f (%v -> %v)",
-				c.whisper, c.seedvc, d, nf, nn)
+		_, away := planSep("", c.whisper, c.seedvc, "~/h", "~/s", "/data/sep")
+		_, home := planSep("", c.whisper, c.seedvc, "~/h", "~/s", "")
+		na, nh := diskNumbers(t, away), diskNumbers(t, home)
+		if d := growth(na, nh); d < sizeSepGB-1 || d > sizeSepGB+1 {
+			t.Errorf("whisper=%v seedvc=%v: без sep_dir разделение должно добавить ~%s ГБ к месту на домашнем диске, got %+.1f (%v -> %v)",
+				c.whisper, c.seedvc, gbStr(sizeSepGB), d, na, nh)
 		}
 	}
-}
-
-func TestInstallWorkerRequiresExplicitRoformer(t *testing.T) {
-	t.Parallel()
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{
-		"dry_run": false, "confirm": true, "whisper": false, "seedvc": false, "archive": dummyArchive(t),
-	})
-	if ok {
-		t.Fatalf("install without explicit roformer must be an error, got:\n%s", out)
-	}
-	if !strings.Contains(out, "roformer") {
-		t.Errorf("error must mention roformer: %s", out)
-	}
-	if !strings.Contains(strings.ToLower(out), "спрос") {
-		t.Errorf("error must say the user has to be asked: %s", out)
-	}
-}
-
-// Каталог RoFormer sep_dir.
-
-// sepEnvSteps — шаги, которые пишут пути RoFormer в worker.env.
-func sepEnvSteps(steps []step) []step {
-	var out []step
-	for _, st := range steps {
-		if strings.Contains(st.cmd, "PARTSCASTER_SEP_PY") || strings.Contains(st.cmd, "PARTSCASTER_SEP_MODELS") {
-			out = append(out, st)
-		}
-	}
-	return out
-}
-
-// runEnvStep выполняет шаг с HOME во временном каталоге и возвращает worker.env.
-func runEnvStep(t *testing.T, home string, st step) string {
-	t.Helper()
-	cmd := exec.Command("sh", "-c", st.cmd)
-	cmd.Env = append(os.Environ(), "HOME="+home)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("worker.env step failed: %v\n%s\ncmd: %s", err, out, st.cmd)
-	}
-	data, err := os.ReadFile(filepath.Join(home, "partscaster", "worker.env"))
-	if err != nil {
-		t.Fatalf("worker.env not written under $HOME/partscaster: %v (cmd %s)", err, st.cmd)
-	}
-	return string(data)
-}
-
-func TestInstallSepDirVenvInDir(t *testing.T) {
-	t.Parallel()
-	_, steps := planSep("", false, false, true, "~/h", "~/s", "/data/sep")
-	st, ok := findNamed(steps, "roformer")
-	if !ok {
-		t.Fatalf("RoFormer step missing with roformer=true")
-	}
-	if !strings.Contains(st.cmd, "/data/sep/venv") {
-		t.Errorf("RoFormer step must install env into /data/sep/venv: %s", st.cmd)
-	}
-	if strings.Contains(st.cmd, "sep-venv") {
-		t.Errorf("RoFormer step with sep_dir must not use ~/sep-venv: %s", st.cmd)
-	}
-}
-
-func TestInstallSepDirWritesWorkerEnv(t *testing.T) {
-	t.Parallel()
-	_, steps := planSep("", false, false, true, "~/h", "~/s", "/data/sep")
-	env := sepEnvSteps(steps)
-	if len(env) == 0 {
-		t.Fatalf("no step writes PARTSCASTER_SEP_PY/PARTSCASTER_SEP_MODELS to worker.env with sep_dir")
-	}
-	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "partscaster"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	var data string
-	for _, st := range env {
-		data = runEnvStep(t, home, st)
-	}
-	if got := envValues(data, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != "/data/sep/venv/bin/python" {
-		t.Errorf("PARTSCASTER_SEP_PY in worker.env = %q, want [/data/sep/venv/bin/python]\n%s", got, data)
-	}
-	if got := envValues(data, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != "/data/sep/models" {
-		t.Errorf("PARTSCASTER_SEP_MODELS in worker.env = %q, want [/data/sep/models]\n%s", got, data)
-	}
-	// повторная установка не дублирует строки
-	for _, st := range env {
-		data = runEnvStep(t, home, st)
-	}
-	if n := len(envValues(data, "PARTSCASTER_SEP_PY")); n != 1 {
-		t.Errorf("after second run PARTSCASTER_SEP_PY appears %d times:\n%s", n, data)
-	}
-}
-
-func TestInstallSepDirKeepsExistingWorkerEnv(t *testing.T) {
-	t.Parallel()
-	_, steps := planSep("", false, false, true, "~/h", "~/s", "/data/sep")
-	env := sepEnvSteps(steps)
-	if len(env) == 0 {
-		t.Fatalf("no step writes PARTSCASTER_SEP_PY/PARTSCASTER_SEP_MODELS to worker.env with sep_dir")
-	}
-	home := t.TempDir()
-	dir := filepath.Join(home, "partscaster")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	pre := "HF_HOME=/x/hf\nPARTSCASTER_SEP_PY=/opt/my/python\nPARTSCASTER_SEP_MODELS=/opt/my/models\n"
-	if err := os.WriteFile(filepath.Join(dir, "worker.env"), []byte(pre), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var data string
-	for _, st := range env {
-		data = runEnvStep(t, home, st)
-	}
-	if got := envValues(data, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != "/opt/my/python" {
-		t.Errorf("already set PARTSCASTER_SEP_PY overwritten/duplicated: %q\n%s", got, data)
-	}
-	if got := envValues(data, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != "/opt/my/models" {
-		t.Errorf("already set PARTSCASTER_SEP_MODELS overwritten/duplicated: %q\n%s", got, data)
-	}
-	if got := envValues(data, "HF_HOME"); len(got) != 1 || got[0] != "/x/hf" {
-		t.Errorf("other worker.env lines lost: %q\n%s", got, data)
-	}
-}
-
-func TestInstallSepDirHomeDiskAsWithoutRoformer(t *testing.T) {
-	t.Parallel()
-	for _, c := range []struct{ whisper, seedvc bool }{{false, false}, {true, true}} {
-		_, off := planSep("", c.whisper, c.seedvc, false, "~/h", "~/s", "")
-		_, on := planSep("", c.whisper, c.seedvc, true, "~/h", "~/s", "/data/sep")
-		nf, nn := diskNumbers(t, off), diskNumbers(t, on)
-		if len(nf) != len(nn) {
-			t.Fatalf("disk step shape differs: %v vs %v", nf, nn)
-		}
-		for i := range nf {
-			if nf[i] != nn[i] {
-				t.Errorf("whisper=%v seedvc=%v: sep_dir set, home disk requirement must equal no-RoFormer: %v vs %v",
-					c.whisper, c.seedvc, nf, nn)
-				break
-			}
-		}
-	}
-}
-
-func TestInstallNoSepDirDefaults(t *testing.T) {
-	t.Parallel()
-	_, steps := planSep("", false, false, true, "~/h", "~/s", "")
-	st, ok := findNamed(steps, "roformer")
-	if !ok {
-		t.Fatalf("RoFormer step missing with roformer=true")
-	}
-	if !strings.Contains(st.cmd, "sep-venv") {
-		t.Errorf("without sep_dir RoFormer env must be ~/sep-venv: %s", st.cmd)
-	}
-	if env := sepEnvSteps(steps); len(env) != 0 {
-		t.Errorf("without sep_dir there must be no worker.env step for RoFormer, got %d: %+v", len(env), env)
+	if d := diskNeedGB(false, false, true) - diskNeedGB(false, false, false); math.Abs(d-sizeSepGB) > 1e-9 {
+		t.Errorf("diskNeedGB: разделение на домашнем диске добавляет %.1f ГБ, want %.1f", d, sizeSepGB)
 	}
 }
 
@@ -1004,19 +910,13 @@ func TestInstallSepDirSpecialCharsLiteral(t *testing.T) {
 			sb := newInstallSandbox(t)
 			mark := filepath.Join(t.TempDir(), "executed")
 			dir := strings.ReplaceAll(dir, "MARK", mark)
-			env, calls := sb.run(t, sb.plan(false, false, true, "~/h", "~/s", dir, ""))
+			_, calls := sb.run(t, sb.plan(false, false, "~/h", "~/s", dir))
 			if fileExists(mark) {
 				t.Fatalf("substitution in sep_dir %q was executed", dir)
 			}
-			base := expandHome(dir, sb.home)
-			if got := envValues(env, "PARTSCASTER_SEP_PY"); len(got) != 1 || got[0] != base+"/venv/bin/python" {
-				t.Errorf("PARTSCASTER_SEP_PY = %q, want [%s]\n%s", got, base+"/venv/bin/python", env)
-			}
-			if got := envValues(env, "PARTSCASTER_SEP_MODELS"); len(got) != 1 || got[0] != base+"/models" {
-				t.Errorf("PARTSCASTER_SEP_MODELS = %q, want [%s]\n%s", got, base+"/models", env)
-			}
-			if !hasArg(calls, base+"/venv") {
-				t.Errorf("uv did not get venv path %q literally; stub calls:\n%s", base+"/venv", calls)
+			// install.sh получает каталог одним аргументом --sep-dir, «~/» раскрыт
+			if got, ok := installShSepDir(t, calls); !ok || got != expandHome(dir, sb.home) {
+				t.Errorf("install.sh --sep-dir = %q (есть: %v), want %q", got, ok, expandHome(dir, sb.home))
 			}
 		})
 	}
@@ -1031,7 +931,7 @@ func TestInstallHFHomeSpecialCharsLiteral(t *testing.T) {
 			sb := newInstallSandbox(t)
 			mark := filepath.Join(t.TempDir(), "executed")
 			dir := strings.ReplaceAll(dir, "MARK", mark)
-			_, calls := sb.run(t, sb.plan(false, false, false, dir, "~/s", "", ""))
+			_, calls := sb.run(t, sb.plan(false, false, dir, "~/s", ""))
 			if fileExists(mark) {
 				t.Fatalf("substitution in hf_home %q was executed", dir)
 			}
@@ -1050,7 +950,7 @@ func TestInstallSeedVCDirSpecialCharsLiteral(t *testing.T) {
 			sb := newInstallSandbox(t)
 			mark := filepath.Join(t.TempDir(), "executed")
 			dir := strings.ReplaceAll(dir, "MARK", mark)
-			env, calls := sb.run(t, sb.plan(false, true, false, "~/h", dir, "", ""))
+			env, calls := sb.run(t, sb.plan(false, true, "~/h", dir, ""))
 			if fileExists(mark) {
 				t.Fatalf("substitution in seedvc_dir %q was executed", dir)
 			}
@@ -1068,7 +968,7 @@ func TestInstallSeedVCDirSpecialCharsLiteral(t *testing.T) {
 func TestInstallDefaultPathsExpandHome(t *testing.T) {
 	t.Parallel()
 	sb := newInstallSandbox(t)
-	env, calls := sb.run(t, sb.plan(false, true, false, "~/yue/hf-cache", "~/partscaster/seedvc", "", ""))
+	env, calls := sb.run(t, sb.plan(false, true, "~/yue/hf-cache", "~/partscaster/seedvc", ""))
 	if got := installShHFHome(t, calls); got != sb.home+"/yue/hf-cache" {
 		t.Errorf("--hf-home = %q, want %q", got, sb.home+"/yue/hf-cache")
 	}
@@ -1089,12 +989,10 @@ func TestInstallWorkerAcceptsSpecialCharPaths(t *testing.T) {
 				t.Run(param+"/"+strconv.Itoa(i)+map[bool]string{true: "/dry", false: "/run"}[dry], func(t *testing.T) {
 					trapShells(t) // установка «выполняется» заглушками, на машине ничего не ставится
 					s, _ := newTestServer(t)
-					args := map[string]any{"whisper": false, "seedvc": true, "roformer": true, param: dir,
-						"archive": dummyArchive(t)}
+					args := map[string]any{"whisper": false, "seedvc": true, param: dir, "archive": dummyArchive(t)}
 					if !dry {
 						args["dry_run"] = false
 						args["confirm"] = true
-						args["stems_model"] = "htdemucs" // при roformer=true установка требует выбора
 					}
 					out, ok := call(t, s, "install_worker", args)
 					if !ok {
@@ -1113,13 +1011,10 @@ func TestInstallWorkerRejectsNewlineAndNUL(t *testing.T) {
 				t.Run(param+map[bool]string{true: "/dry", false: "/run"}[dry], func(t *testing.T) {
 					log := trapShells(t)
 					s, _ := newTestServer(t)
-					args := map[string]any{"whisper": false, "seedvc": true, "roformer": true, param: dir,
-						"archive": dummyArchive(t)}
+					args := map[string]any{"whisper": false, "seedvc": true, param: dir, "archive": dummyArchive(t)}
 					if !dry {
 						args["dry_run"] = false
 						args["confirm"] = true
-						// stems_model задан: ошибка должна быть именно из-за пути, а не из-за выбора модели
-						args["stems_model"] = "roformer"
 					}
 					out, ok := call(t, s, "install_worker", args)
 					if ok {
@@ -1147,15 +1042,15 @@ func TestInstallAllStepsBashSyntax(t *testing.T) {
 	}
 	for _, host := range []string{"", remoteHost} {
 		for _, archive := range []string{testArchive, "/home/me/my builds/worker-1.0.tar.gz"} {
-			for mask := 0; mask < 8; mask++ {
+			for mask := 0; mask < 4; mask++ {
 				for _, sepDir := range []string{"", "/data/sep", "~/my sep$(id)"} {
-					w, sv, rf := mask&1 != 0, mask&2 != 0, mask&4 != 0
-					_, steps := workerInstallPlanFull(host, archive, w, sv, rf, "~/yue/hf-cache", "~/partscaster/seedvc", sepDir, "")
+					w, sv := mask&1 != 0, mask&2 != 0
+					_, steps := workerInstallPlanFull(host, archive, w, sv, "~/yue/hf-cache", "~/partscaster/seedvc", sepDir)
 					for _, st := range steps {
 						cmd := exec.Command(bash, "-n", "-c", st.cmd)
 						if out, err := cmd.CombinedOutput(); err != nil {
-							t.Errorf("step %q (host=%q archive=%q whisper=%v seedvc=%v roformer=%v sep_dir=%q) is not valid bash: %v\n%s\ncmd: %s",
-								st.name, host, archive, w, sv, rf, sepDir, err, out, st.cmd)
+							t.Errorf("step %q (host=%q archive=%q whisper=%v seedvc=%v sep_dir=%q) is not valid bash: %v\n%s\ncmd: %s",
+								st.name, host, archive, w, sv, sepDir, err, out, st.cmd)
 						}
 					}
 				}
@@ -1172,7 +1067,7 @@ func TestInstallSystemdStepFallbackHint(t *testing.T) {
 	if err != nil {
 		t.Skip("bash not found")
 	}
-	_, steps := planSep("", false, false, false, "~/h", "~/s", "")
+	_, steps := planSep("", false, false, "~/h", "~/s", "")
 	st, ok := findNamed(steps, "systemd")
 	if !ok {
 		t.Fatalf("systemd step missing")
@@ -1213,15 +1108,7 @@ func TestInstallSystemdStepFallbackHint(t *testing.T) {
 	}
 }
 
-// Модель дорожек по умолчанию при установке.
-//
-// stems_model (htdemucs | roformer): при roformer=true и установке обязателен —
-// агент спрашивает пользователя; roformer без roformer=true — ошибка; без
-// RoFormer и без выбора — настройка не меняется (переустановка не сбрасывает
-// выбранный ранее RoFormer). Выбор пишется в ~/partscaster/data/settings.json
-// слиянием до запуска юнита; план показывает выбор; при roformer после
-// установки — проверка действующей модели (/config stems_model = bs-roformer-sw)
-// с понятным предупреждением.
+// Помощники настоящей установки (обработчик install_worker с dry_run=false).
 
 // installRunArgs — аргументы настоящей установки (не сухой прогон); архив задан явно,
 // чтобы обработчик не собирал его (make worker-tar) на машине теста.
@@ -1240,414 +1127,6 @@ func assertNothingRan(t *testing.T, log string) {
 	t.Helper()
 	if data, err := os.ReadFile(log); err == nil && len(data) > 0 {
 		t.Errorf("commands were executed:\n%s", data)
-	}
-}
-
-func TestInstallStemsModelRequiredWithRoformer(t *testing.T) {
-	log := trapShells(t)
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", installRunArgs(t, map[string]any{"roformer": true}))
-	if ok {
-		t.Fatalf("install with roformer=true and no stems_model must be an error, got:\n%s", out)
-	}
-	if !strings.Contains(out, "stems_model") {
-		t.Errorf("error must mention stems_model: %s", out)
-	}
-	if !strings.Contains(strings.ToLower(out), "спрос") {
-		t.Errorf("error must say the user has to be asked: %s", out)
-	}
-	assertNothingRan(t, log)
-}
-
-func TestInstallStemsModelDryRunWithoutChoiceOK(t *testing.T) {
-	log := trapShells(t)
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{"whisper": false, "seedvc": false, "roformer": true,
-		"archive": dummyArchive(t)})
-	if !ok {
-		t.Fatalf("dry run with roformer=true and no stems_model must succeed, got error: %s", out)
-	}
-	if !strings.Contains(out, "СУХОЙ ПРОГОН") {
-		t.Errorf("expected dry run output:\n%s", out)
-	}
-	assertNothingRan(t, log)
-}
-
-func TestInstallStemsModelRoformerRequiresRoformerInstall(t *testing.T) {
-	for _, dry := range []bool{true, false} {
-		t.Run(map[bool]string{true: "dry", false: "run"}[dry], func(t *testing.T) {
-			log := trapShells(t)
-			s, _ := newTestServer(t)
-			args := map[string]any{"whisper": false, "seedvc": false, "roformer": false, "stems_model": "roformer",
-				"archive": dummyArchive(t)}
-			if !dry {
-				args = installRunArgs(t, args)
-			}
-			out, ok := call(t, s, "install_worker", args)
-			if ok {
-				t.Fatalf("stems_model=roformer with roformer=false must be an error, got:\n%s", out)
-			}
-			if !strings.Contains(out, "roformer") {
-				t.Errorf("error must mention roformer: %s", out)
-			}
-			assertNothingRan(t, log)
-		})
-	}
-}
-
-func TestInstallStemsModelUnknownValue(t *testing.T) {
-	for _, val := range []string{"mdx", "Demucs", " htdemucs"} {
-		for _, dry := range []bool{true, false} {
-			t.Run(val+map[bool]string{true: "/dry", false: "/run"}[dry], func(t *testing.T) {
-				log := trapShells(t)
-				s, _ := newTestServer(t)
-				args := map[string]any{"whisper": false, "seedvc": false, "roformer": true, "stems_model": val,
-					"archive": dummyArchive(t)}
-				if !dry {
-					args = installRunArgs(t, args)
-				}
-				out, ok := call(t, s, "install_worker", args)
-				if ok {
-					t.Fatalf("unknown stems_model %q must be an error, got:\n%s", val, out)
-				}
-				if !strings.Contains(out, "stems_model") {
-					t.Errorf("error must mention stems_model: %s", out)
-				}
-				assertNothingRan(t, log)
-			})
-		}
-	}
-}
-
-// Без RoFormer и без stems_model шага записи stems_model в settings.json нет:
-// переустановка (например, ради whisper) не сбрасывает выбранный ранее RoFormer.
-func TestInstallStemsModelUnchangedWithoutChoice(t *testing.T) {
-	t.Parallel()
-	for _, c := range []struct{ whisper, seedvc bool }{{false, false}, {true, false}, {false, true}} {
-		_, steps := workerInstallPlanFull("", testArchive, c.whisper, c.seedvc, false, "~/h", "~/s", "", "")
-		for _, st := range steps {
-			if strings.Contains(st.cmd, "settings.json") && strings.Contains(st.cmd, "stems_model") {
-				t.Errorf("whisper=%v seedvc=%v, no RoFormer, no stems_model: unexpected settings step %q: %s",
-					c.whisper, c.seedvc, st.name, st.cmd)
-			}
-		}
-	}
-}
-
-// Полный прогон шагов без RoFormer и без выбора: ранее выбранный RoFormer
-// в settings.json сохраняется, прочие ключи тоже.
-func TestInstallStemsModelReinstallKeepsRoformerSetting(t *testing.T) {
-	t.Parallel()
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not found")
-	}
-	sb := newInstallSandbox(t)
-	fakeWorkerVenv(t, sb.home)
-	dir := filepath.Join(sb.home, "partscaster", "data")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	pre := `{"stems_model": "roformer", "llm_model": "qwen"}`
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(pre), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sb.run(t, sb.plan(true, false, false, "~/h", "~/s", "", ""))
-	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
-	if err != nil {
-		t.Fatalf("settings.json disappeared after reinstall: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("settings.json is not valid JSON: %v\n%s", err, data)
-	}
-	if m["stems_model"] != "roformer" || m["llm_model"] != "qwen" {
-		t.Errorf("reinstall without stems_model changed settings: %v", m)
-	}
-}
-
-// Явный stems_model=htdemucs без RoFormer — шаг записи есть, план называет модель.
-func TestInstallStemsModelExplicitHtdemucsWithoutRoformer(t *testing.T) {
-	t.Parallel()
-	plan, steps := workerInstallPlanFull("", testArchive, false, false, false, "~/h", "~/s", "", "htdemucs")
-	_, st := settingsStep(t, steps)
-	if !strings.Contains(st.cmd, "htdemucs") {
-		t.Errorf("settings step does not contain htdemucs: %s", st.cmd)
-	}
-	if !strings.Contains(strings.ToLower(plan), "demucs") {
-		t.Errorf("plan for explicit htdemucs does not name it:\n%s", plan)
-	}
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", map[string]any{"whisper": false, "seedvc": false, "roformer": false,
-		"stems_model": "htdemucs", "archive": dummyArchive(t)})
-	if !ok {
-		t.Fatalf("dry run with explicit htdemucs without roformer must succeed, got error: %s", out)
-	}
-}
-
-// Установка без RoFormer (без stems_model) не требует выбора модели.
-func TestInstallStemsModelNotRequiredWithoutRoformer(t *testing.T) {
-	trapShells(t)
-	s, _ := newTestServer(t)
-	out, ok := call(t, s, "install_worker", installRunArgs(t, map[string]any{"roformer": false}))
-	if !ok && strings.Contains(out, "stems_model") {
-		t.Fatalf("install without RoFormer must not require stems_model, got error: %s", out)
-	}
-}
-
-func TestInstallStemsModelPlanNamesChoice(t *testing.T) {
-	t.Parallel()
-	planH, _ := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", "htdemucs")
-	planR, _ := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", "roformer")
-	// в плане модель может называться по-человечески («Demucs»)
-	if !strings.Contains(strings.ToLower(planH), "demucs") {
-		t.Errorf("plan for stems_model=htdemucs does not name it:\n%s", planH)
-	}
-	if !strings.Contains(strings.ToLower(planR), "roformer") {
-		t.Errorf("plan for stems_model=roformer does not name it:\n%s", planR)
-	}
-	if planH == planR {
-		t.Errorf("plan text does not depend on stems_model choice:\n%s", planH)
-	}
-}
-
-// settingsStep — шаг, который пишет stems_model в settings.json воркера.
-func settingsStep(t *testing.T, steps []step) (int, step) {
-	t.Helper()
-	for i, st := range steps {
-		if strings.Contains(st.cmd, "settings.json") && strings.Contains(st.cmd, "stems_model") {
-			return i, st
-		}
-	}
-	t.Fatalf("no step writes stems_model to settings.json")
-	return -1, step{}
-}
-
-// fakeWorkerVenv — окружение воркера (~/yue/.venv, его создаёт install.sh раньше в
-// установке) подменяется системным python3: в тесте uv не запускается.
-func fakeWorkerVenv(t *testing.T, home string) {
-	t.Helper()
-	py, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not found")
-	}
-	bin := filepath.Join(home, "yue", ".venv", "bin")
-	if err := os.MkdirAll(bin, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"python", "python3"} {
-		if err := os.Symlink(py, filepath.Join(bin, name)); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-// runSettingsStep выполняет шаг с HOME во временном каталоге и возвращает
-// разобранный ~/partscaster/data/settings.json.
-func runSettingsStep(t *testing.T, home string, st step) map[string]any {
-	t.Helper()
-	fakeWorkerVenv(t, home)
-	cmd := exec.Command("bash", "-c", st.cmd)
-	cmd.Dir = home
-	cmd.Env = append(os.Environ(), "HOME="+home)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("settings step failed: %v\n%s\ncmd: %s", err, out, st.cmd)
-	}
-	data, err := os.ReadFile(filepath.Join(home, "partscaster", "data", "settings.json"))
-	if err != nil {
-		t.Fatalf("settings.json not written under $HOME/partscaster/data: %v (cmd %s)", err, st.cmd)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("settings.json is not valid JSON: %v\n%s", err, data)
-	}
-	return m
-}
-
-func TestInstallStemsModelWritesSettingsMerged(t *testing.T) {
-	t.Parallel()
-	for _, model := range []string{"htdemucs", "roformer"} {
-		t.Run(model, func(t *testing.T) {
-			t.Parallel()
-			_, steps := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", model)
-			_, st := settingsStep(t, steps)
-			if !strings.Contains(st.cmd, model) {
-				t.Errorf("settings step does not contain value %q: %s", model, st.cmd)
-			}
-			home := t.TempDir()
-			dir := filepath.Join(home, "partscaster", "data")
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			other := "htdemucs"
-			if model == "htdemucs" {
-				other = "roformer"
-			}
-			pre := `{"stems_model": "` + other + `", "llm_model": "qwen", "name": "Дорожки", "nested": {"a": 1}}`
-			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(pre), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			m := runSettingsStep(t, home, st)
-			if m["stems_model"] != model {
-				t.Errorf("stems_model = %v, want %q", m["stems_model"], model)
-			}
-			if m["llm_model"] != "qwen" || m["name"] != "Дорожки" {
-				t.Errorf("other settings keys lost or changed: %v", m)
-			}
-			if n, ok := m["nested"].(map[string]any); !ok || n["a"] != float64(1) {
-				t.Errorf("nested settings key lost: %v", m)
-			}
-		})
-	}
-}
-
-// settings.json ещё нет — шаг создаёт его. Каталог data/ на чистой машине
-// создают предыдущие шаги — это проверяет TestInstallStemsModelFullRunWritesSettings.
-func TestInstallStemsModelWritesSettingsFresh(t *testing.T) {
-	t.Parallel()
-	_, steps := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", "roformer")
-	_, st := settingsStep(t, steps)
-	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "partscaster", "data"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	m := runSettingsStep(t, home, st)
-	if m["stems_model"] != "roformer" {
-		t.Errorf("stems_model = %v, want roformer", m["stems_model"])
-	}
-}
-
-// Полный прогон шагов на чистом HOME (внешние программы — заглушки):
-// settings.json появляется с выбранной моделью.
-func TestInstallStemsModelFullRunWritesSettings(t *testing.T) {
-	t.Parallel()
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not found")
-	}
-	sb := newInstallSandbox(t)
-	fakeWorkerVenv(t, sb.home)
-	sb.run(t, sb.plan(false, false, false, "~/h", "~/s", "", "htdemucs"))
-	data, err := os.ReadFile(filepath.Join(sb.home, "partscaster", "data", "settings.json"))
-	if err != nil {
-		t.Fatalf("settings.json not written by install steps: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("settings.json is not valid JSON: %v\n%s", err, data)
-	}
-	if m["stems_model"] != "htdemucs" {
-		t.Errorf("stems_model = %v, want htdemucs", m["stems_model"])
-	}
-}
-
-func TestInstallStemsModelSettingsBeforeSystemd(t *testing.T) {
-	t.Parallel()
-	for _, host := range []string{"", remoteHost} {
-		for _, c := range []struct {
-			roformer bool
-			model    string
-		}{{false, "htdemucs"}, {true, "htdemucs"}, {true, "roformer"}} {
-			_, steps := workerInstallPlanFull(host, testArchive, false, false, c.roformer, "~/h", "~/s", "", c.model)
-			si, _ := settingsStep(t, steps)
-			ui := -1
-			for i, st := range steps {
-				if strings.Contains(strings.ToLower(st.name), "systemd") {
-					ui = i
-					break
-				}
-			}
-			if ui < 0 {
-				t.Fatalf("host=%q: systemd step missing (roformer=%v model=%s)", host, c.roformer, c.model)
-			}
-			if si > ui {
-				t.Errorf("host=%q roformer=%v model=%s: settings step (#%d) must come before systemd unit (#%d)",
-					host, c.roformer, c.model, si, ui)
-			}
-		}
-	}
-}
-
-// runCheckStep выполняет шаг с curl-заглушкой, отдающей config, и
-// sleep-заглушкой; возвращает вывод и ошибку.
-func runCheckStep(t *testing.T, st step, config string) (string, error) {
-	t.Helper()
-	bash, err := exec.LookPath("bash")
-	if err != nil {
-		t.Skip("bash not found")
-	}
-	stubs := t.TempDir()
-	cfg := filepath.Join(stubs, "config.json")
-	if err := os.WriteFile(cfg, []byte(config), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	curl := "#!/bin/sh\ncat " + shellQuoteTest(cfg) + "\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(stubs, "curl"), []byte(curl), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(stubs, "sleep"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	home := t.TempDir()
-	cmd := exec.Command(bash, "-c", st.cmd)
-	cmd.Dir = home
-	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+stubs+":"+os.Getenv("PATH"))
-	out, err := cmd.CombinedOutput()
-	return string(out), err
-}
-
-// Проверка после установки — по действующей модели воркера (/config
-// stems_model = bs-roformer-sw), а не по roformer_available: RoFormer может
-// быть установлен, но воркер делать Demucs.
-func TestInstallStemsModelRoformerFinalCheck(t *testing.T) {
-	t.Parallel()
-	_, steps := workerInstallPlanFull("", testArchive, false, false, true, "~/h", "~/s", "", "roformer")
-	last := steps[len(steps)-1]
-	if last.must {
-		t.Errorf("roformer check step must not be a must-step (warning, not stop)")
-	}
-	t.Run("not-active", func(t *testing.T) {
-		t.Parallel()
-		for _, cfg := range []string{
-			`{"roformer_available": true, "stems_model": "htdemucs"}`,
-			`{"roformer_available":true,"stems_model":"htdemucs"}`,
-			`{"roformer_available": false, "stems_model": "htdemucs"}`,
-			`{"roformer_available": true}`,
-			``,
-		} {
-			out, err := runCheckStep(t, last, cfg)
-			if err == nil {
-				t.Errorf("config %q: check must fail when active model is not bs-roformer-sw; output:\n%s", cfg, out)
-			}
-			if strings.TrimSpace(out) == "" || !strings.Contains(strings.ToLower(out), "roformer") {
-				t.Errorf("config %q: check must print a warning mentioning RoFormer, got:\n%s", cfg, out)
-			}
-		}
-	})
-	t.Run("active", func(t *testing.T) {
-		t.Parallel()
-		for _, cfg := range []string{
-			`{"roformer_available": true, "stems_model": "bs-roformer-sw"}`,
-			`{"roformer_available":true,"stems_model":"bs-roformer-sw"}`,
-		} {
-			out, err := runCheckStep(t, last, cfg)
-			if err != nil {
-				t.Errorf("config %q: check must pass when active model is bs-roformer-sw: %v\n%s", cfg, err, out)
-			}
-		}
-	})
-}
-
-func TestInstallStemsModelNoRoformerCheckForHtdemucs(t *testing.T) {
-	t.Parallel()
-	for _, c := range []struct {
-		roformer bool
-		model    string
-	}{{false, "htdemucs"}, {true, "htdemucs"}, {false, ""}} {
-		_, steps := workerInstallPlanFull("", testArchive, false, false, c.roformer, "~/h", "~/s", "", c.model)
-		for _, st := range steps {
-			if strings.Contains(st.cmd, "bs-roformer-sw") || strings.Contains(st.cmd, "roformer_available") {
-				t.Errorf("roformer=%v stems_model=%q: unexpected RoFormer check %q", c.roformer, c.model, st.name)
-			}
-		}
 	}
 }
 
@@ -1672,7 +1151,7 @@ func noCurlPath(t *testing.T) string {
 // воркера (~/yue/.venv/bin/python).
 func TestInstallHealthStepWithoutCurlUsesVenvPython(t *testing.T) {
 	sb := newInstallSandbox(t)
-	steps := sb.plan(false, false, false, "", "", "", "")
+	steps := sb.plan(false, false, "", "", "")
 	st, ok := findNamed(steps, "health")
 	if !ok {
 		t.Fatalf("no health step in plan: %+v", steps)
@@ -1710,7 +1189,7 @@ func TestInstallHealthStepWithoutCurlUsesVenvPython(t *testing.T) {
 func TestInstallStepsFindUvOutsidePath(t *testing.T) {
 	t.Parallel()
 	n := 0
-	for _, st := range installSteps("user@gpu-host", "", true, true, true, 20, "~/hf", "~/seedvc", "") {
+	for _, st := range installSteps("user@gpu-host", "", true, true, 20, "~/hf", "~/seedvc", "") {
 		i := strings.Index(st.cmd, "uv venv")
 		if i < 0 {
 			continue
@@ -1723,7 +1202,7 @@ func TestInstallStepsFindUvOutsidePath(t *testing.T) {
 			}
 		}
 	}
-	if n < 2 {
-		t.Fatalf("ждали шаги RoFormer и whisper с uv, нашли %d", n)
+	if n < 1 {
+		t.Fatalf("ждали шаг whisper с uv, нашли %d", n)
 	}
 }

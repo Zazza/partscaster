@@ -155,7 +155,7 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `make_stems` | **job_id**, model | Split the track: main stems drums/bass/other/vocals, detailed guitar/piano and (only RoFormer) drum parts kick/snare/toms/hh/ride/crash. `model` — `htdemucs` (fast) or `roformer` (cleaner, ~4.5 times longer) for one time; empty — the `stems_model` setting |
+| `make_stems` | **job_id** | Split the track (BS-Roformer-SW + DrumSep, ~1.5 min per track): main stems drums/bass/other/vocals, detailed guitar/piano and drum parts kick/snare/toms/hh/ride/crash |
 | `overdub` | **job_id**, **style**, lyrics, seed, gain, abc | A part over the track from its score with a new style. `gain` 0.1–1 (0.5); 0 — a cover as a new track without mixing. `abc` — your own plan for the part. Without `lyrics` — a vocalise |
 | `guitar_part` | **job_id**, style | What the guitarist will play "from the plan chords" (block `gtrnotes`): bars, strikes with notes. `style` 0–4: auto, strumming, fingerpicking, bass + chord, fifths |
 | `voice_convert` | **job_id**, **ref_job_id**, ref_from, ref_dur, steps, title | EXPERIMENT "Album voice": the track's voice with the timbre of a sample (Seed-VC on the worker). The voice is recognizable but it wobbles — see [deployment.md](deployment.md). Without Seed-VC — error 503 |
@@ -251,15 +251,15 @@ edit log after each successful change.
 | Tool | Parameters | What it does |
 |---|---|---|
 | `config_get` | — | Worker address, worker data paths, generation model (chosen and recommended for the GPU) and worker engines |
-| `config_set` | server_url, stems_auto, stems_model, fx_engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `stems_model` — `htdemucs` or `roformer`; `fx_engine` — effects engine on/off; `cpp_model` — generation model (any downloaded one: `bf16`, `q8`, `q6`, `q5`; the one recommended for the card is in `config_get`; the same seed on another model gives a different performance), `cpp_low_vram` — low-VRAM mode; model and mode — from the next generation |
+| `config_set` | server_url, stems_auto, fx_engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `fx_engine` — effects engine on/off; `cpp_model` — generation model (any downloaded one: `bf16`, `q8`, `q6`, `q5`; the one recommended for the card is in `config_get`; the same seed on another model gives a different performance), `cpp_low_vram` — low-VRAM mode; model and mode — from the next generation |
 | `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set cpp_model=<name>` |
 
 ### Installation and diagnostics
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `doctor` | host | Environment check: is the worker available and which components it has, ffmpeg, Go, Node; on the machine with the graphics card (`host` — over ssh) — GPU and video memory, disk space. Worker version |
-| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, roformer, stems_model, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB), Seed-VC (~11 GB) and RoFormer (~7.3 GB, non-commercial weights) are needed, and with RoFormer — which model should make the stems. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`/`roformer`. GPU and disk space are checked before installation. Generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one by VRAM). Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` |
+| `doctor` | host | Environment check: is the worker available and which components it has (including whether stem separation is installed — `roformer_available`), ffmpeg, Go, Node; on the machine with the graphics card (`host` — over ssh) — GPU and video memory, disk space. Worker version |
+| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB) and Seed-VC (~11 GB) are needed. RoFormer stem separation (~7.3 GB, non-commercial weights) is always installed, together with the worker. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`. GPU and disk space are checked before installation. Generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one by VRAM). Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` (or the paths already written in `worker.env`); `sep_dir` is passed to `install.sh --sep-dir` |
 | `install_app` | dry_run, confirm | Build the app on this PC (`wails build`; needs Go, Node, wails CLI). A dry run by default |
 
 ## Work recipes
@@ -291,10 +291,10 @@ the response is the loudness (LUFS) and the true peak. To listen to mastering on
 
 ## Installing the worker through the agent
 
-The worker is installed from the archive `worker-<version>.tar.gz`; its `install.sh` installs the base (see
+The worker is installed from the archive `worker-<version>.tar.gz`; its `install.sh` installs the base together with stem separation (see
 [deployment.md](deployment.md)). The archive is the `archive` parameter; without it, MCP built from sources builds
 it itself (`make worker-tar`), and a release MCP takes the archive that lies next to `partscaster-mcp`. MCP
-installs optional components (whisper, Seed-VC, RoFormer) after the base.
+installs optional components (whisper, Seed-VC) after the base.
 
 - **Everything on one PC**: `install_worker` without `host` — unpacking and `install.sh` locally.
 - **Graphics card on another machine**: `install_worker` with `host=user@gpu-host` — the archive is copied over

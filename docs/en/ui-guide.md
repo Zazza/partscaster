@@ -377,10 +377,9 @@ Trick marks carry over to new versions.
 
 - No stems — the track is split into stems by itself when the Studio opens (the "track stems" setting;
   "manually" — the "make stems" button). While it splits, a line replaces the desk: what is happening and how long
-  to wait (Demucs — about 20 s, RoFormer — about a minute and a half; if the GPU is busy it waits in the queue).
-  The separation model comes from the settings. If the track is split into only 4
-  stems — "split in more detail": again with the model from the settings (RoFormer gives drum parts, guitar and
-  keys), edits stay.
+  to wait (about a minute and a half; if the GPU is busy it waits in the queue). If the track has an old split
+  without drum parts — "split in more detail": again, and the new split also gives drum parts (kick, snare,
+  cymbals…), edits stay.
 - **"rhythm section from kits"** — all drum parts and the bass with samples from one kit, in one rebuild (toms —
   by pitch); the window is the selection, with no selection — the whole track. Next to it are the kit ("Live
   acoustic", "808 drum machine", "909 drum machine", "80s sample machine (Linn)", "Early rhythm box (CR-78)",
@@ -527,8 +526,8 @@ At the top of the block are the one-click buttons and album loudness:
 
 **Sound presets** — a recipe for processing the whole track. Choose a preset (a list with search) → **"Apply"**:
 the preset goes into "Track changes" at once as one line "Preset: <name>" (an earlier preset is replaced); no new
-version is made. It is prepared at build time ("▶ mix" or "apply all"): no stems — the track is split (drum parts —
-with the RoFormer model), parts and sample kits are prepared, volumes are set from the stem measurements. Your own
+version is made. It is prepared at build time ("▶ mix" or "apply all"): no stems — the track is split (with drum
+parts), parts and sample kits are prepared, volumes are set from the stem measurements. Your own
 edits on the same stems take priority over the preset's. From there it works
 like any other edit: "▶ mix" plays the track with the preset, "apply all" builds the result and checks the balance:
 splits the finished track into stems, measures the levels and, if one misses by more than 1 dB, corrects it and
@@ -606,8 +605,8 @@ the right — "Listening" (it stays in place while you scroll). In the title row
 - **"Master — the whole track"** — ready masters, "loudness" with a LUFS target, "▶ after", "master chain";
 - "final chain on the mix:" — the same as another preset;
 - "Parts (N) — carried over unchanged" — synth and percussion parts from the source preset;
-- drum parts are heard only with the RoFormer stem model — without it the editor warns you, and the entry stays
-  in the preset;
+- with a reference that has an old split (without drum parts) the drum parts are not heard — the editor warns you
+  and suggests splitting it again ("split in more detail" in the Studio), and the entry stays in the preset;
 - in the "Listening" block — **"Apply to the reference"** (a full run of the preset on the reference, a few minutes;
   the finished version plays at once), progress and errors. Leaving with unsaved edits asks for confirmation.
 
@@ -699,11 +698,11 @@ button in the title row — "Saved" or an error shows next to it.
     split), "right away for every track" (a finished track goes next into the GPU queue; 70–170 MB per track;
     drafts and insert pieces are not split) or "manually (a button in "Stems")";
   - "Split instrumental tracks into stems right away" — an instrumental is split into stems after generation
-    (~7 s of GPU), and if something sounds in the voice stem, the track gets ⚠ "voice in instrumental";
-  - "stem separation" — "fast — Demucs (~20 s per track)" or "cleaner — RoFormer (~1.5 min per track)".
-    RoFormer cuts out voice, guitars and keys more cleanly and splits drums into parts; its weights are
-    non-commercial (CC BY-NC-SA). It applies to new separations. If it is not installed on the worker, the page
-    tells you where to read ([deployment.md](deployment.md)).
+    (~1.5 min of GPU), and if something sounds in the voice stem, the track gets ⚠ "voice in instrumental";
+  - there is no separation model choice: the stems are always made by BS-Roformer-SW (~1.5 min per track), and the
+    drums are also split into parts; its weights are non-commercial (CC BY-NC-SA). If it is not installed on the
+    worker, a red line at the end of the block says that "Stems", instrument insertion and stem effects do not work and the
+    worker should be reinstalled ([deployment.md](deployment.md)).
 - **"Generation model"** — "model": BF16, Q8, Q6, Q5 with size and state ("downloaded" / "not downloaded"); the one
   recommended for the worker's graphics card is marked "recommended", and below the choice there is a hint "For this
   graphics card (N GB) … is recommended" (sometimes — in economy mode). Any model can be chosen. A model that is not
@@ -711,7 +710,7 @@ button in the title row — "Saved" or an error shows next to it.
   memory, songs up to ~3.5 min. The same seed on another model gives a different performance; notes and continuations
   carry over; the model changes from the next generation. If the worker has no yue2.cpp program, an error hint says that
   generation does not work and the worker needs reinstalling.
-- **"Worker (information only)"** (at the bottom of the "Worker connection" block) — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), separation model;
+- **"Worker (information only)"** (at the bottom of the "Worker connection" block) — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), "stem separation: BS-Roformer-SW" or "not installed";
   below — "App version".
 - **"For AI agents (Claude Code, Claude Desktop, Codex)"** — the MCP server partscaster-mcp gives an agent the
   app's tools: generation, studio, effects; it takes the worker address from these settings. The path to

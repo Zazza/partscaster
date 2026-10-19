@@ -184,11 +184,13 @@ func writeFile(dst string, r io.Reader, mode os.FileMode) error {
 	return f.Close()
 }
 
-func WorkerEnv(home, _ string) map[string]string {
+func WorkerEnv(home, goos string) map[string]string {
 	return map[string]string{
-		"PARTSCASTER_DATA_DIR": filepath.Join(home, "data"),
-		"HF_HOME":              filepath.Join(home, "hf-cache"),
-		"PYTHONUTF8":           "1",
+		"PARTSCASTER_DATA_DIR":   filepath.Join(home, "data"),
+		"HF_HOME":                filepath.Join(home, "hf-cache"),
+		"PYTHONUTF8":             "1",
+		"PARTSCASTER_SEP_PY":     SepPython(home, goos),
+		"PARTSCASTER_SEP_MODELS": SepModelsDir(home),
 	}
 }
 

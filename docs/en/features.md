@@ -47,8 +47,8 @@ version. Details — [ui-guide.md](ui-guide.md).
 
 ## 3. Sound
 
-- **Stems** — the track is split into vocals, drums, bass, guitar, keys and "other": Demucs (fast) or
-  BS-RoFormer-SW (cleaner, about 4.5 times slower); the drums are also split into parts (kick, snare, toms, hi-hat, ride, crash).
+- **Stems** — the track is split into vocals, drums, bass, guitar, keys and "other" by the BS-RoFormer-SW model
+  (about a minute and a half per track); the drums are also split into parts (kick, snare, toms, hi-hat, ride, crash).
   The "Stems" desk: volume, pan, width, its own sound for each stem, "before / after" on a selection.
 - **Replacing instruments with real samples from the track's notes** — the "replace" button in the desk: live drums and
   drum machines (808, 909, Linn, CR-78, Simmons), bass guitars, orchestra (violins, cellos, brass), keyboards and synths.

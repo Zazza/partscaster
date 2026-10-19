@@ -64,14 +64,14 @@ if it is newer — "update the app" (обновите приложение). Upd
 
 ## Via an AI agent
 
-The MCP tool `install_worker` installs the worker and optional components: empty `host` — on this PC,
+The MCP tool `install_worker` installs the worker (together with stem separation) and optional components: empty `host` — on this PC,
 `host=user@gpu-host` — on another machine over ssh. The archive is taken from next to `partscaster-mcp` (release package)
 or built with `make worker-tar` (MCP built from source).
 
 - By default it is a dry run: **nothing is executed**; it shows components, disk space and steps.
-- To install: `dry_run=false`, `confirm=true` and an explicit choice of `whisper`, `seedvc`, `roformer` (true/false);
-  with `roformer=true` — also `stems_model=htdemucs|roformer` (what to use for stems by default).
-- Paths: `hf_home` (weights cache, default `~/yue/hf-cache`), `sep_dir` (RoFormer), `seedvc_dir`;
+- To install: `dry_run=false`, `confirm=true` and an explicit choice of `whisper`, `seedvc` (true/false).
+  Stem separation (RoFormer) is always installed; there is no separate choice.
+- Paths: `hf_home` (weights cache, default `~/yue/hf-cache`), `sep_dir` (RoFormer environment and weights), `seedvc_dir`;
   generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one).
 - Before installing, it checks the GPU and free space in the home directory; if there is not enough, the installation
   does not start.
@@ -83,9 +83,9 @@ Inside, this is the same `install.sh` from the archive, plus steps for the compo
 
 | Component | Needed | Disk space | Without it |
 |---|---|---|---|
-| Worker: YuE2 generation on yue2.cpp, SheetSage2 score, demucs stems | required | up to ~17.8 GB (environment ~7.4 + generation model 3.1–7.7 during installation + score and stem weights ~2.7 on first use) | — |
+| Worker: YuE2 generation on yue2.cpp, SheetSage2 score | required | up to ~17.8 GB (environment ~7.4 + generation model 3.1–7.7 during installation + score weights ~2.7 on first use) | — |
 | Sample kits (drums, basses, orchestra) | installed together with the worker | ~1.2 GB | downloaded on first selection |
-| RoFormer: cleaner stem separation + drums split into parts | optional | ~7.3 GB (environment 6.1 + weights 1.1) | demucs makes the stems, no drum parts |
+| Stem separation: BS-Roformer-SW + DrumSep (drums split into parts) | required | ~7.3 GB (environment 6.1 + weights 1.1) | — |
 | whisper: what a finished track sings — a check for an AI agent (MCP `job_lyrics`) | optional | ~3.2 GB | `job_lyrics` returns an error; "Settings" shows "not found" |
 | Seed-VC: "Album voice" (experiment) | optional | ~10–11 GB after installation, ~14 GB during it | the "Album voice" block with a "not installed" note |
 | NAM: amplifiers in the sound engine | optional | a package folder without torch | only the `amp` block is unavailable |
@@ -101,27 +101,32 @@ The worker ships as a versioned archive. Its `install.sh` does both installation
    even earlier — see below);
 2. puts the code into `~/partscaster/releases/<time>-<version>/`;
 3. creates the environment `~/yue/.venv` (`uv venv --python 3.12`) if it does not exist, and installs the packages from
-   `requirements.txt` from the PyTorch cu128 index (torch is needed for stems, score transcription, Seed-VC and NAM;
+   `requirements.txt` from the PyTorch cu128 index (torch is needed for score transcription, Seed-VC and NAM;
    generation itself runs in the yue2.cpp program) — only for a new environment or a changed `requirements.txt`
    (fingerprint — `~/partscaster/.requirements.sha256`, without comments and blank lines: editing the text does not
    reinstall packages);
 4. creates `~/partscaster/worker.env` if it does not exist, with one line `HF_HOME=` (default
    `~/yue/hf-cache`, `--hf-home DIR` — another directory; the tilde is expanded — systemd does not understand it);
-5. installs the yue2.cpp program and the generation model (see [Generation model](#generation-model--yue2cpp)); if that
+   with `--sep-dir DIR` it adds `PARTSCASTER_SEP_PY=DIR/venv/bin/python` and `PARTSCASTER_SEP_MODELS=DIR/models` there,
+   if these lines are not there yet;
+5. installs stem separation (see [Stem separation](#stem-separation--bs-roformer-sw-and-drumsep)): the environment
+   and the weights; if that fails, the installation stops with an error and the previous version stays active;
+6. installs the yue2.cpp program and the generation model (see [Generation model](#generation-model--yue2cpp)); if that
    fails, the installation stops with an error and the previous version stays active;
-6. atomically switches the link `~/partscaster/current` to the new version and installs the unit
+7. atomically switches the link `~/partscaster/current` to the new version and installs the unit
    `~/.config/systemd/user/partscaster-worker.service`;
-7. installs sample kits (`kits_install.py`; if it fails, the next run or the app downloads them);
-8. keeps 3 previous versions and deletes the rest;
-9. restarts the service and waits up to ~30 s for an answer from `/health` (`--no-start` — without starting).
+8. installs sample kits (`kits_install.py`; if it fails, the next run or the app downloads them);
+9. keeps 3 previous versions and deletes the rest;
+10. restarts the service and waits up to ~30 s for an answer from `/health` (`--no-start` — without starting).
 
-The generation model starts not when the worker starts, but on the first generation. Score and stem weights
-download on first use.
+The generation model starts not when the worker starts, but on the first generation. Score weights download
+on first use, stem separation weights — during installation.
 
 | Parameter | What it does |
 |---|---|
 | `--no-start` | install without starting the service |
 | `--hf-home DIR` | weights cache directory for a new `worker.env` |
+| `--sep-dir DIR` | stem separation directory: environment `DIR/venv`, weights `DIR/models` (written to `worker.env` if the paths are not there yet) |
 | `--cpp-model auto\|bf16\|q8\|q6\|q5` | generation model; `auto` — recommended by VRAM. Without the parameter — the one chosen earlier, if downloaded, otherwise the recommended one |
 | `--cpp-low-vram` | turn on low-VRAM mode (without the parameter — as recommended for the card) |
 | `--rollback` | `~/partscaster/current/install.sh --rollback` — go back to the previous version |
@@ -155,8 +160,9 @@ removes the old `yue-worker` unit, renames the `YUE_*` keys in `worker.env` to `
 leaves a link `~/yue-studio` → `partscaster`. The environment `~/yue/.venv` and the cache `~/yue/hf-cache` stay
 in place. The app also copies its settings from the old folder once in the same way.
 
-**ffmpeg** on the GPU machine is needed only for the spectrogram in the studio (`sudo apt install ffmpeg`); without it
-the "spectrum" mode answers 503; the loudness waveform works.
+**ffmpeg** on the GPU machine is needed by the worker only for the spectrogram in the studio (`sudo apt install ffmpeg`);
+without it the "spectrum" mode answers 503; the loudness waveform works. Stem separation needs ffmpeg too, but without
+a system one it uses its own from the `imageio-ffmpeg` package.
 
 ### Updating
 
@@ -179,14 +185,13 @@ Set them in `~/partscaster/worker.env` (example — `worker.env.example` in the 
 |---|---|---|
 | `PARTSCASTER_DATA_DIR` | `~/partscaster/data` (the unit sets `<PARTSCASTER_HOME>/data`) | SQLite database, tracks, worker settings, kits, yue2.cpp models |
 | `PARTSCASTER_HOME` | `~/partscaster` (set by the unit) | installation directory; the worker looks there for the yue2.cpp program built by `install.sh` (`yue2cpp-src`) |
-| `HF_HOME` | `~/yue/hf-cache` (`install.sh` writes it into a new `worker.env`); without the line — `~/.cache/huggingface` | Hugging Face weights cache (SheetSage2 and MERT, demucs); generation models live in `PARTSCASTER_CPP_MODELS` |
-| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (set by the unit) | PyTorch VRAM allocation mode (stems, score transcription) |
+| `HF_HOME` | `~/yue/hf-cache` (`install.sh` writes it into a new `worker.env`); without the line — `~/.cache/huggingface` | Hugging Face weights cache (SheetSage2 and MERT); generation models live in `PARTSCASTER_CPP_MODELS` |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (set by the unit) | PyTorch VRAM allocation mode (score transcription and other worker operations) |
 | `YUE2_MAX_TOKENS` | `16000` | semantic token budget per song ≈ maximum length (16000 — up to ~10 min; VRAM peak grows with length) |
 | `YUE2_CFG_SCALE` | `1.5` | how closely to follow the style (classifier-free guidance): higher — more exact, but drier |
 | `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | interpreter of the whisper environment |
-| `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | interpreter of the RoFormer environment |
-| `PARTSCASTER_SEP_MODELS` | `~/sep-models` | RoFormer and DrumSep weights (~1.1 GB, downloaded on the first separation) |
-| `PARTSCASTER_STEMS_MODEL` | — | `demucs` — always separate with demucs, even if RoFormer is selected and installed |
+| `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | interpreter of the stem separation (RoFormer) environment |
+| `PARTSCASTER_SEP_MODELS` | `~/sep-models` | RoFormer and DrumSep weights (~1.1 GB, downloaded during installation) |
 | `PARTSCASTER_SEEDVC_DIR` | `~/partscaster/seedvc` | Seed-VC directory |
 | `PARTSCASTER_NAM_DEPS` | — | folder with NAM packages for the `amp` block |
 | `PARTSCASTER_FX_ENGINE` | — | `0` — sound engine turned off (`/jobs/{id}/fx` → 503), whatever the settings say |
@@ -203,30 +208,44 @@ Variables of other programs:
 | `PARTSCASTER_DEPLOY_HOST` | `deploy.sh`, `make worker` | `user@gpu-host` for deployment |
 | `PARTSCASTER_TORCH_INDEX` | `seedvc_install.sh` | PyTorch index for Seed-VC (default CUDA 12.8) |
 
-## Optional components
+## Stem separation — BS-Roformer-SW and DrumSep
 
-They are installed separately — by an agent (`install_worker`) or by hand with the commands below. The worker works without them.
+A required part of the worker: `install.sh` (and `install_worker`) installs it together with the worker. The stems
+are made by BS-Roformer-SW (python-audio-separator): vocals, drums, bass, "other", and inside "other" — guitar and keys;
+DrumSep also splits the drums into kick, snare, toms, hi-hat, ride, crash. About a minute and a half for a
+4-minute track. There is no model choice.
 
-### Stem separation — BS-Roformer-SW and DrumSep
+It runs in a **separate environment** (audio-separator has its own torch and onnxruntime); the worker starts it as a
+subprocess (`sep_run.py`). What `install.sh` does:
 
-By default, demucs makes the stems (fast, ~20 s for a 4-minute track). BS-Roformer-SW
-(python-audio-separator) is cleaner (median SDR on MUSDB18: vocals 11.7 vs 9.1 dB, "other" 7.6 vs 4.8),
-but ~4.5 times slower; DrumSep also splits the drums into kick, snare, toms, hi-hat, ride,
-crash. It runs in a **separate environment** (audio-separator has its own torch and onnxruntime); the worker starts
-it as a subprocess:
+- environment — `PARTSCASTER_SEP_PY` from `worker.env`, without the line — `~/sep-venv`; packages are pinned:
+  `audio-separator[gpu]==0.47.0`, `audioread`, `imageio-ffmpeg==0.6.0` (separation needs the ffmpeg program: without
+  a system one it is taken from this package). A repeated installation with the same package set does not reinstall
+  the environment (fingerprint — `~/partscaster/.sep-packages.sha256`); an environment that is already there is not touched;
+- weights of both models (~1.1 GB) — right during installation, into `PARTSCASTER_SEP_MODELS`, without the line —
+  `~/sep-models` (`sep_run.py download <directory>`, no GPU needed);
+- if the environment or the weights fail, the installation stops with an error and the previous version stays
+  active; a repeated run resumes the download.
+
+The same by hand:
 
 ```bash
 uv venv ~/sep-venv --python 3.12
-uv pip install --python ~/sep-venv/bin/python "audio-separator[gpu]" audioread
+uv pip install --python ~/sep-venv/bin/python "audio-separator[gpu]==0.47.0" audioread imageio-ffmpeg==0.6.0
+~/sep-venv/bin/python ~/partscaster/current/sep_run.py download ~/sep-models
 ```
 
-- In another location — set `PARTSCASTER_SEP_PY` and `PARTSCASTER_SEP_MODELS` in `worker.env`. Agent:
-  `install_worker roformer=true stems_model=roformer sep_dir=/data/sep` — the environment goes into
-  `<sep_dir>/venv`, the weights into `<sep_dir>/models`, and the paths are added to `worker.env`.
-- To turn it on: "Settings" → "stem separation", MCP `config_set stems_model=roformer`, one time —
-  `make_stems model=roformer`. If there is no environment or it crashed, demucs separates without an error.
-- **Weights license:** RoFormer-SW and DrumSep — CC BY-NC-SA (non-commercial), downloaded on the first separation.
-  Commercially clean mode — `PARTSCASTER_STEMS_MODEL=demucs` (demucs weights — MIT).
+- In another location (for example, on another disk) — `install.sh --sep-dir /data/sep` or the agent
+  `install_worker sep_dir=/data/sep`: the environment goes into `<sep_dir>/venv`, the weights into `<sep_dir>/models`,
+  and the paths are added to `worker.env`. You can also write `PARTSCASTER_SEP_PY` and `PARTSCASTER_SEP_MODELS` yourself.
+- If there is no environment or separation crashed, no stems are made and the worker returns the error
+  «разделение на дорожки не удалось: …» ("stem separation failed: …"); the app's "Settings" shows "not installed".
+  The fix is to reinstall the worker.
+- **Weights license:** BS-Roformer-SW and DrumSep — CC BY-NC-SA (non-commercial).
+
+## Optional components
+
+They are installed separately — by an agent (`install_worker`) or by hand with the commands below. The worker works without them.
 
 ### whisper — track lyrics
 
@@ -335,10 +354,10 @@ but you can choose them.
 The Windows package has `partscaster-worker.exe` next to the app. A double click opens a console window:
 while the window is open, the worker works; close it, and the worker stops (no Python process stays in the background). There is no autostart.
 
-- **First run:** checks the GPU (`nvidia-smi`) and disk space (~25 GB needed), lets you choose a folder (default
+- **First run:** checks the GPU (`nvidia-smi`) and disk space (~30 GB needed), lets you choose a folder (default
   `%LOCALAPPDATA%\partscaster-worker`, the choice is remembered; another one — `--home D:\partscaster-worker`). Into the folder
   it installs uv (pinned version, sha256 check), Python 3.12, the `venv` environment and packages:
-  `requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128` (stems, score transcription; the yue2.cpp program also takes
+  `requirements.txt`, `torch`/`torchaudio` `2.10.0+cu128` (score transcription; the yue2.cpp program also takes
   the CUDA libraries from them), `truststore`. Then the generation model downloads (see below).
 - **After that:** starts in seconds. Packages are reinstalled only if `requirements.txt` or
   the pinned versions changed (fingerprint — `packages.sha256`). A new program version puts new code into `app\`;
@@ -353,7 +372,10 @@ while the window is open, the worker works; close it, and the worker stops (no P
   while the model is in place. Without the question: `--cpp-model auto|bf16|q8|q6|q5 [--cpp-low-vram]`.
   The yue2.cpp program (`yue2cpp\yue-server.exe`) is part of the package; without it or without a downloaded model
   the worker does not start — a repeated run resumes the download. To change the model later — in the app's "Settings".
-- The program does not install optional components (whisper, RoFormer, Seed-VC); it does not install sample kits
+- **Stem separation** is always installed: the `sep-venv` environment in the installation folder (torch with CUDA,
+  the cu128 index, as in the main environment) and the RoFormer/DrumSep weights in `sep-models`. A repeated run
+  reinstalls the packages only if their set changed; if it fails, the worker does not start — a repeated run resumes.
+- The program does not install optional components (whisper, Seed-VC); it does not install sample kits
   in advance — they download on first selection.
 
 ## Worker in WSL2

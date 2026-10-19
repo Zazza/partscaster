@@ -46,8 +46,8 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
 - **You cannot get the timbre of a specific singer with one button.** The "Voice" slot and the fitting room set the delivery character,
   not the timbre. What helps: the manner and era in the style, choosing a seed (×5) and processing the finished track.
 - **The model takes stress and phrasing from the plan, not from the lyrics** — edit the melody: [lyrics-melody.md](lyrics-melody.md).
-- **Instrument replacement works on RoFormer stems.** With Demucs the guitar leaks into the bass and sounds on top of
-  the processed one.
+- **Old tracks separated before the switch to RoFormer (Demucs) are poor for instrument replacement:** the guitar
+  leaks into the bass there and sounds on top of the processed one, and there are no drum parts. In the studio — "split in more detail".
 - **SheetSage2 transcription** is accurate on a simple texture; on a dense mix the chords and sections are approximate.
 - **A plan can be longer than the sound**: bars past the end of the track are dimmed in the roll.
 - **A seed repeats the performance only on the same generation model.** Another model (BF16, Q8…) with the same seed
@@ -64,10 +64,9 @@ Partscaster code — [MIT](../../LICENSE). Model weights are not part of the rep
 | Component | License |
 |---|---|
 | YuE2 | CC BY-NC 4.0 **with an additional permission from the model authors**: musicians and content creators may monetize the generated songs (License section in the README [github.com/multimodal-art-projection/YuE](https://github.com/multimodal-art-projection/YuE)) |
-| BS-RoFormer-SW, DrumSep (stem separation) | CC BY-NC / BY-NC-SA — non-commercial, without such a permission |
+| BS-RoFormer-SW, DrumSep (stem separation, installed together with the worker) | CC BY-NC / BY-NC-SA — non-commercial, without such a permission |
 | SheetSage2 (transcription) | CC BY-NC — non-commercial, without such a permission |
 | yue2.cpp (the generation program; the GGUF models are the same YuE2 weights, YuE2 terms) | MIT |
-| Demucs | MIT |
 | Seed-VC | GPL-3.0 |
 
 Check the terms on the model pages.

@@ -1,37 +1,39 @@
-"""Тесты разделения BS-Roformer-SW вместо
-htdemucs + барабаны по частям (DrumSep).
+"""Разделение на дорожки — только BS-Roformer-SW + части барабанов DrumSep (карточка internal-no-demucs).
 
 Контракт:
+- stems.separate(audio_path, out_dir) — без выбора модели; ответ {stems, seconds, model}, model —
+  «bs-roformer-sw»;
 - основные stem-{drums,bass,other,vocals}.flac в сумме дают трек;
   stem-other = other + guitar + piano модели;
 - stem-guitar/stem-piano — подробные внутри «прочего», в сумму не входят;
 - stem-{kick,snare,toms,hh,ride,crash}.flac — части внутри «барабанов»,
-  в сумму не входят, минус их не видит;
-- модель выбирается: по умолчанию htdemucs; RoFormer — если выбран
-  (stems.separate(..., prefer="roformer"), настройка воркера stems_model,
-  разово POST /jobs/{id}/stems?model=roformer|htdemucs);
-- RoFormer выбран, но окружения нет / он упал / PARTSCASTER_STEMS_MODEL=demucs →
-  demucs, model = htdemucs, частей нет, это не ошибка;
-- ответ разделения содержит model (bs-roformer-sw | htdemucs); неизвестная
-  модель → 422; /config отдаёт stems_pref, stems_model, roformer_available.
+  в сумму не входят, минус их не видит; сбой DrumSep основное разделение не роняет
+  (частей нет, в том числе оставшихся от прошлого разделения);
+- окружения разделения нет / подпроцесс упал / таймаут → RuntimeError с текстом про RoFormer
+  (разделение), дорожек нет; другой модели и отката нет — PARTSCASTER_STEMS_MODEL=demucs ничего не меняет;
+- битый/пустой файл → исключение без частичных дорожек;
+- roformer_available() — есть ли файл python окружения разделения (PARTSCASTER_SEP_PY);
+- POST /jobs/{id}/stems → 200 и model «bs-roformer-sw» (в т.ч. без файла настроек); сбой разделения или
+  окружения нет → 500 «разделение на дорожки не удалось: …», дорожек нет; сбой DrumSep → 200 без частей;
+- GET /config: roformer_available отражает наличие окружения; stems_pref/stems_model нет.
 
-Внешние границы подменяются: подпроцесс RoFormer (subprocess.run на python
-из PARTSCASTER_SEP_PY со скриптом sep_run.py) — фейком, который пишет известные
-сигналы и печатает JSON по контракту sep_run.py; demucs — stems._run_model.
-torch и веса моделей не нужны.
+Внешние границы подменяются: подпроцесс RoFormer (stems.run_proc — запуск python из PARTSCASTER_SEP_PY со
+скриптом sep_run.py) — фейком test_no_demucs.FakeSep, который пишет известные сигналы и печатает JSON по
+контракту sep_run.py. torch и веса моделей не нужны. Выбор модели, старые поля клиентов и /version —
+test_no_demucs.
 
-Без numpy/soundfile классы разделения пропускаются; API-классы ещё и без
+Без numpy/soundfile/librosa классы разделения пропускаются; API-классы ещё и без
 fastapi/httpx (как соседние в test_pure.py).
 """
-import json
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import test_pure as tp
+from test_no_demucs import (AMP, DETAIL, DUR, HZ, MAIN, PART_AMP, PART_HZ, PARTS, SR, _SepEnv, _mix, _read,
+                            _tone_amp)
 
 try:
     import soundfile  # noqa: F401
@@ -39,8 +41,7 @@ try:
 except ImportError:
     _HAS_SF = False
 
-# librosa — зависимость воркера (requirements.txt): без неё путь RoFormer
-# в stems.py падает и уходит на demucs, кейсы «сработал RoFormer» не проверить
+# librosa — зависимость воркера (requirements.txt): без неё путь RoFormer в stems.py не пройти
 try:
     import librosa  # noqa: F401
     _HAS_LIBROSA = True
@@ -51,157 +52,13 @@ _SEP_OK = tp._HAS_NUMPY and _HAS_SF and _HAS_LIBROSA
 _SEP_SKIP = "нужны numpy/soundfile/librosa"
 _WORKER_OK = tp._HAS_WORKER_DEPS and _HAS_SF and _HAS_LIBROSA
 _WORKER_SKIP = "нужны fastapi/httpx/numpy/soundfile/librosa (окружение воркера)"
-
-SR = 44100
-DUR = 2.0
-MAIN = ("drums", "bass", "other", "vocals")
-DETAIL = ("guitar", "piano")
-PARTS = ("kick", "snare", "toms", "hh", "ride", "crash")
-
-# у каждого источника свой тон — по спектру видно, что попало в файл
-HZ = {"drums": 110, "bass": 220, "other": 330, "vocals": 440, "guitar": 550, "piano": 660}
-PART_HZ = {"kick": 770, "snare": 880, "toms": 990, "hh": 1100, "ride": 1210, "crash": 1320}
-AMP = 0.1
-PART_AMP = 0.05
-
-
-def _tone(hz, amp=AMP, dur=DUR, sr=SR):
-    import numpy as np
-    t = np.arange(int(dur * sr)) / sr
-    x = (amp * np.sin(2 * np.pi * hz * t)).astype(np.float32)
-    return np.stack([x, x], axis=1)
-
-
-def _tone_amp(x, hz, sr=SR):
-    """Амплитуда синуса частоты hz (одна точка ДПФ по целым секундам)."""
-    import numpy as np
-    if x.ndim > 1:
-        x = x.mean(axis=1)
-    n = (len(x) // sr) * sr
-    x = x[:n].astype(np.float64)
-    t = np.arange(n) / sr
-    return 2 * abs(np.sum(x * np.exp(-2j * np.pi * hz * t))) / n
-
-
-def _mix():
-    """Трек = сумма шести источников RoFormer (модель раскладывает его без остатка)."""
-    import numpy as np
-    return np.sum([_tone(h) for h in HZ.values()], axis=0).astype(np.float32)
-
-
-def _read(path):
-    import soundfile as sf
-    x, _ = sf.read(str(path), dtype="float32", always_2d=True)
-    return x
-
-
-class FakeSep:
-    """Фейк subprocess.run для `python sep_run.py <аудио> <выход> <веса>`.
-    Пишет в каталог выхода сырые дорожки <имя>.wav и drums-<часть>.wav,
-    печатает последней строкой JSON по контракту sep_run.py. Чужие вызовы
-    subprocess.run уходят в настоящий."""
-
-    _real = staticmethod(subprocess.run)
-
-    def __init__(self, mode="ok"):
-        # ok | fail (код выхода 1) | drum_fail (DrumSep упал) | raise (таймаут)
-        self.mode = mode
-        self.calls = []
-
-    def __call__(self, cmd, *args, **kw):
-        argv = [str(a) for a in (cmd if isinstance(cmd, (list, tuple)) else [cmd])]
-        idx = next((i for i, a in enumerate(argv) if Path(a).name == "sep_run.py"), None)
-        if idx is None:
-            return self._real(cmd, *args, **kw)
-        self.calls.append(argv)
-        src, out = Path(argv[idx + 1]), Path(argv[idx + 2])
-        if self.mode == "raise":
-            raise subprocess.TimeoutExpired(argv, 1)
-        if self.mode == "fail":
-            return self._done(argv, 1, "", "Traceback ...\nRuntimeError: CUDA out of memory")
-        import soundfile as sf
-        try:
-            sf.read(str(src))
-        except Exception as e:  # noqa: BLE001 — как настоящий sep_run на битом файле
-            return self._done(argv, 1, "", f"Traceback ...\n{type(e).__name__}: {e}")
-        out.mkdir(parents=True, exist_ok=True)
-        stems = {}
-        for name, hz in HZ.items():
-            p = out / f"{name}.wav"
-            sf.write(str(p), _tone(hz), SR)
-            stems[name] = str(p)
-        parts, err = {}, ""
-        if self.mode == "drum_fail":
-            err = "RuntimeError: DrumSep weights download failed"
-        else:
-            for name, hz in PART_HZ.items():
-                p = out / f"drums-{name}.wav"
-                sf.write(str(p), _tone(hz, amp=PART_AMP), SR)
-                parts[name] = str(p)
-        stdout = "loading model...\n" + json.dumps({"stems": stems, "drum_parts": parts, "drum_error": err}) + "\n"
-        return self._done(argv, 0, stdout, "")
-
-    @staticmethod
-    def _done(argv, code, stdout, stderr):
-        return subprocess.CompletedProcess(argv, code, stdout=stdout, stderr=stderr)
-
-
-# demucs-фейк: источник = вход × k; у htdemucs сумма k = 1 (дорожки = трек).
-# У 6-стемной основные k < 0 — по знаку видно, из какой модели взят файл.
-_K4 = {"drums": 0.4, "bass": 0.3, "other": 0.2, "vocals": 0.1}
-_K6 = {"drums": -0.4, "bass": -0.3, "other": -0.1, "vocals": -0.1, "guitar": 0.06, "piano": 0.04}
-
-
-class FakeDemucs:
-    """fail_6s — 6-стемная модель (гитара/клавиши) не загрузилась."""
-
-    def __init__(self, fail_6s=False):
-        self.calls = []
-        self.fail_6s = fail_6s
-
-    def __call__(self, name, data, sr):
-        self.calls.append(name)
-        if self.fail_6s and name == "htdemucs_6s":
-            raise RuntimeError("download failed: htdemucs_6s")
-        ks = {"htdemucs": _K4, "htdemucs_6s": _K6}[name]
-        return {s: (data * k).astype("float32") for s, k in ks.items()}
-
-
-RF = "roformer"  # выбор RoFormer (значение настройки/параметра)
-
-
-class _SepEnv:
-    """Окружение разделения на тест: временный файл PARTSCASTER_SEP_PY (по умолчанию
-    существует — окружение RoFormer «установлено»), каталог весов
-    PARTSCASTER_SEP_MODELS, откат PARTSCASTER_STEMS_MODEL — только если задан; фейки на
-    подпроцессе и demucs."""
-
-    def _setup_sep(self, tmp: Path, sep_mode="ok", sep_py_exists=True, rollback_env=None, fail_6s=False):
-        import stems
-        sep_py = tmp / "sep-python"
-        if sep_py_exists:
-            sep_py.write_text("")
-        elif sep_py.exists():
-            sep_py.unlink()
-        env = {"PARTSCASTER_SEP_PY": str(sep_py), "PARTSCASTER_SEP_MODELS": str(tmp / "sep-models")}
-        p = mock.patch.dict(os.environ, env)
-        p.start()
-        self.addCleanup(p.stop)
-        if rollback_env is None:
-            os.environ.pop("PARTSCASTER_STEMS_MODEL", None)
-        else:
-            os.environ["PARTSCASTER_STEMS_MODEL"] = rollback_env
-        self.sep = FakeSep(sep_mode)
-        self.demucs = FakeDemucs(fail_6s)
-        for p in (mock.patch.object(stems, "run_proc", self.sep),
-                  mock.patch.object(stems, "_run_model", self.demucs)):
-            p.start()
-            self.addCleanup(p.stop)
+RF_MODEL = "bs-roformer-sw"
+SEP_ERR = "разделение на дорожки не удалось"
 
 
 @unittest.skipUnless(_SEP_OK, _SEP_SKIP)
 class TestSeparateRoformer(_SepEnv, unittest.TestCase):
-    """stems.separate(audio_path, out_dir, prefer=...) с установленным окружением RoFormer."""
+    """stems.separate(audio_path, out_dir) — RoFormer подпроцессом."""
 
     def setUp(self):
         import soundfile as sf
@@ -213,24 +70,23 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         self.out = self.tmp / "job"
         self.out.mkdir()
 
-    def _separate(self, prefer=RF, **kw):
-        """prefer=None — вызов без выбора модели (по умолчанию)."""
+    def _separate(self, **kw):
         import stems
         self._setup_sep(self.tmp, **kw)
-        if prefer is None:
-            return stems.separate(self.audio, self.out)
-        return stems.separate(self.audio, self.out, prefer=prefer)
+        return stems.separate(self.audio, self.out)
 
     def _files(self):
         return sorted(p.name for p in self.out.iterdir())
+
+    def _stem_files(self):
+        return [f for f in self._files() if f.startswith("stem-")]
 
     def test_main_and_detail_files_model_roformer(self):
         res = self._separate()
         self.assertEqual(len(self.sep.calls), 1, "RoFormer не вызван")
         for n in MAIN + DETAIL:
             self.assertTrue((self.out / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac: {self._files()}")
-        self.assertEqual(res.get("model"), "bs-roformer-sw")
-        self.assertEqual(self.demucs.calls, [], "при рабочем RoFormer demucs не нужен")
+        self.assertEqual(res.get("model"), RF_MODEL)
 
     def test_other_is_other_plus_guitar_plus_piano(self):
         self._separate()
@@ -297,153 +153,81 @@ class TestSeparateRoformer(_SepEnv, unittest.TestCase):
         for n in PARTS:
             self.assertLess(_tone_amp(full, PART_HZ[n]), 0.002, f"часть {n} попала в основные дорожки")
 
-    def test_no_sep_python_demucs_path(self):
-        res = self._separate(sep_py_exists=False)  # RoFormer выбран, окружения нет; исключения нет
+    def _assert_fails(self, **kw):
+        with self.assertRaises(RuntimeError) as cm:
+            self._separate(**kw)
+        self.assertRegex(str(cm.exception), r"(?i)roformer|разделени")
+        self.assertEqual(self._stem_files(), [], "дорожки после сбоя разделения")
+        return cm.exception
+
+    def test_no_sep_python_raises_without_subprocess(self):
+        e = self._assert_fails(sep_py_exists=False)
         self.assertEqual(self.sep.calls, [], "RoFormer вызван без окружения")
-        self.assertEqual(res.get("model"), "htdemucs")
-        self.assertIn("htdemucs", self.demucs.calls)
-        for n in MAIN:
-            self.assertTrue((self.out / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
-        for n in PARTS:
-            self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"stem-{n}.flac без DrumSep")
+        self.assertRegex(str(e), r"(?i)переустанов|install", "нет подсказки, как пройти")
 
-    def test_subprocess_error_falls_back_with_log(self):
-        with self.assertLogs("partscaster-worker", level="WARNING") as cm:
-            res = self._separate(sep_mode="fail")
-        self.assertEqual(len(self.sep.calls), 1)
-        self.assertEqual(res.get("model"), "htdemucs")
-        for n in MAIN:
-            self.assertTrue((self.out / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
-        for n in PARTS:
-            self.assertFalse((self.out / f"stem-{n}.flac").exists())
-        self.assertTrue(cm.records, "сбой RoFormer не записан в лог")
+    def test_subprocess_error_raises(self):
+        self._assert_fails(sep_mode="fail")
+        self.assertEqual(len(self.sep.calls), 1, "запасного второго прохода быть не должно")
 
-    def test_subprocess_timeout_falls_back(self):
-        with self.assertLogs("partscaster-worker", level="WARNING"):
-            res = self._separate(sep_mode="raise")
-        self.assertEqual(res.get("model"), "htdemucs")
-        self.assertTrue((self.out / "stem-vocals.flac").is_file())
+    def test_subprocess_timeout_raises(self):
+        self._assert_fails(sep_mode="raise")
 
-    def test_fallback_main_stems_sum_to_input(self):
-        self._separate(sep_mode="fail")
-        self._assert_main_sum_is_input()
-
-    def test_rollback_env_never_calls_roformer(self):
-        res = self._separate(rollback_env="demucs")  # RoFormer выбран и окружение есть
-        self.assertEqual(self.sep.calls, [], "PARTSCASTER_STEMS_MODEL=demucs, а RoFormer вызван")
-        self.assertEqual(res.get("model"), "htdemucs")
+    def test_old_rollback_env_still_roformer(self):
+        res = self._separate(old_rollback="demucs")  # строка старого отката в worker.env
+        self.assertEqual(len(self.sep.calls), 1, "PARTSCASTER_STEMS_MODEL=demucs обошёл RoFormer")
+        self.assertEqual(res.get("model"), RF_MODEL)
         self.assertTrue((self.out / "stem-drums.flac").is_file())
 
     def test_drumsep_failure_keeps_main(self):
         res = self._separate(sep_mode="drum_fail")
-        self.assertEqual(res.get("model"), "bs-roformer-sw")
-        self.assertEqual(self.demucs.calls, [], "сбой DrumSep не повод уходить в demucs")
+        self.assertEqual(res.get("model"), RF_MODEL)
         for n in MAIN + DETAIL:
             self.assertTrue((self.out / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
         for n in PARTS:
             self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"stem-{n}.flac при упавшем DrumSep")
 
-    def _broken(self, content: bytes, prefer):
+    def test_drumsep_failure_drops_parts_of_previous_split(self):
+        # части от прошлого разделения не должны остаться рядом с новыми основными дорожками
+        import soundfile as sf
+        for n in PARTS:
+            sf.write(str(self.out / f"stem-{n}.flac"), _mix(), SR)
+        self._separate(sep_mode="drum_fail")
+        for n in PARTS:
+            self.assertFalse((self.out / f"stem-{n}.flac").exists(), f"старая stem-{n}.flac осталась")
+
+    def _broken(self, content: bytes):
         self.audio.write_bytes(content)
         with self.assertRaises(Exception):  # noqa: B017 — тип ошибки не задан, важно «упало»
-            self._separate(prefer=prefer)
-        stems_left = [f for f in self._files() if f.startswith("stem-")]
+            self._separate()
+        stems_left = self._stem_files()
         self.assertEqual(stems_left, [], f"частичные дорожки после сбоя: {stems_left}")
 
     def test_empty_file_raises_without_stems(self):
-        for prefer in (RF, None):
-            with self.subTest(prefer=prefer):
-                self._broken(b"", prefer)
+        self._broken(b"")
 
     def test_garbage_file_raises_without_stems(self):
-        for prefer in (RF, None):
-            with self.subTest(prefer=prefer):
-                self._broken(b"not an audio file at all" * 100, prefer)
-
-    def test_default_is_demucs_even_with_roformer_env(self):
-        res = self._separate(prefer=None)
-        self.assertEqual(self.sep.calls, [], "без выбора RoFormer вызван")
-        self.assertEqual(res.get("model"), "htdemucs")
-        for n in MAIN:
-            self.assertTrue((self.out / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
-        for n in PARTS:
-            self.assertFalse((self.out / f"stem-{n}.flac").exists())
-
-    def test_explicit_htdemucs(self):
-        res = self._separate(prefer="htdemucs")
-        self.assertEqual(self.sep.calls, [])
-        self.assertEqual(res.get("model"), "htdemucs")
-
-    # demucs: основные из htdemucs, гитара/клавиши из htdemucs_6s
-    def _gain(self, name):
-        """Доля входа в файле стема (FakeDemucs: источник = вход × k)."""
-        import numpy as np
-        x, ref = _read(self.out / f"stem-{name}.flac").mean(axis=1), _read(self.audio).mean(axis=1)
-        n = min(len(x), len(ref))
-        return float(np.dot(x[:n], ref[:n]) / np.dot(ref[:n], ref[:n]))
-
-    def test_demucs_main_from_4_stem_detail_from_6_stem_model(self):
-        res = self._separate(prefer=None)
-        want = {f"stem-{n}.flac" for n in MAIN + DETAIL}
-        self.assertEqual({Path(s).name for s in res.get("stems", [])}, want)
-        for n in MAIN:
-            with self.subTest(stem=n):
-                self.assertAlmostEqual(self._gain(n), _K4[n], delta=0.01, msg=f"stem-{n} не из htdemucs")
-        for n in DETAIL:
-            with self.subTest(stem=n):
-                self.assertAlmostEqual(self._gain(n), _K6[n], delta=0.01, msg=f"stem-{n} не из htdemucs_6s")
-
-    def test_demucs_6s_load_failure_keeps_main_stems(self):
-        with self.assertLogs("partscaster-worker", level="WARNING"):
-            res = self._separate(prefer=None, fail_6s=True)  # исключение наружу не выходит
-        names = {Path(s).name for s in res.get("stems", [])}
-        self.assertEqual(names, {f"stem-{n}.flac" for n in MAIN})
-        for n in MAIN:
-            self.assertAlmostEqual(self._gain(n), _K4[n], delta=0.01)
-        for n in DETAIL:
-            self.assertFalse((self.out / f"stem-{n}.flac").exists(),
-                             f"stem-{n}.flac записан, хотя 6-стемная модель не загрузилась")
-
+        self._broken(b"not an audio file at all" * 100)
 
 class TestRoformerAvailability(unittest.TestCase):
-    """Без аудио-зависимостей: roformer_available отражает наличие файла
-    PARTSCASTER_SEP_PY; выбор RoFormer действует, только если он выбран, окружение
-    есть и нет отката PARTSCASTER_STEMS_MODEL=demucs."""
+    """Без аудио-зависимостей: roformer_available отражает наличие файла PARTSCASTER_SEP_PY."""
 
-    def _check(self, exists, prefer=None, rollback=None):
+    def _check(self, exists):
         import stems
         with tempfile.TemporaryDirectory() as td:
             py = Path(td) / "python"
             if exists:
                 py.write_text("")
             with mock.patch.dict(os.environ, {"PARTSCASTER_SEP_PY": str(py)}):
-                os.environ.pop("PARTSCASTER_STEMS_MODEL", None)
-                if rollback is not None:
-                    os.environ["PARTSCASTER_STEMS_MODEL"] = rollback
-                avail = stems.roformer_available()
-                enabled = stems.roformer_enabled() if prefer is None else stems.roformer_enabled(prefer)
-                return avail, enabled
+                return stems.roformer_available()
 
     def test_available_reflects_file(self):
-        self.assertTrue(self._check(True)[0])
-        self.assertFalse(self._check(False)[0])
-
-    def test_not_enabled_by_default(self):
-        self.assertFalse(self._check(True)[1])
-
-    def test_enabled_when_chosen_and_installed(self):
-        self.assertTrue(self._check(True, RF)[1])
-
-    def test_not_enabled_when_missing(self):
-        self.assertFalse(self._check(False, RF)[1])
-
-    def test_not_enabled_by_rollback(self):
-        self.assertFalse(self._check(True, RF, "demucs")[1])
+        self.assertTrue(self._check(True))
+        self.assertFalse(self._check(False))
 
 
 @unittest.skipUnless(_WORKER_OK, _WORKER_SKIP)
 class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
-    """POST /jobs/{id}/stems, GET/POST /config поверх выбора модели."""
+    """POST /jobs/{id}/stems и GET /config: дорожки только RoFormer."""
 
     def setUp(self):
         super().setUp()
@@ -473,9 +257,11 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
             c.execute("UPDATE jobs SET audio_file='audio.flac' WHERE id=?", (jid,))
         return jid, d
 
-    def _stems(self, jid, model=None):
-        params = {} if model is None else {"model": model}
-        return self.client.post(f"/jobs/{jid}/stems", params=params)
+    def _stems(self, jid):
+        return self.client.post(f"/jobs/{jid}/stems")
+
+    def _stem_files(self, d):
+        return sorted(p.name for p in d.iterdir() if p.name.startswith("stem-"))
 
     def _config(self):
         r = self.client.get("/config")
@@ -484,166 +270,64 @@ class TestStemsApiRoformer(_SepEnv, tp._WorkerApiCase):
 
     def test_stems_response_model_roformer(self):
         self._setup_sep(Path(self._td.name))
-        jid, _ = self._audio_job()
-        r = self._stems(jid, RF)
+        self.assertFalse(self.settings.exists())   # без файла настроек — тоже RoFormer
+        jid, d = self._audio_job()
+        r = self._stems(jid)
         self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "bs-roformer-sw")
+        self.assertEqual(r.json().get("model"), RF_MODEL)
+        self.assertEqual(len(self.sep.calls), 1)
+        for n in MAIN + DETAIL + PARTS:
+            self.assertTrue((d / f"stem-{n}.flac").is_file(), f"нет stem-{n}.flac")
 
-    def test_no_sep_python_response_htdemucs(self):
+    def test_no_sep_python_500_clear_error(self):
         self._setup_sep(Path(self._td.name), sep_py_exists=False)
         jid, d = self._audio_job()
-        r = self._stems(jid, RF)
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "htdemucs")
-        for n in PARTS:
-            self.assertFalse((d / f"stem-{n}.flac").exists())
+        r = self._stems(jid)
+        self.assertEqual(r.status_code, 500, r.text)
+        detail = r.json().get("detail", "")
+        self.assertIn(SEP_ERR, detail)
+        self.assertRegex(detail, r"(?i)переустанов|install")
+        self.assertEqual(self.sep.calls, [])
+        self.assertEqual(self._stem_files(d), [])
 
-    def test_subprocess_error_200_htdemucs(self):
+    def test_subprocess_error_500(self):
         self._setup_sep(Path(self._td.name), sep_mode="fail")
         jid, d = self._audio_job()
-        with self.assertLogs("partscaster-worker", level="WARNING"):
-            r = self._stems(jid, RF)
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "htdemucs")
-        self.assertTrue((d / "stem-vocals.flac").is_file())
-
-    def test_rollback_response_htdemucs(self):
-        self._setup_sep(Path(self._td.name), rollback_env="demucs")
-        self.assertLess(self.client.post("/config", json={"stems_model": RF}).status_code, 300)
-        for model in (RF, None):  # ни разовый выбор, ни настройка не обходят откат
-            with self.subTest(model=model):
-                jid, _ = self._audio_job()
-                r = self._stems(jid, model)
-                self.assertEqual(r.status_code, 200, r.text)
-                self.assertEqual(r.json().get("model"), "htdemucs")
-        self.assertEqual(self.sep.calls, [])
-        self.assertEqual(self._config().get("stems_model"), "htdemucs")
+        r = self._stems(jid)
+        self.assertEqual(r.status_code, 500, r.text)
+        self.assertIn(SEP_ERR, r.json().get("detail", ""))
+        self.assertEqual(len(self.sep.calls), 1)
+        self.assertEqual(self._stem_files(d), [], "дорожки при упавшем RoFormer")
 
     def test_drumsep_failure_200_roformer(self):
         self._setup_sep(Path(self._td.name), sep_mode="drum_fail")
         jid, d = self._audio_job()
-        r = self._stems(jid, RF)
+        r = self._stems(jid)
         self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "bs-roformer-sw")
+        self.assertEqual(r.json().get("model"), RF_MODEL)
+        self.assertTrue((d / "stem-vocals.flac").is_file())
         for n in PARTS:
             self.assertFalse((d / f"stem-{n}.flac").exists())
 
     def test_broken_audio_500_separation_failed(self):
         self._setup_sep(Path(self._td.name))
-        for model in (RF, None):
-            for content in (b"", b"garbage" * 200):
-                with self.subTest(model=model, size=len(content)):
-                    jid, d = self._audio_job(content)
-                    r = self._stems(jid, model)
-                    self.assertEqual(r.status_code, 500, r.text)
-                    self.assertIn("separation failed", r.json().get("detail", ""))
-                    left = sorted(p.name for p in d.iterdir() if p.name.startswith("stem-"))
-                    self.assertEqual(left, [], f"частичные дорожки: {left}")
+        for content in (b"", b"garbage" * 200):
+            with self.subTest(size=len(content)):
+                jid, d = self._audio_job(content)
+                r = self._stems(jid)
+                self.assertEqual(r.status_code, 500, r.text)
+                self.assertIn(SEP_ERR, r.json().get("detail", ""))
+                left = self._stem_files(d)
+                self.assertEqual(left, [], f"частичные дорожки: {left}")
 
-    def test_default_settings_use_demucs(self):
-        self._setup_sep(Path(self._td.name))  # окружение RoFormer есть
-        self.assertFalse(self.settings.exists())
-        jid, d = self._audio_job()
-        r = self._stems(jid)
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "htdemucs")
-        self.assertEqual(self.sep.calls, [], "по умолчанию RoFormer вызван")
-        self.assertTrue((d / "stem-vocals.flac").is_file())
-
-    def test_setting_roformer_used_by_default(self):
-        self._setup_sep(Path(self._td.name))
-        r = self.client.post("/config", json={"stems_model": RF})
-        self.assertLess(r.status_code, 300, r.text)
-        jid, _ = self._audio_job()
-        r = self._stems(jid)
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "bs-roformer-sw")
-        self.assertEqual(len(self.sep.calls), 1)
-
-    def test_param_htdemucs_overrides_setting_once(self):
-        self._setup_sep(Path(self._td.name))
-        self.assertLess(self.client.post("/config", json={"stems_model": RF}).status_code, 300)
-        jid, _ = self._audio_job()
-        r = self._stems(jid, "htdemucs")
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "htdemucs")
-        self.assertEqual(self.sep.calls, [])
-        # разово: настройка не изменилась, следующий вызов без параметра — RoFormer
-        self.assertEqual(self._config().get("stems_pref"), RF)
-        jid2, _ = self._audio_job()
-        self.assertEqual(self._stems(jid2).json().get("model"), "bs-roformer-sw")
-
-    def test_param_roformer_with_default_setting_once(self):
-        self._setup_sep(Path(self._td.name))
-        jid, _ = self._audio_job()
-        r = self._stems(jid, RF)
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json().get("model"), "bs-roformer-sw")
-        self.assertEqual(self._config().get("stems_pref"), "htdemucs")
-        jid2, _ = self._audio_job()
-        self.assertEqual(self._stems(jid2).json().get("model"), "htdemucs")
-        self.assertEqual(len(self.sep.calls), 1)
-
-    def test_unknown_model_param_422(self):
-        self._setup_sep(Path(self._td.name))
-        jid, d = self._audio_job()
-        for bad in ("xyz", "ROFORMER", "demucs6"):
-            with self.subTest(model=bad):
-                r = self._stems(jid, bad)
-                self.assertEqual(r.status_code, 422, r.text)
-        self.assertEqual(self.sep.calls, [])
-        self.assertEqual(self.demucs.calls, [])
-        self.assertEqual([p.name for p in d.iterdir() if p.name.startswith("stem-")], [])
-
-    def test_unknown_config_value_422_keeps_pref(self):
-        self._setup_sep(Path(self._td.name))
-        r = self.client.post("/config", json={"stems_model": "xyz"})
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertEqual(self._config().get("stems_pref"), "htdemucs")
-
-    def test_config_roformer_persists(self):
-        import json as _json
-        self._setup_sep(Path(self._td.name))
-        self.assertEqual(self._config().get("stems_pref"), "htdemucs")  # по умолчанию
-        r = self.client.post("/config", json={"stems_model": RF})
-        self.assertLess(r.status_code, 300, r.text)
-        self.assertEqual(self._config().get("stems_pref"), RF)
-        # «перезапуск»: значение живёт в файле настроек воркера и читается из него заново
-        self.assertTrue(self.settings.exists(), "выбор не сохранён в настройки воркера")
-        saved = self.settings.read_text(encoding="utf-8")
-        self.settings.unlink()
-        self.assertEqual(self._config().get("stems_pref"), "htdemucs")
-        self.settings.write_text(saved, encoding="utf-8")
-        self.assertEqual(self._config().get("stems_pref"), RF)
-        self.assertEqual(_json.loads(saved).get("stems_model"), RF)
-
-    def test_config_back_to_htdemucs(self):
-        self._setup_sep(Path(self._td.name))
-        self.client.post("/config", json={"stems_model": RF})
-        r = self.client.post("/config", json={"stems_model": "htdemucs"})
-        self.assertLess(r.status_code, 300, r.text)
-        self.assertEqual(self._config().get("stems_pref"), "htdemucs")
-
-    def test_config_effective_model_and_availability(self):
-        cases = [
-            # (выбор в настройке, окружение есть, ждём stems_model, ждём roformer_available)
-            (None, True, "htdemucs", True),
-            (RF, True, "bs-roformer-sw", True),
-            (RF, False, "htdemucs", False),
-            ("htdemucs", True, "htdemucs", True),
-            (None, False, "htdemucs", False),
-        ]
-        for pref, installed, want_model, want_avail in cases:
-            with self.subTest(pref=pref, installed=installed):
-                if self.settings.exists():
-                    self.settings.unlink()
+    def test_config_availability_without_choice(self):
+        for installed in (True, False):
+            with self.subTest(installed=installed):
                 self._setup_sep(Path(self._td.name), sep_py_exists=installed)
-                if pref is not None:
-                    self.assertLess(self.client.post("/config", json={"stems_model": pref}).status_code, 300)
                 cfg = self._config()
-                self.assertEqual(cfg.get("stems_model"), want_model, cfg)
-                self.assertIs(cfg.get("roformer_available"), want_avail, cfg)
-                self.assertEqual(cfg.get("stems_pref"), pref or "htdemucs", cfg)
+                self.assertIs(cfg.get("roformer_available"), installed, cfg)
+                self.assertNotIn("stems_model", cfg)
+                self.assertNotIn("stems_pref", cfg)
 
 
 if __name__ == "__main__":

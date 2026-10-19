@@ -418,7 +418,7 @@ const posSection = (pos) => {
 const secLabel = (pos) => sectionLabel(posSection(pos), locale.value)
 const isSecStart = (pos) => pos === 0 || posSection(pos) !== posSection(pos - 1)
 // голоса партитуры (Vocal/Ins) — по-русски; неизвестный — как есть
-// дорожки demucs по-русски (барабаны, бас, гитары/синты, голос, гитара, клавиши); неизвестная — как есть
+// дорожки разделения по-русски (барабаны, бас, гитары/синты, голос, гитара, клавиши); неизвестная — как есть
 const stemLabel = (n) => { if (!n) return ''; const k = 'studio.dsp.target.' + n; const s = t(k); return s === k ? n : s }
 // шаги студии: ссылки на разделы, активный — по прокрутке
 const STUDIO_STEPS = ['listen', 'edit', 'sound', 'voice', 'done']
@@ -1316,7 +1316,7 @@ async function toggleFxPrev() {
 
 // на что эффект: '' — весь трек, иначе дорожка (стем) — через пересборку
 // дорожек: остальное не меняется (обработка микса глушила гитары)
-// guitar/piano — подробные дорожки 6-стемной модели (внутри «прочего»)
+// guitar/piano — подробные дорожки разделения (внутри «прочего»)
 const DSP_TARGETS = ['', 'vocals', 'drums', 'bass', 'other', 'guitar', 'piano']
 
 // линия громкости по волне: весь трек — отдельный вариант; дорожка — запись

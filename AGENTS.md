@@ -141,7 +141,7 @@ Partscaster has three parts: a desktop app (Go + Wails v2, Vue 3 UI), an MCP ser
   otherwise the spectrum endpoint returns 503 and the loudness waveform still works.
 - Environment variables are read in several modules: `yue_worker.py`, `stems.py`, `engine_cpp.py`,
   `voice.py`. Most are read once at import; some are read on every call (for example
-  `PARTSCASTER_FX_ENGINE`, `PARTSCASTER_STEMS_MODEL`, `PARTSCASTER_SEP_PY`, and the yue2.cpp paths in
+  `PARTSCASTER_FX_ENGINE`, `PARTSCASTER_SEP_PY`, `PARTSCASTER_SEP_MODELS`, and the yue2.cpp paths in
   `engine_cpp.py`). Do not assume a single place to look. A new variable goes into
   `worker.env.example` and the table in `docs/{ru,en}/deployment.md`.
 - Packaging is by rule, not by list (`tools/worker-tar.sh`): the worker archive contains `worker/*.py`

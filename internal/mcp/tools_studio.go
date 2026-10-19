@@ -43,14 +43,13 @@ func RegisterStudioTools(s *Server) {
 		Name: "config_set",
 		Description: "Настройки: server_url — адрес воркера (сохраняется и в settings приложения); " +
 			"stems_auto — когда делать дорожки трека (studio — при открытии студии | always — сразу у каждого готового трека | manual — вручную); " +
-			"stems_model — модель дорожек по умолчанию (htdemucs | roformer); fx_engine — звуковой движок вкл/выкл; " +
+			"fx_engine — звуковой движок вкл/выкл; " +
 			"cpp_model — модель генерации (любая скачанная; рекомендуемая для карты — в config_get), cpp_low_vram — экономный режим; " +
 			"модель и режим — со следующей генерации.",
 		InputSchema: props(map[string]any{
-			"server_url":  prop("адрес воркера, напр. http://gpu-host:8091", "string"),
-			"stems_auto":  prop("когда делать дорожки: studio (при открытии студии) | always (сразу у каждого готового трека) | manual (вручную)", "string"),
-			"stems_model": prop("чем делать дорожки по умолчанию: htdemucs (быстро) | roformer (чище, ~4,5× дольше, веса некоммерческие)", "string"),
-			"fx_engine":   prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
+			"server_url": prop("адрес воркера, напр. http://gpu-host:8091", "string"),
+			"stems_auto": prop("когда делать дорожки: studio (при открытии студии) | always (сразу у каждого готового трека) | manual (вручную)", "string"),
+			"fx_engine":  prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
 			"cpp_model": prop("модель генерации: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install). "+
 				"Тот же сид на другой модели даёт другое исполнение; ноты и продолжения переносятся", "string"),
 			"cpp_low_vram": prop("экономный режим (~4,5 ГБ видеопамяти, песня до ~3,5 мин)", "boolean"),
@@ -63,9 +62,6 @@ func RegisterStudioTools(s *Server) {
 			cfg := map[string]any{}
 			if v := argString(args, "stems_auto"); v != "" {
 				cfg["stems_auto"] = v
-			}
-			if v := argString(args, "stems_model"); v != "" {
-				cfg["stems_model"] = v
 			}
 			if v, ok := args["fx_engine"].(bool); ok {
 				cfg["fx_engine"] = v
@@ -325,16 +321,13 @@ func RegisterStudioTools(s *Server) {
 		Name: "make_stems",
 		Description: "Разделить трек джобы на стемы (drums/bass/other/vocals) и подробные дорожки guitar/piano (внутри other) " +
 			"и части барабанов kick/snare/toms/hh/ride/crash (внутри drums) — подробные в сумму трека не входят. " +
-			"Модель: htdemucs (быстро, ~20 с на трек) или roformer — BS-Roformer-SW, заметно чище, ~4,5× дольше, " +
-			"части барабанов только с ней. По умолчанию — настройка stems_model (config_set); какая сработала — поле model. " +
-			"Медленно при первом вызове (качаются веса).",
+			"Модель — BS-Roformer-SW (+ DrumSep для частей барабанов), ~1,5 мин на трек.",
 		InputSchema: props(map[string]any{
 			"job_id": prop("ID джобы", "integer"),
-			"model":  prop("разово: roformer | htdemucs (пусто — по настройке stems_model)", "string"),
 		}, "job_id"),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			defer s.fxCache().Invalidate(argInt(args, "job_id")) // стемы переписаны — кэш превью устарел
-			out, err := s.client.MakeStemsWith(context.Background(), argInt(args, "job_id"), argString(args, "model"))
+			out, err := s.client.MakeStems(context.Background(), argInt(args, "job_id"))
 			if err != nil {
 				return "", err
 			}

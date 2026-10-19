@@ -9,6 +9,10 @@ python venv отвечает на `engine_cpp.py recommend|installed|download` �
 (рекомендация «q8 1», скачанная модель помечается файлом installed-<модель> в каталоге заглушек),
 в каталоге версии лежит рабочая заглушка программы yue2cpp/yue-server. Выбор модели, отказ без
 программы/модели — test_install_engine и test_cpp_only.
+Окружение разделения на дорожки (RoFormer, ~/sep-venv) установщик тоже ставит всегда — вторым `uv venv`
+и `uv pip install` с audio-separator; `sep_run.py download` отвечает python-заглушка (код 0). Здесь
+счёт venv и пакетов — по окружению воркера (venv по пути, пакеты по `-r requirements.txt`);
+установка разделения, её отпечаток и сбои — test_no_demucs (ТК21–ТК25).
 
 Что должно работать:
 I1. Установка: current → $PARTSCASTER_HOME/releases/<YYYYmmddHHMMSS>-<ver> (атомарная ссылка),
@@ -186,6 +190,25 @@ class _InstallCase(unittest.TestCase):
     def called(self, name, *first):
         return [a for n, a in self.calls() if n == name and a[:len(first)] == list(first)]
 
+    def worker_venvs(self):
+        """`uv venv` окружения воркера (не окружения разделения)."""
+        return [a for a in self.called("uv", "venv") if a[1:2] == [str(self.venv)]]
+
+    def worker_pips(self):
+        """`uv pip install` пакетов воркера (-r requirements.txt), без пакетов разделения."""
+        return [a for a in self.called("uv", "pip", "install") if "-r" in a]
+
+    def sep_pips(self):
+        """`uv pip install` пакетов разделения на дорожки (audio-separator)."""
+        return [a for a in self.called("uv", "pip", "install") if any("audio-separator" in x for x in a)]
+
+    def sep_installed_before(self):
+        """Окружение разделения уже стоит (установка до архивов, без отпечатка): python в ~/sep-venv."""
+        py = self.home / "sep-venv" / "bin" / "python"
+        py.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(self.stubs / "venv-python", py)
+        py.chmod(0o755)
+
     def current(self):
         return self.yue_home / "current"
 
@@ -246,14 +269,15 @@ class TestInstallBasic(_InstallCase):
 
     def test_new_venv_and_packages(self):
         self.install("1.0.0", "--no-start")
-        venvs = self.called("uv", "venv")
+        venvs = self.worker_venvs()
         self.assertEqual(len(venvs), 1, self.calls())
         self.assertEqual(venvs[0][1], str(self.venv))
         self.assertIn("--python", venvs[0])
         self.assertEqual(venvs[0][venvs[0].index("--python") + 1], "3.12")
-        pips = self.called("uv", "pip", "install")
+        # пакеты воркера — один раз; второй `uv pip install` — пакеты разделения, и только они
+        pips = self.worker_pips()
         self.assertEqual(len(pips), 1, self.calls())
-        self.assertIn("-r", pips[0])
+        self.assertEqual(len(self.called("uv", "pip", "install")), 1 + len(self.sep_pips()), self.calls())
         self.assertTrue(pips[0][pips[0].index("-r") + 1].endswith("requirements.txt"))
         self.assertTrue((self.yue_home / ".requirements.sha256").is_file())
 
@@ -442,11 +466,13 @@ class TestInstallRequirements(_InstallCase):
                          "fingerprint written after failed pip")
         (self.stubs / "fail-uv-pip").unlink()
         self.install("1.0.1", "--no-start")
-        self.assertEqual(len(self.called("uv", "pip", "install")), 1, "after failed pip the next run must install")
+        self.assertEqual(len(self.worker_pips()), 1, "after failed pip the next run must install")
         self.assertTrue((self.yue_home / ".requirements.sha256").is_file())
 
     def test_existing_venv_without_fingerprint(self):
-        """Установка до архивов: venv есть, отпечатка нет → пакеты не ставятся, отпечаток пишется."""
+        """Установка до архивов: venv есть, отпечатка нет → пакеты не ставятся, отпечаток пишется
+        (окружение разделения тогда тоже стояло — его установщик не трогает так же)."""
+        self.sep_installed_before()
         bin_ = self.venv / "bin"
         bin_.mkdir(parents=True)
         shutil.copy(self.stubs / "venv-python", bin_ / "python")
@@ -652,16 +678,20 @@ class TestInstallUvLookup(_InstallCase):
         """ТК1: uv только в $HOME/.local/bin — установка проходит, uv pip install вызван."""
         self.put_uv(".local/bin")
         self.install("1.0.0", "--no-start")
-        self.assertEqual(len(self.called("uv", "venv")), 1, self.calls())
-        self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
+        self.assertEqual(len(self.worker_venvs()), 1, self.calls())
+        self.assertEqual(len(self.worker_pips()), 1, self.calls())
+        # найденный uv ставит и окружение разделения
+        self.assertEqual(len(self.sep_pips()), 1, self.calls())
         self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
 
     def test_uv_in_cargo_bin(self):
         """ТК2: uv только в $HOME/.cargo/bin — установка проходит, uv pip install вызван."""
         self.put_uv(".cargo/bin")
         self.install("1.0.0", "--no-start")
-        self.assertEqual(len(self.called("uv", "venv")), 1, self.calls())
-        self.assertEqual(len(self.called("uv", "pip", "install")), 1, self.calls())
+        self.assertEqual(len(self.worker_venvs()), 1, self.calls())
+        self.assertEqual(len(self.worker_pips()), 1, self.calls())
+        # найденный uv ставит и окружение разделения
+        self.assertEqual(len(self.sep_pips()), 1, self.calls())
         self.assertEqual(RELEASE_RE.match(self.current_release()).group(1), "1.0.0")
 
     def test_no_uv_new_venv_fails_clearly(self):

@@ -17,7 +17,8 @@ GET/POST /fx/assets, флаг fx_engine в /config.
 - /config: fx_engine (по умолчанию да), POST сохраняет, PARTSCASTER_FX_ENGINE=0 выключает.
 
 Внешние границы подменяются: модель NAM (FakeAmp из test_fx_engine), загрузка
-захвата fx_nam.load_nam (torch), demucs (stems._run_model). Дорожки кладутся
+захвата fx_nam.load_nam (torch), подпроцесс разделения RoFormer (stems.run_proc — фейк
+test_no_demucs.FakeSep). Дорожки кладутся
 файлами stem-*.flac заранее.
 
 Без окружения воркера (fastapi/httpx/numpy/scipy/soundfile/librosa) — пропуск.
@@ -276,24 +277,13 @@ class TestFxEndpoint(_FxApiCase):
         self.assertEqual(len(self._fx_files(d)), 4)
 
     def test_stems_made_when_missing(self):
-        import numpy as np
-        import stems
-        calls = []
-
-        def fake_demucs(name, data, sr):
-            calls.append(name)
-            ks = {"drums": 0.4, "bass": 0.3, "other": 0.2, "vocals": 0.1}
-            if name.endswith("6s"):
-                ks = {"drums": 0.4, "bass": 0.3, "other": 0.1, "vocals": 0.1, "guitar": 0.06, "piano": 0.04}
-            return {s: (np.asarray(data) * k).astype("float32") for s, k in ks.items()}
-
-        p = mock.patch.object(stems, "_run_model", fake_demucs)
-        p.start()
-        self.addCleanup(p.stop)
+        # разделение — подпроцесс RoFormer (sep_run.py): фейк test_no_demucs пишет дорожки по контракту
+        import test_no_demucs as nd
+        nd._SepEnv._setup_sep(self, Path(self._td.name))
         jid, d = self._audio_job(stems=False)
         self.assertFalse((d / "stem-vocals.flac").exists())
         out = self._ok(jid, source="vocals", chain=IDENTITY, output="solo")
-        self.assertTrue(calls, "дорожки не делались")
+        self.assertEqual(len(self.sep.calls), 1, "дорожки не делались")
         self.assertTrue((d / "stem-vocals.flac").is_file())
         y, _ = _read(d / out["file"])
         stem, _ = _read(d / "stem-vocals.flac")

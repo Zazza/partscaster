@@ -60,7 +60,7 @@ const err = ref('')
 
 const tr = (lbl) => (lbl && (lbl[locale.value] || lbl.ru)) || ''
 const rows = computed(() => deskRows(props.stems.map((s) => s.name), inserts.appliedFor(props.job.id)))
-// разделено без частей барабанов (Demucs / старое разделение) — предложить разделить подробнее
+// разделено без частей барабанов (старое разделение) — предложить разделить подробнее
 const noParts = computed(() => props.stems.length > 0 && !props.stems.some((s) => s.name === 'kick'))
 const fileOf = (stem) => (props.stems.find((s) => s.name === stem) || {}).file || `stem-${stem}.flac`
 const stemName = (s) => t('studio.dsp.target.' + s)
@@ -156,13 +156,13 @@ async function makeStems() {
 }
 
 // дорожки при открытии студии (настройка «Дорожки трека»); старый воркер без настройки — как «при открытии»
-const stemsCfg = ref(null)   // {mode, model} — что делать и чем (RoFormer дольше)
+const stemsCfg = ref(null)   // {mode} — когда делать дорожки
 const autoTried = ref(0)     // трек, для которого разделение уже запускали: сбой не повторяется по кругу
 onMounted(async () => {
   try {
     const c = await api.workerConfig()
-    stemsCfg.value = { mode: c.stems_auto || 'studio', model: c.stems_model || '' }
-  } catch { stemsCfg.value = { mode: 'studio', model: '' } }   // воркер недоступен — разделение само упадёт с причиной
+    stemsCfg.value = { mode: c.stems_auto || 'studio' }
+  } catch { stemsCfg.value = { mode: 'studio' } }   // воркер недоступен — разделение само упадёт с причиной
 })
 watch(() => [props.job.id, props.stemsLoaded, props.stems.length, stemsCfg.value], () => {
   if (!stemsCfg.value || busy.value || autoTried.value === props.job.id) return
@@ -170,7 +170,6 @@ watch(() => [props.job.id, props.stemsLoaded, props.stems.length, stemsCfg.value
   autoTried.value = props.job.id
   makeStems()
 }, { immediate: true })
-const splitTime = computed(() => t(stemsCfg.value && stemsCfg.value.model === 'bs-roformer-sw' ? 'desk.split.slow' : 'desk.split.fast'))
 
 // место в стерео и «убрать» у строки дорожки — как у всех блоков: поменяли → «▶ стало / ▶ было» → «Применить»
 // (в «Изменения трека»); до «Применить» правка висит у строки и в трек не идёт
@@ -337,7 +336,7 @@ async function upload(kind) {
 <template>
   <!-- дорожек нет: идёт разделение — что происходит и сколько ждать; иначе — кнопка -->
   <p v-if="!stems.length && busy === 'stems'" class="desk-split"><span class="pulse">⟳</span>
-    {{ t('desk.split.busy', { time: splitTime }) }}</p>
+    {{ t('desk.split.busy', { time: t('desk.split.time') }) }}</p>
   <div v-else-if="!stems.length" class="dsp-row">
     <span class="muted">{{ t('desk.noStems') }}</span>
     <button class="primary small" :disabled="!!busy" @click="makeStems">{{ t('instr.stems.make') }}</button>

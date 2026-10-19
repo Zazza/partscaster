@@ -1,18 +1,16 @@
 # Окружение воркера (Ubuntu + CUDA; torch — с CUDA-индексом, см. docs/ru/deployment.md):
 #   uv pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu128 \
 #     --extra-index-url https://pypi.org/simple
-# генерация — программой yue2.cpp (не пакет Python); torch нужен дорожкам, SheetSage2 (pretty_midi, mir_eval),
-# Seed-VC и NAM
+# генерация — программой yue2.cpp (не пакет Python), дорожки — RoFormer в своём окружении (sep_run.py);
+# torch здесь — SheetSage2 (pretty_midi, mir_eval, torchaudio) и NAM
 fastapi
 uvicorn
 soundfile
 lameenc
 librosa
 transformers>=4.57
-einops
 torchaudio==2.10.0
 pretty_midi
 mido
 mir_eval
-demucs
 numpy

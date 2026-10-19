@@ -345,7 +345,7 @@ class TestConfigNoEngine(_Case):
         self.assertNotIn("engine", self._stored())
 
     def test_old_settings_engine_not_shown(self):
-        self._settings(engine="torch", stems_model="roformer")
+        self._settings(engine="torch", stems_auto="always")
         self.assertNotIn("engine", self._cfg())
 
 
@@ -634,13 +634,16 @@ except ImportError:   # без bash/tar песочница установщик�
     _EngineCase = unittest.TestCase
 
 # venv-python песочницы: kits_install.py — заглушка; engine_cpp.py download — фейковая загрузка
-# (кладёт файлы модели и VAE нужного размера, без сети); остальное (recommend и любые проверки
-# через python воркера) — настоящий python, чтобы рекомендация шла из настоящей функции.
+# (кладёт файлы модели и VAE нужного размера, без сети); sep_run.py download (веса разделения; этот же
+# файл — python окружения разделения, его создаёт заглушка `uv venv`) — заглушка, fail-sep-download — сбой;
+# остальное (recommend и любые проверки через python воркера) — настоящий python, чтобы рекомендация шла
+# из настоящей функции.
 CPP_VENV_PY = r"""#!/bin/sh
 { echo "== venv-python"; for a in "$@"; do printf '%s\n' "$a"; done; } >> "$STUB_LOG"
 printf '%s\t%s\t%s\t%s\n' "$PWD" "${PARTSCASTER_DATA_DIR-}" "${PARTSCASTER_CPP_MODELS-}" "$*" >> "$STUB_DIR/py-ctx.log"
 case "$1" in
   *kits_install.py) [ -f "$STUB_DIR/fail-kits" ] && exit 1; exit 0;;
+  *sep_run.py) [ "$2" = download ] && [ -f "$STUB_DIR/fail-sep-download" ] && exit 1; exit 0;;
   *engine_cpp.py)
     if [ "$2" = download ]; then
       [ -f "$STUB_DIR/fail-download" ] && exit 1
@@ -741,10 +744,10 @@ class TestInstallCppOnly(_CppInstall):
 
     def test_other_settings_kept(self):
         self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"stems_model": "roformer"}', encoding="utf-8")
+        self.settings_path.write_text('{"stems_auto": "always"}', encoding="utf-8")
         self.set_vram(8188)
         self.install("1.0.0", "--no-start")
-        self.assertEqual(self.settings().get("stems_model"), "roformer")
+        self.assertEqual(self.settings().get("stems_auto"), "always")
         self.assert_model("q8", True)
 
 
@@ -781,11 +784,11 @@ class TestInstallUpdate(_CppInstall):
 
     def test_old_torch_install_gets_recommended(self):
         self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"engine": "torch", "stems_model": "roformer"}', encoding="utf-8")
+        self.settings_path.write_text('{"engine": "torch", "stems_auto": "always"}', encoding="utf-8")
         self.set_vram(12282)
         self.install("1.0.0", "--no-start")
         self.assert_model("bf16", False)
-        self.assertEqual(self.settings().get("stems_model"), "roformer")
+        self.assertEqual(self.settings().get("stems_auto"), "always")
         self.assertEqual([d[:2] for d in self.downloads()], [["download", "bf16"]], self.calls())
 
     def test_removed_model_reinstalled(self):
@@ -829,12 +832,12 @@ class TestInstallFailures(_CppInstall):
     def test_download_failure_fails_without_torch(self):
         (self.stubs / "fail-download").touch()
         self.data.mkdir(parents=True)
-        self.settings_path.write_text('{"stems_model": "roformer"}', encoding="utf-8")
+        self.settings_path.write_text('{"stems_auto": "always"}', encoding="utf-8")
         p = self.install("1.0.0", "--no-start", ok=False)
         self.assertNotEqual(p.returncode, 0, p.stdout)
         st = self.settings()
         self.assertNotEqual(st.get("engine"), "torch", st)
-        self.assertEqual(st.get("stems_model"), "roformer")
+        self.assertEqual(st.get("stems_auto"), "always")
         env = self.yue_home / "worker.env"
         if env.exists():
             self.assertNotIn("YUE2_BACKEND", env.read_text())

@@ -385,20 +385,15 @@ func ensurePresetStems(ctx context.Context, svc yue.Service, id int64, specs []y
 	if len(miss) == 0 {
 		return nil
 	}
-	parts := slices.ContainsFunc(miss, func(n string) bool { return slices.Contains(drumParts, n) })
-	if parts {
-		_, err = svc.MakeStemsWith(ctx, id, "roformer")
-	} else {
-		_, err = svc.MakeStems(ctx, id)
-	}
-	if err != nil {
+	// нет частей барабанов — старое разделение (до RoFormer): новое разделение их даст
+	if _, err = svc.MakeStems(ctx, id); err != nil {
 		return fmt.Errorf("разделение на дорожки: %w", err)
 	}
 	if have, err = trackStems(ctx, svc, id); err != nil {
 		return err
 	}
 	if miss = missingStems(need, have); len(miss) > 0 {
-		return fmt.Errorf("нет дорожек: %s (нужно разделение RoFormer)", strings.Join(miss, ", "))
+		return fmt.Errorf("нет дорожек: %s (разделение их не дало)", strings.Join(miss, ", "))
 	}
 	return nil
 }

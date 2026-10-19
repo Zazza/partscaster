@@ -45,8 +45,8 @@ from abcparse import mute_voice, parse_abc
 from plancheck import plan_diff
 from dsp import analyze_file, beat_grid, vocal_activity
 from sheetsage import transcribe as ss_transcribe
-from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_DEMUCS, MODEL_ROFORMER, roformer_available,
-                   roformer_enabled, separate as demucs_separate)
+from stems import (DETAIL_STEMS, DRUM_PARTS, MAIN_STEMS, MODEL_ROFORMER, roformer_available,
+                   separate as split_stems)
 import stems as stems_lib
 import voice as voicevc
 
@@ -111,7 +111,7 @@ def _split_section(section: str) -> tuple[str, str, int]:
 
 @contextmanager
 def gpu_queue(section: str = "gpu"):
-    """Тяжёлая секция (YuE2, demucs, SheetSage, whisper, Seed-VC, NAM): видеокарта
+    """Тяжёлая секция (YuE2, RoFormer, SheetSage, whisper, Seed-VC, NAM): видеокарта
     одна — секция ждёт своей очереди в QUEUE (параллельные CUDA-контексты ломают
     друг другу graph capture). Внутри своей операции — без очереди (вложенные
     секции, шаги цепочки клиента с X-Partscaster-Op).
@@ -903,19 +903,16 @@ def _mark_failed(job_id: int, e: BaseException) -> None:
                      (friendly_error(e), time.strftime("%Y-%m-%dT%H:%M:%S"), job_id))
 
 
-def _separate(job_id: int, audio: Path, jdir: Path, model: str | None = None) -> dict:
-    """Дорожки (модель — model или настройка stems_model) + проверка голоса в
-    треке «без голоса» (vocal_leak)."""
-    pref = model or stems_pref()
+def _separate(job_id: int, audio: Path, jdir: Path) -> dict:
+    """Дорожки (RoFormer) + проверка голоса в треке «без голоса» (vocal_leak)."""
     with gpu_queue(f"stems {job_id}"):
-        # по умолчанию — прежний вызов separate(audio, dir): контракт не меняется
-        result = demucs_separate(audio, jdir) if pref == MODEL_DEMUCS else demucs_separate(audio, jdir, prefer=pref)
+        result = split_stems(audio, jdir)
     check_vocal_leak(job_id)
     return result
 
 
 def _ensure_stems(job_id: int) -> Path:
-    """Дорожки demucs трека (делаются, если их ещё нет) → каталог трека."""
+    """Дорожки трека (делаются, если их ещё нет) → каталог трека."""
     row = _job_row(job_id)
     jdir = JOBS_DIR / str(job_id)
     if not (jdir / "stem-vocals.flac").is_file():
@@ -1227,7 +1224,6 @@ class PlanIn(BaseModel):
 class ConfigIn(BaseModel):
     auto_stems_instrumental: bool | None = None
     stems_auto: str | None = None    # когда делать дорожки: studio | always | manual
-    stems_model: str | None = None   # разделение: «htdemucs» (быстро) | «roformer» (чище)
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
     # модель генерации yue2.cpp (bf16 | q8 | q6 | q5) и экономный режим (~4,5 ГБ); поле engine старых клиентов
     # (выбор движка) не объявлено — pydantic его молча отбрасывает
@@ -1253,15 +1249,6 @@ def _save_settings(st: dict) -> None:
     tmp = SETTINGS_PATH.with_name(f".{SETTINGS_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(tmp, SETTINGS_PATH)
-
-
-STEMS_CHOICES = (MODEL_DEMUCS, "roformer")
-
-
-def stems_pref() -> str:
-    """Чем делать дорожки по умолчанию: htdemucs (быстро) или roformer (чище, ~4,5× дольше)."""
-    v = _load_settings().get("stems_model", MODEL_DEMUCS)
-    return v if v in STEMS_CHOICES else MODEL_DEMUCS
 
 
 def cpp_model_pref() -> str:
@@ -1326,9 +1313,7 @@ def get_config():
         "seedvc_available": voicevc.available(),
         "auto_stems_instrumental": auto_stems_instrumental(),
         "stems_auto": stems_auto_pref(),
-        # выбор пользователя и чем дорожки будут делаться на деле (RoFormer — если выбран и установлен)
-        "stems_pref": stems_pref(),
-        "stems_model": MODEL_ROFORMER if roformer_enabled(stems_pref()) else MODEL_DEMUCS,
+        # разделение на дорожки (RoFormer) установлено — без него дорожек нет (подсказка в интерфейсе)
         "roformer_available": roformer_available(),
         "fx_engine": fx_engine_enabled(),
         "fx_preview": True,   # воркер умеет превью движка (страница «Инструменты»); старый — нет поля
@@ -1366,12 +1351,6 @@ def set_config(req: ConfigIn):
             raise HTTPException(422, f"stems_auto must be one of {', '.join(STEMS_AUTO_CHOICES)}")
         st = _load_settings()
         st["stems_auto"] = req.stems_auto
-        _save_settings(st)
-    if req.stems_model is not None:
-        if req.stems_model not in STEMS_CHOICES:
-            raise HTTPException(422, f"stems_model must be one of {', '.join(STEMS_CHOICES)}")
-        st = _load_settings()
-        st["stems_model"] = req.stems_model
         _save_settings(st)
     if req.fx_engine is not None:
         st = _load_settings()
@@ -1451,7 +1430,7 @@ def get_version():
         "engine": engine_cpp.engine_label(cpp_model_pref()),
         "components": {"whisper": cfg["whisper_available"], "seedvc": cfg["seedvc_available"],
                        "roformer": cfg["roformer_available"]},
-        "stems_model": cfg["stems_model"],
+        "stems_model": MODEL_ROFORMER,   # модель дорожек одна — часть контракта (рецепт, клиенты)
     }
 
 
@@ -2055,7 +2034,7 @@ class GridIn(BaseModel):
 @app.post("/jobs/{job_id}/grid")
 def job_grid(job_id: int, body: GridIn | None = None):
     """Сетка долей для эффектов в такт («Ритм-гейт»): темп и время сильной доли.
-    Источник — дорожка барабанов (есть после demucs), иначе микс. Окно
+    Источник — дорожка барабанов (есть после разделения), иначе микс. Окно
     from_sec–to_sec (0 — до конца) — лучше то место, где эффект будет: доля
     берётся первая в окне, и погрешность темпа не накапливается по треку."""
     body = body or GridIn()
@@ -2247,7 +2226,7 @@ def _job_row(job_id: int):
 def job_lyrics(job_id: int, language: str | None = None):
     """Текст из готового аудио джобы (faster-whisper) — без повторной загрузки
     файла: аудио уже у воркера. Для овердаба/кавера этой же джобы.
-    Есть дорожка голоса (demucs) — распознаётся она, а не микс: гитары сбивали
+    Есть дорожка голоса — распознаётся она, а не микс: гитары сбивали
     whisper. Язык — ?language=en|ru|…|auto, без него — по стилю трека."""
     row = _job_row(job_id)
     if row is None or row["status"] != "done" or not row["audio_file"]:
@@ -2834,48 +2813,43 @@ def submit_overdub(job_id: int, req: OverdubIn):
 
 
 @app.post("/jobs/{job_id}/stems")
-def job_stems(job_id: int, model: str | None = None):
-    """Разделить трек на дорожки. ?model=roformer|htdemucs — разово этой моделью,
-    без параметра — по настройке stems_model."""
-    if model is not None and model not in STEMS_CHOICES:
-        raise HTTPException(422, f"model must be one of {', '.join(STEMS_CHOICES)}")
+def job_stems(job_id: int):
+    """Разделить трек на дорожки (RoFormer). ?model= старых клиентов не объявлен — FastAPI его отбрасывает."""
     row = _job_row(job_id)
     if row is None or not row["audio_file"]:
         raise HTTPException(404, "job or audio not found")
     try:
-        return _split_job(job_id, row, model)
+        return _split_job(job_id, row)
     except (opqueue.OpCanceled, opqueue.OpGone) as e:
         # ждали авторазделение, а его сняли в очереди: поток авторазделения вне запроса — 409 здесь
         raise HTTPException(409, opqueue.CANCELED_TEXT if isinstance(e, opqueue.OpCanceled) else str(e)) from e
     except Exception as e:  # noqa: BLE001
         log.exception("stems failed")
-        raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
+        raise HTTPException(500, f"разделение на дорожки не удалось: {friendly_error(e)}") from e
 
 
-# разделение трека, которое уже идёт или ждёт очереди: второй запрос того же трека той же моделью
+# разделение трека, которое уже идёт или ждёт очереди: второй запрос того же трека
 # (студия открылась, пока шло авторазделение) ждёт его итога, а не делит трек ещё раз
-_splits: dict[int, tuple[str, Future]] = {}
+_splits: dict[int, Future] = {}
 _splits_guard = threading.Lock()
 
 
-def _split_job(job_id: int, row, model: str | None = None) -> dict:
+def _split_job(job_id: int, row) -> dict:
     """Дорожки трека и их метрики (уровень для пульта «Дорожки»)."""
-    want = model or stems_pref()
     mine = None
     with _splits_guard:
         running = _splits.get(job_id)
-        # внутри своей операции очереди чужой итог не ждём: он ждёт видеокарту, которую держит эта операция;
-        # другая модель — свой итог (очередь всё равно разделит по одному)
-        join = running is not None and running[0] == want and not opqueue.current_op.get()
+        # внутри своей операции очереди чужой итог не ждём: он ждёт видеокарту, которую держит эта операция
+        join = running is not None and not opqueue.current_op.get()
         if running is None:
             mine = Future()
-            _splits[job_id] = (want, mine)
+            _splits[job_id] = mine
     if join:
-        return running[1].result()
+        return running.result()
     if mine is None:
-        return _split_job_now(job_id, row, model)
+        return _split_job_now(job_id, row)
     try:
-        result = _split_job_now(job_id, row, model)
+        result = _split_job_now(job_id, row)
     except BaseException as e:
         mine.set_exception(e)
         raise
@@ -2884,13 +2858,13 @@ def _split_job(job_id: int, row, model: str | None = None) -> dict:
         return result
     finally:
         with _splits_guard:
-            if _splits.get(job_id, (None, None))[1] is mine:
+            if _splits.get(job_id) is mine:
                 _splits.pop(job_id)
 
 
-def _split_job_now(job_id: int, row, model: str | None) -> dict:
+def _split_job_now(job_id: int, row) -> dict:
     job_dir = JOBS_DIR / str(job_id)
-    result = _separate(job_id, job_dir / row["audio_file"], job_dir, model)
+    result = _separate(job_id, job_dir / row["audio_file"], job_dir)
     for f in result["stems"]:
         try:
             m = analyze_file(job_dir / f)
@@ -2952,7 +2926,7 @@ def _guitar_part(job_id: int) -> dict:
         try:
             _ensure_stems(job_id)
         except Exception as e:  # noqa: BLE001
-            raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
+            raise HTTPException(500, f"разделение на дорожки не удалось: {friendly_error(e)}") from e
     if not gpath.is_file():
         raise HTTPException(422, "у трека нет дорожки гитары (guitar) — гитаристу не за кем вписываться")
     cache = jdir / GUITAR_PART_CACHE
@@ -3488,10 +3462,11 @@ def _fx_render(job_id: int, req: FxIn) -> dict:
         try:
             _ensure_stems(job_id)
         except Exception as e:  # noqa: BLE001
-            raise HTTPException(500, f"separation failed: {friendly_error(e)}") from e
+            raise HTTPException(500, f"разделение на дорожки не удалось: {friendly_error(e)}") from e
         sp = jdir / f"stem-{req.source}.flac"
         if not sp.is_file():
-            hint = " (части барабанов — только при разделении RoFormer)" if req.source in DRUM_PARTS else ""
+            hint = (" (старое разделение без частей барабанов — разделите трек заново)"
+                    if req.source in DRUM_PARTS else "")
             raise HTTPException(422, f"у трека нет дорожки {req.source}{hint}")
         part, _ = sf.read(str(sp), always_2d=True, dtype="float64")
         part = part[:n] if len(part) >= n else np.pad(part, ((0, n - len(part)), (0, 0)))
@@ -4793,13 +4768,12 @@ def job_recipe(job_id: int):
     if root is not None:
         root["plan_abc"] = _read_text(root_id, root.get("abc_file") or "score.abc")
         root["request_abc"] = _read_text(root_id, root.get("req_abc"))
-    ver = get_version()
     # сид повторяет исполнение только на том же движке: в рецепт — движок корня, не текущий
     eng = (root or {}).get("engine") or ""
     name = eng[4:] if eng.startswith("cpp-") else ""
     model = engine_cpp.model_label(name) if name in engine_cpp.MODELS else LEGACY_TORCH_LABEL
     try:
-        out = recipe.build_recipe(jobs, ops, root_id, model, ver["stems_model"],
+        out = recipe.build_recipe(jobs, ops, root_id, model, MODEL_ROFORMER,
                                   time.strftime("%Y-%m-%dT%H:%M:%S%z"))
     except recipe.RecipeError as e:
         raise HTTPException(422, str(e)) from e

@@ -17,24 +17,20 @@ import (
 //   - dsp_variant_delete — деструктивный: без confirm=true вариант не удаляется (воркер не
 //     вызывается, ошибка просит подтверждения); с confirm — удаляется ровно указанный файл трека;
 //   - config_set: server_url — адрес воркера (без хвостового «/»), сохраняется в настройки
-//     приложения; stems_model/fx_engine уходят воркеру как заданы
+//     приложения; stems_auto/fx_engine уходят воркеру как заданы
 //     (fx_engine=false — тоже значение, не «не задано»); незаданное не трогается;
 //     воркер отказал — ошибка;
-//   - make_stems: job_id и разовая model доходят до воркера; после дорожек кэш превью этого
+//   - make_stems: job_id доходит до воркера (модели не выбираются; model старого клиента не мешает и
+//     никуда не уходит); после дорожек кэш превью этого
 //     трека устаревает (следующее превью качает новые дорожки); ошибка воркера — ошибка.
 
 type studioCovFake struct {
 	*fakeService
 	dspDeleted []string // "<id>/<file>"
-	stems      []stemsCall
+	stems      []int64  // у каких джоб звали MakeStems
 	stemsErr   error
 	workerCfg  []map[string]any
 	cfgErr     error
-}
-
-type stemsCall struct {
-	ID    int64
-	Model string
 }
 
 func (f *studioCovFake) DspVariantDelete(ctx context.Context, id int64, fname string) (bool, error) {
@@ -42,8 +38,8 @@ func (f *studioCovFake) DspVariantDelete(ctx context.Context, id int64, fname st
 	return true, nil
 }
 
-func (f *studioCovFake) MakeStemsWith(ctx context.Context, id int64, model string) (map[string]any, error) {
-	f.stems = append(f.stems, stemsCall{id, model})
+func (f *studioCovFake) MakeStems(ctx context.Context, id int64) (map[string]any, error) {
+	f.stems = append(f.stems, id)
 	if f.stemsErr != nil {
 		return nil, f.stemsErr
 	}
@@ -135,12 +131,12 @@ func TestConfigSetServerURLAppliedAndSaved(t *testing.T) {
 func TestConfigSetWorkerSettingsPassedAsGiven(t *testing.T) {
 	s, fake := newStudioCovServer(t)
 	out, ok := call(t, s, "config_set", map[string]any{
-		"stems_model": "roformer", "fx_engine": false,
+		"stems_auto": "manual", "fx_engine": false,
 	})
 	if !ok {
 		t.Fatalf("config_set: %s", out)
 	}
-	want := []map[string]any{{"stems_model": "roformer", "fx_engine": false}}
+	want := []map[string]any{{"stems_auto": "manual", "fx_engine": false}}
 	if !reflect.DeepEqual(fake.workerCfg, want) {
 		t.Fatalf("воркеру ушло %v, want %v", fake.workerCfg, want)
 	}
@@ -175,8 +171,8 @@ func TestConfigSetEmptyTouchesNothing(t *testing.T) {
 
 func TestConfigSetWorkerRefusalIsError(t *testing.T) {
 	s, fake := newStudioCovServer(t)
-	fake.cfgErr = errors.New("422: stems_model")
-	out, ok := call(t, s, "config_set", map[string]any{"stems_model": "nope"})
+	fake.cfgErr = errors.New("422: stems_auto")
+	out, ok := call(t, s, "config_set", map[string]any{"stems_auto": "nope"})
 	if ok {
 		t.Fatalf("отказ воркера скрыт: %s", out)
 	}
@@ -185,21 +181,20 @@ func TestConfigSetWorkerRefusalIsError(t *testing.T) {
 	}
 }
 
-func TestMakeStemsPassesJobAndModel(t *testing.T) {
+func TestMakeStemsPassesJob(t *testing.T) {
 	for _, tc := range []struct {
 		args map[string]any
-		want stemsCall
+		want int64
 	}{
-		{map[string]any{"job_id": float64(42)}, stemsCall{42, ""}},
-		{map[string]any{"job_id": float64(42), "model": "roformer"}, stemsCall{42, "roformer"}},
-		{map[string]any{"job_id": float64(9), "model": "htdemucs"}, stemsCall{9, "htdemucs"}},
+		{map[string]any{"job_id": float64(42)}, 42},
+		{map[string]any{"job_id": float64(9), "model": "htdemucs"}, 9}, // model старого клиента — игнор
 	} {
 		s, fake := newStudioCovServer(t)
 		out, ok := call(t, s, "make_stems", tc.args)
 		if !ok {
 			t.Fatalf("%v: %s", tc.args, out)
 		}
-		if !reflect.DeepEqual(fake.stems, []stemsCall{tc.want}) {
+		if !reflect.DeepEqual(fake.stems, []int64{tc.want}) {
 			t.Fatalf("%v: до воркера дошло %v, want %v", tc.args, fake.stems, tc.want)
 		}
 		if !strings.Contains(out, "stem-vocals.flac") {
@@ -210,7 +205,7 @@ func TestMakeStemsPassesJobAndModel(t *testing.T) {
 
 func TestMakeStemsErrorIsError(t *testing.T) {
 	s, fake := newStudioCovServer(t)
-	fake.stemsErr = errors.New("503: demucs")
+	fake.stemsErr = errors.New("503: roformer")
 	out, ok := call(t, s, "make_stems", map[string]any{"job_id": float64(3)})
 	if ok {
 		t.Fatalf("ошибка воркера скрыта: %s", out)

@@ -72,8 +72,8 @@ called Yue Studio.
 - **The worker** — the part that generates and processes audio: Linux, Windows (a program, no WSL) or
   WSL2. It can run on the same computer or on a separate GPU machine on your network.
 - **The app** — Linux and Windows; a macOS build exists but is untested.
-- Models download by themselves (the generation model during installation, the rest on first use); no
-  Hugging Face account needed.
+- Models download by themselves (the generation model and the stem separation models during installation, the
+  rest on first use); no Hugging Face account needed.
 
 ## Install
 
@@ -118,7 +118,8 @@ listens only on the local computer by default.
   royalties; companies need a license from the authors
   ([terms](https://github.com/multimodal-art-projection/YuE#license)).
 - **Stem separation and transcription** — BS-RoFormer-SW, DrumSep and SheetSage2 are under
-  non-commercial licenses without such a permission; demucs is MIT. Seed-VC voice conversion is
+  non-commercial licenses without such a permission; the stem separation models are a required part of the
+  worker installation. Seed-VC voice conversion is
   GPL-3.0. Models are not part of the repository; check the terms on their pages — the user is
   responsible for how the output is used.
 - **Samples:** Salamander Grand Piano V3 — Alexander Holm, CC BY 3.0; clean guitar phrases from

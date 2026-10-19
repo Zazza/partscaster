@@ -16,7 +16,7 @@ import (
 // Сверка по итогу.
 //
 // Пресет с целями level_db после прохода (пересборка → … → версия-трек V) разделяет V
-// (MakeStemsWith(V, "roformer")), меряет уровни целевых дорожек к треку так же, как presetLevels
+// (MakeStems(V), RoFormer), меряет уровни целевых дорожек к треку так же, как presetLevels
 // (rms_p95_db дорожки − сумма мощностей основных vocals/drums/bass/other из JobStems(V)); если хоть одна
 // дальше 1 дБ от цели — исправляющий проход: у каждой целевой записи поправка −ошибка (за проход не больше
 // ±6 дБ), поправки накапливаются (сумма не больше ±9 дБ на запись). Не больше двух исправляющих проходов
@@ -48,21 +48,19 @@ type vfUpload struct {
 type vfFake struct {
 	*prlFake
 	guitarErr map[int64]float64 // версия → гитара к треку = цель + ошибка (нет в карте — у цели)
-	splitFail map[int64]bool    // у каких версий MakeStemsWith отвечает ошибкой
+	splitFail map[int64]bool    // у каких версий MakeStems отвечает ошибкой
 	noMetric  map[string]bool   // у каких дорожек версий нет замера rms_p95_db (дорожка в списке есть)
 	split     map[int64]bool
-	splitAsks []int64 // у каких версий просили roformer
+	splitAsks []int64 // у каких версий просили разделение
 	ups       []vfUpload
 	nextID    int64
 }
 
-func (f *vfFake) MakeStemsWith(ctx context.Context, id int64, model string) (map[string]any, error) {
+func (f *vfFake) MakeStems(ctx context.Context, id int64) (map[string]any, error) {
 	if id == psJobID {
-		return f.prlFake.MakeStemsWith(ctx, id, model)
+		return f.prlFake.MakeStems(ctx, id)
 	}
-	if model == "roformer" {
-		f.splitAsks = append(f.splitAsks, id)
-	}
+	f.splitAsks = append(f.splitAsks, id)
 	if f.splitFail[id] {
 		return nil, errors.New("roformer: нет памяти")
 	}
@@ -245,7 +243,7 @@ func vfRun(t *testing.T, id int64, errs map[int64]float64, fail ...int64) (*vfFa
 	}
 	res := vfApply(t, f, vfPreset(id))
 	if !vfAsked(f.splitAsks, vfFirst) {
-		t.Errorf("первая версия не разделена RoFormer для сверки: просили %v", f.splitAsks)
+		t.Errorf("первая версия не разделена для сверки: просили %v", f.splitAsks)
 	}
 	return f, orig, res
 }

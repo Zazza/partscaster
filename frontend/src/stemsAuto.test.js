@@ -186,7 +186,7 @@ describe('i18n и api.js — «минус» убран, «убрать доро�
   const present = [
     'settings.stemsAuto', 'settings.stemsAuto.studio', 'settings.stemsAuto.always',
     'settings.stemsAuto.manual', 'settings.stemsAuto.hint',
-    'desk.remove', 'desk.remove.tip', 'desk.split.busy', 'desk.split.fast', 'desk.split.slow',
+    'desk.remove', 'desk.remove.tip', 'desk.split.busy', 'desk.split.time',
     'insert.remove',
   ]
   const absent = ['studio.minus', 'studio.stems.minus', 'studio.minusLabel', 'studio.wave.minus']

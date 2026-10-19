@@ -7,7 +7,7 @@ J1. POST /jobs/{id}/ops {op, params: obj, result: str, refs: [int]} → {id}; op
 E1. GET /jobs/{id}/recipe: корень песни (по parent_id/overdub_of до верха) — из
     столбцов; plan_abc = текст score.abc, abc = текст request.abc (если был, иначе
     null); worker_model — метка модели, которой сделан корень (у трека текущей модели —
-    как model в /version); stems_model — как в /version; потомки — из журнала (n-id).
+    как model в /version); stems_model — «bs-roformer-sw», как в /version; потомки — из журнала (n-id).
 E2. Отказы 422: корень — черновик; корень — импорт чужого аудио; в песне есть
     версия role=voice. Трека нет — 404.
 I1. POST /recipes/import {recipe, mode: seed|plan} → {id}; чужой format/version → 422.
@@ -176,6 +176,7 @@ class TestRecipeExport(_RecipeCase):
         self.assertTrue(rec["exported_at"])
         self.assertEqual(rec["worker_model"], ver["model"])
         self.assertEqual(rec["stems_model"], ver["stems_model"])
+        self.assertEqual(rec["stems_model"], "bs-roformer-sw")
         self.assertEqual(rec["track"], {"title": "Warm Wire", "folder": "Альбом", "head": "n3"})
         r = rec["root"]
         self.assertEqual(r["id"], "n1")

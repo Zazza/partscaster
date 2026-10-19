@@ -19,7 +19,7 @@
 - Старт воркера: queued генерации — в очередь по queue_pos, старые без места — по id;
   running → error (ТК6, ТК11).
 
-Внешние границы подменяются: разделение на дорожки (demucs_separate), поток queue_loop, программа
+Внешние границы подменяются: разделение на дорожки (split_stems — stems.separate), поток queue_loop, программа
 yue-server (фейк из test_engine_cpp — в регрессии запоздалой отмены).
 Очередь воркера — глобальный экземпляр opqueue.OpQueue; между тестами он очищается
 только через публичное API модуля.
@@ -143,11 +143,11 @@ class _Case(_QueueMixin, _WorkerApiCase):
         self._setup_queue()
         self.sep_calls = []
         self.sep_hook = None
-        p = mock.patch.object(self.w, "demucs_separate", side_effect=self._fake_separate)
+        p = mock.patch.object(self.w, "split_stems", side_effect=self._fake_separate)
         p.start()
         self.addCleanup(p.stop)
 
-    def _fake_separate(self, audio, out_dir, **kw):
+    def _fake_separate(self, audio, out_dir):
         live = [it for it in self.q.snapshot()["items"] if it["state"] == "running"]
         self.sep_calls.append(live)
         if self.sep_hook:

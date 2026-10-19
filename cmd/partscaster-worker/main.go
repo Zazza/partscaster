@@ -30,7 +30,7 @@ var payload embed.FS
 
 var version = "dev" // git describe (tools/release.sh)
 
-const needFreeGB = 25
+const needFreeGB = 30 // ~ воркер 17,8 + разделение 7,3 + наборы 1,2 + запас 2 (как MCP install_worker), с округлением вверх
 
 func main() {
 	homeFlag := flag.String("home", "", "папка установки (Python, пакеты, модели, треки)")
@@ -119,10 +119,34 @@ func start(homeFlag string, lan bool, opts engineOptions) error {
 			return fmt.Errorf("пакеты не встали: %w (повторный запуск продолжит)", err)
 		}
 	}
+	if err := setupSep(home, workerDir); err != nil {
+		return err
+	}
 	if err := setupEngine(home, workerDir, gpu, opts); err != nil {
 		return err
 	}
 	return serve(home, workerDir, lan)
+}
+
+// setupSep — разделение на дорожки (RoFormer): своё окружение (первый раз или сменились пакеты) и веса обеих
+// моделей (есть — не качаются). Обязательно: без него у треков нет дорожек.
+func setupSep(home, workerDir string) error {
+	if workerexe.NeedSepInstall(home) {
+		fmt.Println("\nУстановка разделения на дорожки (RoFormer, первый раз — несколько гигабайт)…")
+		uv, err := workerexe.EnsureUv(home)
+		if err != nil {
+			return fmt.Errorf("uv: %w", err)
+		}
+		if err := workerexe.InstallSep(home, uv, os.Stdout); err != nil {
+			return fmt.Errorf("разделение на дорожки не встало: %w (повторный запуск продолжит)", err)
+		}
+	}
+	cmd := workerexe.SepDownloadCommand(home, workerDir)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("веса разделения на дорожки не скачались: %w (повторный запуск докачает)", err)
+	}
+	return nil
 }
 
 // setupEngine — модель генерации yue2.cpp. Скачанный выбор пользователя без флагов не трогается; иначе — модель

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Установка/обновление воркера Partscaster из распакованного архива (worker-<версия>/install.sh).
 #
-#   ./install.sh [--no-start] [--hf-home DIR]   установить эту версию и (без --no-start) перезапустить
+#   ./install.sh [--no-start] [--hf-home DIR] [--sep-dir DIR]   установить эту версию и (без --no-start) перезапустить
+#     --sep-dir — каталог разделения на дорожки: окружение DIR/venv, веса DIR/models (пишется в worker.env)
 #   ~/partscaster/current/install.sh --rollback   вернуть предыдущую версию
 #   модель генерации (yue2.cpp): --cpp-model auto|bf16|q8|q6|q5 (auto — рекомендуемая по видеопамяти),
 #     --cpp-low-vram — экономный режим (~4,5 ГБ); без флагов скачанная выбранная модель не меняется,
@@ -9,7 +10,9 @@
 #
 # Раскладка: код — $PARTSCASTER_HOME/releases/<время>-<версия>/, ссылка $PARTSCASTER_HOME/current — действующая версия;
 # данные ($PARTSCASTER_HOME/data) и настройки машины ($PARTSCASTER_HOME/worker.env) общие для всех версий и не трогаются.
-# Необязательные компоненты (whisper, Seed-VC, RoFormer) ставит MCP-инструмент install_worker.
+# Разделение на дорожки (RoFormer) — своё окружение (PARTSCASTER_SEP_PY, по умолчанию ~/sep-venv) с весами
+# (PARTSCASTER_SEP_MODELS, по умолчанию ~/sep-models) — обязательная часть, ставится здесь.
+# Необязательные компоненты (whisper, Seed-VC) ставит MCP-инструмент install_worker.
 set -euo pipefail
 
 # pwd -P: запуск через ссылку current/install.sh копирует саму версию, а не ссылку на неё
@@ -52,6 +55,7 @@ KEEP=3 # сколько прежних версий хранить кроме д
 NO_START=0
 ROLLBACK=0
 HF_HOME_DIR="~/yue/hf-cache"
+SEP_DIR=""     # пусто — PARTSCASTER_SEP_PY/PARTSCASTER_SEP_MODELS из worker.env или ~/sep-venv и ~/sep-models
 CPP_MODEL=""   # пусто — скачанный выбор пользователя, без него — рекомендуемая (как auto)
 CPP_LOW_VRAM=0
 while [[ $# -gt 0 ]]; do
@@ -59,9 +63,10 @@ while [[ $# -gt 0 ]]; do
     --no-start) NO_START=1 ;;
     --rollback) ROLLBACK=1 ;;
     --hf-home) HF_HOME_DIR="${2:?--hf-home: нужен каталог}"; shift ;;
+    --sep-dir) SEP_DIR="${2:?--sep-dir: нужен каталог}"; shift ;;
     --cpp-model) CPP_MODEL="${2:?--cpp-model: auto, bf16, q8, q6 или q5}"; shift ;;
     --cpp-low-vram) CPP_LOW_VRAM=1 ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     --engine) echo "неизвестный параметр: --engine — движок генерации один (yue2.cpp); модель: --cpp-model" >&2; exit 2 ;;
     *) echo "неизвестный параметр: $1" >&2; exit 2 ;;
   esac
@@ -144,7 +149,7 @@ with_worker_env() {
   (
     export PARTSCASTER_DATA_DIR="$PARTSCASTER_HOME/data" PARTSCASTER_HOME
     if [[ -f "$PARTSCASTER_HOME/worker.env" ]]; then
-      while IFS='=' read -r key val; do
+      while IFS='=' read -r key val || [[ -n "$key" ]]; do # последняя строка без перевода — тоже ключ
         [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
         if [[ ${#val} -ge 2 && ( "$val" == \"*\" || "$val" == \'*\' ) ]]; then val="${val:1:${#val}-2}"; fi
         export "$key=$val"
@@ -355,9 +360,53 @@ fi
 if [[ ! -f "$PARTSCASTER_HOME/worker.env" ]]; then
   printf 'HF_HOME=%s\n' "$(expand_home "$HF_HOME_DIR")" > "$PARTSCASTER_HOME/worker.env"
 fi
+# каталог разделения (--sep-dir) — в worker.env, если путей там ещё нет (заданное раньше не перетирается);
+# перед дописыванием — перевод строки в конце файла, иначе ключ склеится с последней строкой
+if [[ -n "$SEP_DIR" ]]; then
+  env_file="$PARTSCASTER_HOME/worker.env"
+  [[ -s "$env_file" && -n "$(tail -c1 "$env_file")" ]] && echo >> "$env_file"
+  sep_abs="$(expand_home "$SEP_DIR")"
+  grep -q '^PARTSCASTER_SEP_PY=' "$env_file" || printf 'PARTSCASTER_SEP_PY=%s\n' "$sep_abs/venv/bin/python" >> "$env_file"
+  grep -q '^PARTSCASTER_SEP_MODELS=' "$env_file" || printf 'PARTSCASTER_SEP_MODELS=%s\n' "$sep_abs/models" >> "$env_file"
+fi
+
+# разделение на дорожки: RoFormer в своём окружении (его torch/onnxruntime конфликтуют с окружением воркера);
+# пакеты закреплены (0.47.0 проверен на GPU-машине), повтор с тем же набором окружение не трогает; веса обеих
+# моделей скачиваются сразу — первое разделение не ждёт ~0,8 ГБ. Сбой — версия не включается
+SEP_PACKAGES=("audio-separator[gpu]==0.47.0" "audioread" "imageio-ffmpeg==0.6.0") # ffmpeg — для машин без системного
+sep_setup() { # sep_setup <каталог новой версии>
+  local dir="$1" py models venv fp="$PARTSCASTER_HOME/.sep-packages.sha256" want mark
+  py="$(with_worker_env bash -c 'printf %s "${PARTSCASTER_SEP_PY:-$HOME/sep-venv/bin/python}"')"
+  models="$(with_worker_env bash -c 'printf %s "${PARTSCASTER_SEP_MODELS:-$HOME/sep-models}"')"
+  venv="$(dirname "$(dirname "$py")")"
+  mark="$venv/.partscaster-installing"
+  want="$(printf '%s\n' "${SEP_PACKAGES[@]}" | sha256sum | cut -d' ' -f1)"
+  if [[ ! -x "$py" ]]; then
+    need_uv
+    uv venv "$venv" --python 3.12 || return 1
+    touch "$mark"
+  elif [[ ! -f "$fp" && ! -f "$mark" ]]; then
+    echo "$want" > "$fp" # окружение из установки до архивов: рабочее не трогаем, запоминаем отпечаток
+  fi
+  if [[ -f "$mark" || "$(cat "$fp" 2>/dev/null)" != "$want" ]]; then
+    echo "пакеты разделения (audio-separator, свой torch; первый раз — несколько гигабайт)"
+    need_uv
+    uv pip install --python "$py" "${SEP_PACKAGES[@]}" || return 1
+    echo "$want" > "$fp"
+    rm -f "$mark"
+  fi
+  echo "окружение разделения: $venv"
+  (cd "$dir" && "$py" sep_run.py download "$models") || { echo "веса разделения не скачаны — повторный запуск докачает" >&2; return 1; }
+}
 
 # движок генерации yue2.cpp: программа из архива релиза (готовая сборка CUDA 12.8; библиотеки CUDA — из venv
 # воркера), не запускается — сборка закреплённого коммита; модель — с проверкой суммы
+echo "== разделение на дорожки (RoFormer) =="
+if ! sep_setup "$PARTSCASTER_HOME/releases/$NAME"; then
+  echo "!! разделение на дорожки не установлено — версия $VERSION не включена" >&2
+  exit 1
+fi
+
 echo "== модель генерации (yue2.cpp) =="
 if ! cpp_setup "$PARTSCASTER_HOME/releases/$NAME"; then
   echo "!! yue2.cpp или модель не установлены — версия $VERSION не включена" >&2
@@ -376,7 +425,7 @@ echo "версия $VERSION → $PARTSCASTER_HOME/releases/$NAME"
 echo "== наборы сэмплов =="
 (
   cd "$PARTSCASTER_HOME/current"
-  while IFS='=' read -r key val; do
+  while IFS='=' read -r key val || [[ -n "$key" ]]; do
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
     if [[ ${#val} -ge 2 && ( "$val" == \"*\" || "$val" == \'*\' ) ]]; then val="${val:1:${#val}-2}"; fi # кавычки — как у systemd
     export "$key=$val"

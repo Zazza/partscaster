@@ -31,8 +31,6 @@ const workerProbe = ref('') // статус проверки воркера
 // у треков «без голоса» сразу делать дорожки — метка, если в инструментал пролез голос
 const autoStems = ref(true)
 const stemsAuto = ref('studio')        // когда делать дорожки трека: studio | always | manual
-const stemsModel = ref('htdemucs')      // разделение на дорожки: htdemucs | roformer
-const roformerOk = ref(false)           // окружение RoFormer установлено на воркере
 // модель генерации (yue2.cpp) и экономный режим
 const cppModel = ref('q8')
 const cppLowVram = ref(false)
@@ -122,10 +120,6 @@ async function downloadModel() {
 }
 
 const stemsAutoOptions = computed(() => STEMS_AUTO.map((v) => ({ value: v, label: t('settings.stemsAuto.' + v) })))
-const stemsOptions = computed(() => [
-  { value: 'htdemucs', label: t('settings.stemsModel.fast') },
-  { value: 'roformer', label: t('settings.stemsModel.clean'), disabled: !roformerOk.value },
-])
 
 onMounted(async () => {
   api.appVersion().then((v) => { appVersion.value = v }).catch(() => {})
@@ -140,8 +134,6 @@ onMounted(async () => {
     const c = await api.workerConfig()
     autoStems.value = c.auto_stems_instrumental !== false
     stemsAuto.value = c.stems_auto || 'studio'
-    stemsModel.value = c.stems_pref || 'htdemucs'
-    roformerOk.value = !!c.roformer_available
     applyEngine(c)
     info.value = c
   } catch {
@@ -160,12 +152,9 @@ async function save() {
       await api.setWorkerConfig({
         auto_stems_instrumental: autoStems.value,
         stems_auto: stemsAuto.value,
-        stems_model: stemsModel.value,
       })
       const c = await api.workerConfig()
-      // сервер мог смениться — доступность RoFormer и выбор берём из его ответа
-      stemsModel.value = c.stems_pref || 'htdemucs'
-      roformerOk.value = !!c.roformer_available
+      // сервер мог смениться — сведения о нём (в т.ч. есть ли разделение на дорожки) берём из его ответа
       info.value = c
     } catch (e) {
       err.value = t('settings.worker.notApplied', { err: String(e) })
@@ -217,7 +206,7 @@ async function save() {
       <div v-if="info" class="set-info muted">
         {{ t('settings.info.dataDir') }}: {{ info.data_dir }}<br />
         whisper: {{ info.whisper_available ? info.whisper_py : t('settings.info.whisperMissing') }}<br />
-        <template v-if="info.stems_model">{{ t('settings.stemsModel') }}: {{ info.stems_model === 'bs-roformer-sw' ? 'BS-Roformer-SW' : t('settings.stemsModel.demucs') }}</template>
+        {{ t('settings.stems') }}: {{ info.roformer_available ? 'BS-Roformer-SW' : t('settings.stems.none') }}
       </div>
       <div v-else class="set-info muted">{{ t('settings.info.workerDown') }}</div>
       <div v-if="appVersion" class="set-info muted">{{ t('settings.appVersion', { v: appVersion }) }}</div>
@@ -234,12 +223,7 @@ async function save() {
         <span>{{ t('settings.autoStems') }}</span>
       </label>
       <div class="set-hint muted">{{ t('settings.autoStems.hint') }}</div>
-
-      <div class="set-row">
-        <span>{{ t('settings.stemsModel') }}</span>
-        <VSelect v-model="stemsModel" :options="stemsOptions" />
-      </div>
-      <div class="set-hint muted">{{ roformerOk ? t('settings.stemsModel.hint') : t('settings.stemsModel.missing') }}</div>
+      <div v-if="info && !info.roformer_available" class="set-hint error">{{ t('settings.stems.missing') }}</div>
     </PageBox>
 
       <PageBox v-if="engineSupported" :title="t('settings.engine')">

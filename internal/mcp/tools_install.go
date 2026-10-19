@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -31,7 +30,7 @@ func RegisterInstallTools(s *Server) {
 			out, _ := runSteps("", []step{
 				{name: "воркер Partscaster (health)", cmd: fmt.Sprintf("curl -sf --max-time 5 %s/health", s.client.GetURL())},
 				{name: "компоненты воркера (whisper, Seed-VC, модель разделения)", cmd: fmt.Sprintf(
-					"curl -sf --max-time 5 %s/config | grep -o '\"\\(whisper_available\\|seedvc_available\\|stems_model\\)\": *\"*[a-z-]*'", s.client.GetURL())},
+					"curl -sf --max-time 5 %s/config | grep -o '\"\\(whisper_available\\|seedvc_available\\|roformer_available\\)\": *\"*[a-z-]*'", s.client.GetURL())},
 				{name: "ffmpeg (нужен для DSP на ПК)", cmd: "ffmpeg -version | head -1"},
 				{name: "Go (сборка приложения)", cmd: "go version"},
 				{name: "Node (сборка фронта)", cmd: "node --version"},
@@ -48,25 +47,21 @@ func RegisterInstallTools(s *Server) {
 		Name: "install_worker",
 		Description: "Установить воркер на машине с GPU (Ubuntu + NVIDIA/CUDA). Пустой host — всё на этом ПК " +
 			"(частая схема: приложение и GPU на одной машине), host — отдельная машина по ssh. " +
-			"Компоненты: воркер (обязательно, до ~" + gbStr(sizeWorkerGB) + " ГБ: окружение, программа yue2.cpp и модель генерации, веса разбора нот), " +
-			"whisper — распознавание текстов треков (~" + gbStr(sizeWhisperGB) + " ГБ), " +
+			"Компоненты: воркер (обязательно, до ~" + gbStr(sizeWorkerGB) + " ГБ: окружение, программа yue2.cpp и модель генерации, веса разбора нот) " +
+			"и разделение на дорожки RoFormer (обязательно, ~" + gbStr(sizeSepGB) + " ГБ, веса некоммерческие; каталог — sep_dir); " +
+			"необязательные: whisper — распознавание текстов треков (~" + gbStr(sizeWhisperGB) + " ГБ), " +
 			"Seed-VC — «голос альбома», ЭКСПЕРИМЕНТ (~" + gbStr(sizeSeedvcGB) + " ГБ после установки, больше во время). " +
-			"RoFormer — более чистое разделение дорожек (~" + gbStr(sizeSepGB) + " ГБ, веса некоммерческие). " +
-			"Сначала сухой прогон (по умолчанию) — покажи пользователю план и СПРОСИ, нужны ли whisper, Seed-VC и RoFormer, " +
-			"а при RoFormer — какой моделью делать дорожки по умолчанию (stems_model: htdemucs — быстрее, roformer — чище; " +
-			"потом меняется в настройках приложения); " +
-			"установка — dry_run=false, confirm=true и явные whisper/seedvc/roformer (true или false), при roformer=true — stems_model. " +
+			"Сначала сухой прогон (по умолчанию) — покажи пользователю план и СПРОСИ, нужны ли whisper и Seed-VC; " +
+			"установка — dry_run=false, confirm=true и явные whisper/seedvc (true или false). " +
 			"Перед установкой проверяются GPU и место на диске — при нехватке установка не начинается.",
 		InputSchema: props(map[string]any{
-			"host":     prop("user@gpu-host (пусто = локально на этой машине)", "string"),
-			"dry_run":  prop("только показать план, ничего не выполняя (по умолчанию true)", "boolean"),
-			"confirm":  prop("выполнить установку (спроси пользователя)", "boolean"),
-			"whisper":  prop("ставить whisper — тексты треков, ~"+gbStr(sizeWhisperGB)+" ГБ (спроси пользователя)", "boolean"),
-			"seedvc":   prop("ставить Seed-VC — «голос альбома», эксперимент, ~"+gbStr(sizeSeedvcGB)+" ГБ (спроси пользователя)", "boolean"),
-			"roformer": prop("ставить RoFormer — заметно более чистые дорожки (~4,5× дольше demucs), ~"+gbStr(sizeSepGB)+" ГБ, веса некоммерческие (спроси пользователя)", "boolean"),
-			"stems_model": prop("модель дорожек по умолчанию: htdemucs (быстро) | roformer (чище, только при roformer=true); "+
-				"при roformer=true обязательна — спроси пользователя; без RoFormer и без выбора — настройка не меняется", "string"),
-			"sep_dir":    prop("каталог RoFormer: окружение <dir>/venv и веса <dir>/models, можно на другом диске (пусто — ~/sep-venv и ~/sep-models)", "string"),
+			"host":    prop("user@gpu-host (пусто = локально на этой машине)", "string"),
+			"dry_run": prop("только показать план, ничего не выполняя (по умолчанию true)", "boolean"),
+			"confirm": prop("выполнить установку (спроси пользователя)", "boolean"),
+			"whisper": prop("ставить whisper — тексты треков, ~"+gbStr(sizeWhisperGB)+" ГБ (спроси пользователя)", "boolean"),
+			"seedvc":  prop("ставить Seed-VC — «голос альбома», эксперимент, ~"+gbStr(sizeSeedvcGB)+" ГБ (спроси пользователя)", "boolean"),
+			"sep_dir": prop("каталог разделения на дорожки (RoFormer): окружение <dir>/venv и веса <dir>/models, можно на другом диске "+
+				"(пусто — ~/sep-venv и ~/sep-models или то, что уже записано в worker.env)", "string"),
 			"seedvc_dir": prop("каталог Seed-VC (по умолчанию ~/partscaster/seedvc; можно на другом диске)", "string"),
 			"hf_home":    prop("каталог кеша весов HF (по умолчанию ~/yue/hf-cache)", "string"),
 			"cpp_model": prop("модель генерации: auto — рекомендуемая по видеопамяти (по умолчанию) | bf16 (~10 ГБ видеопамяти) | "+
@@ -84,27 +79,14 @@ func RegisterInstallTools(s *Server) {
 			}
 			whisper, wOK := args["whisper"].(bool)
 			seedvc, sOK := args["seedvc"].(bool)
-			roformer, rOK := args["roformer"].(bool)
-			if !dryRun && (!wOK || !sOK || !rOK) {
+			if !dryRun && (!wOK || !sOK) {
 				return "", fmt.Errorf("перед установкой спроси пользователя, нужны ли необязательные компоненты, " +
-					"и передай явно whisper=true|false, seedvc=true|false и roformer=true|false")
-			}
-			stemsModel := argString(args, "stems_model")
-			switch {
-			case stemsModel != "" && stemsModel != "htdemucs" && stemsModel != "roformer":
-				return "", fmt.Errorf("stems_model: htdemucs или roformer (получено %q)", stemsModel)
-			case stemsModel == "roformer" && !roformer:
-				return "", errors.New("stems_model=roformer без roformer=true: по умолчанию нельзя выбрать неустановленную модель")
-			case stemsModel == "" && roformer && !dryRun:
-				return "", errors.New("спроси пользователя, чем делать дорожки по умолчанию, и передай stems_model=htdemucs|roformer " +
-					"(htdemucs — быстрее, roformer — чище; потом меняется в настройках приложения)")
+					"и передай явно whisper=true|false и seedvc=true|false")
 			}
 			cppModel := argString(args, "cpp_model")
 			if err := checkCppModel(cppModel); err != nil {
 				return "", err
 			}
-			// без RoFormer и без явного выбора настройка не меняется: переустановка ради whisper
-			// не сбрасывает выбранный раньше RoFormer (воркер без настройки и так делает Demucs)
 			hfHome := argString(args, "hf_home")
 			if hfHome == "" {
 				hfHome = "~/yue/hf-cache"
@@ -133,12 +115,12 @@ func RegisterInstallTools(s *Server) {
 					archive = a
 				}
 			}
-			plan, steps := workerInstallPlanFull(argString(args, "host"), archive, whisper, seedvc, roformer, hfHome, seedvcDir, sepDir, stemsModel)
+			plan, steps := workerInstallPlanFull(argString(args, "host"), archive, whisper, seedvc, hfHome, seedvcDir, sepDir)
 			plan, steps = withCppModel(plan, steps, cppModel)
 			out, err := runSteps(argString(args, "host"), steps, !dryRun)
 			out = plan + "\n" + out + workerAddress(s)
 			if dryRun {
-				out = "СУХОЙ ПРОГОН — ничего не выполнено, только план (установка: dry_run=false, confirm=true, whisper, seedvc, roformer).\n\n" + out
+				out = "СУХОЙ ПРОГОН — ничего не выполнено, только план (установка: dry_run=false, confirm=true, whisper, seedvc).\n\n" + out
 			}
 			if err != nil {
 				return "", fmt.Errorf("%w\n\n%s", err, out)
@@ -179,7 +161,7 @@ func RegisterInstallTools(s *Server) {
 
 // Размеры компонентов воркера, ГБ (замер на установленной машине, 2026-10-03; модель генерации — 2026-10-19):
 // воркер — окружение 7,4 + модель генерации до 7,7 (BF16 7,2 + VAE 0,5; Q8 — 4,3), MERT 2,4 и SheetSage 0,2
-// (разбор нот), demucs 0,1; whisper — окружение 2,7 + модель small 0,5; Seed-VC — 11 после
+// (разбор нот); whisper — окружение 2,7 + модель small 0,5; Seed-VC — 11 после
 // установки и ~14 на время установки (см. seedvc_install.sh).
 const (
 	sizeWorkerGB     = 17.8
@@ -245,10 +227,10 @@ func workerAddress(s *Server) string {
 	return fmt.Sprintf("\nадрес воркера сейчас: %s (сменить: config_set)", s.client.GetURL())
 }
 
-// diskNeedGB — сколько места нужно под выбранные компоненты (Seed-VC — по пику установки).
-func diskNeedGB(whisper, seedvc, roformer bool) float64 {
+// diskNeedGB — сколько места нужно на домашнем диске (Seed-VC — по пику установки; разделение — если не в sep_dir).
+func diskNeedGB(whisper, seedvc, sepHome bool) float64 {
 	need := sizeWorkerGB + sizeKitsGB + sizeReserveGB
-	if roformer {
+	if sepHome {
 		need += sizeSepGB
 	}
 	if whisper {
@@ -260,40 +242,13 @@ func diskNeedGB(whisper, seedvc, roformer bool) float64 {
 	return need
 }
 
-// workerInstallPlanFull — текст для пользователя (компоненты, место) и шаги установки.
-// sepDir — каталог RoFormer: "" — ~/sep-venv и веса ~/sep-models, иначе <sepDir>/venv и
-// <sepDir>/models (пути — в worker.env, место RoFormer на домашнем диске не считается).
-// stemsModel — модель дорожек по умолчанию (htdemucs | roformer; "" — прежняя настройка):
-// записывается в настройки воркера, при roformer после установки проверяется, что он доступен.
-// workerInstallPlanFull — план установки: host "" — на этом ПК, иначе на машине по ssh;
-// archive — архив воркера (make worker-tar), его install.sh ставит базу воркера.
-func workerInstallPlanFull(host, archive string, whisper, seedvc, roformer bool, hfHome, seedvcDir, sepDir, stemsModel string) (string, []step) {
-	need := diskNeedGB(whisper, seedvc, roformer && sepDir == "")
-	plan := planText(whisper, seedvc, roformer, need, hfHome, seedvcDir)
-	if stemsModel != "" {
-		plan += fmt.Sprintf("Дорожки по умолчанию: %s (меняется в настройках приложения).\n", stemsLabel[stemsModel])
-	}
-	steps := installSteps(host, archive, whisper, seedvc, roformer, need, hfHome, seedvcDir, sepDir)
-	if stemsModel == "" {
-		return plan, steps
-	}
-	// настройка — до запуска юнита (воркер читает settings.json на каждый запрос, но так проще проверить);
-	// слияние с существующим файлом: прочие настройки пользователя не теряются
-	set := step{name: "настройка: дорожки по умолчанию — " + stemsLabel[stemsModel], cmd: fmt.Sprintf(
-		`~/yue/.venv/bin/python -c 'import json,pathlib; p=pathlib.Path.home()/"partscaster/data/settings.json"; `+
-			`p.parent.mkdir(parents=True, exist_ok=True); d=json.loads(p.read_text()) if p.is_file() else {}; d["stems_model"]=%q; p.write_text(json.dumps(d, ensure_ascii=False, indent=1))'`,
-		stemsModel)}
-	last := len(steps) - 2 // перед systemd-юнитом и health
-	steps = append(steps[:last], append([]step{set}, steps[last:]...)...)
-	if stemsModel == "roformer" {
-		// действующая модель, а не «установлен»: выбор мог лечь не туда (PARTSCASTER_DATA_DIR) или его
-		// перекрывает PARTSCASTER_STEMS_MODEL=demucs — тогда «доступен» был бы неправдой
-		steps = append(steps, step{name: "проверка: дорожки делает RoFormer", cmd: "sleep 2 && " + workerGet("/config", 10) + " | " +
-			`grep -q '"stems_model": *"bs-roformer-sw"' && echo 'дорожки делает RoFormer' || ` +
-			`{ echo 'ВНИМАНИЕ: RoFormer выбран по умолчанию, но воркер делает дорожки demucs. ` +
-			`Проверьте шаг установки RoFormer, PARTSCASTER_SEP_PY, PARTSCASTER_DATA_DIR и PARTSCASTER_STEMS_MODEL в ~/partscaster/worker.env'; exit 1; }`})
-	}
-	return plan, steps
+// workerInstallPlanFull — план установки: host "" — на этом ПК, иначе на машине по ssh; archive — архив воркера
+// (make worker-tar), его install.sh ставит базу воркера, разделение на дорожки и модель генерации.
+// sepDir — каталог разделения: "" — как в worker.env или ~/sep-venv и ~/sep-models, иначе <sepDir>/venv и
+// <sepDir>/models (install.sh --sep-dir пишет их в worker.env; место на домашнем диске тогда не считается).
+func workerInstallPlanFull(host, archive string, whisper, seedvc bool, hfHome, seedvcDir, sepDir string) (string, []step) {
+	need := diskNeedGB(whisper, seedvc, sepDir == "")
+	return planText(whisper, seedvc, need, hfHome, seedvcDir, sepDir), installSteps(host, archive, whisper, seedvc, need, hfHome, seedvcDir, sepDir)
 }
 
 // checkCppModel — модель генерации для install.sh (--cpp-model); проверка до шагов.
@@ -322,23 +277,25 @@ func withCppModel(plan string, steps []step, cppModel string) (string, []step) {
 	return plan, steps
 }
 
-var stemsLabel = map[string]string{"htdemucs": "Demucs (быстро)", "roformer": "RoFormer (чище)"}
-
-func planText(whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir string) string {
+func planText(whisper, seedvc bool, need float64, hfHome, seedvcDir, sepDir string) string {
 	mark := map[bool]string{true: "[x]", false: "[ ]"}
 	var b strings.Builder
 	b.WriteString("Компоненты:\n")
-	fmt.Fprintf(&b, "  [x] воркер — генерация (YuE2 на yue2.cpp), разбор нот, дорожки (demucs): до ~%s ГБ "+
+	fmt.Fprintf(&b, "  [x] воркер — генерация (YuE2 на yue2.cpp), разбор нот: до ~%s ГБ "+
 		"(модель генерации — при установке, веса разбора нот — при первом запуске)\n",
 		gbStr(sizeWorkerGB))
-	fmt.Fprintf(&b, "  %s RoFormer — чистое разделение дорожек (+ барабаны по частям), включается в настройках: ~%s ГБ, "+
-		"веса некоммерческие (CC BY-NC-SA); без него дорожки делает demucs\n", mark[roformer], gbStr(sizeSepGB))
+	sep := "~/sep-venv и ~/sep-models (или пути из worker.env)"
+	if sepDir != "" {
+		sep = fmt.Sprintf("%[1]s/venv и %[1]s/models (PARTSCASTER_SEP_PY и PARTSCASTER_SEP_MODELS в worker.env)", sepDir)
+	}
+	fmt.Fprintf(&b, "  [x] разделение на дорожки RoFormer (+ барабаны по частям): ~%s ГБ, веса некоммерческие (CC BY-NC-SA), "+
+		"каталог %s\n", gbStr(sizeSepGB), sep)
 	fmt.Fprintf(&b, "  %s whisper — распознавание текстов треков: ~%s ГБ\n", mark[whisper], gbStr(sizeWhisperGB))
 	fmt.Fprintf(&b, "  %s Seed-VC — «голос альбома», ЭКСПЕРИМЕНТ (голос узнаётся, но дрожит): ~%s ГБ после установки, ~%s ГБ во время, каталог %s\n",
 		mark[seedvc], gbStr(sizeSeedvcGB), gbStr(sizeSeedvcPeakGB), seedvcDir)
 	fmt.Fprintf(&b, "Нужно места: ~%s ГБ (веса HF — в %s; если он на другом диске, места на домашнем нужно меньше).\n",
 		gbStr(need), hfHome)
-	b.WriteString("Без whisper, Seed-VC и RoFormer приложение работает; соответствующие функции будут неактивны с подписью «не установлен».\n")
+	b.WriteString("Без whisper и Seed-VC приложение работает; соответствующие функции будут неактивны с подписью «не установлен».\n")
 	return b.String()
 }
 
@@ -354,7 +311,7 @@ const (
 	uvPathCmd = `export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH" && `
 )
 
-func installSteps(host, archive string, whisper, seedvc, roformer bool, need float64, hfHome, seedvcDir, sepDir string) []step {
+func installSteps(host, archive string, whisper, seedvc bool, need float64, hfHome, seedvcDir, sepDir string) []step {
 	steps := []step{
 		{name: "проверка: видеокарта NVIDIA и драйвер", cmd: checkGPUCmd, must: true},
 		{name: "проверка: место на диске", cmd: fmt.Sprintf(checkDiskCmd, int(math.Ceil(need))), must: true},
@@ -370,28 +327,19 @@ func installSteps(host, archive string, whisper, seedvc, roformer bool, need flo
 		src = shellQuote("~/" + name)
 		cleanup += " " + src
 	}
-	steps = append(steps,
-		step{name: "воркер из архива (install.sh: код, окружение, пакеты, наборы сэмплов)", must: true, cmd: fmt.Sprintf(
-			`d=$(mktemp -d) && trap '%s' EXIT && tar xzf %s -C "$d" && bash "$d"/worker-*/install.sh --no-start --hf-home %s`,
-			strings.ReplaceAll(cleanup, "'", `'\''`), src, shellQuote(hfHome))},
-	)
-	if roformer { // не must: без него разделение идёт прежним demucs
-		venv, py := "~/sep-venv", "~/sep-venv/bin/python"
-		if sepDir != "" {
-			venv, py = shellQuote(sepDir+"/venv"), shellQuote(sepDir+"/venv/bin/python")
-		}
-		steps = append(steps, step{name: "RoFormer (чистое разделение дорожек, отдельное окружение)", cmd: fmt.Sprintf(
-			uvPathCmd+`uv venv %s --python 3.12 && uv pip install --python %s "audio-separator[gpu]" audioread`, venv, py)})
+	sepFlag := ""
+	if sepDir != "" {
+		sepFlag = " --sep-dir " + shellQuote(sepDir)
 	}
+	steps = append(steps,
+		step{name: "воркер из архива (install.sh: код, окружение, пакеты, разделение на дорожки, модель генерации, наборы сэмплов)",
+			must: true, cmd: fmt.Sprintf(
+				`d=$(mktemp -d) && trap '%s' EXIT && tar xzf %s -C "$d" && bash "$d"/worker-*/install.sh --no-start --hf-home %s%s`,
+				strings.ReplaceAll(cleanup, "'", `'\''`), src, shellQuote(hfHome), sepFlag)},
+	)
 	if whisper {
 		steps = append(steps, step{name: "whisper (тексты треков)", cmd: uvPathCmd + "uv venv ~/whisper-venv && " +
 			"uv pip install --python ~/whisper-venv/bin/python faster-whisper"})
-	}
-	if roformer && sepDir != "" { // нестандартный каталог — воркер узнаёт его из worker.env
-		steps = append(steps, step{name: "worker.env: пути RoFormer", cmd: fmt.Sprintf(
-			`(grep -q '^PARTSCASTER_SEP_PY=' ~/partscaster/worker.env || printf 'PARTSCASTER_SEP_PY=%%s\n' %s >> ~/partscaster/worker.env) && `+
-				`(grep -q '^PARTSCASTER_SEP_MODELS=' ~/partscaster/worker.env || printf 'PARTSCASTER_SEP_MODELS=%%s\n' %s >> ~/partscaster/worker.env)`,
-			shellQuote(sepDir+"/venv/bin/python"), shellQuote(sepDir+"/models"))})
 	}
 	if seedvc {
 		dir := shellQuote(seedvcDir)

@@ -2016,7 +2016,7 @@ class TestVocalLeak(_WorkerApiCase):
             return {"stems": names, "seconds": 0.0}
 
         # замер дорожек (analyze_file) к метке голоса не относится — подменён
-        with mock.patch.object(self.w, "demucs_separate", side_effect=fake_separate), \
+        with mock.patch.object(self.w, "split_stems", side_effect=fake_separate), \
                 mock.patch.object(self.w, "analyze_file", return_value={}):
             r = self.client.post(f"/jobs/{jid}/stems")
             self.assertLess(r.status_code, 300, r.text)

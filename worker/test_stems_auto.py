@@ -11,22 +11,18 @@
   черновика, у ролей fragment/section/voice, без audio_file и если
   stem-vocals.flac уже есть; сбой разделения в потоке не пробрасывается,
   а логируется;
-- _split_job(job_id, row, model=None): два одновременных вызова для одного
-  трека — _split_job_now выполняется один раз, второй получает тот же
-  результат (или то же исключение); после завершения следующий вызов делит
-  заново;
-- действующая модель — model or stems_pref(): общий итог только у вызовов с ОДНОЙ
-  действующей моделью; вызов с другой моделью (None при stems_pref 'htdemucs' против
-  'roformer', 'htdemucs' против 'roformer') не ждёт первый — _split_job_now
-  выполняется второй раз (с model 'roformer'), у каждого свой результат;
+- _split_job(job_id, row) — без выбора модели (модель дорожек одна, RoFormer): два
+  одновременных вызова для одного трека — _split_job_now выполняется один раз, второй
+  получает тот же результат (или то же исключение); после завершения следующий вызов
+  делит заново;
 - вызов изнутри операции очереди (opqueue.current_op != 0 в вызывающем потоке) не ждёт
-  идущее разделение того же трека той же моделью — делит сам и возвращает свой итог;
+  идущее разделение того же трека — делит сам и возвращает свой итог;
 - после таких вызовов реестр чист: следующий вызов делит заново, не зависает;
 - POST /jobs/{id}/stems: _split_job бросил opqueue.OpCanceled → 409, detail содержит
-  opqueue.CANCELED_TEXT; opqueue.OpGone → 409;
+  opqueue.CANCELED_TEXT (и у старого клиента с ?model= — параметр игнорируется); opqueue.OpGone → 409;
 - POST /jobs/{id}/minus больше нет (404/405).
 
-Внешняя граница — само разделение (_split_job / _split_job_now: GPU-модели);
+Внешняя граница — само разделение (_split_job / _split_job_now: RoFormer на GPU);
 оно подменяется моком. Воркер импортируется целиком — без fastapi/httpx/numpy
 классы пропускаются, как соседние в test_pure.py.
 """
@@ -246,7 +242,7 @@ class TestSplitJobOnce(_StemsAutoCase):
         return out
 
     def test_concurrent_one_split_same_result(self):
-        result = {"stems": ["vocals", "drums", "bass", "other"], "model": "htdemucs"}
+        result = {"stems": ["vocals", "drums", "bass", "other"], "model": "bs-roformer-sw"}
         with mock.patch.object(self.w, "_split_job_now", side_effect=self._now(result)):
             out = self._two_calls()
         self.assertEqual(self.n, 1)
@@ -266,7 +262,7 @@ class TestSplitJobOnce(_StemsAutoCase):
 
     def test_after_finish_next_call_splits_again(self):
         self.release.set()
-        with mock.patch.object(self.w, "_split_job_now", side_effect=self._now({"model": "htdemucs"})):
+        with mock.patch.object(self.w, "_split_job_now", side_effect=self._now({"model": "bs-roformer-sw"})):
             self.w._split_job(self.jid, self.row)
             self.w._split_job(self.jid, self.row)
         self.assertEqual(self.n, 2)
@@ -276,8 +272,8 @@ class TestSplitJobOnce(_StemsAutoCase):
         with mock.patch.object(self.w, "_split_job_now", side_effect=self._now(err=RuntimeError("x"))):
             with self.assertRaises(RuntimeError):
                 self.w._split_job(self.jid, self.row)
-        with mock.patch.object(self.w, "_split_job_now", side_effect=self._now({"model": "htdemucs"})):
-            self.assertEqual(self.w._split_job(self.jid, self.row), {"model": "htdemucs"})
+        with mock.patch.object(self.w, "_split_job_now", side_effect=self._now({"model": "bs-roformer-sw"})):
+            self.assertEqual(self.w._split_job(self.jid, self.row), {"model": "bs-roformer-sw"})
         self.assertEqual(self.n, 2)
 
 
@@ -292,8 +288,8 @@ class TestMinusRemoved(_StemsAutoCase):
 
 
 @unittest.skipUnless(tp._HAS_WORKER_DEPS, _SKIP)
-class TestSplitJobModelAndQueue(_StemsAutoCase):
-    """_split_job: другая модель и вызов из операции очереди не ждут идущее разделение."""
+class TestSplitJobInsideQueueOp(_StemsAutoCase):
+    """_split_job: вызов из операции очереди не ждёт идущее разделение того же трека."""
 
     def setUp(self):
         super().setUp()
@@ -302,41 +298,38 @@ class TestSplitJobModelAndQueue(_StemsAutoCase):
         self.release = threading.Event()
         self.entered = threading.Event()
         self.n = 0
-        self.models = []  # модель, с которой звали _split_job_now, по порядку
 
     def _now(self):
-        """Первое разделение висит до release, следующие отвечают сразу; итог — по модели."""
-        def fake(job_id, row, *a, **kw):
-            model = kw["model"] if "model" in kw else (a[0] if a else None)
+        """Первое разделение висит до release, следующие отвечают сразу; итог — номер вызова."""
+        def fake(job_id, row):
             self.n += 1
             call_no = self.n   # номер этого вызова: общий счётчик к возврату первого уже ушёл дальше
-            self.models.append(model)
             if call_no == 1:
                 self.entered.set()
                 self.release.wait(_JOIN_SEC)
-            return {"model": model, "call": call_no}
+            return {"model": "bs-roformer-sw", "call": call_no}
         return fake
 
-    def _first_then_second(self, first_model, second, second_op=0):
-        """Первый вызов висит в разделении; второй (model=second) должен вернуться, не дожидаясь."""
+    def _first_then_second(self, second_op):
+        """Первый вызов висит в разделении; второй (из операции second_op) должен вернуться, не дожидаясь."""
         out = {}
 
-        def call(key, model, op_id):
+        def call(key, op_id):
             tok = self.w.opqueue.current_op.set(op_id) if op_id else None
             try:
-                out[key] = ("ok", self.w._split_job(self.jid, self.row, model))
+                out[key] = ("ok", self.w._split_job(self.jid, self.row))
             except Exception as e:  # исключение — результат вызова, его и сверяем
                 out[key] = ("err", e)
             finally:
                 if tok is not None:
                     self.w.opqueue.current_op.reset(tok)
 
-        t1 = threading.Thread(target=call, args=("a", first_model, 0))
+        t1 = threading.Thread(target=call, args=("a", 0))
         t2 = None
         t1.start()
         try:
             self.assertTrue(self.entered.wait(_JOIN_SEC), "разделение не началось")
-            t2 = threading.Thread(target=call, args=("b", second, second_op))
+            t2 = threading.Thread(target=call, args=("b", second_op))
             t2.start()
             t2.join(5)
             self.assertFalse(t2.is_alive(), "второй вызов ждёт первый")
@@ -355,62 +348,16 @@ class TestSplitJobModelAndQueue(_StemsAutoCase):
         """Реестр чист: следующий вызов делит заново и не виснет."""
         before = self.n
         done = {}
-        t = threading.Thread(target=lambda: done.setdefault("r", self.w._split_job(self.jid, self.row, "roformer")))
+        t = threading.Thread(target=lambda: done.setdefault("r", self.w._split_job(self.jid, self.row)))
         t.start()
         t.join(5)
         self.assertFalse(t.is_alive(), "следующий вызов завис")
         self.assertEqual(self.n, before + 1)
         self.assertEqual(done["r"]["call"], before + 1)
 
-    def test_default_vs_roformer_split_twice(self):
-        with mock.patch.object(self.w, "stems_pref", return_value="htdemucs"), \
-                mock.patch.object(self.w, "_split_job_now", side_effect=self._now()):
-            out = self._first_then_second(None, "roformer")
-            self.assertEqual(self.n, 2)
-            self.assertEqual(self.models[1], "roformer")
-            self.assertEqual(out["b"], ("ok", {"model": "roformer", "call": 2}))
-            kind, res = out["a"]
-            self.assertEqual(kind, "ok")
-            self.assertEqual(res["call"], 1, "первый получил чужой итог")
-            self._then_splits_again()
-
-    def test_explicit_htdemucs_vs_roformer_split_twice(self):
-        with mock.patch.object(self.w, "stems_pref", return_value="htdemucs"), \
-                mock.patch.object(self.w, "_split_job_now", side_effect=self._now()):
-            out = self._first_then_second("htdemucs", "roformer")
-            self.assertEqual(self.n, 2)
-            self.assertEqual(self.models[1], "roformer")
-            self.assertEqual(out["b"], ("ok", {"model": "roformer", "call": 2}))
-            self.assertEqual(out["a"], ("ok", {"model": "htdemucs", "call": 1}))
-            self._then_splits_again()
-
-    def test_roformer_pref_vs_explicit_roformer_same_model_waits(self):
-        # действующая модель одна (None при stems_pref 'roformer' и 'roformer') — общий итог
-        with mock.patch.object(self.w, "stems_pref", return_value="roformer"), \
-                mock.patch.object(self.w, "_split_job_now", side_effect=self._now()):
-            out = {}
-
-            def call(key, model):
-                out[key] = self.w._split_job(self.jid, self.row, model)
-
-            t1 = threading.Thread(target=call, args=("a", None))
-            t1.start()
-            self.assertTrue(self.entered.wait(_JOIN_SEC))
-            t2 = threading.Thread(target=call, args=("b", "roformer"))
-            t2.start()
-            time.sleep(0.3)
-            self.assertNotIn("b", out, "второй вызов той же модели не дождался первого")
-            self.release.set()
-            for t in (t1, t2):
-                t.join(_JOIN_SEC)
-                self.assertFalse(t.is_alive())
-        self.assertEqual(self.n, 1)
-        self.assertEqual(out["a"], out["b"])
-
-    def test_inside_queue_op_does_not_wait_same_model(self):
-        with mock.patch.object(self.w, "stems_pref", return_value="htdemucs"), \
-                mock.patch.object(self.w, "_split_job_now", side_effect=self._now()):
-            out = self._first_then_second("htdemucs", "htdemucs", second_op=7)
+    def test_inside_queue_op_does_not_wait(self):
+        with mock.patch.object(self.w, "_split_job_now", side_effect=self._now()):
+            out = self._first_then_second(second_op=7)
             self.assertEqual(self.n, 2)
             kind, res = out["b"]
             self.assertEqual(kind, "ok")
@@ -430,7 +377,8 @@ class TestStemsEndpointQueueErrors(_StemsAutoCase):
         self.assertEqual(r.status_code, 409, r.text)
         self.assertIn(self.w.opqueue.CANCELED_TEXT, str(r.json().get("detail")))
 
-    def test_canceled_with_model_409(self):
+    def test_canceled_old_client_model_param_409(self):
+        # старый клиент шлёт ?model= — параметр игнорируется, отмена — та же 409
         jid = self._track()
         with mock.patch.object(self.w, "_split_job", side_effect=self.w.opqueue.OpCanceled()):
             r = self.client.post(f"/jobs/{jid}/stems?model=roformer")

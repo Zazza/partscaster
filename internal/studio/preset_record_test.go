@@ -103,7 +103,7 @@ func prExpanded(t *testing.T, f *psFake) {
 func TestRebuildPresetRecordPrepares(t *testing.T) {
 	t.Parallel()
 	f := ppSetup(t, 8, ppBars())
-	f.afterDefault = map[string]string{"stem-guitar.flac": lavfi(t, aeval("0.2*sin(2*PI*700*t)", 8),
+	f.afterSplit = map[string]string{"stem-guitar.flac": lavfi(t, aeval("0.2*sin(2*PI*700*t)", 8),
 		filepath.Join(t.TempDir(), "pr-guitar.flac"))}
 	p := ppPreset(t, 71, ppPartsPadPerc)
 	p.Specs = []yue.PresetSpec{
@@ -114,8 +114,8 @@ func TestRebuildPresetRecordPrepares(t *testing.T) {
 
 	res := prRebuild(t, f, prRecord("-900", p))
 
-	if !reflect.DeepEqual(f.splits, []string{""}) {
-		t.Errorf("разделения %q, want одно обычное (у трека нет гитары)", f.splits)
+	if len(f.splits) != 1 {
+		t.Errorf("разделения %v, want одно (у трека нет гитары)", f.splits)
 	}
 	for _, kit := range []string{"pianokit", "clapkit"} {
 		if !contains(f.installs, kit) {

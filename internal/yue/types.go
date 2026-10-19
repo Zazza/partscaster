@@ -42,8 +42,6 @@ type Service interface {
 	JobPreview(ctx context.Context, id int64, fromSec, toSec float64) (map[string]any, error)
 	SubmitOverdub(ctx context.Context, id int64, style, lyrics string, gain float64, abc string, seed int64) (int64, error)
 	MakeStems(ctx context.Context, id int64) (map[string]any, error)
-	// MakeStemsWith — разделение разово заданной моделью (roformer | htdemucs; "" — по настройке)
-	MakeStemsWith(ctx context.Context, id int64, model string) (map[string]any, error)
 	// GuitarPart — партия гитариста «по аккордам плана» в манере style → {style, bars, strikes, beats, tune_cents}
 	GuitarPart(ctx context.Context, id int64, style int) (map[string]any, error)
 	// звуковой движок воркера: цепочка блоков на трек/дорожку → вариант; захваты NAM и IR

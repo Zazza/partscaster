@@ -23,7 +23,7 @@ import (
 // приписок о версии.
 func (f *fakeService) Version(ctx context.Context) (*yue.VersionInfo, error) {
 	return &yue.VersionInfo{Version: "test", API: yue.WorkerAPI, SourceHash: "000000000000",
-		Components: map[string]bool{"whisper": false, "seedvc": false, "roformer": false}, StemsModel: "htdemucs"}, nil
+		Components: map[string]bool{"whisper": false, "seedvc": false, "roformer": false}, StemsModel: "bs-roformer-sw"}, nil
 }
 
 // versionFake — фейк с настраиваемым ответом /version и счётчиком опросов.

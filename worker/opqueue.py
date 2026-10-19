@@ -34,7 +34,7 @@ current_op: contextvars.ContextVar[int] = contextvars.ContextVar("current_op", d
 
 class OpCanceled(BaseException):  # noqa: N818 - имя из контракта
     """Операцию отменили. Наследник BaseException: в воркере много широких
-    `except Exception` (RoFormer → запасной Demucs, whisper → текст ошибки) —
+    `except Exception` (RoFormer → ошибка дорожек, whisper → текст ошибки) —
     отмена не должна превращаться в «попробовать иначе»."""
 
     def __init__(self, msg: str = CANCELED_TEXT):
@@ -450,6 +450,6 @@ class OpQueue:
                 if op is not None:
                     op.procs.discard(p)
         if gone or (op is not None and (op.cancel_requested or op.state in FINAL)):
-            # процесс убит отменой или закрытием операции — не «упал» (иначе RoFormer ушёл бы на запасной Demucs)
+            # процесс убит отменой или закрытием операции — не «упал» (иначе отмена выглядела бы сбоем разделения)
             raise OpCanceled()
         return subprocess.CompletedProcess(cmd, p.returncode, out, err)

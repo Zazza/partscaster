@@ -218,7 +218,7 @@ func TestApplyEditsVerifyOnTarget(t *testing.T) {
 	}
 	aeShifts(t, f, orig, nil)
 	if len(f.splitAsks) != 1 || f.splitAsks[0] != vfFirst {
-		t.Errorf("RoFormer просили у %v, want одно разделение #%d", f.splitAsks, vfFirst)
+		t.Errorf("разделение просили у %v, want одно разделение #%d", f.splitAsks, vfFirst)
 	}
 	aeOneVersion(t, f, vfFirst)
 	if len(f.draftDel) != 1 {
@@ -607,7 +607,7 @@ func TestApplyEditsMixFileSkipsFirstBuild(t *testing.T) {
 		t.Fatalf("первая версия %+v, want из файла %s трека #%d", f.promoted, file, psJobID)
 	}
 	if !vfAsked(f.splitAsks, vfFirst) {
-		t.Errorf("версия из файла прослушивания не сверена: RoFormer просили у %v", f.splitAsks)
+		t.Errorf("версия из файла прослушивания не сверена: разделение просили у %v", f.splitAsks)
 	}
 	if id != vfFirst {
 		t.Errorf("id %d, want %d", id, vfFirst)

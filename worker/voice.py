@@ -105,7 +105,7 @@ def match_gain(source: np.ndarray, converted: np.ndarray) -> float:
 def replace_vocal(mix: np.ndarray, vocals: np.ndarray, new: np.ndarray, mask: np.ndarray,
                   gain: float = 1.0) -> np.ndarray:
     """Заменить голос в готовом миксе: mix − mask·vocals + mask·gain·new.
-    Микс берётся целиком, а не собирается из дорожек demucs (сумма дорожек ≠
+    Микс берётся целиком, а не собирается из дорожек (сумма дорожек ≠
     микс — музыка портилась и там, где голоса нет): вне маски результат бит в
     бит равен миксу. Все массивы — (frames[, ch]) одной частоты; моно-голос
     идёт в оба канала; длина — как у микса (короткие дополняются тишиной).

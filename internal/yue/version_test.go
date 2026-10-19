@@ -230,7 +230,7 @@ func TestCheckOldWorkerWarns(t *testing.T) {
 func TestCheckNewerWorkerWarns(t *testing.T) {
 	isolateSettings(t)
 	srv := workerStub(t, fmt.Sprintf(`{"version":"v9","api":%d,"source_hash":"0123456789ab","model":"",`+
-		`"components":{"whisper":false,"seedvc":false,"roformer":false},"stems_model":"htdemucs"}`, WorkerAPI+1))
+		`"components":{"whisper":false,"seedvc":false,"roformer":false},"stems_model":"bs-roformer-sw"}`, WorkerAPI+1))
 	res, err := Check(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("Check: %v", err)

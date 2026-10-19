@@ -619,7 +619,7 @@ class TestCancel(_Case):
         go = threading.Event()
 
         def fn():
-            with q.slot("stems", "demucs", job_id=1):
+            with q.slot("stems", "roformer", job_id=1):
                 inside.set()
                 go.wait(JOIN)
             return "finished"
@@ -706,7 +706,7 @@ class TestNoTwoOnGpuAfterCancel(_Case):
         def fn():
             with self.q.use_op(a):
                 try:
-                    with self.q.slot("stems", "demucs", job_id=1):
+                    with self.q.slot("stems", "roformer", job_id=1):
                         inside.set()
                         go.wait(JOIN)
                         seen["nxt_in_step"] = _state(self.q, nxt)

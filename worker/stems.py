@@ -1,14 +1,12 @@
-"""Разделение трека на стемы: demucs (htdemucs, по умолчанию — быстро) или по выбору
-BS-Roformer-SW (чище, ~4,5× дольше; отдельное окружение, см. sep_run.py); demucs — и
-запасной путь при сбое RoFormer, и откат (PARTSCASTER_STEMS_MODEL=demucs).
-
-Модель грузится на вызов и выгружается: не держим VRAM рядом с YuE2.
+"""Разделение трека на стемы: BS-Roformer-SW + DrumSep в отдельном окружении (см. sep_run.py) —
+подпроцессом, видеопамять освобождается с его концом. Другой модели нет: сбой — ошибка дорожек.
 """
 import json
 import logging
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -22,23 +20,26 @@ def _run(cmd, timeout=None, **kw):
 # запуск внешнего процесса; воркер ставит сюда QUEUE.run_proc — отмена из очереди убивает процесс
 run_proc = _run
 
-# основные дорожки (htdemucs): в сумме дают трек — по ним минус и замены
+# основные дорожки: в сумме дают трек — по ним минус и замены
 MAIN_STEMS = ("drums", "bass", "other", "vocals")
-# подробные дорожки (htdemucs_6s): гитара и клавиши — уточнение внутри
+# подробные дорожки (гитара и клавиши RoFormer-SW): уточнение внутри
 # «прочего», в сумму трека не входят (иначе гитара удвоится)
 DETAIL_STEMS = ("guitar", "piano")
-# части барабанов (DrumSep, только при RoFormer): уточнение внутри «барабанов»,
+# части барабанов (DrumSep): уточнение внутри «барабанов»,
 # в сумму трека не входят — минус и вклейки их не видят
 DRUM_PARTS = ("kick", "snare", "toms", "hh", "ride", "crash")
 
 MODEL_ROFORMER = "bs-roformer-sw"
-MODEL_DEMUCS = "htdemucs"
 SEP_TIMEOUT = 1800  # с: 4-минутный трек — около минуты, запас на первую загрузку весов
 
 
 def _sep_python() -> Path:
-    """python отдельного окружения разделения (PARTSCASTER_SEP_PY, по умолчанию ~/sep-venv)."""
-    return Path(os.environ.get("PARTSCASTER_SEP_PY") or Path.home() / "sep-venv" / "bin" / "python")
+    """python отдельного окружения разделения (PARTSCASTER_SEP_PY, по умолчанию ~/sep-venv; на Windows —
+    Scripts\\python.exe venv)."""
+    if os.environ.get("PARTSCASTER_SEP_PY"):
+        return Path(os.environ["PARTSCASTER_SEP_PY"])
+    venv = Path.home() / "sep-venv"
+    return venv / "Scripts" / "python.exe" if sys.platform == "win32" else venv / "bin" / "python"
 
 
 def _sep_models() -> Path:
@@ -47,46 +48,8 @@ def _sep_models() -> Path:
 
 
 def roformer_available() -> bool:
-    """Окружение RoFormer установлено (PARTSCASTER_SEP_PY есть)."""
+    """Окружение разделения установлено (python окружения есть)."""
     return _sep_python().is_file()
-
-
-def roformer_enabled(prefer: str = MODEL_DEMUCS) -> bool:
-    """RoFormer — только если его выбрали (prefer), окружение есть и не включён
-    принудительный откат PARTSCASTER_STEMS_MODEL=demucs."""
-    if os.environ.get("PARTSCASTER_STEMS_MODEL", "").strip().lower() == "demucs":
-        return False
-    return prefer in ("roformer", MODEL_ROFORMER) and roformer_available()
-
-
-def _run_model(name: str, data, sr: int) -> dict:
-    """Модель demucs name на звук data (сэмплы × каналы) → {источник: дорожка}
-    в частоте sr. Модель выгружается сразу после прохода."""
-    import torch
-    from demucs.pretrained import get_model
-    from demucs.apply import apply_model
-    import torchaudio.functional as AF
-
-    model = get_model(name)
-    try:
-        mix = torch.from_numpy(data.T).unsqueeze(0)
-        if model.samplerate != sr:
-            mix = AF.resample(mix, sr, model.samplerate)
-        with torch.no_grad():
-            # без видеокарты — на CPU (медленнее: ~4 с на секунду звука)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            stems = apply_model(model, mix.to(device), split=True, overlap=0.25)[0]
-        out = {}
-        for i, src in enumerate(model.sources):
-            stem = stems[i].cpu()
-            if model.samplerate != sr:
-                stem = AF.resample(stem, model.samplerate, sr)
-            out[src] = stem.T.numpy()
-        return out
-    finally:
-        del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
 
 def _read_as(path: Path, sr: int, n: int):
@@ -134,7 +97,7 @@ def _distribute_residual(main: dict, mix, sr: int) -> dict:
 
 def _separate_roformer(audio_path: Path, out_dir: Path, sr: int, n: int, mix) -> list:
     """RoFormer-SW подпроцессом → контракт файлов приложения. Исключение — при
-    любом сбое основного разделения (вызывающий уходит на demucs)."""
+    любом сбое основного разделения."""
     import numpy as np
     import soundfile as sf
     tmp = out_dir / ".sep-tmp"
@@ -176,12 +139,11 @@ def _separate_roformer(audio_path: Path, out_dir: Path, sr: int, n: int, mix) ->
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def separate(audio_path: Path, out_dir: Path, prefer: str = MODEL_DEMUCS) -> dict:
-    """→ out_dir/stem-{drums,bass,other,vocals}.flac (+ stem-{guitar,piano}.flac,
-    при RoFormer ещё stem-{kick,snare,toms,hh,ride,crash}.flac).
-    Возвращает {stems, seconds, model}. prefer — «roformer» (чище, ~4,5× дольше)
-    или «htdemucs» (быстро, по умолчанию). RoFormer — если выбран и доступен; его
-    сбой уводит на demucs. Подробные дорожки — по возможности."""
+def separate(audio_path: Path, out_dir: Path) -> dict:
+    """→ out_dir/stem-{drums,bass,other,vocals}.flac (+ stem-{guitar,piano}.flac и части барабанов
+    stem-{kick,snare,toms,hh,ride,crash}.flac — по возможности). Возвращает {stems, seconds, model}.
+    Окружения разделения нет или RoFormer упал — RuntimeError с текстом для человека; отмена операции
+    очереди (OpCanceled) проходит как есть."""
     import numpy as np
     import soundfile as sf
 
@@ -192,28 +154,16 @@ def separate(audio_path: Path, out_dir: Path, prefer: str = MODEL_DEMUCS) -> dic
         raise ValueError(f"в файле нет звука: {audio_path.name}")
     if data.shape[1] == 1:
         data = np.concatenate([data, data], axis=1)
+    if not roformer_available():
+        raise RuntimeError(f"разделение на дорожки (RoFormer) не установлено: нет {_sep_python()} — "
+                           "переустановите воркер")
     t0 = time.time()
-    # части барабанов от прошлого разделения не должны пережить новое (demucs их не делает)
+    # части барабанов от прошлого разделения не должны пережить новое (сбой DrumSep их не перепишет)
     for name in DRUM_PARTS:
         (out_dir / f"stem-{name}.flac").unlink(missing_ok=True)
-    if roformer_enabled(prefer):
-        try:
-            names = _separate_roformer(audio_path, out_dir, sr, len(data), data)
-            log.info("roformer: %s stems from %s in %.1fs", len(names), audio_path.name, time.time() - t0)
-            return {"stems": names, "seconds": round(time.time() - t0, 1), "model": MODEL_ROFORMER}
-        except Exception:  # noqa: BLE001 — запасной путь: прежний demucs
-            log.exception("roformer: разделение не удалось, запасной путь demucs (%s)", audio_path.name)
-    names = []
-    main = _run_model("htdemucs", data, sr)
-    for name in MAIN_STEMS:
-        sf.write(str(out_dir / f"stem-{name}.flac"), main[name], sr)
-        names.append(f"stem-{name}.flac")
     try:
-        detail = _run_model("htdemucs_6s", data, sr)
-        for name in DETAIL_STEMS:
-            sf.write(str(out_dir / f"stem-{name}.flac"), detail[name], sr)
-            names.append(f"stem-{name}.flac")
-    except Exception:  # noqa: BLE001 — основные дорожки уже есть, подробные необязательны
-        log.exception("demucs 6s: гитара/клавиши не выделены (%s)", audio_path.name)
-    log.info("demucs: %s stems from %s in %.1fs", len(names), audio_path.name, time.time() - t0)
-    return {"stems": names, "seconds": round(time.time() - t0, 1), "model": MODEL_DEMUCS}
+        names = _separate_roformer(audio_path, out_dir, sr, len(data), data)
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
+        raise RuntimeError(f"разделение на дорожки (RoFormer) не удалось: {e}") from e
+    log.info("roformer: %s stems from %s in %.1fs", len(names), audio_path.name, time.time() - t0)
+    return {"stems": names, "seconds": round(time.time() - t0, 1), "model": MODEL_ROFORMER}

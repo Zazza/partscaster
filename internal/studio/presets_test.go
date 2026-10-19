@@ -17,8 +17,8 @@ import (
 // Пресеты звука.
 //
 // ApplySoundPreset(ctx, svc, jobID, preset) → {ChildID, File}:
-//   (а) дорожки из specs должны быть у трека; нет — разделение (части барабанов —
-//       MakeStemsWith(id, "roformer"), иначе MakeStems); всё ещё нет — ошибка с именами;
+//   (а) дорожки из specs должны быть у трека; нет — разделение MakeStems(id) (одно, RoFormer; части барабанов
+//       у старых треков без них — тоже им); всё ещё нет — ошибка с именами и пояснением, что разделение их не дало;
 //   (а') наборы сэмплов движка «<набор>/<часть>», которых нет в FxAssets().kits, —
 //       InstallFxKit(<набор>) один раз на набор;
 //   (б) specs → RebuildSections окном «весь трек» → файл F; specs пусты → F = звук трека;
@@ -51,11 +51,10 @@ type psPromote struct {
 type psFake struct {
 	*engFake
 	jobs []yue.Job
-	log  []string // порядок значимых вызовов: split:<model>, install:<kit>, applyfx:<source>, upload:<file>, track:<file>
+	log  []string // порядок значимых вызовов: split, install:<kit>, applyfx:<source>, upload:<file>, track:<file>
 
-	afterRoformer map[string]string // дорожки, которые появляются после MakeStemsWith(id, "roformer")
-	afterDefault  map[string]string // … после MakeStems(id) / MakeStemsWith(id, "")
-	splits        []string          // модели разделения по порядку ("" — по настройке)
+	afterSplit map[string]string // дорожки, которые появляются после MakeStems(id)
+	splits     []int64           // у каких джоб звали MakeStems, по порядку
 
 	kits     []any // FxAssets()["kits"]: [{name, samples}]
 	installs []string
@@ -85,25 +84,12 @@ func (f *psFake) JobStems(_ context.Context, id int64) ([]map[string]any, error)
 	return out, nil
 }
 
-func (f *psFake) split(id int64, model string) {
-	f.splits = append(f.splits, model)
-	f.log = append(f.log, "split:"+model)
-	add := f.afterDefault
-	if model == "roformer" {
-		add = f.afterRoformer
-	}
-	for name, p := range add {
+func (f *psFake) MakeStems(_ context.Context, id int64) (map[string]any, error) {
+	f.splits = append(f.splits, id)
+	f.log = append(f.log, "split")
+	for name, p := range f.afterSplit {
 		f.files[key(id, name)] = p
 	}
-}
-
-func (f *psFake) MakeStems(_ context.Context, id int64) (map[string]any, error) {
-	f.split(id, "")
-	return map[string]any{"ok": true}, nil
-}
-
-func (f *psFake) MakeStemsWith(_ context.Context, id int64, model string) (map[string]any, error) {
-	f.split(id, model)
 	return map[string]any{"ok": true}, nil
 }
 
@@ -351,38 +337,37 @@ func TestApplySoundPresetSpecsAndFinal(t *testing.T) {
 	}
 }
 
-// Нет kick (часть барабанов) → MakeStemsWith(id, "roformer"), после
+// Нет kick (часть барабанов, старый трек) → MakeStems(id), после
 // разделения kick есть → применение продолжается.
-func TestApplySoundPresetSplitsRoformerForDrumParts(t *testing.T) {
+func TestApplySoundPresetSplitsForDrumParts(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
-	f.afterRoformer = map[string]string{"stem-kick.flac": psStemFile(t, "kick", "0.5*lt(mod(t\\,0.5)\\,0.02)")}
+	f.afterSplit = map[string]string{"stem-kick.flac": psStemFile(t, "kick", "0.5*lt(mod(t\\,0.5)\\,0.02)")}
 	p := psPreset(6, []yue.PresetSpec{{Stems: []string{"kick"},
 		Engine: []map[string]any{{"type": "sampler", "kit": "osdk/kick", "output_db": 0.0}}}}, nil)
 
 	psApply(t, f, p)
 
-	if !reflect.DeepEqual(f.splits, []string{"roformer"}) {
-		t.Errorf("разделения %q, want ровно одно roformer (не хватает части барабанов)", f.splits)
+	if !reflect.DeepEqual(f.splits, []int64{psJobID}) {
+		t.Errorf("разделения %v, want ровно одно MakeStems(#%d) (не хватает части барабанов)", f.splits, psJobID)
 	}
 	if len(f.promoted) != 1 {
 		t.Errorf("VariantToTrack вызван %d раз, want 1 (после разделения kick есть — продолжение)", len(f.promoted))
 	}
 }
 
-// Нет только guitar (не часть барабанов) → MakeStems (разделение по настройке, не roformer).
-func TestApplySoundPresetSplitsDefaultForGuitar(t *testing.T) {
+// Нет только guitar (не часть барабанов) → то же одно MakeStems.
+func TestApplySoundPresetSplitsForGuitar(t *testing.T) {
 	t.Parallel()
 	f := psSetup(t, nil)
-	f.afterDefault = map[string]string{"stem-guitar.flac": psStemFile(t, "guitar", "0.2*sin(2*PI*700*t)")}
-	f.afterRoformer = f.afterDefault
+	f.afterSplit = map[string]string{"stem-guitar.flac": psStemFile(t, "guitar", "0.2*sin(2*PI*700*t)")}
 	p := psPreset(7, []yue.PresetSpec{{Stems: []string{"guitar"}, Chain: "eq",
 		Params: map[string]float64{"mid": 3, "midf": 1200}}}, nil)
 
 	psApply(t, f, p)
 
-	if !reflect.DeepEqual(f.splits, []string{""}) {
-		t.Errorf("разделения %q, want ровно одно MakeStems (по настройке, не roformer)", f.splits)
+	if !reflect.DeepEqual(f.splits, []int64{psJobID}) {
+		t.Errorf("разделения %v, want ровно одно MakeStems(#%d)", f.splits, psJobID)
 	}
 	if len(f.promoted) != 1 {
 		t.Errorf("VariantToTrack вызван %d раз, want 1", len(f.promoted))
@@ -409,8 +394,8 @@ func TestApplySoundPresetMissingStemsAfterSplit(t *testing.T) {
 			t.Errorf("ошибка %q без имени дорожки %q", msg, want)
 		}
 	}
-	if !strings.Contains(strings.ToLower(msg), "roformer") {
-		t.Errorf("ошибка %q без подсказки про разделение RoFormer", msg)
+	if !strings.Contains(strings.ToLower(msg), "разделени") {
+		t.Errorf("ошибка %q без пояснения, что дорожек не дало разделение", msg)
 	}
 	if len(f.calls) != 0 || len(f.uploads) != 0 {
 		t.Errorf("пересборка шла: ApplyFx %d, загрузки %v; want ничего", len(f.calls), keys(f.uploads))

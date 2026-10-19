@@ -69,15 +69,14 @@ test('адрес воркера доходит до страницы настр�
   expect(b.serverURL).toBe('http://localhost:8091')
 })
 
-test('«Сохранить» с выбранным RoFormer не падает (regression: TypeError reading trim)', async () => {
+test('«Сохранить» не падает (regression: TypeError reading trim)', async () => {
   const b = await mountSettings('http://localhost:8091')
-  b.stemsModel = 'roformer'
   await b.save()
   for (let i = 0; i < 10; i++) await Promise.resolve()
   expect(String(b.err)).not.toContain('TypeError')
-  // что отправили воркеру — с адресом и RoFormer
+  // что отправили воркеру: модели дорожек нет — разделение одно (internal-no-demucs)
   const cfg = m.api.setWorkerConfig.mock.calls[0][0]
-  expect(cfg.stems_model).toBe('roformer')
+  expect(cfg).not.toHaveProperty('stems_model')
   // internal-drop-ollama: раздела Ollama в настройках нет — воркеру ollama_* не уходят
   expect(Object.keys(cfg).filter((k) => k.startsWith('ollama'))).toEqual([])
   expect(m.api.setServerURL).toHaveBeenCalledWith('http://localhost:8091')

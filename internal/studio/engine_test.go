@@ -831,7 +831,7 @@ func TestRebuildSectionsEngineWorkerWithoutPreviewFails(t *testing.T) {
 		cfgErr   error
 		wantText bool // текст про обновление воркера (для ответа /config без fx_preview)
 	}{
-		{"нет fx_preview", map[string]any{"stems_model": "roformer"}, nil, true},
+		{"нет fx_preview", map[string]any{"roformer_available": true}, nil, true},
 		{"fx_preview false", map[string]any{"fx_preview": false}, nil, true},
 		{"пустой /config", map[string]any{}, nil, true},
 		{"/config недоступен", nil, errors.New("404 not found: /config"), false},
@@ -1265,10 +1265,10 @@ func TestRebuildSectionsEngineUnknownPartSkipped(t *testing.T) {
 	}
 }
 
-// У родителя нет дорожки-части барабанов, и MakeStems
-// её не дал (демиксер без частей барабанов, например Demucs) — пересборка падает с
-// подсказкой «нужен RoFormer», ничего не загружено, MakeStems вызван (ровно один раз).
-func TestRebuildSectionsEngineDrumPartMissingHintsRoFormer(t *testing.T) {
+// У родителя нет дорожки-части барабанов, и MakeStems (RoFormer + DrumSep)
+// её не дал (сбой DrumSep) — пересборка падает с именем части и подсказкой повторить разделение
+// (make_stems), без отсылки к выбору модели в настройках; ничего не загружено, MakeStems вызван ровно один раз.
+func TestRebuildSectionsEngineDrumPartMissingHintsResplit(t *testing.T) {
 	t.Parallel()
 	for _, part := range []string{"kick", "snare", "crash"} {
 		t.Run(part, func(t *testing.T) {
@@ -1280,8 +1280,14 @@ func TestRebuildSectionsEngineDrumPartMissingHintsRoFormer(t *testing.T) {
 			if err == nil {
 				t.Fatalf("части %s нет и после MakeStems: want ошибку, got nil", part)
 			}
-			if !strings.Contains(strings.ToLower(err.Error()), "roformer") {
-				t.Errorf("ошибка %q — want подсказку про RoFormer", err)
+			msg := strings.ToLower(err.Error())
+			if !strings.Contains(msg, part) || !strings.Contains(msg, "make_stems") {
+				t.Errorf("ошибка %q — want имя части %q и подсказку повторить make_stems", err, part)
+			}
+			for _, bad := range []string{"настройк", "model="} {
+				if strings.Contains(msg, bad) {
+					t.Errorf("ошибка %q отсылает к выбору модели (%q), а выбора больше нет", err, bad)
+				}
 			}
 			if n := f.stemsCalls[parentID]; n != 1 {
 				t.Errorf("MakeStems(родитель) вызван %d раз, want ровно 1", n)

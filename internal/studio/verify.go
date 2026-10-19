@@ -130,7 +130,7 @@ func verifyTargets(specs []SectionSpec) map[int]float64 {
 // {индекс записи: −ошибка, ±verifyMaxDb}, если хоть одна цель дальше verifyTolDb. Сбой разделения/замера — без
 // поправок (в лог).
 func verifyLevels(ctx context.Context, svc yue.Service, child int64, specs []SectionSpec, targets map[int]float64) map[int]float64 {
-	if _, err := svc.MakeStemsWith(ctx, child, "roformer"); err != nil {
+	if _, err := svc.MakeStems(ctx, child); err != nil {
 		log.Printf("сверка #%d — разделение: %v", child, err)
 		return nil
 	}

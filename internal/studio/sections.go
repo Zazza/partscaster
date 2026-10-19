@@ -44,7 +44,7 @@ type SectionSpec struct {
 	// Chain (+ Params) при ChildID 0 — эффект на дорожку: DSP-цепочка
 	// применяется к дорожкам Stems трека в окне [From, To) (To ≤ 0 — до конца);
 	// в трек добавляется разница «обработанная − исходная» дорожка, поэтому
-	// остальное не меняется даже при утечках demucs
+	// остальное не меняется даже при утечках разделения
 	Chain  string             `json:"chain,omitempty"`
 	Params map[string]float64 `json:"params,omitempty"`
 	// Steps при ChildID 0 — вместо Chain цепочка эффектов по порядку (педалборд):
@@ -142,7 +142,7 @@ var drumParts = []string{"kick", "snare", "toms", "hh", "ride", "crash"}
 // engineStems — дорожки, которые меняет цепочка движка: и части барабанов (замена ударов sampler)
 var engineStems = append(append([]string{}, mutable...), drumParts...)
 
-// detailStems — подробные дорожки (6-стемная модель воркера): гитара и клавиши
+// detailStems — подробные дорожки разделения: гитара и клавиши
 // внутри «прочего». Заменять их нельзя (у куска своих нет), но эффект,
 // громкость и глушение — как у основных: в трек идёт «дорожка − исходная»
 var detailStems = []string{"guitar", "piano"}
@@ -957,7 +957,7 @@ func muteInserts(s SectionSpec, parent stemSet, inputs *[]string) []dsp.Insert {
 		}
 		from, dur := insertWindow(s, fadeIn, fadeOut)
 		*inputs = append(*inputs, parent[name])
-		// KeepHighHz > 0 — меняется только низ дорожки: demucs относит к голосу
+		// KeepHighHz > 0 — меняется только низ дорожки: разделение относит к голосу
 		// шумные тарелки, и заглушённая речь уносила их с собой (#258: верх −30 дБ
 		// на месте речи, «дыры»)
 		out = append(out, dsp.Insert{AtSec: from, SkipSec: from, DurSec: dur, Gain: gain,
@@ -967,7 +967,7 @@ func muteInserts(s SectionSpec, parent stemSet, inputs *[]string) []dsp.Insert {
 }
 
 // fetchStems — стемы drums/bass/other джобы; нет — один раз просим воркер
-// разложить трек (demucs, секунды). Без стемов замена невозможна — ошибка.
+// разложить трек (RoFormer, ~1,5 мин). Без стемов замена невозможна — ошибка.
 func fetchStems(ctx context.Context, svc yue.Service, id int64, dir string) (stemSet, error) {
 	get := func() (stemSet, error) {
 		set := stemSet{}
@@ -994,7 +994,7 @@ func fetchStems(ctx context.Context, svc yue.Service, id int64, dir string) (ste
 }
 
 // fetchDetailStems — гитара/клавиши родителя, если их просят записи без
-// куска (эффект, громкость). Стемы, сделанные до 6-стемной модели, их не
+// куска (эффект, громкость). Старые разделения без подробных дорожек их не
 // имеют: один раз просим воркер разложить трек заново. Нет и после — ошибка,
 // а не молчаливый пропуск (эффект «применился», а звук тот же)
 func fetchDetailStems(ctx context.Context, svc yue.Service, id int64, specs []SectionSpec, parent stemSet, dir string) error {
@@ -1031,10 +1031,10 @@ func fetchDetailStems(ctx context.Context, svc yue.Service, id int64, specs []Se
 		return fmt.Errorf("стемы #%d: %w", id, err)
 	}
 	if err := get(); err != nil {
-		hint := "воркер без 6-стемной модели?"
+		hint := "разделение их не дало"
 		for _, n := range need {
-			if slices.Contains(drumParts, n) { // части барабанов — только у RoFormer
-				hint = "части барабанов есть только у разделения RoFormer: настройки → «Разделение на дорожки» или make_stems model=roformer"
+			if slices.Contains(drumParts, n) {
+				hint = "сбой разделения частей барабанов (DrumSep) — повторите make_stems"
 				break
 			}
 		}

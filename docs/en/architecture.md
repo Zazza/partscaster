@@ -16,7 +16,7 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 │  • sound — system player     │                 │  • YuE2 generation — yue2.cpp       │
 │  • ffmpeg effects — locally  │                 │    (yue-server on 127.0.0.1,        │
 │  • sound presets, rebuild    │                 │    started/stopped by the worker)   │
-├──────────────────────────────┤                 │  • SheetSage2, demucs / RoFormer    │
+├──────────────────────────────┤                 │  • SheetSage2, RoFormer stems       │
 │ partscaster-mcp — MCP server │ ──────────────▶ │  • sound engine, NAM, kits          │
 │ stdio, for AI agents         │                 │  • whisper, Seed-VC — separate      │
 └──────────────────────────────┘                 │    environments (optional)          │
@@ -116,7 +116,7 @@ in `worker/`.
 | `engine_cpp.py` | generation engine **yue2.cpp**: models (pinned files and checksums), the recommended model by VRAM, starting and stopping `yue-server`, translating requests, parsing the response and the log; from the command line — `python engine_cpp.py download <model>`, `installed <model>`, `recommend [MiB]` |
 | `sheetsage.py` | SheetSage2: track → ABC score (for the piano roll and overdub) |
 | `abcparse.py`, `plancheck.py`, `arc.py`, `chordgrid.py` | parsing ABC into a timeline; checking an edited plan; dramaturgy (build-up, explosion) on top of the plan; chord grid by bars |
-| `stems.py`, `sep_run.py` | stem separation: demucs in the worker process, or BS-Roformer-SW + DrumSep as a subprocess in a separate environment |
+| `stems.py`, `sep_run.py` | stem separation: BS-Roformer-SW + DrumSep as a subprocess in a separate environment (`sep_run.py download` — weights during installation) |
 | `fx_engine.py`, `fx_nam.py` | sound engine (a chain of blocks on numpy/scipy, without time shift); NAM amplifier |
 | `drumsynth.py`, `kits_install.py` | synthesis of drum machines and synth basses; installing sample kits in advance |
 | `guitarpart.py`, `guitarnotes.py` | a guitarist part from the plan chords, and splitting it into hits for the `gtrnotes` block |
@@ -152,8 +152,8 @@ Consequences:
 ## Generation engine — yue2.cpp
 
 Generation runs on [yue2.cpp](https://github.com/ServeurpersoCom/yue2.cpp) on GGML: the YuE2-3B model in GGUF. The
-former PyTorch engine (package `yue2`) is removed; the torch library stays in the worker — stems, SheetSage2 and NAM
-run on it, while whisper and Seed-VC work in their own environments.
+former PyTorch engine (package `yue2`) is removed; the torch library stays in the worker — SheetSage2 and NAM
+run on it, while stems (RoFormer), whisper and Seed-VC work in their own environments.
 
 | Model | File | VRAM at peak |
 |---|---|---|
@@ -191,7 +191,7 @@ There is one GPU, so one long operation runs (the "slot"); the others wait by th
 - A client operation lives on "alive" heartbeats (`POST /queue/ops/{id}/beat`): if the client is gone for 180 s,
   the operation is "interrupted" and the slot goes to the next one.
 - Cancel: a waiting operation is removed at once; for a running one, external processes (RoFormer, Seed-VC, whisper, yue2.cpp)
-  are stopped, and work inside the worker process (demucs, SheetSage, NAM, plan) finishes the current step;
+  are stopped, and work inside the worker process (SheetSage, NAM, plan) finishes the current step;
   the result is "canceled", and the request gets 409.
 - The pause and client operations are kept in the worker's memory: after a restart the pause is removed, and the client gets
   404 and shows "interrupted".
@@ -205,8 +205,7 @@ There is one GPU, so one long operation runs (the "slot"); the others wait by th
   BF16 ~10 GB, Q8 ~8 GB, low-VRAM mode ~4.5 GB. The worker gets VRAM figures for `/stats` and the error text from
   `nvidia-smi`, not through torch: a CUDA context in its own process would take memory for nothing.
 - SheetSage2 is small (hundreds of MB) and also stays loaded.
-- Separation: demucs (~0.7 GB) loads per call and unloads; RoFormer is a separate process, and its memory
-  is freed when it exits.
+- Separation: RoFormer is a separate process, and its memory is freed when it exits.
 - Sound engine: a NAM capture (tens of MB) loads per call through the queue; the other blocks run on the CPU.
 
 ## Track stems (contract)
@@ -216,22 +215,24 @@ Files `stem-*.flac` in the track directory:
 - **main** — `drums`, `bass`, `other`, `vocals`: together they make the track. They are used for the backing track, inserts,
   rebuild, vocal check (`vocal_leak`);
 - **detailed inside "other"** — `guitar`, `piano`: a refinement of `other`, not part of the sum;
-- **detailed inside "drums"** — `kick`, `snare`, `toms`, `hh`, `ride`, `crash` (DrumSep, only with
-  RoFormer): a refinement of `drums`, not part of the sum.
+- **detailed inside "drums"** — `kick`, `snare`, `toms`, `hh`, `ride`, `crash` (DrumSep): a refinement of
+  `drums`, not part of the sum. A DrumSep failure does not break the main separation — there are just no parts. Tracks
+  separated before the switch to RoFormer (Demucs) have no parts; the studio offers "split in more detail".
 
-The model is the worker setting `stems_model`: `htdemucs` (default, fast) or `roformer`
-(BS-Roformer-SW, cleaner, ~4.5 times slower; one time — `POST /jobs/{id}/stems?model=roformer`). In RoFormer,
-"other" does not include guitar and keys, so the app's `other` = the model's other + guitar + piano, and the remainder
-"track − sum of the main stems" is distributed to the stems by their contribution at each frequency — the sum is exact. If there is no RoFormer environment,
-it crashed, or `PARTSCASTER_STEMS_MODEL=demucs` is set — demucs works (htdemucs + htdemucs_6s), and there are no drum
-parts. Which model ran — the `model` field of the response; in `GET /config` — `stems_pref` (the choice),
-`stems_model` (actually used), `roformer_available`.
+Only BS-Roformer-SW makes the stems (`stems.py` runs `sep_run.py` with the `PARTSCASTER_SEP_PY` interpreter);
+there is no model choice. In RoFormer, "other" does not include guitar and keys, so the app's `other` = the model's
+other + guitar + piano, and the remainder "track − sum of the main stems" is distributed to the stems by their
+contribution at each frequency — the sum is exact. If there is no environment or RoFormer crashed — the error
+«разделение на дорожки не удалось: …» ("stem separation failed"), there is no fallback. The `model` field of the
+response and `stems_model` in `GET /version` are always `bs-roformer-sw`; whether separation is installed —
+`roformer_available` in `GET /config`.
 
 ## Worker on Windows without WSL (`cmd/partscaster-worker`, `internal/workerexe`)
 
 `partscaster-worker.exe` is one program with the worker archive embedded into it when the Windows package is built
 (`//go:embed payload`). The first run installs into the user folder (default
-`%LOCALAPPDATA%\partscaster-worker`) uv, Python 3.12, the environment and packages, unpacks the worker code
+`%LOCALAPPDATA%\partscaster-worker`) uv, Python 3.12, the environment and packages, the stem separation environment
+(`sep-venv`, weights in `sep-models`), unpacks the worker code
 into `app\` and starts uvicorn; after that it starts right away. While the window is open, the worker works: the Python process
 is tied to the program by a Windows job object. The yue2.cpp program is in the worker archive (the Windows package
 is not built without it), the generation model is in `data\yue2cpp-models\`, other weights are in `hf-cache\`,
