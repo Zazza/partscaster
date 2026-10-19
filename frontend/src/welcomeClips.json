@@ -2,70 +2,163 @@
   "steps": [
     {
       "id": "form",
-      "title": { "ru": "Добавить партию", "en": "Add a part" },
+      "title": {
+        "ru": "Форма песни",
+        "en": "Song structure"
+      },
       "pairs": [
         {
-          "id": "guitar",
-          "title": { "ru": "Вступает блюзовая гитара", "en": "The blues guitar comes in" },
-          "before": "01-guitar-before.mp3",
-          "after": "01-guitar-after.mp3",
-          "before_label": { "ru": "только акустика", "en": "acoustic only" },
-          "after_label": { "ru": "с блюзовой гитарой", "en": "with blues guitar" },
-          "dur": 12.02
+          "id": "voice",
+          "title": {
+            "ru": "Появился голос",
+            "en": "The voice appears"
+          },
+          "before": "03-voice-before.mp3",
+          "after": "03-voice-after.mp3",
+          "before_label": {
+            "ru": "без слов",
+            "en": "no words"
+          },
+          "after_label": {
+            "ru": "с голосом",
+            "en": "with voice"
+          },
+          "dur": 15.02
         },
         {
-          "id": "band",
-          "title": { "ru": "Возвращаются барабаны", "en": "The drums come back" },
-          "before": "08-band-before.mp3",
-          "after": "08-band-after.mp3",
-          "before_label": { "ru": "гитара и голос", "en": "guitar and voice" },
-          "after_label": { "ru": "с барабанами и басом", "en": "with drums and bass" },
+          "id": "tired",
+          "title": {
+            "ru": "Усталый финал",
+            "en": "A tired finale"
+          },
+          "before": "08-tired-before.mp3",
+          "after": "08-tired-after.mp3",
+          "before_label": {
+            "ru": "как было",
+            "en": "as it was"
+          },
+          "after_label": {
+            "ru": "затишье и усталый голос",
+            "en": "lull and tired voice"
+          },
+          "dur": 18.02
+        },
+        {
+          "id": "ending",
+          "title": {
+            "ru": "Другой финал",
+            "en": "A different ending"
+          },
+          "before": "08-ending-before.mp3",
+          "after": "08-ending-after.mp3",
+          "before_label": {
+            "ru": "первый финал",
+            "en": "first ending"
+          },
+          "after_label": {
+            "ru": "новый финал",
+            "en": "new ending"
+          },
           "dur": 13.03
         }
       ]
     },
     {
       "id": "fills",
-      "title": { "ru": "Сбивки и провалы", "en": "Fills and drops" },
+      "title": {
+        "ru": "Сбивки и провалы",
+        "en": "Fills and drops"
+      },
       "pairs": [
         {
           "id": "fill",
-          "title": { "ru": "Барабанная сбивка", "en": "Drum fill" },
-          "before": "06-fill-before.mp3",
-          "after": "06-fill-after.mp3",
-          "before_label": { "ru": "без сбивки", "en": "no fill" },
-          "after_label": { "ru": "со сбивкой", "en": "with fill" },
-          "dur": 11.04
+          "title": {
+            "ru": "Барабанная сбивка",
+            "en": "Drum fill"
+          },
+          "before": "03-fill-before.mp3",
+          "after": "03-fill-after.mp3",
+          "before_label": {
+            "ru": "без сбивки",
+            "en": "no fill"
+          },
+          "after_label": {
+            "ru": "со сбивкой",
+            "en": "with fill"
+          },
+          "dur": 12.02
         },
         {
           "id": "drop",
-          "title": { "ru": "Провал перед соло", "en": "A drop before the solo" },
-          "before": "02-drop-before.mp3",
-          "after": "02-drop-after.mp3",
-          "before_label": { "ru": "без провала", "en": "no drop" },
-          "after_label": { "ru": "провал и вход соло", "en": "drop and solo entry" },
-          "dur": 18.02
+          "title": {
+            "ru": "Провал и заход барабанов",
+            "en": "Drop and drums coming back"
+          },
+          "before": "03-drop-before.mp3",
+          "after": "03-drop-after.mp3",
+          "before_label": {
+            "ru": "без провала",
+            "en": "no drop"
+          },
+          "after_label": {
+            "ru": "с провалом",
+            "en": "with drop"
+          },
+          "dur": 25.03
         }
       ]
     },
     {
       "id": "voice",
-      "title": { "ru": "Голос", "en": "Vocals" },
+      "title": {
+        "ru": "Голос",
+        "en": "Vocals"
+      },
       "pairs": [
         {
-          "id": "shout",
-          "title": { "ru": "Случайный выкрик", "en": "A random shout" },
-          "before": "01-shout-before.mp3",
-          "after": "01-shout-after.mp3",
-          "before_label": { "ru": "с выкриком", "en": "with the shout" },
-          "after_label": { "ru": "вырезан", "en": "cut out" },
-          "dur": 6.02
+          "id": "chorus",
+          "title": {
+            "ru": "Последний припев",
+            "en": "The last chorus"
+          },
+          "before": "05-chorus-before.mp3",
+          "after": "05-chorus-after.mp3",
+          "before_label": {
+            "ru": "первый припев",
+            "en": "first chorus"
+          },
+          "after_label": {
+            "ru": "выше, с долгими нотами",
+            "en": "higher, with long notes"
+          },
+          "dur": 15.02
+        },
+        {
+          "id": "higher",
+          "title": {
+            "ru": "Голос выше в последнем припеве",
+            "en": "Higher voice in the last chorus"
+          },
+          "before": "07-voice-before.mp3",
+          "after": "07-voice-after.mp3",
+          "before_label": {
+            "ru": "обычный припев",
+            "en": "regular chorus"
+          },
+          "after_label": {
+            "ru": "последний, выше",
+            "en": "last one, higher"
+          },
+          "dur": 15.02
         }
       ]
     },
     {
       "id": "presets",
-      "title": { "ru": "Пресеты звука", "en": "Sound presets" },
+      "title": {
+        "ru": "Пресеты звука",
+        "en": "Sound presets"
+      },
       "pairs": []
     }
   ]
