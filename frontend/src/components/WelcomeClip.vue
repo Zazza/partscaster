@@ -55,14 +55,15 @@ async function stop() {
 <template>
   <div class="welcome-clip">
     <div class="welcome-clip-title">{{ tr(pair.title) }}</div>
+    <!-- сетка: «Слушать» и два равных сегмента «было | стало» — у всех пар шага столбцы совпадают -->
     <div class="welcome-clip-row">
-      <button class="ghost small-btn" :class="{ stop: playing }" @click="toggle">
+      <button class="ghost small-btn welcome-play" :class="{ stop: playing }" @click="toggle">
         <AppIcon :name="playing ? 'stop' : 'play'" /> {{ playing ? t('welcome.stop') : t('welcome.play') }}</button>
       <div class="welcome-ab" role="group">
         <button class="ghost small-btn" :class="{ on: which === 'before' }" @click="pick('before')">
-          {{ t('welcome.before') }}: {{ tr(pair.before_label) }}</button>
+          <span class="welcome-ab-side">{{ t('welcome.before') }}</span> {{ tr(pair.before_label) }}</button>
         <button class="ghost small-btn" :class="{ on: which === 'after' }" @click="pick('after')">
-          {{ t('welcome.after') }}: {{ tr(pair.after_label) }}</button>
+          <span class="welcome-ab-side">{{ t('welcome.after') }}</span> {{ tr(pair.after_label) }}</button>
       </div>
     </div>
     <p v-if="err" class="muted">{{ err }}</p>
@@ -73,7 +74,13 @@ async function stop() {
 .welcome-clip { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border); }
 .welcome-clip:first-child { border-top: none; }
 .welcome-clip-title { font-weight: 600; }
-.welcome-clip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.welcome-ab { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.welcome-ab .on { color: var(--text); border-color: var(--accent); }
+.welcome-clip-row { display: grid; grid-template-columns: 112px 1fr; align-items: stretch; gap: 8px; }
+.welcome-play { justify-content: center; }
+.welcome-ab { display: grid; grid-template-columns: 1fr 1fr; }
+.welcome-ab button { justify-content: flex-start; text-align: left; white-space: normal; line-height: 1.3; }
+.welcome-ab button:first-child { border-radius: 4px 0 0 4px; }
+.welcome-ab button:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+.welcome-ab .on { color: var(--text); border-color: var(--accent); position: relative; z-index: 1; }
+.welcome-ab-side { color: var(--muted); margin-right: 4px; }
+.welcome-ab .on .welcome-ab-side { color: var(--accent-text); }
 </style>

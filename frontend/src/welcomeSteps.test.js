@@ -2,6 +2,7 @@
 // порядке (ТК1), с какой секунды играть другую версию пары при переключении «было/стало»
 // (ТК2), и проверка данных welcomeClips.json: у шагов и пар есть ru и en (ТК7).
 import { describe, it, expect } from 'vitest'
+import { readdirSync } from 'node:fs'
 import { visibleSteps, switchStart } from './welcomeSteps.js'
 import clips from './welcomeClips.json'
 
@@ -170,6 +171,40 @@ describe('welcomeClips.json: шаг пресетов', () => {
       expect(typeof s.lead, `шаг ${s.id}: lead`).toBe('object')
       expect(typeof s.lead.ru, `шаг ${s.id}: lead.ru`).toBe('string')
       expect(typeof s.lead.en, `шаг ${s.id}: lead.en`).toBe('string')
+    }
+  })
+})
+
+// internal-welcome-polish, условие 1, ТК5: пара пресетов №2 — «Индастриал-метал», клипы рока 70-х убраны
+// и из окна, и из встроенных файлов (каталог internal/welcome/clips).
+describe('welcomeClips.json: пара «Индастриал» вместо рока 70-х (ТК5)', () => {
+  const presets = clips.steps.find((s) => s.id === 'presets')
+  const builtIn = readdirSync(new URL('../../internal/welcome/clips/', import.meta.url))
+
+  it('presets[1] — industrial, клипы presets-industrial-before/after.mp3', () => {
+    const p = presets.pairs[1]
+    expect(p.id).toBe('industrial')
+    expect(p.before).toBe('presets-industrial-before.mp3')
+    expect(p.after).toBe('presets-industrial-after.mp3')
+  })
+
+  it('клипы industrial есть среди встроенных файлов', () => {
+    expect(builtIn).toContain('presets-industrial-before.mp3')
+    expect(builtIn).toContain('presets-industrial-after.mp3')
+  })
+
+  it('файлов presets-70s-* нет ни среди встроенных, ни в данных окна', () => {
+    expect(builtIn.length).toBeGreaterThan(0)
+    expect(builtIn.filter((f) => f.startsWith('presets-70s-'))).toEqual([])
+    const files = clips.steps.flatMap((s) => s.pairs.flatMap((p) => [p.before, p.after]))
+    expect(files.filter((f) => /70s/.test(f))).toEqual([])
+    expect(clips.steps.flatMap((s) => s.pairs.map((p) => p.id)).filter((id) => /70/.test(id))).toEqual([])
+  })
+
+  it('каждый клип окна есть среди встроенных файлов', () => {
+    for (const s of clips.steps) for (const p of s.pairs) {
+      expect(builtIn, `${s.id}/${p.id}`).toContain(p.before)
+      expect(builtIn, `${s.id}/${p.id}`).toContain(p.after)
     }
   })
 })

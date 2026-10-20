@@ -47,7 +47,6 @@ const newTrack = () => emit('new-track', dontShow.value)
         <img class="welcome-logo" src="../assets/logo.png" alt="" width="32" height="32">
         <div class="welcome-tabs">
           <button class="ghost small-btn" :class="{ on: cur === 'about' }" @click="cur = 'about'">{{ t('welcome.tab.about') }}</button>
-          <span class="spacer"></span>
           <button v-if="notes" class="ghost small-btn" :class="{ on: cur === 'news' }" @click="cur = 'news'">
             {{ t('welcome.tab.news') }} · {{ notes.version }}</button>
         </div>
@@ -91,20 +90,21 @@ const newTrack = () => emit('new-track', dontShow.value)
         </ul>
       </div>
 
-      <div v-if="cur === 'about'" class="welcome-steps">
-        <button class="ghost small-btn" :disabled="step === 0" @click="go(step - 1)">{{ t('welcome.prev') }}</button>
-        <span class="welcome-dots">
-          <button v-for="(s, i) in steps" :key="s.id" class="welcome-dot" :class="{ on: i === step }"
-                  :title="t('welcome.step', { n: i + 1 })" :aria-label="t('welcome.step', { n: i + 1 })" @click="go(i)"></button>
-        </span>
-        <button class="ghost small-btn" :style="{ visibility: step < steps.length - 1 ? 'visible' : 'hidden' }"
-                @click="go(step + 1)">{{ t('welcome.next') }}</button>
+      <!-- точки шагов — по центру над нижней строкой; листание — кнопками справа внизу -->
+      <div v-if="cur === 'about'" class="welcome-dots">
+        <button v-for="(s, i) in steps" :key="s.id" class="welcome-dot" :class="{ on: i === step }"
+                :title="t('welcome.step', { n: i + 1 })" :aria-label="t('welcome.step', { n: i + 1 })" @click="go(i)"></button>
       </div>
 
       <div class="modal-actions welcome-actions">
         <label class="muted welcome-dont"><input v-model="dontShow" type="checkbox"> {{ t('welcome.dontShow') }}</label>
         <span class="spacer"></span>
-        <button class="primary" @click="close">{{ t('welcome.ok') }}</button>
+        <template v-if="cur === 'about'">
+          <button v-if="step > 0" class="ghost" @click="go(step - 1)">{{ t('welcome.prev') }}</button>
+          <button v-if="step < steps.length - 1" class="primary" @click="go(step + 1)">{{ t('welcome.next') }}</button>
+          <button v-else class="primary" @click="close">{{ t('welcome.ok') }}</button>
+        </template>
+        <button v-else class="primary" @click="close">{{ t('welcome.ok') }}</button>
       </div>
     </div>
   </div>
@@ -116,22 +116,23 @@ const newTrack = () => emit('new-track', dontShow.value)
    нижним краем на линию текста и торчала вверх; двойной класс сильнее */
 .modal-head.welcome-head { align-items: center; }
 .welcome-logo { width: 32px; height: 32px; flex: none; filter: drop-shadow(0 0 6px var(--lcd-glow)); }
-.welcome-tabs { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.welcome-tabs { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .welcome-tabs .on { color: var(--text); border-color: var(--accent); }
 /* высота тела — одна на все шаги: кнопки шагов не прыгают при листании */
 .welcome-body { overflow-y: auto; min-height: 300px; }
 .welcome-modal h2.welcome-title { margin: 0 0 6px; padding: 0; background: none; border: none; text-shadow: none;
   font-size: 18px; text-transform: none; letter-spacing: 0; color: var(--accent-text); }
-.welcome-lead { margin: 0 0 12px; line-height: 1.5; max-width: 62ch; }
+.welcome-lead { margin: 0 0 12px; line-height: 1.55; }
 .welcome-tight { margin-bottom: 6px; }
 .welcome-agent { margin-top: 12px; }
 .welcome-hint { margin: 0 0 4px; }
 .welcome-news { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
-.welcome-steps { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.welcome-dots { display: inline-flex; gap: 8px; }
+.welcome-dots { display: flex; justify-content: center; gap: 8px; }
 .welcome-dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid var(--border);
   background: transparent; cursor: pointer; }
 .welcome-dot.on { background: var(--accent); border-color: var(--accent); }
-.welcome-actions { align-items: center; }
+.welcome-actions { align-items: center; gap: 8px; margin-top: 0; }
+/* «Назад» (ghost) и «Далее» (primary) — одной высоты и ширины: у классов разные отступы */
+.welcome-actions button { padding: 7px 16px; line-height: 1.25; min-width: 104px; }
 .welcome-dont { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 </style>

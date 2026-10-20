@@ -183,20 +183,20 @@
           "dur": 18.02
         },
         {
-          "id": "rock70s",
+          "id": "industrial",
           "title": {
-            "ru": "Пресет «Классический рок 70-х · с органом»",
-            "en": "Preset “Classic 70s rock · organ”"
+            "ru": "Пресет «Индастриал-метал · машина»",
+            "en": "Preset “Industrial metal · machine”"
           },
-          "before": "presets-70s-before.mp3",
-          "after": "presets-70s-after.mp3",
+          "before": "presets-industrial-before.mp3",
+          "after": "presets-industrial-after.mp3",
           "before_label": {
-            "ru": "гаражный рок как сгенерирован",
-            "en": "garage rock as generated"
+            "ru": "хард-рок как сгенерирован",
+            "en": "hard rock as generated"
           },
           "after_label": {
-            "ru": "живые барабаны, бас по нотам, орган",
-            "en": "live drums, bass by notes, organ"
+            "ru": "драм-машина 909, эйсид-бас, рубленые гитары",
+            "en": "909 drum machine, acid bass, chopped guitars"
           },
           "dur": 18.02
         }
