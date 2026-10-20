@@ -78,6 +78,7 @@ const newTrack = () => emit('new-track', dontShow.value)
 
         <template v-else>
           <h2 class="welcome-title">{{ tr(st.title) }}</h2>
+          <p v-if="tr(st.lead)" class="welcome-lead">{{ tr(st.lead) }}</p>
           <p class="muted welcome-hint">{{ t('welcome.example.hint') }}</p>
           <WelcomeClip v-for="p in st.pairs" :key="p.id" :pair="p" />
         </template>

@@ -138,3 +138,38 @@ describe('welcomeClips.json', () => {
     expect(new Set(all).size).toBe(all.length)
   })
 })
+
+// internal-welcome-presets: шаг «Пресеты звука» — две пары (ТК1) и подпись шага lead ru/en (ТК2).
+// Сверка имён клипов с набором встроенных файлов — в Go-тесте internal/welcome, здесь не дублируется.
+describe('welcomeClips.json: шаг пресетов', () => {
+  const presets = clips.steps.find((s) => s.id === 'presets')
+  const nonEmpty = (v) => typeof v === 'string' && v.trim() !== ''
+
+  it('шаг presets есть и в нём ровно 2 пары', () => {
+    expect(presets, 'шаг presets').toBeDefined()
+    expect(presets.pairs).toHaveLength(2)
+  })
+
+  it('пары presets — разные клипы, «было» и «стало» не совпадают', () => {
+    const files = presets.pairs.flatMap((p) => [p.before, p.after])
+    expect(new Set(files).size).toBe(4)
+  })
+
+  it('шаг presets виден в окне', () => {
+    expect(visibleSteps(clips).map((s) => s.id)).toContain('presets')
+  })
+
+  it('у presets подпись шага lead: ru и en непустые', () => {
+    expect(nonEmpty(presets.lead?.ru), 'lead.ru').toBe(true)
+    expect(nonEmpty(presets.lead?.en), 'lead.en').toBe(true)
+  })
+
+  it('у остальных шагов lead нет либо это объект со строками ru/en', () => {
+    for (const s of clips.steps) {
+      if (s.id === 'presets' || s.lead === undefined || s.lead === null) continue
+      expect(typeof s.lead, `шаг ${s.id}: lead`).toBe('object')
+      expect(typeof s.lead.ru, `шаг ${s.id}: lead.ru`).toBe('string')
+      expect(typeof s.lead.en, `шаг ${s.id}: lead.en`).toBe('string')
+    }
+  })
+})

@@ -159,7 +159,48 @@
         "ru": "Пресеты звука",
         "en": "Sound presets"
       },
-      "pairs": []
+      "lead": {
+        "ru": "Пресет не трогает ноты и голос — меняет звук: барабаны, бас, новые инструменты и обработку. Одна кнопка после генерации.",
+        "en": "A preset keeps the notes and the voice and changes the sound: drums, bass, new instruments and processing. One click after generation."
+      },
+      "pairs": [
+        {
+          "id": "synthwave",
+          "title": {
+            "ru": "Пресет «Синтвейв · ретро»",
+            "en": "Preset “Synthwave · retro”"
+          },
+          "before": "presets-synth-before.mp3",
+          "after": "presets-synth-after.mp3",
+          "before_label": {
+            "ru": "инди-рок как сгенерирован",
+            "en": "indie rock as generated"
+          },
+          "after_label": {
+            "ru": "драм-машина, синт-бас, пэд",
+            "en": "drum machine, synth bass, pad"
+          },
+          "dur": 18.02
+        },
+        {
+          "id": "rock70s",
+          "title": {
+            "ru": "Пресет «Классический рок 70-х · с органом»",
+            "en": "Preset “Classic 70s rock · organ”"
+          },
+          "before": "presets-70s-before.mp3",
+          "after": "presets-70s-after.mp3",
+          "before_label": {
+            "ru": "гаражный рок как сгенерирован",
+            "en": "garage rock as generated"
+          },
+          "after_label": {
+            "ru": "живые барабаны, бас по нотам, орган",
+            "en": "live drums, bass by notes, organ"
+          },
+          "dur": 18.02
+        }
+      ]
     }
   ]
 }

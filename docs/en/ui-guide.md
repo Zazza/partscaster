@@ -727,7 +727,9 @@ after an update (the "What's new · version" tab) — the news of a new version 
 
 - **"What it is"** — a step-by-step introduction ("Back" / "Next", step dots): what the app is and where the name
   comes from, then "before / after" examples from an album made in the app (a "Listen" button and a version
-  switch — while playing, the version changes from the same moment), and the last step — where the model runs, how
+  switch — while playing, the version changes from the same moment) and two sound presets on a piece of a track
+  ("Synthwave · retro", "Classic 70s rock · organ": the notes and the voice stay, the sound changes; the pairs are
+  loudness-matched), and the last step — where the model runs, how
   much video memory it needs, and a "New track" button. The clips are built into the app: no worker needed.
 - **"What's new"** — the list of changes in the current version.
 - **"Don't show on start"** and **"Got it"** — close.
