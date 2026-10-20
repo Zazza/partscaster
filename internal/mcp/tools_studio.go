@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +53,7 @@ func RegisterStudioTools(s *Server) {
 			"fx_engine":  prop("звуковой движок воркера (fx_apply): false — выключить (откат на эффекты ffmpeg)", "boolean"),
 			"cpp_model": prop("модель генерации: bf16 | q8 | q6 | q5 (должна быть скачана — engine_model_install). "+
 				"Тот же сид на другой модели даёт другое исполнение; ноты и продолжения переносятся", "string"),
-			"cpp_low_vram": prop("экономный режим (~4,5 ГБ видеопамяти, песня до ~3,5 мин)", "boolean"),
+			"cpp_low_vram": prop("экономный режим для карт до 10 ГБ: контекст по видеопамяти карты (8 ГБ — песня до ~10 мин с продолжениями)", "boolean"),
 		}),
 		Handler: func(s *Server, args map[string]any) (string, error) {
 			if u := argString(args, "server_url"); u != "" {
@@ -819,6 +820,11 @@ func modelHint(cfg map[string]any) string {
 	if mib, _ := rec["vram_mib"].(float64); mib > 0 { // числа JSON — float64; карта «12 ГБ» сообщает 12282 МиБ
 		card = fmt.Sprintf("карта %.0f ГБ", mib/1024)
 	}
-	return fmt.Sprintf("выбрана %s; рекомендуемая для этой машины (%s) — %s",
+	hint := fmt.Sprintf("выбрана %s; рекомендуемая для этой машины (%s) — %s",
 		name(cfg["cpp_model"], cfg["cpp_low_vram"]), card, name(rec["model"], rec["low_vram"]))
+	// max_song_sec — потолок длины трека вместе с продолжениями; саму песню модель пишет на 3–5 мин
+	if sec, _ := cfg["max_song_sec"].(float64); sec > 0 {
+		hint += fmt.Sprintf("; песня до ~%.0f мин с продолжениями (сама модель пишет 3–5 мин)", math.Round(sec/60))
+	}
+	return hint
 }

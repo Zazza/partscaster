@@ -1,5 +1,5 @@
 // Чистая логика сборки строки стиля и подготовки стиха к отправке.
-import { slotDict, durOptions } from './slotOptions.js'
+import { slotDict } from './slotOptions.js'
 
 // порядок слотов в строке стиля — язык/жанр первыми, продакшн последним
 export const SLOT_ORDER = [
@@ -29,14 +29,14 @@ export function cleanLyrics(text) {
   return text.split('\n').filter(l => !l.trim().startsWith('#')).join('\n')
 }
 
-// «без слов»: вместо стиха — n секций [Instrumental] (n из режима длительности)
-export function instrumentalLyrics(durMode) {
-  const opt = durOptions.find(o => o.id === durMode) || durOptions[0]
-  return Array(Math.max(1, opt.n)).fill('[Instrumental]').join('\n\n')
+// «без слов»: вместо стиха — одна секция [Instrumental]. Длину решает модель планом (3–5 мин),
+// число секций она не слушает (замер 2026-10-20) — выбора длительности нет
+export function instrumentalLyrics() {
+  return '[Instrumental]'
 }
 
-export function effectiveLyrics(lyrics, noLyrics, durMode) {
-  return noLyrics ? instrumentalLyrics(durMode) : cleanLyrics(lyrics)
+export function effectiveLyrics(lyrics, noLyrics) {
+  return noLyrics ? instrumentalLyrics() : cleanLyrics(lyrics)
 }
 
 // «без слов» для слотов стиля: включили — голос стиля → «без голоса» (прежний запоминается в kept),

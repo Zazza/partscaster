@@ -311,7 +311,7 @@ type SubmitParams struct {
 	// драматургия поверх плана: "" | build (нарастание) | wave (волна) |
 	// burst (взрыв: пол-время на входе, breakdown, финал — голос на октаву выше)
 	Arc string `json:"arc,omitempty"`
-	// жёсткий потолок семантических токенов (селектор длительности); 0 = бюджет воркера
+	// жёсткий потолок семантических токенов (из API/MCP, форма не шлёт); 0 = бюджет воркера
 	MaxTokens int64 `json:"max_tokens,omitempty"`
 	// производный трек: родитель и роль (см. Job.ParentID/Role)
 	ParentID int64  `json:"parent_id,omitempty"`

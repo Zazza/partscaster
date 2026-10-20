@@ -18,10 +18,12 @@ if transcription worked (otherwise the studio has a "Create score" button). With
 ## Hardware
 
 - **NVIDIA graphics card only** (the installer checks `nvidia-smi`), from 8 GB of video memory. The generation model
-  takes at peak: BF16 ~10 GB, Q8 ~8 GB, economy mode ~4.5 GB (a song up to ~3.5 minutes).
-- **Track length is limited** by the model budget (16000 tokens, variable `YUE2_MAX_TOKENS`). When memory runs out, the worker
-  says what is to blame: the track length itself (turn on economy mode, choose a smaller model or reduce the duration)
-  or other programs on the graphics card (for example, Stable Diffusion — free the memory).
+  takes at peak: BF16 ~10 GB, Q8 ~8 GB, economy mode sizes memory to the card (~6.5 GB on an 8 GB card, a track with continuations up to ~10 min).
+- **The model decides the song length**: it writes a plan for 3–5 minutes, the length cannot be chosen (the model
+  ignores the number of `[Instrumental]` parts). With continuations a track is limited by the model context: up to
+  ~14.5 min, in economy mode — by the card's video memory (~10 min on 8 GB); `YUE2_MAX_TOKENS` caps it from above.
+  When memory runs out, the worker says what is to blame: the model itself (turn on economy mode or choose a smaller
+  model) or other programs on the graphics card (for example, Stable Diffusion — free the memory).
 
 ## Security
 

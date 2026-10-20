@@ -1,6 +1,6 @@
 // Сборка заявок к воркеру: что воркер должен получить.
 import { describe, it, expect } from 'vitest'
-import { slotOptions, durOptions, durTokens } from './slotOptions.js'
+import { slotOptions } from './slotOptions.js'
 import { planTimeline } from './abcEdit.js'
 import {
   formStyle, newTrackPayload,
@@ -44,7 +44,7 @@ const bodyOf = (abc, voice) => {
 
 // заполненная форма нового трека: всё по умолчанию
 const form = (over = {}) => ({
-  title: 'Gone', lyrics: '[Verse]\nline one', noLyrics: false, durMode: 'auto',
+  title: 'Gone', lyrics: '[Verse]\nline one', noLyrics: false,
   seed: '', cot: 'full', arc: '', abc: '', temperature: '', cfg: '', soundPresetIds: [],
   ...over,
 })
@@ -63,15 +63,10 @@ describe('новый трек: заявка POST /jobs (newTrackPayload)', () =>
     expect(p.lyrics).toContain('[Verse]')
   })
 
-  it('«без слов»: вместо стиха — секции [Instrumental], их число растёт с длительностью', () => {
-    const short = newTrackPayload(form({ noLyrics: true, lyrics: 'не петь', durMode: 'auto' }))
-    expect(short.lyrics).not.toContain('не петь')
-    expect(short.lyrics).toMatch(/\[Instrumental\]/)
-    const long = durOptions[durOptions.length - 1].id
-    const p = newTrackPayload(form({ noLyrics: true, durMode: long }))
-    const n = (s) => (s.match(/\[Instrumental\]/g) || []).length
-    expect(n(p.lyrics)).toBeGreaterThan(n(short.lyrics))
-    expect(p.lyrics.replace(/\[Instrumental\]/g, '').trim()).toBe('')
+  // internal-vram-context ТК7: «без слов» — заглушка ровно из одной секции, стих не уходит
+  it('«без слов»: вместо стиха — ровно «[Instrumental]»', () => {
+    expect(newTrackPayload(form({ noLyrics: true, lyrics: 'не петь' })).lyrics).toBe('[Instrumental]')
+    expect(newTrackPayload(form({ noLyrics: true, lyrics: '' })).lyrics).toBe('[Instrumental]')
   })
 
   it('seed пусто — 0 (воркер выберет случайный); число из поля — числом', () => {
@@ -114,13 +109,12 @@ describe('новый трек: заявка POST /jobs (newTrackPayload)', () =>
     expect(newTrackPayload(form()).arc).toBe('')
   })
 
-  it('max_tokens: «авто» — 0 (бюджет воркера), выбранная длительность — её потолок, неизвестная — 0', () => {
-    expect(newTrackPayload(form({ durMode: 'auto' })).max_tokens).toBe(0)
-    expect(newTrackPayload(form({ durMode: 's1' })).max_tokens).toBe(3000)   // 3000 ≈ 1–2 мин
-    for (const [id, tok] of Object.entries(durTokens)) {
-      expect(newTrackPayload(form({ durMode: id })).max_tokens).toBe(tok)
+  // internal-vram-context ТК7: потолок длины решает воркер (по карте) — форма max_tokens не шлёт вовсе
+  it('поля max_tokens нет: со словами и без', () => {
+    for (const noLyrics of [false, true]) {
+      const p = newTrackPayload(form({ noLyrics }))
+      expect('max_tokens' in p, `noLyrics=${noLyrics}`).toBe(false)
     }
-    expect(newTrackPayload(form({ durMode: 'нет-такого' })).max_tokens).toBe(0)
   })
 
   it('характер «как обычно» не отправляется — воркер решает сам', () => {

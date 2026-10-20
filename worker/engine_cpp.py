@@ -1,8 +1,8 @@
 """Движок генерации — yue2.cpp (GGML): модели, программа, сервер, заявки, разбор ответа, рекомендуемая модель.
 
-Модель YuE2-3B в формате GGUF: BF16 ~10 ГБ видеопамяти, Q8 ~8 ГБ, экономный режим ~4,5 ГБ. Сид между моделями
-НЕ переносится — другое исполнение (как и у старых треков, сделанных прежним движком на PyTorch); ноты
-(semantic) переносятся: продолжение и пересчёт идут по ним.
+Модель YuE2-3B в формате GGUF: BF16 ~10 ГБ видеопамяти, Q8 ~8 ГБ; экономный режим урезает контекст под карту.
+Сид между моделями НЕ переносится — другое исполнение (как и у старых треков, сделанных прежним движком на
+PyTorch); ноты (semantic) переносятся: продолжение и пересчёт идут по ним.
 
 Сервер yue2.cpp (yue-server) запускает и гасит сам воркер — только 127.0.0.1, свободный порт. Без torch: модуль
 грузится и там, где модели нет (тесты, установка). Из командной строки:
@@ -78,10 +78,39 @@ def gpu_vram_mib() -> int:
 
 FPS = 25                # семантических шагов на секунду звука
 LATENT_DIM = 64
-LOW_VRAM_SEQ = 8192     # экономный режим: контекст модели (КЭШ — главный расход памяти после весов)
-# потолок песни в экономном режиме: контекст минус подсказка с планом (у «Gone» 2635 шагов) с запасом — ~3,6 мин;
-# сервер резервирует бюджет заранее, больший запрос он отклоняет целиком
-LOW_VRAM_BUDGET = 5400
+# Видеопамять yue2.cpp = база модели + кэш под контекст (--max-seq): кэш выделяется при старте сервера целиком,
+# 0,21875 МиБ на шаг, от длины песни почти не зависит (+~160 МиБ на 4 мин против 2). Замер 2026-10-20, RTX 4070 Ti S,
+# пик минус фон: Q8 — 8192 → 4447 МиБ, 16384 → 6239, 24576 → 8031; BF16 — 8192 → 6441, 24576 → 10025.
+MODEL_CONTEXT = 24576   # контекст модели: без --max-seq сервер берёт его (стиль + текст + план + песня)
+KV_MIB_PER_STEP = 0.21875
+# база — всё, кроме кэша; Q6/Q5 не замерены (их пик ~7,7 против 8,0 у Q8) — считаются как Q8, с запасом
+MODEL_BASE_MIB = {"bf16": 4650, "q8": 2660, "q6": 2660, "q5": 2660}
+# запас на систему/рабочий стол, VAE длинной песни и разброс драйверов
+VRAM_MARGIN_MIB = 1536
+ECONOMY_MIN_SEQ = 8192  # меньше — песня с планом не помещается; и неизвестная карта получает его
+# запас контекста под стиль, текст и план (у «Gone» 2635 шагов): потолок песни = контекст − запас.
+# Сервер резервирует потолок заранее и больший запрос отклоняет целиком (повтор по остатку — fit_budget)
+PREFIX_RESERVE = 2792
+
+
+def economy_seq(model: str, vram_mib: int) -> int:
+    """Контекст экономного режима под карту: всё, что остаётся после модели и запаса, — под кэш песни.
+    Вниз до кратного 256, не меньше ECONOMY_MIN_SEQ (и при неизвестной видеопамяти), не больше MODEL_CONTEXT."""
+    if vram_mib <= 0:
+        return ECONOMY_MIN_SEQ
+    base = MODEL_BASE_MIB.get(model, MODEL_BASE_MIB["bf16"])
+    seq = int((vram_mib - base - VRAM_MARGIN_MIB) / KV_MIB_PER_STEP) // 256 * 256
+    return max(ECONOMY_MIN_SEQ, min(seq, MODEL_CONTEXT))
+
+
+def context_seq(model: str, low_vram: bool, vram_mib: int) -> int:
+    """Контекст сервера: экономный — под карту, иначе полный контекст модели."""
+    return economy_seq(model, vram_mib) if low_vram else MODEL_CONTEXT
+
+
+def song_ceiling(seq: int) -> int:
+    """Потолок шагов песни при контексте seq."""
+    return seq - PREFIX_RESERVE
 DEFAULT_CFG = 1.5
 WAV_FORMAT = "wav24"    # форматы yue-server: mp3 | wav16 | wav24 | wav32
 BOUNDARY = b"--yue2-batch-boundary"
@@ -290,23 +319,23 @@ def _base(style: str, lyrics: str, cot: str, seed: int, cfg: float, budget: int,
     }
 
 
-def cap_budget(budget: int, low_vram: bool) -> int:
-    """Потолок шагов, который реально уйдёт серверу: в экономном режиме не больше LOW_VRAM_BUDGET."""
-    return min(budget, LOW_VRAM_BUDGET) if low_vram else budget
+def cap_budget(budget: int, ceiling: int) -> int:
+    """Потолок шагов, который реально уйдёт серверу: не больше потолка песни при его контексте."""
+    return min(budget, ceiling)
 
 
-def build_request(row, budget: int, low_vram: bool, abc: str | None = None, *, style: str | None = None,
+def build_request(row, budget: int, ceiling: int, abc: str | None = None, *, style: str | None = None,
                   seed: int | None = None, cfg_default: float = DEFAULT_CFG) -> dict:
     """Заявка трека: стиль/текст/режим плана строки, свой план (req_abc или драматургия), сид, характер, потолок."""
     body = _base(style if style is not None else row["style"], row["lyrics"], row["cot"],
                  seed if seed is not None else (row["seed"] or 0), row["cfg"] or cfg_default,
-                 cap_budget(int(budget), low_vram), row["temperature"])
+                 cap_budget(int(budget), ceiling), row["temperature"])
     if abc:
         body["abc"] = abc
     return body
 
 
-def continue_request(row, parent_dir: Path, cont_from: float, budget: int, low_vram: bool,
+def continue_request(row, parent_dir: Path, cont_from: float, budget: int, ceiling: int,
                      abc: str | None = None, *, style: str | None = None, cfg_default: float = DEFAULT_CFG) -> dict:
     """Продолжение с отметки: ноты родителя до отметки подаются как сыгранные, дальше модель пишет сама (новый сид,
     новый план или план родителя). Родитель может быть и старым треком прежнего движка: нужны только semantic.npy
@@ -320,7 +349,7 @@ def continue_request(row, parent_dir: Path, cont_from: float, budget: int, low_v
     # бюджет считает и сыгранное; не меньше 200 новых шагов
     total = max(int(budget), k + 200)
     body = _base(style if style is not None else row["style"], row["lyrics"], row["cot"], row["seed"] or 0,
-                 row["cfg"] or cfg_default, cap_budget(total, low_vram), row["temperature"])
+                 row["cfg"] or cfg_default, cap_budget(total, ceiling), row["temperature"])
     body["source_tokens"] = ",".join(map(str, tokens))
     body["source_start"] = 0.0
     body["source_end"] = k / FPS
@@ -410,7 +439,7 @@ class CppOOM(RuntimeError):
 class CppContextOverflow(RuntimeError):
     """Запрос не помещается в контекст сервера: «prefix N + budget M + end exceeds context C» — сервер резервирует
     весь бюджет заранее и отклоняет заявку целиком. Числа — из журнала: по ним воркер повторяет с меньшим
-    бюджетом (длину песни задаёт число секций, бюджет — только потолок)."""
+    бюджетом (длину песни решает модель планом, бюджет — только потолок)."""
 
     def __init__(self, prefix: int, budget: int, context: int):
         super().__init__(f"prefix {prefix} + budget {budget} + end exceeds context {context}")
@@ -481,12 +510,12 @@ class _LogRouter:
 
 
 class CppServer:
-    """Процесс yue-server: старт с моделью/VAE/режимом, заявки, отмена, декод латентов."""
+    """Процесс yue-server: старт с моделью/VAE/контекстом, заявки, отмена, декод латентов."""
 
-    def __init__(self, binary, model_path, vae_path, low_vram: bool, lib_dirs: list[str] | None = None,
+    def __init__(self, binary, model_path, vae_path, max_seq: int, lib_dirs: list[str] | None = None,
                  log_path: Path | None = None):
         self.binary, self.model_path, self.vae_path = Path(binary), Path(model_path), Path(vae_path)
-        self.low_vram = bool(low_vram)
+        self.max_seq = int(max_seq)
         self.lib_dirs = list(lib_dirs if lib_dirs is not None else cuda_lib_dirs())
         self.log_path = Path(log_path) if log_path else models_dir() / "yue-server.log"
         self.proc: subprocess.Popen | None = None
@@ -501,8 +530,13 @@ class CppServer:
     def running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
+    @property
+    def low_vram(self) -> bool:
+        """Контекст урезан (экономный режим)."""
+        return self.max_seq < MODEL_CONTEXT
+
     def key(self) -> tuple:
-        return (str(self.binary), str(self.model_path), self.low_vram)
+        return (str(self.binary), str(self.model_path), self.max_seq)
 
     def start(self, timeout: float = 120) -> None:
         if self.running:
@@ -511,7 +545,7 @@ class CppServer:
         cmd = [str(self.binary), "--host", "127.0.0.1", "--port", str(self.port),
                "--model", str(self.model_path), "--vae", str(self.vae_path)]
         if self.low_vram:
-            cmd += ["--max-seq", str(LOW_VRAM_SEQ)]
+            cmd += ["--max-seq", str(self.max_seq)]
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, "wb")
         # отдельная группа/сессия: на Windows start_new_session запрещён — эквивалент через creationflags

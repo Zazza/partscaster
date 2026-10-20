@@ -12,7 +12,8 @@ M4. find_binary(): $PARTSCASTER_CPP_BIN → <каталог воркера>/yue2
     build/yue-server; нет — None. cuda_lib_dirs(): каталоги lib пакетов nvidia из venv.
     На Windows имена с .exe, cuda_lib_dirs — torch/lib и nvidia <pkg>/bin, каталоги добавляются
     в PATH (LD_LIBRARY_PATH на Windows нет).
-M5. CppServer: запуск только на 127.0.0.1 с --model/--vae; экономный режим → --max-seq 8192;
+M5. CppServer(binary, model, vae, max_seq): запуск только на 127.0.0.1 с --model/--vae; контекст меньше
+    контекста модели → --max-seq N, полный — без флага;
     lib_dirs идут в LD_LIBRARY_PATH (Windows: в PATH); stop() останавливает процесс; synth() —
     POST /synth, опрос /job, результат multipart; отмена → POST /job?cancel=1 и InterruptedError;
     failed → RuntimeError с хвостом журнала; строки журнала уходят в on_log.
@@ -59,6 +60,8 @@ VAE_FILE = "YuE2-Vae-F32.gguf"
 LATENT_T = 10          # кадров латентов в ответе фейка
 WAV_SR = 48000
 WAV_FRAMES = WAV_SR // 2
+FULL_CEILING = 21784     # потолок песни при полном контексте 24576 (24576 − 2792)
+ECONOMY_CEILING = 5400   # потолок при контексте 8192
 DEFAULT_ABC = "X:1\nT:fake\nM:4/4\nL:1/8\nK:C\nV:Vocal\nCDEF GABc|\n"
 
 
@@ -763,8 +766,8 @@ class _ServerCase(_EnvCase):
         self.model.write_bytes(model_bytes("q8"))
         self.vae.write_bytes(VAE_BYTES)
 
-    def _server(self, low_vram=False, lib_dirs=()):
-        s = self.e.CppServer(self.bin, self.model, self.vae, low_vram, list(lib_dirs))
+    def _server(self, max_seq=None, lib_dirs=()):
+        s = self.e.CppServer(self.bin, self.model, self.vae, max_seq or self.e.MODEL_CONTEXT, list(lib_dirs))
         self.addCleanup(s.stop)
         return s
 
@@ -788,10 +791,10 @@ class TestCppServerProcess(_ServerCase):
         self.assertEqual(Path(opt_value(argv, "--vae")), self.vae)
         self.assertEqual(opt_value(argv, "--host"), "127.0.0.1")
         self.assertTrue(str(s.url).startswith("http://127.0.0.1:"), s.url)
-        self.assertNotEqual(opt_value(argv, "--max-seq"), "8192", "без экономного режима — без потолка 8192")
+        self.assertIsNone(opt_value(argv, "--max-seq"), "полный контекст модели — без --max-seq")
 
     def test_low_vram_max_seq(self):
-        s = self._server(low_vram=True)
+        s = self._server(max_seq=8192)
         s.start()
         self.assertEqual(opt_value(fake_starts(self.fake_dir)[0]["argv"], "--max-seq"), "8192")
 
@@ -819,7 +822,7 @@ class TestCppServerProcess(_ServerCase):
         b2 = make_fake_server(other)
         self.addCleanup(kill_fakes, other)
         s1 = self._server()
-        s2 = self.e.CppServer(b2, self.model, self.vae, False, [])
+        s2 = self.e.CppServer(b2, self.model, self.vae, self.e.MODEL_CONTEXT, [])
         self.addCleanup(s2.stop)
         s1.start()
         s2.start()
@@ -893,7 +896,7 @@ class TestCppServerSynth(_ServerCase):
 class TestBuildRequest(_EnvCase):
 
     def test_track_fields(self):
-        req = self.e.build_request(job_row(), 3000, False)
+        req = self.e.build_request(job_row(), 3000, FULL_CEILING)
         self.assertEqual(req["style"], "dark rock, male baritone")
         self.assertEqual(req["lyrics"], "[verse] la la")
         self.assertEqual(req["cot"], "full")
@@ -908,22 +911,21 @@ class TestBuildRequest(_EnvCase):
         json.dumps(req)   # уходит в POST /synth как JSON
 
     def test_abc_passed(self):
-        req = self.e.build_request(job_row(req_abc="request.abc"), 3000, False, abc=DEFAULT_ABC)
+        req = self.e.build_request(job_row(req_abc="request.abc"), 3000, FULL_CEILING, abc=DEFAULT_ABC)
         self.assertEqual(req["abc"], DEFAULT_ABC)
 
     def test_draft_budget(self):
-        req = self.e.build_request(job_row(draft=1), 450, False)
+        req = self.e.build_request(job_row(draft=1), 450, FULL_CEILING)
         self.assertEqual(_sampling(req)["max_tokens"], 450)
 
     def test_low_vram_caps_budget(self):
-        full = self.e.build_request(job_row(), 16000, False)
-        low = self.e.build_request(job_row(), 16000, True)
+        full = self.e.build_request(job_row(), 16000, FULL_CEILING)
+        low = self.e.build_request(job_row(), 16000, ECONOMY_CEILING)
         self.assertEqual(_sampling(full)["max_tokens"], 16000)
-        self.assertLess(_sampling(low)["max_tokens"], 8192, "экономный режим: контекст 8192 — бюджет меньше")
-        self.assertLess(_sampling(low)["max_tokens"], 16000)
+        self.assertEqual(_sampling(low)["max_tokens"], ECONOMY_CEILING, "контекст 8192 — потолок 5400")
 
     def test_low_vram_small_budget_kept(self):
-        low = self.e.build_request(job_row(draft=1), 450, True)
+        low = self.e.build_request(job_row(draft=1), 450, ECONOMY_CEILING)
         self.assertEqual(_sampling(low)["max_tokens"], 450)
 
 
@@ -945,7 +947,7 @@ class TestContinueRequest(_EnvCase):
     def test_from_mark_uses_parent_tokens_and_score(self):
         d = self._parent()
         row = job_row(id=6, parent_id=3, role="continue", cont_from=60.0, seed=77)
-        req = self.e.continue_request(row, d, 60.0, 3000, False)
+        req = self.e.continue_request(row, d, 60.0, 3000, FULL_CEILING)
         self.assertEqual(_tokens(req["source_tokens"]), self.sem)
         self.assertEqual(req["source_start"], 0)
         self.assertAlmostEqual(float(req["source_end"]), 60.0)
@@ -958,7 +960,7 @@ class TestContinueRequest(_EnvCase):
         d = self._parent()
         new = DEFAULT_ABC.replace("CDEF", "EFGA")
         row = job_row(id=6, parent_id=3, role="continue", cont_from=60.0, req_abc="request.abc")
-        req = self.e.continue_request(row, d, 60.0, 3000, False, abc=new)
+        req = self.e.continue_request(row, d, 60.0, 3000, FULL_CEILING, abc=new)
         self.assertEqual(req["abc"], new)
 
     def test_torch_parent_without_plan_json(self):
@@ -966,15 +968,15 @@ class TestContinueRequest(_EnvCase):
         d = self._parent(plan_json=False)
         self.assertFalse((d / "plan.json").exists())
         req = self.e.continue_request(job_row(parent_id=3, role="continue", cont_from=30.0),
-                                      d, 30.0, 3000, False)
+                                      d, 30.0, 3000, FULL_CEILING)
         self.assertEqual(_tokens(req["source_tokens"]), self.sem)
         self.assertAlmostEqual(float(req["source_end"]), 30.0)
 
     def test_low_vram_caps(self):
         d = self._parent()
         req = self.e.continue_request(job_row(parent_id=3, role="continue", cont_from=60.0),
-                                      d, 60.0, 16000, True)
-        self.assertLess(_sampling(req)["max_tokens"], 8192)
+                                      d, 60.0, 16000, ECONOMY_CEILING)
+        self.assertEqual(_sampling(req)["max_tokens"], ECONOMY_CEILING)
 
 
 class TestPlanRequest(_EnvCase):
@@ -1086,7 +1088,7 @@ class TestContextOverflow(_EnvCase):
     def _fail_with_log(self, text: str):
         logf = self.tmp / "yue-server.log"
         logf.write_text(text, encoding="utf-8")
-        srv = self.e.CppServer(self.tmp / "bin", self.tmp / "m.gguf", self.tmp / "v.gguf", False, log_path=logf)
+        srv = self.e.CppServer(self.tmp / "bin", self.tmp / "m.gguf", self.tmp / "v.gguf", 8192, log_path=logf)
         return srv._fail(False)
 
     def test_fail_parses_numbers(self):

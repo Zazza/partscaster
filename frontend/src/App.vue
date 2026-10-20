@@ -5,7 +5,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { api } from './api.js'
 import { rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
-import { slotKeys, slotHints, slotHintsEn, durOptions } from './slotOptions.js'
+import { slotKeys, slotHints, slotHintsEn } from './slotOptions.js'
 import { CHARACTER, characterPayload, characterLabel } from './character.js'
 import { useI18n } from './i18n/index.js'
 import { voiceDescriptor, normalizeVoiceParams } from './voiceLab.js'
@@ -139,9 +139,6 @@ function applyInstrumental(on) {
   keptVocals = r.kept
 }
 watch(noLyrics, applyInstrumental)
-// длительность инструментала: длина трека у YuE2 задаётся числом секций в тексте,
-// явного параметра нет; диапазон размножает [Instrumental]-секции
-const durMode = ref('auto')
 const title = ref('')
 const submitting = ref(false)
 
@@ -179,7 +176,7 @@ function finalStyle() { return sentStyle.value }
 
 function payload(extra = {}) {
   return newTrackPayload({
-    title: title.value, lyrics: lyrics.value, noLyrics: noLyrics.value, durMode: durMode.value,
+    title: title.value, lyrics: lyrics.value, noLyrics: noLyrics.value,
     seed: seed.value, cot: cot.value, arc: arcKind.value, abc: customAbc.value,
     temperature: temperature.value, cfg: cfgScale.value, soundPresetIds: soundPresetIds.value,
   }, extra)
@@ -946,9 +943,6 @@ function onWindowClick(e) {
         <PageBox :title="'3 · ' + t('nt.step.lyrics')" :hint="t('form.lyrics')">
           <template #tools>
               <button class="toggle small-btn" :class="{ on: noLyrics }" :title="t('form.nowords.tip')" @click="noLyrics = !noLyrics">{{ t('form.nowords') }}</button>
-              <select v-if="noLyrics" v-model="durMode" class="dur-select" :title="t('form.dur.tip')">
-                <option v-for="o in durOptions" :key="o.id" :value="o.id">{{ t('dur.' + o.id) }}</option>
-              </select>
           </template>
             <!-- теги секций: вставка в место курсора; без тегов YuE2 расставит части сама -->
             <div v-if="!noLyrics" class="lyrics-tags">
@@ -1624,7 +1618,6 @@ textarea { width: 100%; resize: vertical; font-family: inherit; }
 
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 6px; font-size: 12px; }
 .lyrics-tools { display: flex; gap: 6px; align-items: center; }
-.lyrics-tools .dur-select { max-width: 110px; font-size: 12px; }
 .lyrics-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0 0 4px; }
 .lyrics-tags-hint { font-size: 11px; }
 button.toggle { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 400; font-size: 12px; padding: 3px 10px; }

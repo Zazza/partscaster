@@ -44,6 +44,16 @@ test('ключи ru и en совпадают', () => {
   expect([...en].filter((k) => !ru.has(k)), 'нет в ru').toEqual([])
 })
 
+// internal-vram-context ТК6: выбор длительности в форме нового трека убран целиком — его подписей и
+// подсказок нет ни в ru, ни в en (фильтр очереди 'queue.filter.dur.*' — другой ключ, не про форму)
+test('ключей выбора длительности нет в ru и en', () => {
+  const gone = ['dur.auto', 'dur.s1', 'dur.s2', 'dur.s3', 'dur.s4', 'form.dur.tip', 'form.duration', 'form.duration.tip']
+  expect(gone.filter((k) => k in RU), 'есть в ru').toEqual([])
+  expect(gone.filter((k) => k in EN), 'есть в en').toEqual([])
+  expect(Object.keys(RU).filter((k) => k.startsWith('dur.')), 'dur.* в ru').toEqual([])
+  expect(Object.keys(EN).filter((k) => k.startsWith('dur.')), 'dur.* в en').toEqual([])
+})
+
 test('плейсхолдеры {name} одинаковы в ru и en', () => {
   for (const [key, ru] of Object.entries(RU)) {
     if (!(key in EN)) continue

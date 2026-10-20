@@ -64,10 +64,10 @@ for d in (JOBS_DIR, REFS_DIR, TRANSCRIBES_DIR, VOICES_DIR):
 
 WHISPER_PY = Path(os.environ.get("PARTSCASTER_WHISPER_PY", Path.home() / "whisper-venv" / "bin" / "python"))
 
-# Бюджет семантических токенов на песню (дефолт протокола 9000 ≈ 4.5–6 мин;
-# контекст модели 24576 общий: стиль+лирика+план+песня). 16000 ≈ до ~10 мин,
-# пик VRAM растёт с длиной — для 16 ГБ больше не поднимать.
-MAX_SEM_TOKENS = int(os.environ.get("YUE2_MAX_TOKENS", "16000"))
+# Потолок семантических токенов на песню (25 на секунду): контекст модели 24576 общий — стиль, текст, план и песня;
+# под песню — всё, кроме запаса под подсказку (21784 ≈ 14,5 мин). Видеопамять от потолка не зависит: кэш выделяется
+# под контекст сервера (engine_cpp.economy_seq). YUE2_MAX_TOKENS — свой предел ниже, если нужен.
+MAX_SEM_TOKENS = int(os.environ.get("YUE2_MAX_TOKENS") or engine_cpp.song_ceiling(engine_cpp.MODEL_CONTEXT))
 # cfg_scale (classifier-free guidance): выше — точнее следует стилю, но суше;
 # 1.5 — сбалансированное среднее. 0/отсутствие — дефолт библиотеки.
 CFG_SCALE = float(os.environ.get("YUE2_CFG_SCALE", "1.5"))
@@ -512,21 +512,21 @@ def _get_cpp() -> "engine_cpp.CppServer":
     """Сервер yue2.cpp с моделью и режимом из настроек (вызывать под _pipe_lock); смена модели/режима — новый
     процесс к этой генерации."""
     global _cpp
-    name, low = cpp_model_pref(), cpp_low_vram_pref()
+    name = cpp_model_pref()
     binary = engine_cpp.find_binary()
     if binary is None:
         raise RuntimeError("yue2.cpp не установлен — переустановите воркер (install.sh или partscaster-worker)")
     if not engine_cpp.model_installed(name):
         raise RuntimeError(f"модель yue2.cpp {name} не скачана — скачайте её в настройках")
     d = engine_cpp.models_dir()
-    srv = engine_cpp.CppServer(binary, d / engine_cpp.MODELS[name]["file"], d / engine_cpp.VAE["file"], low,
-                               log_path=DATA_DIR / "yue2cpp-server.log")
+    srv = engine_cpp.CppServer(binary, d / engine_cpp.MODELS[name]["file"], d / engine_cpp.VAE["file"],
+                               current_context(), log_path=DATA_DIR / "yue2cpp-server.log")
     if _cpp is not None and (not _cpp.running or _cpp.key() != srv.key()):
         _stop_cpp()
     if _cpp is None:
         srv.start()
         _cpp = srv
-        log.info("yue2.cpp started: %s%s", engine_cpp.MODELS[name]["file"], " (economy)" if low else "")
+        log.info("yue2.cpp started: %s, context %d", engine_cpp.MODELS[name]["file"], srv.max_seq)
     return _cpp
 
 
@@ -569,30 +569,33 @@ class _CppSong:
 def _cpp_render(cpp, row, request: dict, job_dir: Path, budget: int, counters: dict, cancel_ev) -> _CppSong:
     """Трек или продолжение на yue2.cpp: стиль с припиской, план, сид, характер исполнения."""
     low = cpp.low_vram
+    ceiling = min(MAX_SEM_TOKENS, engine_cpp.song_ceiling(cpp.max_seq))
 
     def build(b: int) -> dict:
         if row["role"] == "continue" or (row["role"] == "fragment" and row["cont_from"]):
-            return engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], b, low,
+            return engine_cpp.continue_request(row, JOBS_DIR / str(row["parent_id"]), row["cont_from"], b, ceiling,
                                                request.get("abc"), style=request["style"], cfg_default=CFG_SCALE)
-        return engine_cpp.build_request(row, b, low, request.get("abc"), style=request["style"],
+        return engine_cpp.build_request(row, b, ceiling, request.get("abc"), style=request["style"],
                                         seed=row["seed"] or LIB_DEFAULT_SEED, cfg_default=CFG_SCALE)
 
     body = build(budget)
     try:
         parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
     except engine_cpp.CppContextOverflow as e:
-        # бюджет — потолок, а не длина (длину задаёт число секций), но сервер резервирует его целиком:
+        # бюджет — потолок, а не длина (длину решает модель планом), но сервер резервирует его целиком:
         # не влезло с потолком — один повтор с бюджетом по остатку контекста
         fit = engine_cpp.fit_budget(e, budget)
         if fit is None:
-            raise RuntimeError("экономный режим yue2.cpp: песня не помещается в память модели — сократите текст "
-                               "или план, уменьшите длину, либо выключите экономный режим в настройках") from e
+            if low:
+                raise RuntimeError("экономный режим yue2.cpp: песня не помещается в память модели — сократите текст "
+                                   "или план либо выключите экономный режим в настройках") from e
+            raise RuntimeError("yue2.cpp: песня не помещается в память модели — сократите текст или план") from e
         log.info("job %s: бюджет %d → %d под контекст yue2.cpp (префикс %d)", row["id"], budget, fit, e.prefix)
         budget = fit
         counters["budget"] = fit
         body = build(fit)
         parts = cpp.synth(body, cancelled=cancel_ev.is_set, on_log=_cpp_log_cb(counters))
-    meta = {"model": cpp.model_path.name, "engine": _cpp_label(cpp), "low_vram": low,
+    meta = {"model": cpp.model_path.name, "engine": _cpp_label(cpp), "low_vram": low, "context": cpp.max_seq,
             "request": {k: v for k, v in body.items() if k != "source_tokens"}}
     # обрезан — модель упёрлась в потолок шагов, не закончив песню сама: ответ yue2.cpp этого факта не несёт,
     # а шагов в нём вся песня (у продолжения — с сыгранными до отметки, как и потолок). #792 (черновик): 450 из 450
@@ -610,9 +613,6 @@ def _cpp_plan(cpp, style: str, lyrics: str, cot: str, seed: int) -> str:
 
 # минимум бюджета полной генерации: с 2500 модель обрывала трек до финала (#1029–#1031 — без аутро)
 MIN_FULL_TOKENS = 6000
-# заглушка «без слов»: шагов на секцию [Instrumental] и запас на вступление и финал
-INSTR_SECTION_TOKENS = 1200
-INSTR_EXTRA_TOKENS = 800
 # авторетрай обрезанного трека: во столько раз больше бюджет (не выше MAX_SEM_TOKENS)
 RETRY_BUDGET_FACTOR = 1.6
 
@@ -637,20 +637,16 @@ def is_instrumental_job(style: str, lyrics: str) -> bool:
 
 
 def job_budget(draft: bool, max_tokens: int, role: "str | None", lyrics: str = "") -> int:
-    """Бюджет семантических токенов джобы — потолок, а не длина: длину трека задаёт число секций.
+    """Бюджет семантических токенов джобы — потолок, а не длина: длину трека решает модель планом (3–5 мин;
+    число секций [Instrumental] она не слушает — замер 2026-10-20, поэтому у «без слов» бюджет как у песни).
     Превью — ~18 с (450). Кусок — ровно до конца окна + хвост (минимум 200 новых шагов держит
     engine_cpp.continue_request). Полная генерация — не меньше MIN_FULL_TOKENS: ниже модель обрывает трек до
-    финала; заглушка «без слов» — по числу секций, max_tokens не учитывается. Всё — с потолком
-    MAX_SEM_TOKENS: кэш модели выделяется под весь бюджет заранее (в экономном режиме потолок ниже —
-    engine_cpp.LOW_VRAM_BUDGET)."""
+    финала. Всё — с потолком MAX_SEM_TOKENS (при урезанном контексте серверу уйдёт меньше — потолок контекста)."""
     if draft:
         return 450
     if role == "fragment":
         return max(200, min(int(max_tokens), MAX_SEM_TOKENS, 30000)) if max_tokens else MAX_SEM_TOKENS
-    if (n := instrumental_sections(lyrics)):
-        budget = n * INSTR_SECTION_TOKENS + INSTR_EXTRA_TOKENS
-    else:
-        budget = min(int(max_tokens), 30000) if max_tokens else MAX_SEM_TOKENS
+    budget = min(int(max_tokens), 30000) if max_tokens else MAX_SEM_TOKENS
     return min(max(MIN_FULL_TOKENS, budget), MAX_SEM_TOKENS)
 
 
@@ -718,8 +714,8 @@ def friendly_error(e: BaseException) -> str:
     # (карта свободна по nvidia-smi — так бывает в WSL без работающей модели) не доказывает вину
     if holders and all(pid in own for pid, _ in holders):
         return (f"Не хватило видеопамяти самому воркеру{mem}: модель и бюджет длины трека "
-                "не поместились. Включите экономный режим или выберите модель поменьше в настройках, "
-                "либо уменьшите длительность в форме нового трека, и нажмите «повторить».")
+                "не поместились. Включите экономный режим или выберите модель поменьше в настройках "
+                "и нажмите «повторить».")
     return (f"GPU занят: не хватило видеопамяти{mem}. Освободите память от других программ "
             "(модель в Ollama, Stable Diffusion и т. п.) и нажмите «повторить».")
 
@@ -752,13 +748,13 @@ def _run_job(job_id: int):
         while True:
             row = _job_row(job_id)   # сид мог смениться авторетраем
             can_retry = _auto_retry_ok(row)
-            # повтор — только если серверу реально уйдёт потолок больше: в экономном режиме он урезан
-            # (engine_cpp.LOW_VRAM_BUDGET), и повтор с тем же потолком и сидом обрезался бы так же
-            low = cpp_low_vram_pref()
+            # повтор — только если серверу реально уйдёт потолок больше: при урезанном контексте он ниже,
+            # и повтор с тем же потолком и сидом обрезался бы так же
+            ceiling = song_ceiling_now()
             res = _render_attempt(job_id, row, job_dir, budget, cancel_ev,
                                   retry_truncated=can_retry and "truncated" not in retried
-                                  and engine_cpp.cap_budget(retry_budget(budget), low)
-                                  > engine_cpp.cap_budget(budget, low))
+                                  and engine_cpp.cap_budget(retry_budget(budget), ceiling)
+                                  > engine_cpp.cap_budget(budget, ceiling))
             if res is None:
                 return   # отмена или ошибка — итог уже в строке
             if res == "retry":
@@ -1197,8 +1193,8 @@ class JobIn(BaseModel):
     style: str
     lyrics: str
     seed: int | None = None
-    # жёсткий потолок семантических токенов (~25 т/с): селектор длительности
-    # формы; 0 = бюджет воркера. Модель может закончить раньше, но не позже
+    # жёсткий потолок семантических токенов (~25 т/с) из API/MCP; форма его не шлёт;
+    # 0 = бюджет воркера. Модель может закончить раньше, но не позже
     max_tokens: int = 0
     cot: str = Field(default="full", pattern="^(full|melody|off)$")
     abc: str | None = None
@@ -1241,8 +1237,8 @@ class ConfigIn(BaseModel):
     auto_stems_instrumental: bool | None = None
     stems_auto: str | None = None    # когда делать дорожки: studio | always | manual
     fx_engine: bool | None = None    # звуковой движок (POST /jobs/{id}/fx); PARTSCASTER_FX_ENGINE=0 — выкл всегда
-    # модель генерации yue2.cpp (bf16 | q8 | q6 | q5) и экономный режим (~4,5 ГБ); поле engine старых клиентов
-    # (выбор движка) не объявлено — pydantic его молча отбрасывает
+    # модель генерации yue2.cpp (bf16 | q8 | q6 | q5) и экономный режим (контекст под карту); поле engine
+    # старых клиентов (выбор движка) не объявлено — pydantic его молча отбрасывает
     cpp_model: str | None = None
     cpp_low_vram: bool | None = None
 
@@ -1339,6 +1335,9 @@ def get_config():
         "cpp_available": engine_cpp.find_binary() is not None,
         "cpp_models": engine_cpp.models_info(),
         "cpp_recommended": _cpp_recommended(),
+        # сколько песни влезает при этой модели, режиме и карте (без поправки на длинный текст и план)
+        "cpp_context": current_context(),
+        "max_song_sec": round(song_ceiling_now() / engine_cpp.FPS, 2),
     }
 
 
@@ -1346,6 +1345,16 @@ def get_config():
 def _gpu_vram_mib() -> int:
     """Видеопамять первой карты в МиБ (0 — неизвестно); не меняется, пока воркер жив: nvidia-smi — один раз."""
     return engine_cpp.gpu_vram_mib()
+
+
+def current_context() -> int:
+    """Контекст сервера yue2.cpp для текущих настроек и карты."""
+    return engine_cpp.context_seq(cpp_model_pref(), cpp_low_vram_pref(), _gpu_vram_mib())
+
+
+def song_ceiling_now() -> int:
+    """Потолок шагов песни, который сейчас реально уйдёт серверу."""
+    return min(MAX_SEM_TOKENS, engine_cpp.song_ceiling(current_context()))
 
 
 def _cpp_recommended() -> dict:

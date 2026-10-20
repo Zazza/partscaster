@@ -2,7 +2,6 @@
 // Новый трек — форма App.vue (POST /jobs); студия — инструментал, «заново с места», «перепеть с
 // места», эффект на дорожку (StudioPage.vue).
 import { SLOT_ORDER, dictStyle, effectiveLyrics } from './styleLogic.js'
-import { durTokens } from './slotOptions.js'
 import { characterPayload } from './character.js'
 import { applyTrick, beatSecAt, continuationPlan, planTimeline, sliceAbc, trickStyleSuffix } from './abcEdit.js'
 import { swapVocals, voiceDescriptor } from './voiceLab.js'
@@ -32,13 +31,11 @@ export function newTrackPayload(f, extra = {}) {
   const abc = f.abc.trim()
   return {
     title: f.title,
-    lyrics: effectiveLyrics(f.lyrics, f.noLyrics, f.durMode),
+    lyrics: effectiveLyrics(f.lyrics, f.noLyrics),
     seed: f.seed ? Number(f.seed) : 0,
     // драматургии и прикреплённому ABC нужен план: off его не строит — молча повышаем до melody
     cot: (f.arc || abc) && f.cot === 'off' ? 'melody' : f.cot,
     arc: f.arc,
-    // потолок длины из селектора длительности (0 = бюджет воркера)
-    max_tokens: durTokens[f.durMode] || 0,
     ...characterPayload(f.temperature, f.cfg),
     ...(abc ? { abc } : {}),
     // пресеты звука — только у полного трека (черновик их не получает)

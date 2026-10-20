@@ -3,9 +3,10 @@
 Что должно работать:
 G1. job_budget(draft, max_tokens, role, lyrics=""): полная генерация (не draft,
     role != "fragment") — не меньше 6000; лирика-заглушка из одних тегов
-    [Instrumental] → max(6000, секций × 1200 + 800), max_tokens при этом не
-    учитывается; итог всегда ≤ MAX_SEM_TOKENS. draft → 450; fragment — как
-    раньше (пол 200, потолок MAX_SEM_TOKENS).
+    [Instrumental] — бюджет как у песни (internal-vram-context усл. 7): max_tokens
+    из заявки, если задан, иначе MAX_SEM_TOKENS; число секций не влияет; итог
+    всегда ≤ MAX_SEM_TOKENS. draft → 450; fragment — как раньше (пол 200,
+    потолок MAX_SEM_TOKENS).
 G2. retry_budget(b) = min(int(b × 1.6), MAX_SEM_TOKENS).
 G3. Колонка jobs.truncated (INTEGER DEFAULT 0), миграция повторяемая.
 G4. Обрезанная полная генерация — ОДИН авторетрай с retry_budget(бюджета)
@@ -215,16 +216,17 @@ class TestJobBudget(_WorkerDbCase):
         self.assertEqual(self.b(max_tokens=40000, role="fragment"), 16000)
 
     def test_instrumental_stub_by_sections(self):
+        """internal-vram-context ТК9: заглушка без max_tokens — потолок MAX_SEM_TOKENS при любом числе секций."""
         stub = lambda n: "\n\n".join(["[Instrumental]"] * n)  # noqa: E731
-        self.assertEqual(self.b(lyrics=stub(3)), 6000)
-        self.assertEqual(self.b(lyrics=stub(8)), 8 * 1200 + 800)  # 10400
-        self.assertEqual(self.b(lyrics=stub(16)), 16000)          # 20000 → потолок
+        for n in (1, 3, 8, 36):
+            self.assertEqual(self.b(lyrics=stub(n)), self.w.MAX_SEM_TOKENS, f"{n} секций")
 
-    def test_instrumental_stub_ignores_max_tokens(self):
-        self.assertEqual(self.b(max_tokens=2500, lyrics=STUB_3), 6000)
-        self.assertEqual(self.b(max_tokens=9000, lyrics=STUB_3), 6000)
+    def test_instrumental_stub_uses_max_tokens(self):
+        """internal-vram-context ТК9: заглушка с max_tokens — как песня: max_tokens из заявки, пол 6000."""
         stub8 = "\n\n".join(["[Instrumental]"] * 8)
-        self.assertEqual(self.b(max_tokens=2500, lyrics=stub8), 10400)
+        self.assertEqual(self.b(max_tokens=7000, lyrics=STUB_3), 7000)
+        self.assertEqual(self.b(max_tokens=7000, lyrics=stub8), 7000)
+        self.assertEqual(self.b(max_tokens=100, lyrics=STUB_3), 6000)
 
     def test_small_max_sem_tokens_wins_over_minimum(self):
         with mock.patch.object(self.w, "MAX_SEM_TOKENS", 5000):
@@ -386,14 +388,48 @@ class TestCppTruncationSource(_GenCase):
         self.assertEqual(self._budgets(), [6000])
         self.assertIs(self._status(jid)["truncated"], False)
 
+    def _card(self, mib):
+        """Видеопамять карты (граница — nvidia-smi)."""
+        p = mock.patch.object(self.w, "_gpu_vram_mib", lambda: mib)
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_economy_no_retry_with_same_cap(self):
-        """Экономный режим: потолок урезан до LOW_VRAM_BUDGET — повтор ушёл бы с тем же потолком и тем же сидом
-        и обрезался бы так же; трек остаётся обрезанным после одного прогона."""
+        """Экономный режим, карта неизвестна: контекст 8192, потолок 5400 — повтор ушёл бы с тем же потолком и
+        тем же сидом и обрезался бы так же; трек остаётся обрезанным после одного прогона."""
+        self._card(0)
         self.settings.write_text(json.dumps({"cpp_model": "q8", "cpp_low_vram": True}))
-        cap = self.e.LOW_VRAM_BUDGET
+        cap = 5400   # 8192 − 2792
         self._semantic(cap)
         jid = self._run(max_tokens=6000)
         self.assertEqual(self._budgets(), [cap], "в экономном режиме повтор с тем же потолком")
+        self.assertIs(self._status(jid)["truncated"], True)
+
+    def test_economy_big_context_retried(self):
+        """internal-vram-context усл. 4: экономный режим на 8 ГБ — контекст 18176, потолок 15384; «потолок станет
+        больше» считается по фактическому контексту, а не по флагу — обрезанный на 6000 трек повторяется с 9600."""
+        self._card(8188)
+        self.settings.write_text(json.dumps({"cpp_model": "q8", "cpp_low_vram": True}))
+        self._semantic(6000)
+        jid = self._run(max_tokens=6000)
+        self.assertEqual(self._budgets(), [6000, 9600], "в экономном режиме с запасом контекста повтора нет")
+        self.assertIs(self._status(jid)["truncated"], False)
+
+    def test_economy_retry_capped_by_context(self):
+        """Повтор в экономном режиме — не выше потолка контекста: 12000 × 1,6 → 16000 → потолок 15384."""
+        self._card(8188)
+        self.settings.write_text(json.dumps({"cpp_model": "q8", "cpp_low_vram": True}))
+        self._semantic(12000)
+        self._run(max_tokens=12000)
+        self.assertEqual(self._budgets(), [12000, 15384])
+
+    def test_economy_budget_at_context_ceiling_no_retry(self):
+        """Бюджет уже упёрся в потолок контекста (15384) — повтор ушёл бы с тем же потолком: его нет."""
+        self._card(8188)
+        self.settings.write_text(json.dumps({"cpp_model": "q8", "cpp_low_vram": True}))
+        self._semantic(15384)
+        jid = self._run()   # без длины → MAX_SEM_TOKENS (16000) → потолок 15384
+        self.assertEqual(self._budgets(), [15384])
         self.assertIs(self._status(jid)["truncated"], True)
 
     def test_continuation_at_cap_retried(self):

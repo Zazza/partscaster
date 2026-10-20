@@ -61,26 +61,16 @@ describe('cleanLyrics', () => {
   })
 })
 
+// internal-vram-context усл. 6: выбора длительности нет — заглушка всегда из одной секции
 describe('instrumentalLyrics / effectiveLyrics', () => {
-  it('auto = одна секция [Instrumental]', () => {
-    expect(instrumentalLyrics('auto')).toBe('[Instrumental]')
+  it('instrumentalLyrics() без аргумента — одна секция [Instrumental]', () => {
+    expect(instrumentalLyrics()).toBe('[Instrumental]')
   })
 
-  it('каждый режим длительности даёт заявленное число секций', () => {
-    // spec: n секций, разделённых пустой строкой
-    const cases = { s1: 3, s2: 8, s3: 16, s4: 36 }
-    for (const [id, n] of Object.entries(cases)) {
-      expect(instrumentalLyrics(id).split('\n\n').length, id).toBe(n)
-    }
-  })
-
-  it('неизвестный режим деградирует к auto (1 секция)', () => {
-    expect(instrumentalLyrics('no-such-mode')).toBe('[Instrumental]')
-  })
-
-  it('effectiveLyrics: без слов — заглушка, со словами — чистка #', () => {
-    expect(effectiveLyrics('[Verse]\nx\n# пометка', true, 'auto')).toBe('[Instrumental]')
-    expect(effectiveLyrics('[Verse]\nтекст\n# пометка', false, 'auto')).toBe('[Verse]\nтекст')
+  it('effectiveLyrics(lyrics, noLyrics): без слов — заглушка, со словами — чистка #', () => {
+    expect(effectiveLyrics('[Verse]\nx\n# пометка', true)).toBe('[Instrumental]')
+    expect(effectiveLyrics('', true)).toBe('[Instrumental]')
+    expect(effectiveLyrics('[Verse]\nтекст\n# пометка', false)).toBe('[Verse]\nтекст')
   })
 })
 

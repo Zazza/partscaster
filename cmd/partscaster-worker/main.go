@@ -73,7 +73,7 @@ func parseFlags(args []string) (options, error) {
 	fs.StringVar(&o.home, "home", "", "папка установки (Python, пакеты, модели, треки)")
 	fs.BoolVar(&o.lan, "lan", false, "открыть воркер для других компьютеров сети (по умолчанию — только этот)")
 	fs.StringVar(&o.cppModel, "cpp-model", "", "модель генерации: auto (рекомендуемая) | bf16 | q8 | q6 | q5")
-	fs.BoolVar(&o.cppLowVram, "cpp-low-vram", false, "экономный режим (контекст 8192 — меньше видеопамяти)")
+	fs.BoolVar(&o.cppLowVram, "cpp-low-vram", false, "экономный режим (контекст по видеопамяти карты — для карт до 10 ГБ)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return o, helpError{out.String()}

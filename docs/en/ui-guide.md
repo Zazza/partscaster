@@ -116,8 +116,7 @@ The row above the form:
   block header, the part tags are above the field:
   - "No vocals" — instrumental: no lyrics needed, the voice in the slots changes to "no vocal" (turn it off and
     the style's voice comes back, unless you typed your own). For a "1:1" style, "Instrumental, no vocals" is
-    added to the start of the line. A length option for the instrumental appears next to it: "by lyrics",
-    "1–2 min", "2–5 min", "5–10 min", "10–30 min (needs more than 16 GB VRAM)"; the length is approximate;
+    added to the start of the line. The length cannot be chosen: the model writes a plan for 3–5 minutes itself;
   - section tag buttons: "Verse", "Pre-chorus", "Chorus", "Bridge", "Intro", "Outro", "Interlude" (the
     tooltip shows what will be inserted). A click inserts `[Verse]`, `[Pre-Chorus]`, `[Chorus]`, `[Bridge]`,
     `[Intro]`, `[Outro]` or `[Interlude]` at the cursor on its own line; selected text is replaced. In
@@ -706,8 +705,8 @@ button in the title row — "Saved" or an error shows next to it.
 - **"Generation model"** — "model": BF16, Q8, Q6, Q5 with size and state ("downloaded" / "not downloaded"); the one
   recommended for the worker's graphics card is marked "recommended", and below the choice there is a hint "For this
   graphics card (N GB) … is recommended" (sometimes — in economy mode). Any model can be chosen. A model that is not
-  downloaded has "Download" (download progress as a line; after it — "Save"). "Economy mode (8 GB)": ~4.5 GB of video
-  memory, songs up to ~3.5 min. The same seed on another model gives a different performance; notes and continuations
+  downloaded has "Download" (download progress as a line; after it — "Save"). "Economy mode (8 GB)": memory sized to the
+  card, on 8 GB a track with continuations up to ~10 min. The same seed on another model gives a different performance; notes and continuations
   carry over; the model changes from the next generation. If the worker has no yue2.cpp program, an error hint says that
   generation does not work and the worker needs reinstalling.
 - **"Worker (information only)"** (at the bottom of the "Worker connection" block) — data folder, whisper (what a finished track sings — for an AI agent, MCP `job_lyrics`), "stem separation: BS-Roformer-SW" or "not installed";

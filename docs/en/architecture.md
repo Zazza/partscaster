@@ -160,7 +160,7 @@ run on it, while stems (RoFormer), whisper and Seed-VC work in their own environ
 | `bf16` | 7.2 GB | ~10 GB |
 | `q8` | 3.8 GB | ~8 GB |
 | `q6` / `q5` | 2.9 / 2.6 GB | ~7.7 GB |
-| low-VRAM mode (`--max-seq 8192`, song up to ~3.5 min) | — | ~4.5 GB (Q8) |
+| low-VRAM mode (`--max-seq` by the card's VRAM, from 8192) | — | from ~4.5 GB (Q8); ~6.5 GB on an 8 GB card |
 
 - The worker starts `yue-server` on 127.0.0.1 (a free port) on the first model operation and keeps it running
   between generations; a model or mode change means a new process for the next generation; on out-of-memory the
@@ -202,7 +202,7 @@ There is one GPU, so one long operation runs (the "slot"); the others wait by th
 ## VRAM
 
 - The generation model lives in a separate `yue-server` process that keeps running between generations: at peak
-  BF16 ~10 GB, Q8 ~8 GB, low-VRAM mode ~4.5 GB. The worker gets VRAM figures for `/stats` and the error text from
+  BF16 ~10 GB, Q8 ~8 GB, low-VRAM mode — by the card (~6.5 GB on 8 GB). The worker gets VRAM figures for `/stats` and the error text from
   `nvidia-smi`, not through torch: a CUDA context in its own process would take memory for nothing.
 - SheetSage2 is small (hundreds of MB) and also stays loaded.
 - Separation: RoFormer is a separate process, and its memory is freed when it exits.

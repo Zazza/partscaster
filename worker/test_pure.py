@@ -1630,13 +1630,15 @@ class TestFriendlyError(_WorkerDbCase):
         self.assertNotIn("Ollama", msg)
 
     def test_oom_self_holder_honest_message(self):
-        """Держит только сам воркер — без обвинения соседей, с подсказкой про длину."""
+        """Держит только сам воркер — без обвинения соседей; совет — экономный режим или модель поменьше,
+        не «уменьшите длительность»: выбора длительности нет (internal-vram-context, усл. 6)."""
         import os
         from unittest import mock
         with mock.patch.object(self.w, "_gpu_holders", return_value=[(os.getpid(), 6.9)]):
             msg = self.w.friendly_error(RuntimeError("CUDA out of memory"))
         self.assertIn("самому воркеру", msg)
-        self.assertIn("длительность", msg)
+        self.assertIn("экономный режим", msg)
+        self.assertNotIn("длительность", msg)
         self.assertNotIn("Ollama", msg)
 
     def test_oom_foreign_holder_blames_neighbours(self):

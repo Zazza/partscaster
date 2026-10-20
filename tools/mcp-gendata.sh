@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 node --input-type=module <<'EOF'
 import { writeFileSync } from 'node:fs'
-import { slotOptions, durOptions } from './frontend/src/slotOptions.js'
+import { slotOptions } from './frontend/src/slotOptions.js'
 import { groups as builtinGroups } from './frontend/src/groups.js'
 import { presets } from './frontend/src/presets.js'
 import { readFileSync } from 'node:fs'

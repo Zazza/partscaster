@@ -99,7 +99,7 @@ If a person canceled the operation, a heavy step responds with 409 "canceled by 
 | `abc` | Your own plan (ABC). With `cot=off` — 422 |
 | `draft` | Draft of ~15–20 s: hear the style before the full render |
 | `arc` | Dramatic shape over the plan: `build` (rise), `wave` (wave), `burst` (burst, voice an octave higher in the finale). Works with your own `abc` too; with `cot=off` — 422 |
-| `max_tokens` | Length ceiling (~25 tokens/s), not the length itself: at least 6000 for a full track, 1200 per section + 800 for a no-lyrics track (`[Instrumental]`); 0 — the worker's budget |
+| `max_tokens` | Length ceiling (~25 tokens/s), not the length itself: at least 6000 for a full track (no-lyrics too); the model decides the song length by its plan (3–5 min) and ignores the number of sections; 0 — the worker's budget |
 | `temperature` | Boldness of playing: 0 (default 1.0) or 0.5–1.5 |
 | `cfg` | Precision to style and notes: 0 (default 1.5, variable `YUE2_CFG_SCALE`) or 1–4 |
 | `parent_id`, `role` | A derived track: from which track and why — `section` (a part for splicing in), `rebuild`, `fragment`, `variant`. In the app it is hidden under the parent. Zero `temperature`/`cfg` and an empty seed are taken from the parent. A continuation is created only via `/continue` |

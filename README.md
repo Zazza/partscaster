@@ -68,7 +68,7 @@ called Yue Studio.
 ## Requirements
 
 - **An NVIDIA GPU with 8 GB of video memory or more.** At peak the generation model takes: BF16 ~10 GB,
-  Q8 ~8 GB, economy mode ~4.5 GB (songs up to ~3.5 min).
+  Q8 ~8 GB, economy mode sizes memory to the card (~6.5 GB on an 8 GB card, a track with continuations up to ~10 min).
 - **The worker** — the part that generates and processes audio: Linux, Windows (a program, no WSL) or
   WSL2. It can run on the same computer or on a separate GPU machine on your network.
 - **The app** — Linux and Windows; a macOS build exists but is untested.

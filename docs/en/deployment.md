@@ -22,7 +22,7 @@ name is enough — port 8091 is added automatically) and press "Check". On the s
 - **NVIDIA GPU with a driver** (`nvidia-smi` must work). Other GPUs are not supported:
   the installers check `nvidia-smi` and stop without it.
 - **VRAM:** from 8 GB. Generation runs on yue2.cpp; the peak depends on the model: BF16 ~10 GB, Q8 ~8 GB,
-  low-VRAM mode ~4.5 GB (song up to ~3.5 min). More: [Generation model](#generation-model--yue2cpp).
+  low-VRAM mode sizes memory to the card (~6.5 GB on an 8 GB card, a track with continuations up to ~10 min). More: [Generation model](#generation-model--yue2cpp).
 - **Linux worker:** Linux with systemd (tested on Ubuntu), [`uv`](https://docs.astral.sh/uv/) —
   `install.sh` uses it to create the environment and install packages; it does not install `uv` itself. It looks for it
   in `PATH`, then in `~/.local/bin` and `~/.cargo/bin` (where the uv installer puts it; ssh without a login shell does not
@@ -187,7 +187,7 @@ Set them in `~/partscaster/worker.env` (example — `worker.env.example` in the 
 | `PARTSCASTER_HOME` | `~/partscaster` (set by the unit) | installation directory; the worker looks there for the yue2.cpp program built by `install.sh` (`yue2cpp-src`) |
 | `HF_HOME` | `~/yue/hf-cache` (`install.sh` writes it into a new `worker.env`); without the line — `~/.cache/huggingface` | Hugging Face weights cache (SheetSage2 and MERT); generation models live in `PARTSCASTER_CPP_MODELS` |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (set by the unit) | PyTorch VRAM allocation mode (score transcription and other worker operations) |
-| `YUE2_MAX_TOKENS` | `16000` | semantic token budget per song ≈ maximum length (16000 — up to ~10 min; VRAM peak grows with length) |
+| `YUE2_MAX_TOKENS` | — | upper limit of the semantic token budget per song with continuations; unset — the model context minus room for style, lyrics and plan (21784 ≈ 14.5 min) |
 | `YUE2_CFG_SCALE` | `1.5` | how closely to follow the style (classifier-free guidance): higher — more exact, but drier |
 | `PARTSCASTER_WHISPER_PY` | `~/whisper-venv/bin/python` | interpreter of the whisper environment |
 | `PARTSCASTER_SEP_PY` | `~/sep-venv/bin/python` | interpreter of the stem separation (RoFormer) environment |
@@ -325,8 +325,8 @@ The former PyTorch engine is gone. The model comes in four sizes:
 | Q6 | 2.9 GB | ~7.7 GB |
 | Q5 | 2.6 GB | ~7.7 GB |
 
-A VAE (0.5 GB) is downloaded with every model. **Low-VRAM mode** (a smaller model context) — ~4.5 GB of VRAM
-with Q8, song up to ~3.5 min. Q6 and Q5 save almost no VRAM but sound rougher, so they are not recommended,
+A VAE (0.5 GB) is downloaded with every model. **Low-VRAM mode** (a smaller model context) sizes the context to the
+card's VRAM: with Q8 on an 8 GB card ~6.5 GB, a track with continuations up to ~10 min (at least ~4.5 GB and ~3.5 min). Q6 and Q5 save almost no VRAM but sound rougher, so they are not recommended,
 but you can choose them.
 
 - **Recommended model** — by the VRAM of the first card: from 11.5 GB ("12 GB" cards) — BF16; from 9.5 GB
