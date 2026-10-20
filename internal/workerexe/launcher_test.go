@@ -609,11 +609,11 @@ func TestParseProgress(t *testing.T) {
 func TestRunLinesRoutesProgress(t *testing.T) {
 	rep := &fakeReporter{}
 	err := runLines(context.Background(), func(_ context.Context, w io.Writer) error {
-		fmt.Fprint(w, "Скачивание модели Q8…\n")
-		fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 1048576/3810233064\n")
-		fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 2097152/3810233064\n")
-		fmt.Fprint(w, "YuE2-Vae-F32.gguf: 530497344/530497344\n")
-		fmt.Fprint(w, "готово\n")
+		_, _ = fmt.Fprint(w, "Скачивание модели Q8…\n")
+		_, _ = fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 1048576/3810233064\n")
+		_, _ = fmt.Fprint(w, "YuE2-3B-Q8_0.gguf: 2097152/3810233064\n")
+		_, _ = fmt.Fprint(w, "YuE2-Vae-F32.gguf: 530497344/530497344\n")
+		_, _ = fmt.Fprint(w, "готово\n")
 		return nil
 	}, rep)
 	if err != nil {

@@ -167,8 +167,14 @@ class TestReleaseTargets(unittest.TestCase):
         win.mkdir(parents=True)
         (win / "yue-server.exe").write_bytes(b"MZ fake")
         (win / "libggml-cuda.dll").write_bytes(b"MZ fake")
+        # каталог воркера Windows: release.sh вшивает в него иконку (go-winres) и кладёт payload
+        (self.root / "cmd" / "partscaster-worker").mkdir(parents=True)
+        (self.root / "cmd" / "partscaster-worker" / "icon.ico").write_bytes(b"\x00\x00\x01\x00 fake")
         p = self._run("windows")
         self._ok(p)
+        winres = [ln for ln in self._log_lines("go tool") if "go-winres" in ln]
+        self.assertTrue(any("--icon icon.ico" in ln and f"--product-version {VERSION}" in ln for ln in winres),
+                        self.log.read_text())
         top = f"partscaster-{VERSION}-windows-amd64"
         zpath = self.root / "dist" / f"{top}.zip"
         self.assertTrue(zpath.is_file(), self._packages())
