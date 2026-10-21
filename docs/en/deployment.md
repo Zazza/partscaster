@@ -43,7 +43,7 @@ latest version. It contains:
 | File | What is inside |
 |---|---|
 | `partscaster-linux-<arch>.tar.gz` | app, `partscaster-mcp`, worker archive (with a ready-made yue2.cpp program for Linux, if built), `INSTALL.txt` |
-| `partscaster-windows-amd64.zip` | the same for Windows + `partscaster-worker.exe`; the worker archive inside has yue2.cpp for Windows |
+| `partscaster-windows-amd64.zip` | the same for Windows + `partscaster-worker.exe` (with the worker and yue2.cpp for Windows inside); the worker archive next to it is for a Linux/WSL machine, without the Windows program |
 | `partscaster-darwin-<arch>.tar.gz` | app `partscaster.app` (`partscaster-mcp` and the worker archive are inside `.app/Contents/MacOS/`); no yue2.cpp |
 | `worker-<version>.tar.gz` | worker archive for a Linux machine with a GPU (the same as in the Linux package) |
 
@@ -67,7 +67,8 @@ Delete a failed trial together with its tag (`git push origin :v1.0.0-rc1` and t
 the next one is `v1.0.0-rc2`.
 
 The worker archives in packages for different OSes differ only in the yue2.cpp program. For a Linux machine with a GPU, take
-`worker-<version>.tar.gz` or the archive from the Linux package: the archive from the Windows package has no Linux program,
+`worker-<version>.tar.gz` or the archive from the Linux package: the archive next to the app in the Windows package has
+no ready program (the Windows variant lives only inside `partscaster-worker.exe`, so the package is not twice as big),
 and `install.sh` will start to build it from source (needs git, cmake, nvcc).
 
 On the GPU machine:

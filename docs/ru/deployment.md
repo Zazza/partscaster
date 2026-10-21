@@ -42,7 +42,7 @@
 | Файл | Что внутри |
 |---|---|
 | `partscaster-linux-<арх>.tar.gz` | приложение, `partscaster-mcp`, архив воркера (с готовой программой yue2.cpp под Linux, если собрана), `INSTALL.txt` |
-| `partscaster-windows-amd64.zip` | то же для Windows + `partscaster-worker.exe`; архив воркера внутри — с yue2.cpp под Windows |
+| `partscaster-windows-amd64.zip` | то же для Windows + `partscaster-worker.exe` (внутри — воркер с yue2.cpp под Windows); архив воркера рядом — для Linux/WSL-машины, без программы под Windows |
 | `partscaster-darwin-<арх>.tar.gz` | приложение `partscaster.app` (`partscaster-mcp` и архив воркера — внутри `.app/Contents/MacOS/`); без yue2.cpp |
 | `worker-<версия>.tar.gz` | архив воркера для Linux-машины с GPU (тот же, что в пакете Linux) |
 
@@ -65,8 +65,9 @@
 `v1.0.0-rc2`.
 
 Архивы воркера в пакетах разных ОС отличаются только программой yue2.cpp. Для Linux-машины с GPU берите
-`worker-<версия>.tar.gz` или архив из пакета Linux: в архиве из пакета Windows программы под Linux нет,
-и `install.sh` начнёт собирать её из исходников (нужны git, cmake, nvcc).
+`worker-<версия>.tar.gz` или архив из пакета Linux: в архиве рядом с приложением в пакете Windows готовой
+программы нет (вариант под Windows живёт только внутри `partscaster-worker.exe`, чтобы пакет не весил вдвое
+больше), и `install.sh` начнёт собирать её из исходников (нужны git, cmake, nvcc).
 
 На GPU-машине:
 

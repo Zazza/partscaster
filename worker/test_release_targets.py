@@ -7,13 +7,16 @@ T2. Неизвестная TARGET_OS («haiku») → отказ, в stderr уп�
 T3. TARGET_OS=windows на Linux → dist/partscaster-<V>-windows-amd64.zip, внутри каталог
     partscaster-<V>-windows-amd64/ с partscaster.exe, partscaster-mcp.exe, worker-<V>.tar.gz, INSTALL.txt
     (@VERSION@ заменён). Предпоследняя строка stdout — путь к zip, последняя — к архиву воркера.
-    Архив воркера несёт готовую сборку yue2.cpp для Windows (yue2cpp/yue-server.exe), linux-сборки в нём нет.
-    Без сборки для Windows пакет не собирается — это проверяет test_cpp_only (ТК13).
+    internal-win-pkg-dedupe: архив воркера рядом в zip — для Linux/WSL: без yue2cpp/yue-server.exe и
+    libggml-cuda.dll, с Linux-сборкой yue2.cpp, если она есть в dist (ТК1). Архив с yue2.cpp под Windows
+    лежит в cmd/partscaster-worker/payload в момент go build ./cmd/partscaster-worker (ТК1).
+    Без dist/yue2cpp-windows-x86_64 пакет Windows не собирается, ошибка про yue2.cpp (ТК2).
     wails вызван с `-platform windows/amd64`, go build partscaster-mcp — с GOOS=windows GOARCH=amd64.
 T5. Непустая WAILS_TAGS → wails build получает `-tags <значение>`; не задана или пустая — `-tags` нет
     (internal-ci-wails-tags ТК1).
 T4. TARGET_OS не задана → пакет под хост: linux-amd64.tar.gz с partscaster (без .exe), partscaster-mcp,
-    worker, INSTALL.txt; wails вызван без `-platform windows`.
+    worker, INSTALL.txt; wails вызван без `-platform windows`. В архиве воркера — Linux-сборка yue2.cpp
+    (yue2cpp/yue-server), сборки под Windows нет (internal-win-pkg-dedupe ТК3).
 
 Настоящие wails/go не нужны: в PATH песочницы — заглушки, которые пишут свои аргументы
 и окружение в лог. Скрипт работает от корня своего репозитория, поэтому запускается копия
@@ -65,6 +68,14 @@ case "$1" in
       prev="$a"
     done
     echo "go build out=$out GOOS=${GOOS:-} GOARCH=${GOARCH:-} args=$*" >> "$log"
+    # сборка воркера Windows: что лежит в payload в момент go build (go:embed) — список файлов архивов в журнал
+    if [[ " $* " == *" ./cmd/partscaster-worker "* ]]; then
+      for t in cmd/partscaster-worker/payload/*.tar.gz; do
+        [[ -f "$t" ]] || continue
+        echo "payload-archive $(basename "$t")" >> "$log"
+        tar -tzf "$t" | sed 's/^/payload-file /' >> "$log"
+      done
+    fi
     if [[ -n "$out" ]]; then
       mkdir -p "$(dirname "$out")"
       printf 'fake-binary\n' > "$out"
@@ -148,6 +159,54 @@ class TestReleaseTargets(unittest.TestCase):
     def _ok(self, p):
         self.assertEqual(p.returncode, 0, f"stdout:\n{p.stdout}\nstderr:\n{p.stderr}")
 
+    def _payload_files(self):
+        return {ln.split(" ", 1)[1].rstrip("/") for ln in self._log_lines("payload-file ")}
+
+    @staticmethod
+    def _tar_names_from_bytes(data):
+        import io
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            return {n.rstrip("/") for n in tf.getnames()}
+
+    def _prepare_windows(self, with_win_cpp=True):
+        if with_win_cpp:
+            win = self.root / "dist" / "yue2cpp-windows-x86_64"
+            win.mkdir(parents=True)
+            (win / "yue-server.exe").write_bytes(b"MZ fake")
+            (win / "libggml-cuda.dll").write_bytes(b"MZ fake")
+        (self.root / "cmd" / "partscaster-worker").mkdir(parents=True)
+        (self.root / "cmd" / "partscaster-worker" / "icon.ico").write_bytes(b"\x00\x00\x01\x00 fake")
+        # настоящая сборка yue2.cpp (docker/powershell) не запускается: заглушки с отказом и записью в журнал
+        for name in ("docker", "nvcc", "powershell"):
+            p = self.bin / name
+            p.write_text(f'#!/bin/sh\necho "{name} $*" >> "$STUB_LOG"\nexit 1\n')
+            p.chmod(0o755)
+
+    # internal-win-pkg-dedupe ТК2: без сборки yue2.cpp под Windows — отказ с сообщением про неё
+    def test_windows_without_win_cpp_fails(self):
+        self._prepare_windows(with_win_cpp=False)
+        p = self._run("windows")
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        out = (p.stdout + p.stderr).lower()
+        self.assertIn("yue2", out, p.stderr)
+        self.assertIn("windows", out, p.stderr)
+        self.assertFalse(any(n.endswith(".zip") for n in self._packages()), self._packages())
+        self.assertEqual(self._log_lines("payload-archive"), [], "воркер Windows не должен собираться")
+
+    # internal-win-pkg-dedupe ТК1 (край): Linux-сборки в dist нет — пакет Windows собирается,
+    # архив рядом без yue2.cpp вовсе (install.sh соберёт), в payload — сборка под Windows
+    def test_windows_without_linux_cpp(self):
+        self._prepare_windows()
+        shutil.rmtree(self.root / "dist" / "yue2cpp-linux-x86_64")
+        p = self._run("windows")
+        self._ok(p)
+        top = f"partscaster-{VERSION}-windows-amd64"
+        with zipfile.ZipFile(self.root / "dist" / f"{top}.zip") as zf:
+            inner = self._tar_names_from_bytes(zf.read(f"{top}/worker-{VERSION}.tar.gz"))
+        self.assertFalse(any(n.startswith(f"worker-{VERSION}/yue2cpp/") for n in inner), sorted(inner))
+        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", self._payload_files(), self.log.read_text())
+        self.assertEqual(self._log_lines("docker"), [], "docker-сборка yue2.cpp не должна запускаться")
+
     # T1
     def test_darwin_on_linux_refused(self):
         p = self._run("darwin")
@@ -166,14 +225,8 @@ class TestReleaseTargets(unittest.TestCase):
 
     # T3
     def test_windows_on_linux(self):
-        # готовая сборка yue2.cpp для Windows (собирается на Windows tools/yue2cpp-build.ps1)
-        win = self.root / "dist" / "yue2cpp-windows-x86_64"
-        win.mkdir(parents=True)
-        (win / "yue-server.exe").write_bytes(b"MZ fake")
-        (win / "libggml-cuda.dll").write_bytes(b"MZ fake")
-        # каталог воркера Windows: release.sh вшивает в него иконку (go-winres) и кладёт payload
-        (self.root / "cmd" / "partscaster-worker").mkdir(parents=True)
-        (self.root / "cmd" / "partscaster-worker" / "icon.ico").write_bytes(b"\x00\x00\x01\x00 fake")
+        # готовая сборка yue2.cpp для Windows (tools/yue2cpp-build.ps1) и каталог воркера Windows с иконкой
+        self._prepare_windows()
         p = self._run("windows")
         self._ok(p)
         winres = [ln for ln in self._log_lines("go tool") if "go-winres" in ln]
@@ -190,12 +243,18 @@ class TestReleaseTargets(unittest.TestCase):
         worker = self.root / lines[-1]
         self.assertEqual(worker.name, f"worker-{VERSION}.tar.gz")
         self.assertTrue(worker.is_file(), worker)
-        # воркер в пакете Windows — своей ОС: сборка yue2.cpp для Windows, linux-сборки нет
-        with tarfile.open(worker, "r:gz") as tf:
-            names = tf.getnames()
-        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", names)
-        self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server", names)
-        self.assertNotIn(f"worker-{VERSION}/yue2cpp/libggml-base.so", names)
+        # ТК1: в payload при go build ./cmd/partscaster-worker — архив воркера с yue2.cpp под Windows
+        payload = self._payload_files()
+        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", payload, self.log.read_text())
+        self.assertIn(f"worker-{VERSION}/yue2cpp/libggml-cuda.dll", payload, self.log.read_text())
+
+        with zipfile.ZipFile(zpath) as zf:
+            inner = self._tar_names_from_bytes(zf.read(f"{top}/worker-{VERSION}.tar.gz"))
+        # ТК1: архив рядом в пакете — для Linux/WSL: без программы под Windows, с Linux-сборкой из dist
+        self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", inner, sorted(inner))
+        self.assertNotIn(f"worker-{VERSION}/yue2cpp/libggml-cuda.dll", inner, sorted(inner))
+        self.assertFalse(any(n.endswith(".exe") or n.endswith(".dll") for n in inner), sorted(inner))
+        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server", inner, sorted(inner))
 
         with zipfile.ZipFile(zpath) as zf:
             names = {n.rstrip("/") for n in zf.namelist()}
@@ -232,6 +291,12 @@ class TestReleaseTargets(unittest.TestCase):
         for f in ("partscaster", "partscaster-mcp", f"worker-{VERSION}.tar.gz", "INSTALL.txt"):
             self.assertIn(f"{top}/{f}", names, sorted(names))
         self.assertFalse(any(n.endswith(".exe") for n in names), sorted(names))
+        # ТК3 (internal-win-pkg-dedupe): архив воркера в пакете Linux — с Linux-сборкой yue2.cpp
+        with tarfile.open(tpath, "r:gz") as tf:
+            inner = self._tar_names_from_bytes(tf.extractfile(f"{top}/worker-{VERSION}.tar.gz").read())
+        self.assertIn(f"worker-{VERSION}/yue2cpp/yue-server", inner, sorted(inner))
+        self.assertIn(f"worker-{VERSION}/yue2cpp/libggml-base.so", inner, sorted(inner))
+        self.assertNotIn(f"worker-{VERSION}/yue2cpp/yue-server.exe", inner, sorted(inner))
 
         wails = self._log_lines("wails")
         self.assertTrue(wails, self.log.read_text())

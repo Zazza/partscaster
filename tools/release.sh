@@ -43,6 +43,14 @@ if [[ "$HOST_OS" == "windows" && ! -f dist/yue2cpp-windows-x86_64/yue-server.exe
 fi
 export TARGET_OS="$GOOS"   # worker-tar берёт каталог yue2cpp своей ОС
 WORKER_TAR="$(tools/worker-tar.sh dist "$VERSION" | tail -1)"
+# Windows: архив с yue2.cpp под Windows (~220 МБ) идёт только внутрь partscaster-worker.exe; рядом в пакете —
+# архив для Linux/WSL-машины (MCP install_worker, INSTALL.txt): программа под Windows там бесполезна, а вдвоём
+# они удваивали пакет. Linux-сборка yue2.cpp попадёт в него, если есть в dist; нет — install.sh соберёт на месте
+if [[ "$GOOS" == "windows" ]]; then
+  WORKER_TAR_EXE="$WORKER_TAR"
+  mkdir -p dist/worker-linux
+  WORKER_TAR="$(TARGET_OS=linux tools/worker-tar.sh dist/worker-linux "$VERSION" | tail -1)"
+fi
 
 LDFLAGS="-X main.version=$VERSION"
 "$WAILS" build -clean ${WAILS_ARGS[@]+"${WAILS_ARGS[@]}"} -ldflags "$LDFLAGS"
@@ -60,7 +68,7 @@ if [[ "$GOOS" == "windows" ]]; then
   PAYLOAD=cmd/partscaster-worker/payload
   mkdir -p "$PAYLOAD"
   rm -f "$PAYLOAD"/worker-*.tar.gz
-  cp "$WORKER_TAR" "$PAYLOAD/"
+  cp "$WORKER_TAR_EXE" "$PAYLOAD/"
   CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -tags desktop,production -ldflags "$LDFLAGS -H windowsgui" \
     -o build/bin/partscaster-worker.exe ./cmd/partscaster-worker
   rm -f "$PAYLOAD"/worker-*.tar.gz
