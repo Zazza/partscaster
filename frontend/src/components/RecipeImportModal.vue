@@ -6,9 +6,10 @@ import AppIcon from './AppIcon.vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { recipePreview } from '../recipe.js'
+import { localizeWarning } from '../dspI18n.js'
 
 const emit = defineEmits(['close', 'started'])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const text = ref('')
 const preview = ref(null)
@@ -68,7 +69,7 @@ onMounted(pick)
             <label class="set-row set-check"><input type="radio" value="plan" v-model="mode" /> {{ t('recipe.import.mode.plan') }}</label>
           </div>
           <ul v-if="preview.warnings.length" class="muted">
-            <li v-for="(w, i) in preview.warnings" :key="i">{{ w }}</li>
+            <li v-for="(w, i) in preview.warnings" :key="i">{{ localizeWarning(w, locale) }}</li>
           </ul>
         </template>
         <div v-if="err" class="error">{{ err }}</div>

@@ -17,6 +17,7 @@ import {
 import { setWindowTitle } from './composables/useWindowFrame.js'
 import { useI18n } from './i18n/index.js'
 import { localizePresets } from './presetI18n.js'
+import { localizeChains, localizeDspPresets } from './dspI18n.js'
 
 export const api = {
   status: () => YueStatus(),
@@ -68,7 +69,8 @@ export const api = {
   analyze: (id) => YueAnalyzeJob(id),
   references: () => YueReferences(),
   addReference: () => YueAddReference(),
-  dspChains: () => YueDspChains(),
+  // цепочки эффектов и наборы педалей — на языке интерфейса (Go отдаёт их по-русски)
+  dspChains: () => Promise.resolve(YueDspChains()).then((list) => localizeChains(list, useI18n().locale.value)),
   applyDsp: (id, chain, params) => YueApplyDsp(id, chain, params),
   dspVariants: (id) => YueDspVariants(id),
   // звуковой движок воркера: req = {source, chain: [{type, …}], from?, to?, output?, label?}
@@ -98,7 +100,7 @@ export const api = {
   playPreview: (id, slot, which, startSec = 0) => YuePlayPreview(id, slot, which, startSec),
   // доска педалей на весь трек (вариант dsp-pedals.flac) и готовые наборы
   applySteps: (id, steps, label = '') => YueApplySteps(id, steps, label),
-  dspPresets: () => YueDspPresets(),
+  dspPresets: () => Promise.resolve(YueDspPresets()).then((list) => localizeDspPresets(list, useI18n().locale.value)),
   transcribeFile: () => YueTranscribeFile(),
   importTrack: () => YueImportTrack(),
   transcribeJob: (id) => YueTranscribeJob(id),

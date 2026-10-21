@@ -82,3 +82,60 @@ describe('insertTitle / insertWindow — строка эффекта на дор
     expect(insertWindow({ from: 0, to: 0 }, w)).toBe('весь трек')
   })
 })
+
+// internal-dsp-en ТК5: подпись правки не застывает на языке момента создания
+describe('insertTitle — подпись на языке показа (internal-dsp-en ТК5)', async () => {
+  const { afterEach } = await import('vitest')
+  const { useI18n } = await import('./i18n/index.js')
+  const { locale, t, setLocale } = useI18n()
+  const saved = locale.value
+  afterEach(() => setLocale(saved))
+  // имя цепочки — от вызывающего, на языке показа
+  const names = () => ({
+    chainName: (c) => `chain[${locale.value}:${c}]`, stemName: (s) => `stem[${s}]`,
+    instName: (id) => 'приём ' + id,
+  })
+
+  it('«один клик»: «<цепочка на языке показа> (<уровень на языке показа>)», label не используется', () => {
+    const rec = { chain: 'tape', oneClick: 'light', label: 'Кассета (легко)', stems: ['vocals'] }
+    for (const l of ['en', 'ru']) {
+      setLocale(l)
+      expect(insertTitle(rec, names())).toBe(`chain[${l}:tape] (${t('studio.dsp.level.light')}) · stem[vocals]`)
+    }
+    setLocale('en')
+    expect(insertTitle(rec, names())).not.toContain('Кассета')
+    expect(insertTitle({ ...rec, oneClick: 'strong' }, names())).toBe('chain[en:tape] (strong) · stem[vocals]')
+  })
+
+  it('набор педалей: имя по id на языке показа, старая подпись label не используется', () => {
+    const rec = { steps: [{ chain: 'fuzz', params: {} }], pedalPreset: 'hendrix', label: 'Хендрикс', stems: ['other'] }
+    setLocale('en')
+    const en = insertTitle(rec, names())
+    expect(en.startsWith('Hendrix · ')).toBe(true)
+    expect(en).not.toContain('Хендрикс')
+    setLocale('ru')
+    expect(insertTitle(rec, names()).startsWith('Хендрикс · ')).toBe(true)
+  })
+
+  it('старая запись без oneClick/pedalPreset — по своей label на любом языке', () => {
+    const rec = { steps: [{ chain: 'fuzz', params: {} }], label: 'Мой набор', stems: ['other'] }
+    setLocale('en')
+    const en = insertTitle(rec, names())
+    setLocale('ru')
+    const ru = insertTitle(rec, names())
+    expect(en).toContain('Мой набор')
+    expect(en).toBe(ru)
+  })
+})
+
+describe('pedalPresetName (internal-dsp-en ТК5)', async () => {
+  const { pedalPresetName } = await import('./dspI18n.js')
+  it('известный id — имя на языке, неизвестный/пустой — пустая строка', () => {
+    expect(pedalPresetName('hendrix', 'en')).toBe('Hendrix')
+    expect(pedalPresetName('hendrix', 'ru')).toBe('Хендрикс')
+    expect(pedalPresetName('no-such', 'en')).toBe('')
+    expect(pedalPresetName('no-such', 'ru')).toBe('')
+    expect(pedalPresetName('', 'en')).toBe('')
+    expect(pedalPresetName(undefined, 'ru')).toBe('')
+  })
+})

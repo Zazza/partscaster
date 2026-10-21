@@ -1,5 +1,6 @@
 <script setup>
 // Студия трека: пиано-ролл партитуры, минус по стемам, DSP-цепочки.
+import { localizeWarning } from '../dspI18n.js'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from '../i18n/index.js'
 const { t, locale } = useI18n()
@@ -225,6 +226,8 @@ const selRange = computed(() => {
 watch(() => props.job.id, setWindowTitle, { immediate: true })
 onUnmounted(() => { api.setWindowTitle(t('app.title')) })
 
+// смена языка — названия цепочек эффектов заново (api переводит при загрузке)
+watch(locale, async () => { try { dspChains.value = (await api.dspChains()) || [] } catch { /* останется прежний список */ } })
 onMounted(async () => {
   waveRafId = requestAnimationFrame(waveCursorLoop)
   loadWave()
@@ -1452,7 +1455,7 @@ async function applyOneClick(chainId) {
     dspTarget.value = ''
     const params = oneClickParams(chainId, oneClickLevel.value)
     const label = c.name + ' (' + t('studio.dsp.level.' + oneClickLevel.value) + ')'
-    await inserts.addMixFx(props.job.id, { chain: chainId, params, step: 'done', label })
+    await inserts.addMixFx(props.job.id, { chain: chainId, params, step: 'done', label, oneClick: oneClickLevel.value })
     rollErr.value = ''
     trickMsg.value = t('studio.dsp.oneclick.added', { name: label })
   } catch (e) {
@@ -1582,7 +1585,7 @@ function setWindowTitle() {
                           <button class="ghost small-btn" :disabled="dbBusy" :title="t('studio.edits.del.tip')" @click="removeEdit(it)"><AppIcon name="x" /></button>
                           <!-- сборка споткнулась на этой правке / предупреждения подготовки пресета -->
                           <p v-if="it.error" class="error insert-note"><AppIcon name="alert" /> {{ it.error }}</p>
-                          <p v-for="w in (it.warnings || [])" :key="w" class="muted insert-note">{{ w }}</p>
+                          <p v-for="w in (it.warnings || [])" :key="w" class="muted insert-note">{{ localizeWarning(w, locale) }}</p>
                         </div>
                       </div>
                     </div>

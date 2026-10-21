@@ -3,7 +3,7 @@
 // превью места с «было / стало», сравнение до четырёх досок на одном куске,
 // применение к дорожке (реестр пересборки) или ко всему треку. Логика доски —
 // в pedals.js (vitest), окно превью — в fxPreview.js.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
 import { usePlayer, fmtDur } from '../composables/usePlayer.js'
@@ -25,7 +25,7 @@ const props = defineProps({
   stems: { type: Array, default: () => [] },   // дорожки трека, известные студии ({name}): нет гитары — запись на «прочее»
 })
 const emit = defineEmits(['applied', 'stem'])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { nowPlayingKey, playerState, refreshPlayer } = usePlayer()
 const inserts = useInserts()
 
@@ -59,6 +59,8 @@ function pickStem(v) {
   stem.value = v
   emit('stem', v)
 }
+// смена языка — наборы педалей заново (api переводит при загрузке)
+watch(locale, async () => { try { presets.value = await api.dspPresets() } catch (e) { msg.value = String(e) } })
 onMounted(async () => {
   try { presets.value = await api.dspPresets() } catch (e) { msg.value = String(e) }
 })
@@ -176,10 +178,10 @@ async function apply() {
         stem.value = 'other'
         msg.value = t('pedals.noguitar')
       }
-      await inserts.addStemPedals(props.job.id, { stem: stem.value, steps, from: s ? s.from : 0, to: s ? s.to : 0, label })
+      await inserts.addStemPedals(props.job.id, { stem: stem.value, steps, from: s ? s.from : 0, to: s ? s.to : 0, label, pedalPreset: presetSel.value || '' })
     } else {
       // весь трек: доска — запись черновика на собранный микс (до мастера), отдельной версии нет
-      await inserts.addMixPedals(props.job.id, { steps, label })
+      await inserts.addMixPedals(props.job.id, { steps, label, pedalPreset: presetSel.value || '' })
     }
     emit('applied')
     msg.value = (msg.value ? msg.value + ' ' : '') + t('pedals.applied')

@@ -4,8 +4,9 @@
 import { TRICK_INSTRUMENTS } from './abcEdit.js'
 import { isPlaceRecord, placeLabel } from './mixDesk.js'
 import { useI18n } from './i18n/index.js'
+import { localizeWarning, pedalPresetName } from './dspI18n.js'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // роли производных треков: результаты слушают, материал — сырьё для вклеек
 export const RESULT_ROLES = ['variant', 'rebuild', 'continue', 'voice']
@@ -47,12 +48,16 @@ export function mixLabel(file, { applied = [], jobs = [], labelOf, fmt }) {
 // заглушки — название приёма
 export function insertTitle(it, { chainName, stemName, instName, placeName }) {
   // пресет звука — одной строкой: название и пометки (гитарист пропущен…)
-  if (it.preset) return [t('insert.preset', { name: it.preset.name }), ...(it.preset.warnings || [])].join(' · ')
+  if (it.preset) return [t('insert.preset', { name: it.preset.name }), ...(it.preset.warnings || []).map((w) => localizeWarning(w, locale.value))].join(' · ')
   // мастер — на весь микс; место дорожки — «место 30 % вправо · гитары»
   if (it.master && it.engine) return it.label || t('insert.master', { name: it.engine.map((b) => b.type).join(' → ') })
   if (isPlaceRecord(it)) return `${placeName ? placeName(it.place) : t('mix.place') + ' ' + placeLabel(it.place)} · ${stemName(it.stems[0])}`
   // эффект: своя подпись записи («один клик» с уровнем) или название цепочки
-  if (it.chain) return `${it.label || chainName(it.chain)} · ${(it.stems || []).map(stemName).join(', ')}`
+  if (it.chain) {
+    // «один клик» — название цепочки на языке показа и уровень; старые записи — своя подпись
+    const fxName = it.oneClick ? `${chainName(it.chain)} (${t('studio.dsp.level.' + it.oneClick)})` : it.label || chainName(it.chain)
+    return `${fxName} · ${(it.stems || []).map(stemName).join(', ')}`
+  }
   // линия громкости — на дорожку или на весь трек
   if (it.envelope) return `${t('insert.envelope')} · ${(it.stems || []).map(stemName).join(', ')}`
   // цепочка звукового движка: подпись записи или типы блоков по порядку
@@ -62,7 +67,8 @@ export function insertTitle(it, { chainName, stemName, instName, placeName }) {
   }
   // доска педалей: подпись набора/доски или названия педалей по порядку
   if (it.steps) {
-    const what = it.label || it.steps.filter((s) => !s.off).map((s) => chainName(s.chain)).join(' → ')
+    const what = (it.pedalPreset && pedalPresetName(it.pedalPreset, locale.value)) || it.label ||
+      it.steps.filter((s) => !s.off).map((s) => chainName(s.chain)).join(' → ')
     return `${what} · ${(it.stems || []).map(stemName).join(', ')}`
   }
   // «убрать» из пульта «Дорожки» — какая дорожка

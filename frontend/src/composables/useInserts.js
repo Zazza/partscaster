@@ -398,11 +398,12 @@ async function addStemFx(parentId, { stem, chain, params, from = 0, to = 0, step
 
 // доска педалей на дорожку в окне: одна запись реестра со списком шагов
 // (эффекты по порядку, а не сумма отдельных); label — подпись в списке вставок
-async function addStemPedals(parentId, { stem, steps, from = 0, to = 0, label = '' }) {
+async function addStemPedals(parentId, { stem, steps, from = 0, to = 0, label = '', pedalPreset = '' }) {
   notApplying(parentId)
   const item = {
     childId: -(Date.now() * 100 + (muteSeq++ % 100)), instId: 'pedals', from, to, lead: 0, beat: 0, db: 0,
     stems: [stem], fadeIn: 0, fadeOut: 0, keepHighHz: 0, steps: (steps || []).map((s) => ({ ...s })), label,
+    ...(pedalPreset ? { pedalPreset } : {}), // набор педалей — подпись берётся по id на языке показа
   }
   applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
   save()
@@ -458,17 +459,17 @@ const mixItem = (extra) => ({
   childId: -(Date.now() * 100 + (muteSeq++ % 100)), from: 0, to: 0, lead: 0, beat: 0, db: 0,
   stems: ['mix'], fadeIn: 0, fadeOut: 0, keepHighHz: 0, mix: true, ...extra,
 })
-async function addMixFx(parentId, { chain, params, step = '', label = '' }) {
+async function addMixFx(parentId, { chain, params, step = '', label = '', oneClick = '' }) {
   notApplying(parentId)
   const item = mixItem({ instId: 'fx-' + chain, chain, params: { ...(params || {}) },
-    ...(step ? { step } : {}), ...(label ? { label } : {}) })
+    ...(step ? { step } : {}), ...(label ? { label } : {}), ...(oneClick ? { oneClick } : {}) })
   applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
   save()
   return null   // только запись: собирает «▶ микс» (ensureMix) и «применить всё»
 }
-async function addMixPedals(parentId, { steps, label = '' }) {
+async function addMixPedals(parentId, { steps, label = '', pedalPreset = '' }) {
   notApplying(parentId)
-  const item = mixItem({ instId: 'pedals', steps: (steps || []).map((s) => ({ ...s })), label })
+  const item = mixItem({ instId: 'pedals', steps: (steps || []).map((s) => ({ ...s })), label, ...(pedalPreset ? { pedalPreset } : {}) })
   applied.value = { ...applied.value, [parentId]: [...appliedFor(parentId), item] }
   save()
   return null   // только запись: собирает «▶ микс» (ensureMix) и «применить всё»
