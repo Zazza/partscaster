@@ -110,6 +110,18 @@ export function YueExportRecipe(arg1) {
   return window['go']['main']['App']['YueExportRecipe'](arg1);
 }
 
+export function YueFfmpegInstall() {
+  return window['go']['main']['App']['YueFfmpegInstall']();
+}
+
+export function YueFfmpegProgress() {
+  return window['go']['main']['App']['YueFfmpegProgress']();
+}
+
+export function YueFfmpegStatus() {
+  return window['go']['main']['App']['YueFfmpegStatus']();
+}
+
 export function YueFragmentJob(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['YueFragmentJob'](arg1, arg2, arg3, arg4, arg5, arg6);
 }

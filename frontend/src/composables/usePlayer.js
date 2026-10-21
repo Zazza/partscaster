@@ -178,7 +178,12 @@ function onVolume() {
 function onSeekInput() { seeking = true }
 async function onSeekChange() {
   seeking = false
-  try { await api.seekAudio(seekPos.value) } catch {}
+  try {
+    await api.seekAudio(seekPos.value)
+  } catch (e) {
+    // не глотаем: на машине без ffmpeg клик по шкале выглядел «просто ничего»
+    nowPlaying.value = t('player.errorDetail', { err: String(e) })
+  }
   setTimeout(refreshPlayer, 300)
 }
 

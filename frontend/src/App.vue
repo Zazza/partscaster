@@ -37,6 +37,7 @@ import PresetChips from './components/PresetChips.vue'
 import JobPresets from './components/JobPresets.vue'
 import StudioPage from './components/StudioPage.vue'
 import WelcomeModal from './components/WelcomeModal.vue'
+import FfmpegModal from './components/FfmpegModal.vue'
 import { WELCOME_KEY, welcomeTab, welcomeClosed } from './welcome.js'
 import { RELEASE_NOTES } from './releaseNotes.js'
 import logoUrl from './assets/logo.png'
@@ -670,6 +671,16 @@ function closeWelcome(dontShow) {
   welcome.value = null
 }
 
+// ffmpeg: перемотка и эффекты студии — локальный ffmpeg; на чистой машине его нет. Один вопрос
+// за запуск («Позже» до конца запуска не напоминаем), у кого в PATH — не спрашиваем вовсе.
+const ffmpegAsk = ref(false)
+onMounted(async () => {
+  try {
+    const st = await api.ffmpegStatus()
+    ffmpegAsk.value = !st.ok
+  } catch { /* статус не спросился — не мешаем старту */ }
+})
+
 // переход по разделам левого блока: «список треков» — главная; из студии выходим
 function navGo(page) {
   navOpen.value = false
@@ -1295,6 +1306,7 @@ function onWindowClick(e) {
 
   <RecipeImportModal v-if="recipeImport" @close="recipeImport = false" @started="refresh()" />
   <ReplayModal v-if="replayJob" :job="replayJob" @close="replayJob = null" @submitted="refresh()" />
+  <FfmpegModal v-if="ffmpegAsk" @close="ffmpegAsk = false" @installed="ffmpegAsk = false" />
 
 
   <PlanModal v-model:abc="planAbc" :open="planOpen" :busy="planBusy" :err="planErr"

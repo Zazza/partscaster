@@ -5,12 +5,15 @@ package dsp
 import (
 	"os/exec"
 	"syscall"
+
+	"partscaster/internal/ffmpegbin"
 )
 
 // ffmpegCmd — ffmpeg без окна консоли: у GUI-процесса оно иначе мелькает
-// на каждом применении эффектов/перемотке.
+// на каждом применении эффектов/перемотке. Свой ffmpeg (скачанный в папку данных)
+// — прежде PATH.
 func ffmpegCmd(args []string) *exec.Cmd {
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.Command(ffmpegbin.Path(), args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	return cmd
 }

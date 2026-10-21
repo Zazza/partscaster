@@ -11,6 +11,7 @@ import {
   YueDrafts, YueDraftPut, YueDraftDelete, YueApplyEdits,
   YueChordGrid, YueSoundPresets, YueSoundPresetCreate, YueSoundPresetUpdate, YueSoundPresetDelete, YueApplySoundPresetWith, YueSoundPresetRetry, YueQueueList, YueQueueMove, YueQueueCancel, YueQueueSetPaused,
   YuePlayWelcomeClip, YuePlayFile, YueToggleAudio, YueStopAudio, YueSeekAudio, YueSetVolume, YuePlayAudio, YueAudioState, YueDeleteJob,
+  YueFfmpegStatus, YueFfmpegInstall, YueFfmpegProgress,
   YueAppVersion, YueVersion, YueCheckWorker, YueAgentSetup, YueConnectClaudeCode,
   YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
 } from './wailsjs/go/main/App'
@@ -162,4 +163,7 @@ export const api = {
   seekAudio: (sec) => YueSeekAudio(sec),
   audioState: () => YueAudioState(),
   setVolume: (v) => YueSetVolume(v),
+  ffmpegStatus: () => YueFfmpegStatus(),
+  ffmpegInstall: () => YueFfmpegInstall(),
+  ffmpegProgress: () => YueFfmpegProgress(),
 }

@@ -308,6 +308,13 @@ program:
 - Resources (RTX 4070 Ti SUPER 16 GB): +3.8 GB VRAM during the conversion; 50 steps — ~0.6 of the vocal duration.
 - Seed-VC license — GPL-3.0: the user installs it explicitly, and it runs as a separate program.
 
+**ffmpeg on the app machine** is needed by player seeking and studio effects (they run locally).
+On Windows the app checks for it at startup and, if missing, offers to download a pinned build
+(GPL, ~82 MB — LGPL builds lack the rubberband filter the studio needs) into its data folder — `%AppData%\partscaster\tools\ffmpeg\bin`;
+nothing is changed system-wide. An ffmpeg found in PATH is used as is; the app's own copy takes
+precedence. The `PARTSCASTER_FFMPEG` variable forces a path (app and MCP). On Linux/macOS a
+system package is enough (`sudo apt install ffmpeg`).
+
 ### NAM amplifiers
 
 The sound engine (`POST /jobs/{id}/fx`, MCP `fx_apply`) runs on numpy/scipy and needs nothing. Only

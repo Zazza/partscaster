@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-
 	"strings"
 	"sync"
 	"time"
+
+	"partscaster/internal/ffmpegbin"
 )
 
 // player — встроенное воспроизведение через системный pw-play (PipeWire),
@@ -262,7 +263,7 @@ func (p *player) Seek(target time.Duration) error {
 	out.Close()
 	// Пере-кодирование во flac, а не -c copy: потоковое копирование на
 	// повторных нарезках даёт пустые/битые хвосты — «таймер идёт, звука нет».
-	cmd := hiddenCmd("ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+	cmd := hiddenCmd(ffmpegbin.Path(), "-y", "-hide_banner", "-loglevel", "error",
 		"-ss", fmt.Sprintf("%.3f", target.Seconds()), "-i", orig,
 		"-t", fmt.Sprintf("%.3f", remaining.Seconds()),
 		"-c:a", "flac", outName)

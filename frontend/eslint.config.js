@@ -11,6 +11,7 @@ export default [
     languageOptions: {
       globals: {
         localStorage: 'readonly',
+        navigator: 'readonly',
         window: 'readonly',
         document: 'readonly',
         console: 'readonly',

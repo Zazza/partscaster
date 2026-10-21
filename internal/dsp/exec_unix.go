@@ -2,9 +2,13 @@
 
 package dsp
 
-import "os/exec"
+import (
+	"os/exec"
 
-// ffmpegCmd — на unix окна консоли не мелькают.
+	"partscaster/internal/ffmpegbin"
+)
+
+// ffmpegCmd — на unix окна консоли не мелькают; свой ffmpeg (если приложение скачало) — прежде PATH.
 func ffmpegCmd(args []string) *exec.Cmd {
-	return exec.Command("ffmpeg", args...)
+	return exec.Command(ffmpegbin.Path(), args...)
 }
