@@ -91,7 +91,7 @@ func runInstaller(i *Installer) bool {
 		return false
 	}
 	err = wails.Run(&wailsopts.App{
-		Title:            "Partscaster — установка воркера",
+		Title:            tr("Partscaster — установка воркера", "Partscaster — worker setup"),
 		Width:            760,
 		Height:           680,
 		MinWidth:         640,
@@ -103,7 +103,7 @@ func runInstaller(i *Installer) bool {
 		Bind:             []any{i},
 	})
 	if err != nil {
-		showError("окно установки не открылось: " + err.Error())
+		showError(tr("окно установки не открылось: ", "the setup window did not open: ") + err.Error())
 		return false
 	}
 	i.mu.Lock()
@@ -121,8 +121,8 @@ func (i *Installer) beforeClose(ctx context.Context) bool {
 	}
 	ans, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
 		Type:          runtime.QuestionDialog,
-		Title:         "Прервать установку?",
-		Message:       "Установка ещё идёт. Прервать её? Следующий запуск продолжит с того же места.",
+		Title:         tr("Прервать установку?", "Stop the installation?"),
+		Message:       tr("Установка ещё идёт. Прервать её? Следующий запуск продолжит с того же места.", "The installation is still running. Stop it? The next run continues from the same point."),
 		DefaultButton: "No", // Windows: только «Да/Нет»; Enter — не прерывать
 	})
 	if err != nil || ans != "Yes" {
@@ -160,11 +160,12 @@ type Info struct {
 	LAN         bool       `json:"lan"`
 	LANFixed    bool       `json:"lan_fixed"` // задан флагом --lan
 	ConnectHint string     `json:"connect_hint"`
+	Lang        string     `json:"lang"` // язык окна: "ru" | "en" (lang)
 }
 
 // Info — сведения для окна: видеокарта, папка, модели с рекомендацией, выбор доступа.
 func (i *Installer) Info() Info {
-	inf := Info{Version: version, NeedGB: needFreeGB, AskHome: i.home == "", Home: i.home, LANFixed: i.opts.lan}
+	inf := Info{Version: version, NeedGB: needFreeGB, AskHome: i.home == "", Home: i.home, LANFixed: i.opts.lan, Lang: lang}
 	if inf.AskHome {
 		inf.Home = defaultHome()
 	}
@@ -219,7 +220,7 @@ func (i *Installer) FreeGB(dir string) float64 {
 // ChooseFolder — диалог выбора папки; отмена — прежний путь.
 func (i *Installer) ChooseFolder(current string) string {
 	dir, err := runtime.OpenDirectoryDialog(i.wails, runtime.OpenDialogOptions{
-		Title: "Папка установки воркера", DefaultDirectory: filepath.Dir(current), CanCreateDirectories: true,
+		Title: tr("Папка установки воркера", "Worker install folder"), DefaultDirectory: filepath.Dir(current), CanCreateDirectories: true,
 	})
 	if err != nil || dir == "" {
 		return current
@@ -250,15 +251,15 @@ func (i *Installer) Start(c Choice) string {
 		i.mu.Unlock()
 	}()
 	if !workerexe.ValidCppModel(c.Model) {
-		return fmt.Sprintf("модель %q неизвестна", c.Model)
+		return fmt.Sprintf(tr("модель %q неизвестна", "unknown model %q"), c.Model)
 	}
 	if i.home == "" {
 		if strings.TrimSpace(c.Home) == "" {
-			return "выберите папку установки"
+			return tr("выберите папку установки", "choose an install folder")
 		}
 		if err := i.takeHome(c.Home); err != nil {
 			if errors.Is(err, errAlreadyRunning) {
-				return "в этой папке уже работает воркер Partscaster (его значок в трее)"
+				return tr("в этой папке уже работает воркер Partscaster (его значок в трее)", "a Partscaster worker is already running in this folder (its icon is in the tray)")
 			}
 			return err.Error()
 		}
@@ -297,13 +298,13 @@ func (i *Installer) startWorker() error {
 	say(i.w.log, "== этап %d ==\n", int(workerexe.StageStart))
 	if !i.w.isRunning() {
 		if err := i.w.start(); err != nil {
-			return fmt.Errorf("воркер не запустился: %w", err)
+			return fmt.Errorf(tr("воркер не запустился: %w", "the worker did not start: %w"), err)
 		}
 	}
-	i.emit("line", "Запуск воркера…")
+	i.emit("line", tr("Запуск воркера…", "Starting the worker…"))
 	if !i.w.waitHealthy(workerStartTimeout) {
 		i.w.stop()
-		return errors.New("воркер не ответил после запуска — подробности в журнале")
+		return errors.New(tr("воркер не ответил после запуска — подробности в журнале", "the worker did not respond after starting — details in the log"))
 	}
 	return nil
 }
@@ -367,11 +368,11 @@ func (r *windowReporter) Progress(file string, done, total int64) {
 func humanBytes(n int64) string {
 	switch {
 	case n >= 1<<30:
-		return fmt.Sprintf("%.1f ГБ", float64(n)/(1<<30))
+		return fmt.Sprintf(tr("%.1f ГБ", "%.1f GB"), float64(n)/(1<<30))
 	case n >= 1<<20:
-		return fmt.Sprintf("%d МБ", n/(1<<20))
+		return fmt.Sprintf(tr("%d МБ", "%d MB"), n/(1<<20))
 	default:
-		return fmt.Sprintf("%d КБ", n/(1<<10))
+		return fmt.Sprintf(tr("%d КБ", "%d KB"), n/(1<<10))
 	}
 }
 
@@ -381,7 +382,7 @@ func checkGPU() (workerexe.GPU, error) {
 	workerexe.HideConsole(cmd)
 	out, err := cmd.Output()
 	if err != nil {
-		return workerexe.GPU{}, fmt.Errorf("нужна видеокарта NVIDIA с драйвером (nvidia-smi не отвечает: %v)", err)
+		return workerexe.GPU{}, fmt.Errorf(tr("нужна видеокарта NVIDIA с драйвером (nvidia-smi не отвечает: %v)", "an NVIDIA graphics card with a driver is required (nvidia-smi does not respond: %v)"), err)
 	}
 	return workerexe.ParseGPU(string(out))
 }

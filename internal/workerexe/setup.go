@@ -50,6 +50,9 @@ func LockHome(home string) (*os.File, error) {
 		if lockBusy(err) {
 			return nil, ErrHomeBusy
 		}
+		if Lang == "en" {
+			return nil, fmt.Errorf("cannot lock the folder %s: %w", home, err)
+		}
 		return nil, fmt.Errorf("блокировка папки %s: %w", home, err)
 	}
 	return f, nil

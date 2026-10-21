@@ -117,7 +117,7 @@ func runTray(w *worker, lock *os.File) error {
 	defer func() { _ = w.log.Close() }() // журнал: записи уже на диске
 	if !w.isRunning() {
 		if err := w.start(); err != nil {
-			return fmt.Errorf("воркер не запустился: %w", err)
+			return fmt.Errorf(tr("воркер не запустился: %w", "the worker did not start: %w"), err)
 		}
 	}
 	systray.Run(func() { trayReady(w) }, func() { w.stop() })
@@ -126,18 +126,18 @@ func runTray(w *worker, lock *os.File) error {
 
 func trayReady(w *worker) {
 	systray.SetIcon(trayIcon)
-	systray.SetTooltip("Partscaster — воркер")
+	systray.SetTooltip(tr("Partscaster — воркер", "Partscaster — worker"))
 	mState := systray.AddMenuItem(workerexe.StateStarting.Text(), "")
 	mState.Disable()
-	mAddr := systray.AddMenuItem("", "Скопировать адрес для подключения приложения")
-	mLAN := systray.AddMenuItemCheckbox("Доступ с других компьютеров сети", "", workerexe.LoadLauncher(w.home).LAN)
+	mAddr := systray.AddMenuItem("", tr("Скопировать адрес для подключения приложения", "Copy the address for connecting the app"))
+	mLAN := systray.AddMenuItemCheckbox(tr("Доступ с других компьютеров сети", "Access from other computers on the network"), "", workerexe.LoadLauncher(w.home).LAN)
 	systray.AddSeparator()
-	mLog := systray.AddMenuItem("Журнал", "Открыть журнал воркера")
-	mQuit := systray.AddMenuItem("Выход", "Остановить воркер")
+	mLog := systray.AddMenuItem(tr("Журнал", "Log"), tr("Открыть журнал воркера", "Open the worker log"))
+	mQuit := systray.AddMenuItem(tr("Выход", "Exit"), tr("Остановить воркер", "Stop the worker"))
 
 	setAddr := func() {
-		mAddr.SetTitle("Адрес: " + workerexe.ConnectAddress(workerexe.LoadLauncher(w.home).LAN, lanIPs()) +
-			" (скопировать)")
+		mAddr.SetTitle(tr("Адрес: ", "Address: ") + workerexe.ConnectAddress(workerexe.LoadLauncher(w.home).LAN, lanIPs()) +
+			tr(" (скопировать)", " (copy)"))
 	}
 	setAddr()
 	go func() {
@@ -160,8 +160,9 @@ func trayReady(w *worker) {
 			case <-mLog.ClickedCh:
 				openFile(filepath.Join(w.home, "logs", "worker.log"))
 			case <-mQuit.ClickedCh:
-				if generationRunning() && !askYesNo("Идёт генерация — прервать её и остановить воркер?\n"+
-					"Очередь сохранится и продолжится при следующем запуске.") {
+				if generationRunning() && !askYesNo(tr("Идёт генерация — прервать её и остановить воркер?\n"+
+					"Очередь сохранится и продолжится при следующем запуске.", "A generation is running — stop it and shut down the worker?\n"+
+					"The queue is kept and continues on the next start.")) {
 					continue
 				}
 				systray.Quit()
@@ -176,12 +177,12 @@ func trayReady(w *worker) {
 func toggleLAN(w *worker, item *systray.MenuItem) {
 	st := workerexe.LoadLauncher(w.home)
 	want := !st.LAN
-	if generationRunning() && !askYesNo("Идёт генерация — перезапуск воркера её прервёт. Продолжить?") {
+	if generationRunning() && !askYesNo(tr("Идёт генерация — перезапуск воркера её прервёт. Продолжить?", "A generation is running — restarting the worker will stop it. Continue?")) {
 		return
 	}
 	st.LAN = want
 	if err := workerexe.SaveLauncher(w.home, st); err != nil {
-		showError("настройка не сохранилась: " + err.Error())
+		showError(tr("настройка не сохранилась: ", "the setting was not saved: ") + err.Error())
 		return
 	}
 	if want {
@@ -191,7 +192,7 @@ func toggleLAN(w *worker, item *systray.MenuItem) {
 	}
 	w.stop()
 	if err := w.start(); err != nil {
-		showError("воркер не перезапустился: " + err.Error())
+		showError(tr("воркер не перезапустился: ", "the worker did not restart: ") + err.Error())
 	}
 }
 

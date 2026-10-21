@@ -718,12 +718,14 @@ def _cli(argv: list[str]) -> int:
             last[0] = time.monotonic()
             print(f"  {file}: {done / 2**30:.2f} / {total / 2**30:.2f} ГБ", flush=True)
 
+    # язык строк — окна установки воркера Windows (PARTSCASTER_LANG от partscaster-worker), по умолчанию русский
+    en = os.environ.get("PARTSCASTER_LANG") == "en"
     try:
         download(name, show)
     except (OSError, RuntimeError) as e:
-        print(f"модель {name} не скачана: {e}", file=sys.stderr)
+        print(f"model {name} did not download: {e}" if en else f"модель {name} не скачана: {e}", file=sys.stderr)
         return 1
-    print(f"модель {name} на месте: {models_dir()}")
+    print(f"model {name} is in place: {models_dir()}" if en else f"модель {name} на месте: {models_dir()}")
     return 0
 
 

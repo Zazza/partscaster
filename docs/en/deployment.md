@@ -383,9 +383,11 @@ but you can choose them.
 
 The Windows package has `partscaster-worker.exe` next to the app — one program without a console: the first run opens
 an installation window, after that it lives as a tray icon (by the clock). The worker runs until the program is closed
-from the icon menu. There is no autostart at Windows sign-in.
+from the icon menu. There is no autostart at Windows sign-in. The setup window, the icon menu and messages follow
+the Windows interface language (Russian if Windows is Russian, otherwise English); to set it explicitly use the
+`PARTSCASTER_LANG=ru` or `en` environment variable.
 
-![The worker installer window: the generation model for the graphics card and access (the window is in Russian for now)](../img/installer-choices-ru.png)
+![The worker installer window: the generation model for the graphics card and access](../img/installer-choices-en.png)
 
 - **Installation window** (first run):
   1. welcome and a GPU check (`nvidia-smi`; no NVIDIA — a clear message and exit);

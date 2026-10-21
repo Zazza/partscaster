@@ -40,6 +40,7 @@ type options struct {
 }
 
 func main() {
+	workerexe.Lang = lang // строки состояния трея — на языке окна
 	opts, err := parseFlags(os.Args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		showInfo(err.Error())
@@ -70,22 +71,22 @@ func parseFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("partscaster-worker", flag.ContinueOnError)
 	var out bytes.Buffer
 	fs.SetOutput(&out)
-	fs.StringVar(&o.home, "home", "", "папка установки (Python, пакеты, модели, треки)")
-	fs.BoolVar(&o.lan, "lan", false, "открыть воркер для других компьютеров сети (по умолчанию — только этот)")
-	fs.StringVar(&o.cppModel, "cpp-model", "", "модель генерации: auto (рекомендуемая) | bf16 | q8 | q6 | q5")
-	fs.BoolVar(&o.cppLowVram, "cpp-low-vram", false, "экономный режим (контекст по видеопамяти карты — для карт до 10 ГБ)")
+	fs.StringVar(&o.home, "home", "", tr("папка установки (Python, пакеты, модели, треки)", "install folder (Python, packages, models, tracks)"))
+	fs.BoolVar(&o.lan, "lan", false, tr("открыть воркер для других компьютеров сети (по умолчанию — только этот)", "open the worker to other computers on the network (default — this one only)"))
+	fs.StringVar(&o.cppModel, "cpp-model", "", tr("модель генерации: auto (рекомендуемая) | bf16 | q8 | q6 | q5", "generation model: auto (recommended) | bf16 | q8 | q6 | q5"))
+	fs.BoolVar(&o.cppLowVram, "cpp-low-vram", false, tr("экономный режим (контекст по видеопамяти карты — для карт до 10 ГБ)", "economy mode (context sized to the card’s video memory — for cards up to 10 GB)"))
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return o, helpError{out.String()}
 		}
 		msg := err.Error()
 		if strings.Contains(msg, "-engine") {
-			msg += "\n\nДвижок генерации один (yue2.cpp): флага --engine больше нет, модель — --cpp-model auto|bf16|q8|q6|q5."
+			msg += tr("\n\nДвижок генерации один (yue2.cpp): флага --engine больше нет, модель — --cpp-model auto|bf16|q8|q6|q5.", "\n\nThere is one generation engine (yue2.cpp): the --engine flag is gone, the model is --cpp-model auto|bf16|q8|q6|q5.")
 		}
 		return o, errors.New(msg)
 	}
 	if o.cppModel != "" && o.cppModel != "auto" && !workerexe.ValidCppModel(o.cppModel) {
-		return o, fmt.Errorf("--cpp-model: %q (допустимо auto, %s)", o.cppModel, strings.Join(workerexe.CppModels, ", "))
+		return o, fmt.Errorf(tr("--cpp-model: %q (допустимо auto, %s)", "--cpp-model: %q (allowed: auto, %s)"), o.cppModel, strings.Join(workerexe.CppModels, ", "))
 	}
 	return o, nil
 }
@@ -105,7 +106,7 @@ func run(opts options) error {
 	if saved {
 		if err := inst.takeHome(home); err != nil {
 			if errors.Is(err, errAlreadyRunning) {
-				showInfo("Воркер Partscaster уже запущен — его значок в трее (у часов).")
+				showInfo(tr("Воркер Partscaster уже запущен — его значок в трее (у часов).", "The Partscaster worker is already running — its icon is in the tray (by the clock)."))
 				return nil
 			}
 			return err
@@ -123,7 +124,7 @@ func run(opts options) error {
 	return runTray(inst.w, inst.lock)
 }
 
-var errAlreadyRunning = errors.New("воркер этой папки уже запущен")
+var errAlreadyRunning = errors.New(tr("воркер этой папки уже запущен", "the worker of this folder is already running"))
 
 // takeHome — папка установки занята этим запуском (второй запуск той же папки — errAlreadyRunning), порт свободен,
 // код воркера распакован, журнал запуска открыт. Замок папки держится до выхода программы (его закрывает runTray).
@@ -146,8 +147,8 @@ func (i *Installer) takeHome(home string) error {
 	if c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", workerexe.Port), time.Second); err == nil {
 		_ = c.Close() // пробное соединение: ошибка закрытия не важна
 		release()
-		return fmt.Errorf("порт %d занят другой программой (или воркером из другой папки) — закройте её и запустите снова",
-			workerexe.Port)
+		return fmt.Errorf(tr("порт %d занят другой программой (или воркером из другой папки) — закройте её и запустите снова",
+			"port %d is taken by another program (or by a worker from another folder) — close it and start again"), workerexe.Port)
 	}
 	workerDir, err := unpackWorker(home)
 	if err != nil {
@@ -191,7 +192,7 @@ func defaultHome() string {
 func workerArchive() (fs.File, error) {
 	archives, err := fs.Glob(payload, "payload/worker-*.tar.gz")
 	if err != nil || len(archives) != 1 {
-		return nil, errors.New("программа собрана без кода воркера — соберите её через make dist-windows")
+		return nil, errors.New(tr("программа собрана без кода воркера — соберите её через make dist-windows", "the program was built without the worker code — build it with make dist-windows"))
 	}
 	return payload.Open(archives[0])
 }

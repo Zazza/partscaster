@@ -10,10 +10,14 @@ import (
 
 // Программа воркера — для Windows; здесь — только чтобы пакет собирался и проверялся на других системах.
 
-func showError(text string) { fmt.Fprintln(os.Stderr, "Ошибка:", text) }
+const isWindows = false
+
+func uiLangID() uint16 { return 0 } // язык берётся из LANG (detectLang)
+
+func showError(text string) { fmt.Fprintln(os.Stderr, tr("Ошибка:", "Error:"), text) }
 func showInfo(text string)  { fmt.Fprintln(os.Stderr, text) }
 func askYesNo(text string) bool {
-	fmt.Fprintln(os.Stderr, text, "— да")
+	fmt.Fprintln(os.Stderr, text, tr("— да", "— yes"))
 	return true
 }
 

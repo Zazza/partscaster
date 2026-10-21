@@ -256,13 +256,26 @@ func WorkerStateOf(procRunning, healthOK bool) WorkerState {
 	return StateStarting
 }
 
+// Lang — язык строк состояния для трея ("ru" | "en"); выставляет программа воркера при старте.
+var Lang = "ru"
+
 // Text — строка состояния для меню и подсказки значка.
 func (s WorkerState) Text() string {
+	en := Lang == "en"
 	switch s {
 	case StateRunning:
+		if en {
+			return "The worker is running"
+		}
 		return "Воркер работает"
 	case StateFailed:
+		if en {
+			return "The worker stopped with an error — see the log"
+		}
 		return "Воркер остановился с ошибкой — см. журнал"
+	}
+	if en {
+		return "The worker is starting…"
 	}
 	return "Воркер запускается…"
 }

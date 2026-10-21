@@ -4,7 +4,115 @@
 
 const api = () => window.go.main.Installer
 const $ = (id) => document.getElementById(id)
-const STAGES = ['Python и пакеты', 'Разделение на дорожки', 'Модель генерации', 'Запуск']
+
+// Тексты окна: язык — info.lang (программа берёт язык интерфейса Windows). {имя} — подстановка в L().
+const I18N = {
+  ru: {
+    'sub': 'Установка воркера',
+    'welcome.title': 'Добро пожаловать',
+    'welcome.text': 'Воркер — часть Partscaster, которая генерирует музыку на видеокарте этого компьютера. Установка займёт несколько гигабайт и некоторое время — всё ставится в одну папку, в систему ничего не прописывается.',
+    'gpu': 'Видеокарта: {gpu}, {vram} ГБ видеопамяти.',
+    'home.title': 'Папка установки',
+    'home.text': 'Сюда лягут Python, пакеты, модели и ваши треки.',
+    'home.browse': 'Выбрать…',
+    'home.need': 'Нужно около {need} ГБ; свободное место узнать не удалось.',
+    'home.free': 'Свободно {free} ГБ, нужно около {need} ГБ.',
+    'home.low': ' Места может не хватить.',
+    'home.choose': 'Выберите папку установки',
+    'model.title': 'Модель генерации',
+    'model.file': ' — файл {size} ГБ',
+    'model.rec': 'рекомендуется для этой видеокарты',
+    'model.low': 'Экономный режим — память под карту (на 8 ГБ ~6,5 ГБ, трек с продолжениями до ~10 мин)',
+    'model.hint': 'Модель можно сменить потом в настройках приложения.',
+    'access.title': 'Доступ',
+    'access.local': 'Только этот компьютер',
+    'access.local.hint': 'приложение Partscaster стоит здесь же',
+    'access.lan': 'С других компьютеров в сети',
+    'access.lan.hint': 'приложение на другом компьютере; можно сменить в меню значка в трее',
+    'install.title': 'Установка',
+    'install.failed': 'Установка не закончилась',
+    'install.retryHint': 'Уже скачанное не пропадёт — «Повторить» продолжит с того же места.',
+    'install.more': 'Подробнее ▾',
+    'install.less': 'Скрыть подробности ▴',
+    'install.progress': '{file} — {done} из {total} ({pct}%)',
+    'stage.0': 'Python и пакеты',
+    'stage.1': 'Разделение на дорожки',
+    'stage.2': 'Модель генерации',
+    'stage.3': 'Запуск',
+    'done.title': 'Готово',
+    'done.text': 'Воркер запустится и будет работать в фоне — его значок появится в трее (у часов). Оттуда — журнал, доступ из сети и выход.',
+    'done.addr': 'В приложении Partscaster укажите адрес воркера:',
+    'done.copy': 'Скопировать',
+    'done.copied': 'Скопировано',
+    'btn.back': 'Назад',
+    'btn.retry': 'Повторить',
+    'btn.openlog': 'Открыть журнал',
+    'btn.next': 'Далее',
+    'btn.install': 'Установить',
+    'btn.close': 'Закрыть',
+    'unit.gb': 'ГБ',
+    'unit.mb': 'МБ',
+    'unit.kb': 'КБ',
+  },
+  en: {
+    'sub': 'Worker setup',
+    'welcome.title': 'Welcome',
+    'welcome.text': 'The worker is the part of Partscaster that generates music on this computer’s graphics card. Setup takes several gigabytes and some time — everything goes into one folder, nothing is written into the system.',
+    'gpu': 'Graphics card: {gpu}, {vram} GB of video memory.',
+    'home.title': 'Install folder',
+    'home.text': 'Python, packages, models and your tracks will go here.',
+    'home.browse': 'Browse…',
+    'home.need': 'About {need} GB is needed; free space could not be determined.',
+    'home.free': '{free} GB free, about {need} GB needed.',
+    'home.low': ' There may not be enough space.',
+    'home.choose': 'Choose an install folder',
+    'model.title': 'Generation model',
+    'model.file': ' — {size} GB file',
+    'model.rec': 'recommended for this graphics card',
+    'model.low': 'Economy mode — memory sized to the card (~6.5 GB on 8 GB, a track with continuations up to ~10 min)',
+    'model.hint': 'The model can be changed later in the app settings.',
+    'access.title': 'Access',
+    'access.local': 'This computer only',
+    'access.local.hint': 'the Partscaster app is installed here too',
+    'access.lan': 'From other computers on the network',
+    'access.lan.hint': 'the app is on another computer; can be changed in the tray icon menu',
+    'install.title': 'Installing',
+    'install.failed': 'The installation did not finish',
+    'install.retryHint': 'What is already downloaded is kept — “Retry” continues from the same point.',
+    'install.more': 'Details ▾',
+    'install.less': 'Hide details ▴',
+    'install.progress': '{file} — {done} of {total} ({pct}%)',
+    'stage.0': 'Python and packages',
+    'stage.1': 'Stem separation',
+    'stage.2': 'Generation model',
+    'stage.3': 'Start',
+    'done.title': 'Done',
+    'done.text': 'The worker will start and run in the background — its icon appears in the tray (by the clock). From there: the log, network access and exit.',
+    'done.addr': 'In the Partscaster app, enter the worker address:',
+    'done.copy': 'Copy',
+    'done.copied': 'Copied',
+    'btn.back': 'Back',
+    'btn.retry': 'Retry',
+    'btn.openlog': 'Open log',
+    'btn.next': 'Next',
+    'btn.install': 'Install',
+    'btn.close': 'Close',
+    'unit.gb': 'GB',
+    'unit.mb': 'MB',
+    'unit.kb': 'KB',
+  },
+}
+let lang = 'ru'
+function L(key, vars) {
+  let s = (I18N[lang] && I18N[lang][key]) ?? I18N.ru[key] ?? key
+  for (const [k, v] of Object.entries(vars || {})) s = s.replaceAll('{' + k + '}', String(v))
+  return s
+}
+function applyTexts() {
+  document.documentElement.lang = lang
+  for (const el of document.querySelectorAll('[data-i]')) el.textContent = L(el.dataset.i)
+}
+const STAGES = () => [0, 1, 2, 3].map((n) => L('stage.' + n))
 const LOG_MAX = 3000 // строк журнала в окне (полный — в файле)
 
 let info = null
@@ -29,24 +137,25 @@ function buttons() {
   $('openlog').hidden = phase !== 'failed'
   const next = $('next')
   next.hidden = phase === 'installing' || phase === 'failed'
-  next.textContent = phase === 'done' || info.gpu_error ? 'Закрыть' : last ? 'Установить' : 'Далее'
+  next.textContent = phase === 'done' || info.gpu_error ? L('btn.close') : last ? L('btn.install') : L('btn.next')
 }
 
 function gb(v) {
-  return v.toFixed(1).replace('.', ',')
+  const s = v.toFixed(1)
+  return lang === 'ru' ? s.replace('.', ',') : s
 }
 
 async function refreshFree() {
   const free = await api().FreeGB($('home').value)
   const el = $('free')
   if (free < 0) {
-    el.textContent = `Нужно около ${info.need_gb} ГБ; свободное место узнать не удалось.`
+    el.textContent = L('home.need', { need: info.need_gb })
     el.className = 'hint'
     return
   }
-  el.textContent = `Свободно ${Math.floor(free)} ГБ, нужно около ${info.need_gb} ГБ.`
+  el.textContent = L('home.free', { free: Math.floor(free), need: info.need_gb })
   el.className = free < info.need_gb ? 'hint warn' : 'hint'
-  if (free < info.need_gb) el.textContent += ' Места может не хватить.'
+  if (free < info.need_gb) el.textContent += L('home.low')
 }
 
 function renderModels() {
@@ -55,9 +164,9 @@ function renderModels() {
   for (const m of info.models) {
     const label = document.createElement('label')
     label.className = 'opt'
-    const size = m.size_gb ? ` — файл ${gb(m.size_gb)} ГБ` : ''
+    const size = m.size_gb ? L('model.file', { size: gb(m.size_gb) }) : ''
     label.innerHTML = `<input type="radio" name="model" value="${m.name}"> <b>${m.name.toUpperCase()}</b>` +
-      `<span>${size}</span>` + (m.recommended ? ' <span class="rec">рекомендуется для этой видеокарты</span>' : '')
+      `<span>${size}</span>` + (m.recommended ? ` <span class="rec">${L('model.rec')}</span>` : '')
     const input = label.querySelector('input')
     input.checked = m.name === info.model
     input.disabled = info.model_fixed
@@ -82,7 +191,7 @@ function readChoice() {
 }
 
 function renderStages() {
-  $('stages').innerHTML = STAGES.map((s) => `<li>${s}</li>`).join('')
+  $('stages').innerHTML = STAGES().map((s) => `<li>${s}</li>`).join('')
 }
 
 function markStage(n, cls) {
@@ -104,9 +213,9 @@ function logLine(text) {
 
 // человекочитаемые байты: «3,8 ГБ», «530 МБ» — сырые числа в окне не читаются
 function human(n) {
-  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(1).replace('.', ',') + ' ГБ'
-  if (n >= 1024 ** 2) return Math.round(n / 1024 ** 2) + ' МБ'
-  return Math.round(n / 1024) + ' КБ'
+  if (n >= 1024 ** 3) return gb(n / 1024 ** 3) + ' ' + L('unit.gb')
+  if (n >= 1024 ** 2) return Math.round(n / 1024 ** 2) + ' ' + L('unit.mb')
+  return Math.round(n / 1024) + ' ' + L('unit.kb')
 }
 
 function hideProgress() {
@@ -118,7 +227,7 @@ window.runtime.EventsOn('progress', (p) => {
   const pct = p.total > 0 ? Math.floor((100 * p.done) / p.total) : 0
   $('prog').hidden = false
   $('prog-fill').style.width = pct + '%'
-  $('prog-text').textContent = `${p.file} — ${human(p.done)} из ${human(p.total)} (${pct}%)`
+  $('prog-text').textContent = L('install.progress', { file: p.file, done: human(p.done), total: human(p.total), pct })
 })
 
 async function start() {
@@ -127,7 +236,7 @@ async function start() {
   const prev = phase
   phase = 'installing'
   $('fail').hidden = true
-  $('inst-title').textContent = 'Установка'
+  $('inst-title').textContent = L('install.title')
   renderStages()
   curStage = 0
   markStage(0, 'cur')
@@ -147,14 +256,14 @@ window.runtime.EventsOn('stage', (n) => {
   curStage = n
   markStage(n, 'cur')
   hideProgress()
-  if (n < STAGES.length) $('now').textContent = STAGES[n] + '…'
+  if (n < STAGES().length) $('now').textContent = STAGES()[n] + '…'
 })
 window.runtime.EventsOn('line', logLine)
 window.runtime.EventsOn('failed', (text) => {
   phase = 'failed'
   markStage(curStage, 'bad')
   hideProgress()
-  $('inst-title').textContent = 'Установка не закончилась'
+  $('inst-title').textContent = L('install.failed')
   $('fail-text').textContent = text
   $('fail').hidden = false
   buttons()
@@ -162,7 +271,7 @@ window.runtime.EventsOn('failed', (text) => {
 window.runtime.EventsOn('done', (addr) => {
   phase = 'done'
   hideProgress()
-  markStage(STAGES.length, '')
+  markStage(STAGES().length, '')
   $('addr').textContent = addr
   show('done')
   buttons()
@@ -174,7 +283,7 @@ $('next').addEventListener('click', async () => {
     return
   }
   if (steps[at] === 'home' && !$('home').value.trim()) {
-    setError('Выберите папку установки')
+    setError(L('home.choose'))
     return
   }
   setError('')
@@ -202,24 +311,26 @@ $('browse').addEventListener('click', async () => {
 $('home').addEventListener('change', refreshFree)
 $('copy').addEventListener('click', () => {
   api().Copy($('addr').textContent)
-  $('copy').textContent = 'Скопировано'
+  $('copy').textContent = L('done.copied')
 })
 $('toggle-log').addEventListener('click', () => {
   const pre = $('log')
   pre.hidden = !pre.hidden
-  $('toggle-log').textContent = pre.hidden ? 'Подробнее ▾' : 'Скрыть подробности ▴'
+  $('toggle-log').textContent = pre.hidden ? L('install.more') : L('install.less')
   if (!pre.hidden) pre.scrollTop = pre.scrollHeight
 })
 
 async function init() {
   info = await api().Info()
+  lang = info.lang === 'en' ? 'en' : 'ru'
+  applyTexts()
   $('ver').textContent = info.version
   const gpu = $('gpu')
   if (info.gpu_error) {
     gpu.textContent = info.gpu_error
     gpu.className = 'card bad'
   } else {
-    gpu.textContent = `Видеокарта: ${info.gpu}, ${info.vram_gb} ГБ видеопамяти.`
+    gpu.textContent = L('gpu', { gpu: info.gpu, vram: info.vram_gb })
   }
   $('home').value = info.home
   renderModels()

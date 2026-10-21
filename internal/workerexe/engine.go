@@ -5,7 +5,6 @@ package workerexe
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,6 +85,7 @@ func EngineCppCommand(home, workerDir string, args ...string) *exec.Cmd {
 	for k, v := range WorkerEnv(home, goosHere) {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
+	cmd.Env = append(cmd.Env, "PARTSCASTER_LANG="+Lang) // строки скачивания модели — на языке окна установки
 	return cmd
 }
 
@@ -118,6 +118,3 @@ func ValidCppModel(m string) bool {
 	}
 	return false
 }
-
-// FormatGB — мегабайты в «N ГБ» для подсказок.
-func FormatGB(mib int) string { return fmt.Sprintf("%d ГБ", mib/1024) }

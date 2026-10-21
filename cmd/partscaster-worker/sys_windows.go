@@ -10,13 +10,21 @@ import (
 )
 
 const (
-	caption = "Partscaster — воркер"
-	idYes   = 6 // MessageBox: нажата «Да»
+	isWindows = true
+	idYes     = 6 // MessageBox: нажата «Да»
 )
+
+// uiLangID — язык интерфейса Windows (LANGID) для выбора языка окна и трея.
+func uiLangID() uint16 {
+	r, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage").Call()
+	return uint16(r)
+}
+
+func caption() string { return tr("Partscaster — воркер", "Partscaster — worker") }
 
 func messageBox(text string, flags uint32) int32 {
 	t, _ := windows.UTF16PtrFromString(text)
-	c, _ := windows.UTF16PtrFromString(caption)
+	c, _ := windows.UTF16PtrFromString(caption())
 	ret, _ := windows.MessageBox(0, t, c, flags) // окно-сообщение: ошибка показа — показать нечем
 	return ret
 }
