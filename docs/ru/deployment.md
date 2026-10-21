@@ -34,14 +34,35 @@
 
 ## Релизный пакет
 
-Релиз — GitHub Release тега `vX.Y.Z` (собирает `.github/workflows/release.yml`). В нём:
+Релиз — GitHub Release тега `vX.Y.Z` (собирает `.github/workflows/release.yml`). Пакеты приложения в релизе —
+с постоянными именами (версия — в названии релиза и в каталоге внутри архива), поэтому ссылка
+`https://github.com/Zazza/partscaster/releases/latest/download/partscaster-windows-amd64.zip` всегда ведёт на
+последнюю версию. В релизе:
 
 | Файл | Что внутри |
 |---|---|
-| `partscaster-<версия>-linux-<арх>.tar.gz` | приложение, `partscaster-mcp`, архив воркера (с готовой программой yue2.cpp под Linux, если собрана), `INSTALL.txt` |
-| `partscaster-<версия>-windows-amd64.zip` | то же для Windows + `partscaster-worker.exe`; архив воркера внутри — с yue2.cpp под Windows |
-| `partscaster-<версия>-darwin-<арх>.tar.gz` | приложение `partscaster.app` (`partscaster-mcp` и архив воркера — внутри `.app/Contents/MacOS/`); без yue2.cpp |
+| `partscaster-linux-<арх>.tar.gz` | приложение, `partscaster-mcp`, архив воркера (с готовой программой yue2.cpp под Linux, если собрана), `INSTALL.txt` |
+| `partscaster-windows-amd64.zip` | то же для Windows + `partscaster-worker.exe`; архив воркера внутри — с yue2.cpp под Windows |
+| `partscaster-darwin-<арх>.tar.gz` | приложение `partscaster.app` (`partscaster-mcp` и архив воркера — внутри `.app/Contents/MacOS/`); без yue2.cpp |
 | `worker-<версия>.tar.gz` | архив воркера для Linux-машины с GPU (тот же, что в пакете Linux) |
+
+**Программа yue2.cpp для пакетов** собирается заранее отдельным workflow `.github/workflows/yue2cpp.yml`
+(Windows — CUDA 12.8 и Visual Studio раннера, Linux — контейнер CUDA 12.8; около часа). Он запускается сам при
+изменении скриптов сборки или `worker/engine_cpp.py` в develop/main и собирает один раз на коммит yue2.cpp
+(`CPP_COMMIT`); релиз скачивает готовую сборку (артефакт живёт 90 дней), а если её нет — собирает сам.
+
+**Пробный релиз с develop**: тег с дефисом (`v1.0.0-rc1`) на коммит develop собирает все пакеты так же, но релиз
+помечается «предварительным» и не становится «последним» — ссылки `releases/latest` на него не ведут. Порядок:
+
+1. Запушить develop и дождаться зелёного запуска «yue2.cpp» во вкладке Actions (впервые — около часа; дальше он
+   пропускается, пока не изменится коммит yue2.cpp).
+2. Поставить тег: `git tag v1.0.0-rc1 && git push origin v1.0.0-rc1` — запустится «Release» под три ОС.
+3. В релизе проверить: есть `partscaster-windows-amd64.zip`, `partscaster-linux-amd64.tar.gz`,
+   `partscaster-darwin-<арх>.tar.gz` и `worker-<версия>.tar.gz`; в журнале шага «Готовая сборка yue2.cpp» —
+   «взята готовая сборка»; в архиве Windows внутри `worker-*.tar.gz` есть `yue2cpp/yue-server.exe`.
+
+Неудачную пробу удалите вместе с тегом (`git push origin :v1.0.0-rc1` и релиз на странице Releases), следующую —
+`v1.0.0-rc2`.
 
 Архивы воркера в пакетах разных ОС отличаются только программой yue2.cpp. Для Linux-машины с GPU берите
 `worker-<версия>.tar.gz` или архив из пакета Linux: в архиве из пакета Windows программы под Linux нет,

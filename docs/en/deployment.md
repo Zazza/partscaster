@@ -35,14 +35,36 @@ name is enough — port 8091 is added automatically) and press "Check". On the s
 
 ## Release package
 
-A release is the GitHub Release of tag `vX.Y.Z` (built by `.github/workflows/release.yml`). It contains:
+A release is the GitHub Release of tag `vX.Y.Z` (built by `.github/workflows/release.yml`). App packages in a
+release have fixed names (the version is in the release title and in the folder inside the archive), so the link
+`https://github.com/Zazza/partscaster/releases/latest/download/partscaster-windows-amd64.zip` always leads to the
+latest version. It contains:
 
 | File | What is inside |
 |---|---|
-| `partscaster-<version>-linux-<arch>.tar.gz` | app, `partscaster-mcp`, worker archive (with a ready-made yue2.cpp program for Linux, if built), `INSTALL.txt` |
-| `partscaster-<version>-windows-amd64.zip` | the same for Windows + `partscaster-worker.exe`; the worker archive inside has yue2.cpp for Windows |
-| `partscaster-<version>-darwin-<arch>.tar.gz` | app `partscaster.app` (`partscaster-mcp` and the worker archive are inside `.app/Contents/MacOS/`); no yue2.cpp |
+| `partscaster-linux-<arch>.tar.gz` | app, `partscaster-mcp`, worker archive (with a ready-made yue2.cpp program for Linux, if built), `INSTALL.txt` |
+| `partscaster-windows-amd64.zip` | the same for Windows + `partscaster-worker.exe`; the worker archive inside has yue2.cpp for Windows |
+| `partscaster-darwin-<arch>.tar.gz` | app `partscaster.app` (`partscaster-mcp` and the worker archive are inside `.app/Contents/MacOS/`); no yue2.cpp |
 | `worker-<version>.tar.gz` | worker archive for a Linux machine with a GPU (the same as in the Linux package) |
+
+**The yue2.cpp program for the packages** is built in advance by a separate workflow `.github/workflows/yue2cpp.yml`
+(Windows — CUDA 12.8 and the runner's Visual Studio, Linux — a CUDA 12.8 container; about an hour). It runs by itself
+when the build scripts or `worker/engine_cpp.py` change in develop/main and builds once per yue2.cpp commit
+(`CPP_COMMIT`); the release downloads the ready build (the artifact lives 90 days) and builds it itself if there is none.
+
+**A trial release from develop**: a tag with a hyphen (`v1.0.0-rc1`) on a develop commit builds all packages the
+same way, but the release is marked as a pre-release and does not become the latest — `releases/latest` links do not
+lead to it. The order:
+
+1. Push develop and wait for a green "yue2.cpp" run in the Actions tab (the first one takes about an hour; after that
+   it is skipped until the yue2.cpp commit changes).
+2. Set the tag: `git tag v1.0.0-rc1 && git push origin v1.0.0-rc1` — "Release" starts for three OSes.
+3. In the release check: there are `partscaster-windows-amd64.zip`, `partscaster-linux-amd64.tar.gz`,
+   `partscaster-darwin-<arch>.tar.gz` and `worker-<version>.tar.gz`; the "Готовая сборка yue2.cpp" step log says
+   "взята готовая сборка"; the Windows archive has `yue2cpp/yue-server.exe` inside `worker-*.tar.gz`.
+
+Delete a failed trial together with its tag (`git push origin :v1.0.0-rc1` and the release on the Releases page),
+the next one is `v1.0.0-rc2`.
 
 The worker archives in packages for different OSes differ only in the yue2.cpp program. For a Linux machine with a GPU, take
 `worker-<version>.tar.gz` or the archive from the Linux package: the archive from the Windows package has no Linux program,

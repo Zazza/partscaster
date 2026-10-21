@@ -1,0 +1,80 @@
+name: yue2.cpp
+
+# Готовая программа yue2.cpp (движок генерации) для пакетов релиза — заранее, вне релиза: Windows (CUDA 12.8 +
+# Visual Studio C++ раннера) и Linux (контейнер CUDA 12.8). Сборка долгая (CUDA-часть под 6 поколений карт),
+# поэтому делается один раз на коммит yue2.cpp: уже есть неистёкший артефакт yue2cpp-<ос>-x86_64-<коммит> —
+# шаги пропускаются. release.yml скачивает этот артефакт и сам не собирает. Коммит — CPP_COMMIT из
+# worker/engine_cpp.py. Артефакт живёт 90 дней; истёк — релиз соберёт программу сам (медленно) или
+# запустите этот workflow заново (кнопка Run workflow — когда файл есть в main).
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - .github/workflows/yue2cpp.yml
+      - tools/yue2cpp-build.ps1
+      - tools/yue2cpp-build.sh
+      - tools/ci-cuda-windows.ps1
+      - worker/engine_cpp.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read  # поиск уже собранного артефакта
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022  # VS 2022 (MSVC 1944): nvcc 12.8 отвергает MSVC ≥ 1950 из VS 2026 образа windows-latest
+            target: windows
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 340
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Коммит yue2.cpp и есть ли уже сборка
+        id: pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit="$(sed -nE 's/^CPP_COMMIT = "([0-9a-f]+)".*/\1/p' worker/engine_cpp.py)"
+          [[ -n "$commit" ]] || { echo "CPP_COMMIT не найден в worker/engine_cpp.py" >&2; exit 1; }
+          name="yue2cpp-${{ matrix.target }}-x86_64-$commit"
+          n="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name" -q '[.artifacts[] | select(.expired | not)] | length')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if [[ "${n:-0}" -gt 0 ]]; then
+            echo "уже собрано: $name — пропускаю"
+            echo "have=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: CUDA Toolkit 12.8 (Windows, ~10 мин)
+        if: matrix.target == 'windows' && steps.pin.outputs.have != '1'
+        shell: pwsh
+        run: tools/ci-cuda-windows.ps1
+      - name: Сборка (Windows)
+        if: matrix.target == 'windows' && steps.pin.outputs.have != '1'
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/yue2cpp-build.ps1
+      - name: Сборка (Linux, контейнер CUDA 12.8)
+        if: matrix.target == 'linux' && steps.pin.outputs.have != '1'
+        run: tools/yue2cpp-build.sh
+      # tar: артефакт Actions теряет право на запуск у файлов — yue-server под Linux пришёл бы неисполняемым
+      - name: Упаковать
+        if: steps.pin.outputs.have != '1'
+        run: tar -C dist -cf "dist/yue2cpp-${{ matrix.target }}-x86_64.tar" "yue2cpp-${{ matrix.target }}-x86_64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.pin.outputs.have != '1'
+        with:
+          name: ${{ steps.pin.outputs.name }}
+          path: dist/yue2cpp-${{ matrix.target }}-x86_64.tar
+          if-no-files-found: error
+          retention-days: 90

@@ -1,20 +1,25 @@
 name: Release
 
 # Релиз по тегу v*: приложение + partscaster-mcp + архив воркера под Linux/Windows/macOS,
-# всё выкладывается в GitHub Release этого тега. Тег ставит и пушит человек.
+# всё выкладывается в GitHub Release этого тега. Тег ставит и пушит человек. Тег с дефисом (v1.0.0-rc1) —
+# пробный: релиз «предварительный» и не «последний» — так конвейер проверяется с develop до слияния в main.
+# Пакеты приложения в релизе — с постоянными именами (partscaster-windows-amd64.zip …): ссылки
+# releases/latest/download/<имя> не меняются от версии к версии.
 on:
   push:
     tags: ["v*"]
 
 permissions:
   contents: write
+  actions: read  # готовая сборка yue2.cpp — артефакт workflow «yue2.cpp»
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # windows-2022: VS 2022 — nvcc 12.8 (запасная сборка yue2.cpp) отвергает VS 2026 образа windows-latest
+        os: [ubuntu-latest, windows-2022, macos-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -38,10 +43,30 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Wails CLI (версия — как в go.mod)
         run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-      - name: CUDA Toolkit (Windows — сборка yue2.cpp, ~10 мин)
-        if: runner.os == 'Windows'
+      # готовая yue2.cpp из workflow «yue2.cpp» (артефакт этого коммита yue2.cpp): есть — CUDA не ставится и
+      # программа здесь не собирается; нет — сборка ниже, как раньше (на Windows ~час)
+      - name: Готовая сборка yue2.cpp
+        id: prebuilt
+        if: runner.os != 'macOS'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          target="$([[ "$RUNNER_OS" == "Windows" ]] && echo windows || echo linux)"
+          commit="$(sed -nE 's/^CPP_COMMIT = "([0-9a-f]+)".*/\1/p' worker/engine_cpp.py)"
+          name="yue2cpp-$target-x86_64-$commit"
+          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name" -q '[.artifacts[] | select(.expired | not)][0].workflow_run.id // empty')"
+          if [[ -n "$run_id" ]] && gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n "$name" -D dist/prebuilt; then
+            tar -xf "dist/prebuilt/yue2cpp-$target-x86_64.tar" -C dist
+            echo "взята готовая сборка $name (запуск $run_id)"
+            echo "found=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "готовой сборки $name нет — yue2.cpp соберётся здесь"
+            echo "found=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: CUDA Toolkit 12.8 (Windows, если готовой сборки нет; ~10 мин)
+        if: runner.os == 'Windows' && steps.prebuilt.outputs.found != '1'
         shell: pwsh
-        run: choco install -y cuda --version=12.8.1.1.9 # как контейнер Linux-сборки (12.8); VS C++ на раннере есть
+        run: tools/ci-cuda-windows.ps1
       - name: Пакет
         # release.sh сам собирает yue2.cpp готовой программой: на Linux — в контейнере CUDA 12.8, на Windows —
         # локально с CUDA из шага выше. Без сборки пакет Windows не собирается (partscaster-worker.exe не умеет
@@ -50,12 +75,15 @@ jobs:
           # Linux: Wails под webkit2gtk-4.1 (на ubuntu-24.04 нет 4.0, без тега cgo ищет 4.0)
           if [[ "$RUNNER_OS" == "Linux" ]]; then export GOFLAGS="-tags=webkit2_41"; fi
           WAILS="$(go env GOPATH)/bin/wails" tools/release.sh "${GITHUB_REF_NAME}"
+      - name: Постоянные имена пакетов
+        run: tools/release-assets.sh dist
       - name: Выложить в релиз
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           # отдельный архив воркера — из Linux-сборки (для GPU-машины на Linux: в нём программа yue2.cpp под Linux);
           # пакеты Windows и macOS несут свой архив воркера внутри пакета
           files: |
-            dist/partscaster-*.tar.gz
-            dist/partscaster-*.zip
+            dist/release/partscaster-*
             ${{ runner.os == 'Linux' && 'dist/worker-*.tar.gz' || '' }}
