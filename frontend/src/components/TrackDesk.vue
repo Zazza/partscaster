@@ -436,6 +436,10 @@ async function upload(kind) {
 .desk-row { border-bottom: 1px solid var(--line, #2a2a35); padding: 4px 0; }
 .desk-row.open { background: var(--panel-2, rgba(255, 255, 255, 0.02)); }
 .desk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* длинная подсказка уровня («почти не слышно — …») переносится внутри своей колонки, а не выталкивает «звук ▾»
+   на отдельную строку: колонка тянется и сжимается, кнопки справа остаются в ряду */
+.desk-level { flex: 1 1 160px; min-width: 0; }
+.desk-level ~ .spacer { flex: 0 0 0; }  /* только где есть подсказка: без неё spacer по-прежнему прижимает кнопки вправо */
 .desk-select { font-weight: 600; min-width: 90px; text-align: left; }
 .desk-select.on { border-color: var(--accent, #7aa2f7); color: var(--accent, #7aa2f7); }
 .desk-level { font-size: 12px; }
