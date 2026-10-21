@@ -20,7 +20,7 @@ func RegisterInstallTools(s *Server) {
 	s.Register(Tool{
 		Name: "doctor",
 		Description: "Диагностика окружения: доступность воркера, GPU/VRAM (nvidia-smi), ffmpeg, " +
-			"версия Go/Node, необязательные компоненты (whisper, Seed-VC). " +
+			"версия Go/Node, разделение на дорожки (RoFormer), необязательные компоненты (whisper, Seed-VC). " +
 			"Для GPU-проверок на отдельной машине — host.",
 		InputSchema: props(map[string]any{
 			"host": prop("user@gpu-host для проверки удалённой машины (пусто = локально)", "string"),

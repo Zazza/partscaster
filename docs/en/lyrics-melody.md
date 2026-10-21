@@ -43,9 +43,9 @@ The simplest way if the track already exists. In the studio, select bars on the 
 | "voice: variations" | the rhythm and main notes stay the same, phrase ends move to neighboring notes; pressing again — wider |
 | "voice: hold phrase ends" | the end of a phrase stretches into the pause after it — the word sounds longer |
 | "vocal ↑ oct." / "vocal ↓ oct." | the vocal part one octave higher or lower |
-| "voice: stop" | the voice goes silent in the selected stretch |
+| "voice: stop" | the voice goes silent in the selected stretch (the vocal stem is muted, no re-singing needed) |
 
-Then **"↻ re-sing from here"**: the voice of the selected part is sung again (two takes); the music and the voice outside the part do not
+For the other tricks, then **"↻ re-sing from here"**: the voice of the selected part is sung again (two takes); the music and the voice outside the part do not
 change. The new versions appear among the track versions in a few minutes. End the selection in a pause of the voice —
 if the part ends in the middle of singing, a seam is possible.
 

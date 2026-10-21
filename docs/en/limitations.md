@@ -32,8 +32,8 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
 
 ## Platforms
 
-- The app is tested on Linux; it builds under Windows (its own player, without PipeWire). **The macOS build has not
-  been tested.**
+- The app is tested on Linux; for Windows there is a package (the app with its own player without PipeWire and the
+  `partscaster-worker.exe` worker without WSL); **macOS has not been tested.**
 - The built-in player on Linux plays through `pw-play` (PipeWire): the Linux webview has no sound. Without PipeWire the
   player is silent — listen in a browser. On macOS the player is the system `afplay`: volume changes take effect from the
   next start (a seek or the next track), not while playing. Not tested on a Mac.
@@ -46,7 +46,7 @@ local network; from outside — through a VPN, an SSH tunnel or a reverse proxy 
 ## Model and sound
 
 - **You cannot get the timbre of a specific singer with one button.** The "Voice" slot and the fitting room set the delivery character,
-  not the timbre. What helps: the manner and era in the style, choosing a seed (×5) and processing the finished track.
+  not the timbre. What helps: the manner and era in the style, choosing a seed (the "Variants" button) and processing the finished track.
 - **The model takes stress and phrasing from the plan, not from the lyrics** — edit the melody: [lyrics-melody.md](lyrics-melody.md).
 - **Old tracks separated before the switch to RoFormer (Demucs) are poor for instrument replacement:** the guitar
   leaks into the bass there and sounds on top of the processed one, and there are no drum parts. In the studio — "split in more detail".

@@ -17,7 +17,7 @@ Keyboard shortcuts (when the cursor is not in a text field): **Space** — play 
 **Ctrl+F** (Cmd+F on a Mac) — go to the track list and its search.
 
 The window frame is the app's own, in the theme colours. At the top is a bar with the title: "Partscaster" outside
-the studio, the track number and name in the studio. Drag the bar to move the window; double-click it to maximise.
+the studio, "Studio · #N — track title" in the studio. Drag the bar to move the window; double-click it to maximise.
 On the right of the bar are "minimise", "maximise" and "close". Resize by the frame on the left, right and bottom.
 The window does not get smaller than 900×600.
 
@@ -43,8 +43,8 @@ the "track list" icon.
 ### Queue
 
 Everything long that the worker does, in one list in order of execution: generations, presets, rebuilds, stem
-separation, effects, notes, lyrics recognition, voice change, auditions. It includes jobs started from the app
-and jobs started by an AI agent through MCP — these are marked "AI".
+separation, effects, notes, lyrics recognition, voice change, auditions, plans, renders. It includes jobs started from
+the app and jobs started by an AI agent through MCP — these are marked "AI".
 
 - At the top is the running job (a generation shows a percentage), then the waiting ones, below — the last
   5 results.
@@ -75,7 +75,7 @@ If the app and worker versions do not match, a warning appears at the top of the
 The "New track" menu item opens the "New track" page. On the left are three blocks: **"1 · Style"** (style library
 and name), **"2 · Sound"** (style slots, saved voice, instruments, style as one line), **"3 · Lyrics"** (text, part tags,
 "No vocals", a ready note plan). On the right is the **"Send"** column: what goes to the model, sound presets, start
-buttons and "Advanced"; it stays in place while you scroll and moves under the form in a narrow window. After
+buttons and "More options"; it stays in place while you scroll and moves under the form in a narrow window. After
 "Queue", "Variants" or "Draft" the track list opens, and the track is already in the queue. The filled-in form stays
 as it is while the app is open. Esc — back to the track list.
 
@@ -88,10 +88,10 @@ The row above the form:
 - **"— group —"** and **"— style —"** — two lists. Ready styles are grouped by movement (post-punk, punk,
   shoegaze, techno…); a movement has several variants that differ in substance: rhythm, guitars, voice,
   recording. The selected style is spread into the form slots at once; after that you can edit it.
-- **"1:1"** — apply the style as an exact line, without spreading it into slots.
-- **"save"** — the "Style name" window: the current form style (slots and line as they are) goes into
+- **"1:1"** (appears when a ready style is selected) — apply the style as an exact line, without spreading it into slots.
+- **"Save"** — the "Style name" window: the current form style (slots and line as they are) goes into
   "my styles".
-- **"my styles"** — a window with all your styles: click — apply to the form, ✕ — delete (built-in ones
+- **"My styles"** — a window with all your styles: click — apply to the form, ✕ — delete (built-in ones
   are not affected).
 
 ### Form fields
@@ -99,7 +99,7 @@ The row above the form:
 - **"Title"** — your own track title; if empty, the track is shown by its number.
 - **"Import ABC"** (at the bottom of the "3 · Lyrics" block) — paste a ready note plan (ABC is a text notation for music) as the track skeleton: bars,
   chords and structure come from it, while genre, instruments, rhythm and delivery come from the form. An
-  attached plan is shown as the line "plan attached · N lines", "detach" — remove it.
+  attached plan is shown as the line "plan attached · N lines", "Detach" — remove it.
 - **Style slots** — "Song language", "Style", "Rhythm (drums and bass)", "Guitars", "Keys and more", "Voice",
   "Mood", "Sound (recording)" and **BPM**. You type freely; hints appear under the field.
   On submit, known options are replaced with English wording (the model was trained on English tags);
@@ -124,11 +124,11 @@ The row above the form:
   - next to them, a hint: "Tags are optional: without them YuE2 lays out the parts itself — separate stanzas
     with an empty line." Checked: with and without tags the song came out in the same form (intro, verse,
     chorus, interlude, verse, chorus, outro); only without tags the choruses were shorter.
-- **"style for the model"** — the final line that goes to the model. If Russian words remain in it, a red line
-  appears under it: "The style has Russian words: YuE2 understands tags in English — write them in English."
-  This does not block submitting: the line is sent as is.
+- **"style for the model"** (in the "Send" column) — the final line that goes to the model. If Russian words remain in
+  it, a red line appears under it: "The style has Russian words: YuE2 understands tags in English — write them in
+  English." This does not block submitting: the line is sent as is.
 
-### Advanced
+### More options
 
 A collapsed block; its header shows a summary of what is selected:
 
@@ -141,7 +141,7 @@ A collapsed block; its header shows a summary of what is selected:
   higher).
 - **"character"** — two performance knobs: "boldness" (model temperature: higher — the playing is more original
   but dirtier; default 1.0) and "precision" (cfg: higher — clearer, closer to the notes, cleaner sound and voice;
-  default 1.5). "default" — reset. This is not "better/worse", it is a different character; a stretch for an
+  default 1.5). "Default" — reset. This is not "better/worse", it is a different character; a stretch for an
   insert and a continuation take the parent's character.
 
 ### Sound presets and launch
@@ -152,14 +152,14 @@ A collapsed block; its header shows a summary of what is selected:
 - **"Queue"** — one track.
 - **"Variants: N"** — N tracks (2–5, the number is in the list next to it) with neighboring seeds: listen and pick
   the best one. The chosen number is remembered.
-- **"notes →"** — the "Track notation (ABC)" window (below): the attached plan or a new plan from the style.
+- **"Notes →"** — the "Track notation (ABC)" window (below): the attached plan or a new plan from the style.
 - **"Draft ~18 s"** — only the first ~18 seconds in this style with these lyrics, about half a minute of GPU: hear
   whether the style is right before the full render. It is marked "draft" in the track list.
 
 ### The "Track notation (ABC)" window
 
 For advanced users: the usual path is styles and the studio, you do not need to come here. The window opens with
-the "notes →" button in the form and with the "notes (ABC)" item in the track menu.
+the "Notes →" button in the form and with the "Notes (ABC)" item in the track menu.
 
 - you edit the ABC text right in the window; "ABC cheat sheet" — a short guide to notes, bars, chords and rests;
 - "→ to the form" — attach the plan to the form: the skeleton comes from ABC, everything else from the form;
@@ -188,20 +188,22 @@ the list ("loading more…"). Search and filters work over all tracks; the match
 
 ### Track row
 
-Number (a playing track shows a sound icon), ▶/⏸ for a finished track (an unfinished one has a status dot), the
-title with marks ("draft", "unfinished work" — the studio has changes not applied yet, "queued", "error", ⚠ — a
-voice is heard in an instrumental; details in the tooltip), a progress bar during generation, ✎ — rename (your own
-title instead of the number: the number changes when you move to another machine). Under the title, small — the
-track's style in short: genre, voice, guitars. A long title is cut with an ellipsis, the full one is in the tooltip.
-Then — the number of versions and attachments, folder, duration, creation date ("01.10 17:26", the year if it is
-not the current one). In a narrow window the date hides first, then the folder.
+Number (a playing track shows a sound icon), ▶/⏸ for a finished track (an unfinished one has a status dot), the title
+with marks ("draft", "unfinished work" — the studio has changes not applied yet, "queued", "error", ⚠ — a voice is
+heard in an instrumental, "cut short" — the generation hit the length limit and the ending may be missing; details in
+the tooltip), a progress bar during generation, ✎ — rename (your own title instead of the number: the number changes
+when you move to another machine). Under the title, small — the track's style in short: genre, voice, guitars. A long
+title is cut with an ellipsis, the full one is in the tooltip. Then — the number of versions and attachments, folder,
+duration, creation date ("01.10 17:26", the year if it is not the current one). In a narrow window the date hides
+first, then the folder.
 
 On the right, a finished track always shows:
 
 - **"Studio →"** — open the main version in the [studio](#studio);
-- **"⋯"** — "Download flac", "Download mp3" (320 kbps), "Notes (abc)", "In browser" (a listening page with
-  seeking), "Notes (ABC)" (the notes window), "New track like this" (the form with the track's parameters),
-  "Replay in another style…", "Export recipe", "Delete" (with confirmation);
+- **"⋯"** — "Download flac", "Download mp3" (320 kbps), "Notes (abc)" (save the notes file), "In browser" (a listening
+  page with seeking), "Notes (ABC)" (the notes window), "New track like this" (the form with the track's parameters),
+  "Replay in another style…", "Export recipe", "Delete" (with confirmation). Both notes items appear only for a track
+  with notes; "Export recipe" is not shown for a draft;
 - the arrow — expand the track (a click on the row does the same).
 
 ### Versions and attachments
@@ -220,7 +222,7 @@ Under the versions:
 - **Info line**: "seed N", the generation model badge ("BF16", "Q8"…; old tracks of the former engine — "PyTorch")
   — only if the track was made by a different model than the one chosen now: a repeat with the same seed will sound
   different, and "Repeat" warns first; "plan: melody only", character,
-  "custom ABC", "main: #N" (if another version is chosen as the main one).
+  "own ABC", "main: #N" (if another version is chosen as the main one).
 - **Folder** — an icon; click — a list: "no folder", folders, "new folder…" (name and Enter). The song's versions
   move together with it.
 - A track that is queued or in progress has "cancel". An unfinished one has ✕ "Delete the result" and ⟲ "Repeat
@@ -231,7 +233,7 @@ Under the versions:
 
 ### Replay in another style
 
-The "replay in another style…" item in the "⋯" menu. The neural network plays the track again from its notes and
+The "Replay in another style…" item in the "⋯" menu. The neural network plays the track again from its notes and
 lyrics in a new style — a quick cover without the studio (a new generation, a few minutes).
 
 - "genre" — a list with search ("— as it was —" — do not change), "parts" — part buttons, "in your own words";
@@ -272,13 +274,13 @@ You can also import a track through MCP (the `import_track` tool).
 
 ## Studio
 
-The studio opens with the "studio →" button on a track or version and with the "done → #N" result in the queue.
+The studio opens with the "Studio →" button on a track or version and with the "done → #N" result in the queue.
 It is one page, and the sections follow the work: **1 Listen · 2 Edit · 3 Sound · 4 Voice · 5 Done**. The step bar sticks
 to the top and highlights the current section; on its right are "#N track title", the active track badge and the
 sample kit download progress ("downloading kit…"). To leave — any menu item on the left.
 
-Above the steps is the line "BPM · key · meter · N bars (тактов) · ~duration" and the selected stretch
-("a–b s selected" (выделено a–b с)).
+Above the steps is the line "BPM · key · meter · N bars · ~duration" and the selected stretch
+("selected a–b s").
 
 For a track without a score (note transcription) the studio works without the piano roll and bar tricks: the
 waveform, stems, sound and "Done" work as usual. At the top there is a message and a **"Create score"** button
@@ -306,7 +308,9 @@ For a drum part (kick, snare…) the wave shows the part, but edits apply to all
 - "color ▾" — wave color;
 - the plan's bars and sections are drawn over the wave.
 
-**"track metrics"** — a window with sound measurements of the whole track (loudness, brightness, dynamics).
+**"track metrics"** — the "Effect metrics — #N title" window: sound measurements of the whole track (loudness,
+brightness, dynamics, spectrum by bands…). "delta to:" — compare with another track or your own file
+("reference file…"): columns "track", "comparison" and Δ — the difference.
 
 **"volume"** (pencil icon) — a volume line over the wave for the whole track or one stem. This shows a
 "what to apply to" list, "reset", "section ▲ / ▼" (with a selection), "▶ listen"
@@ -375,7 +379,7 @@ Trick marks carry over to new versions.
 "other").
 
 - No stems — the track is split into stems by itself when the Studio opens (the "track stems" setting;
-  "manually" — the "make stems" button). While it splits, a line replaces the desk: what is happening and how long
+  "manually" — the "Make stems" button). While it splits, a line replaces the desk: what is happening and how long
   to wait (about a minute and a half; if the GPU is busy it waits in the queue). If the track has an old split
   without drum parts — "split in more detail": again, and the new split also gives drum parts (kick, snare,
   cymbals…), edits stay.
@@ -442,8 +446,8 @@ voice description in the style line changes. The music is held by the plan; how 
 track, so listen to a piece before the full render.
 
 - The voice is a **card from the [voice lab](#voice-lab)** (a list; its description next to it) or **"tune my
-  own"**: the same knobs as in the voice lab (presets, "in the spirit of", register, roughness, creak, delivery,
-  breath, "own words").
+  own"**: the same knobs as in the voice lab (presets, "manner:", register, roughness, creak, delivery,
+  breath, "custom").
 - **"style for the render"** — the track style line with the voice tags (vocals, voice, baritone…) replaced by the
   chosen voice; with no voice tags the voice is added before the BPM.
 - **"Processing:"** — effects on the vocal stem as buttons: megaphone, telephone, vocal overdrive, slapback and the
@@ -453,7 +457,7 @@ track, so listen to a piece before the full render.
   with a voice picked — a ~18 s draft in that voice (up to 16 bars, with that verse of the lyrics; 1–2 minutes) that
   plays by itself when ready; with an effect too — the same piece with the effect on the voice, no new render; no
   voice but an effect — a piece of the track with the effect on the voice; nothing picked — the original. In "tune my
-  own" mode, after a probe — a name and **"save voice"**: a card with the probe's voice and the track seed.
+  own" mode, after a probe — a name and **"Save voice"**: a card with the probe's voice and the track seed.
 - **"Apply"** (bottom right): the effect and the voice — into "Track changes" (the "Done" step); "apply all" makes
   the track in the new voice in one render (together with the plan tricks), the track's edits go onto it.
 - For a track without lyrics or without a score the step explains why the voice render is unavailable.
@@ -469,8 +473,8 @@ suffers a little inside phrases. It needs the optional Seed-VC component on the 
 
 ### 5 Done
 
-Blocks in order: "Master", "Sound presets", "Track changes" (the "apply all" button with the number of edits —
-after the master, which also puts its edit here), "results".
+Blocks in order: "Master", "Sound presets", "Track changes" (a button with the number of edits — it opens the edits
+window — and "apply all"; the block comes after the master, which also puts its edit here), "results".
 
 **Edits panel** — at the top right, over the studio blocks, staying in place as you scroll. Collapsed it shows the
 number of edits ("0 edits", "1 edit", "5 edits"); a click expands the list, another click collapses it (the studio
@@ -492,7 +496,8 @@ master) come with controls:
 - "edit" on a sound chain — opens it in "Stems", where the button becomes "replace";
 - ✕ — delete (with confirmation);
 - a red line with a reason — the build stumbled on this edit (no final was made, the list is intact); a successful
-  build clears the mark. Under a preset line are its warnings (for example, "no plan — guitarist skipped").
+  build clears the mark. Under a preset line are its warnings (for example, "гитара YuE2 — у трека нет плана" — shown
+  in Russian for now).
 
 At the top of the list is "▶ mix with edits" (the track with all enabled edits). If the edits changed since the last
 build, it says "the mix will be built before playing": the first press builds it (the button shows ⟳, and you can
@@ -507,12 +512,12 @@ timbre. When it is ready the edits go onto
 the new version and the final is built; if it fails, the reason is shown here and the changes stay. **"reset draft"** — remove all changes (the track itself and
 finished versions do not change).
 
-**Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS",
-"Master: loud −11 LUFS", "Master: soft glue"; "loudness" and "to target" (LUFS is the perceived loudness of the
-track: −14 — like streaming services, −11 — loud), "limiter", peak "ceiling" (dBTP), "master chain" (blocks),
-"▶ after / ▶ before" on the mix with edits, "Apply" — one "Master" edit (a new one replaces the old one,
-"now:" shows the current one). After the rebuild — the line "After master: −14.0 LUFS, peak −1.0 dBTP".
-At the top of the block are the one-click buttons and album loudness:
+**Master** — glue and loudness of the whole mix as the last step. "presets:" — "Master: streaming −14 LUFS", "Master:
+loud −11 LUFS", "Master: soft glue"; "loudness" and "to target" (LUFS is the perceived loudness of the track: −14 —
+like streaming services, −11 — loud), "limiter", peak "ceiling" (dBTP), "master chain" (blocks), "▶ after / ▶ before"
+on the mix with edits, "Apply" — one "Master" edit (a new one replaces the old one: when a master is already there,
+the button is called "replace"; "now:" shows the current one). After the rebuild — the line "After master: −14.0 LUFS,
+peak −1.0 dBTP". At the top of the block are the one-click buttons and album loudness:
 
 - **"one-click mastering"** — the "Mastering" (Мастеринг) chain (unsquash the "brick", loudness through
   saturation, top-end grit) on the whole track — into "Track changes" with the level in its label; the final — "apply all".
@@ -553,9 +558,9 @@ What is inside presets and how to edit them — the ["Sound presets"](#sound-pre
 **results** — all track versions.
 
 - The version list — all of them, intermediate ones too: newest at the top, a clear name and date, the full
-  caption in the tooltip. Each has: ▶, ⤓ (save flac), **"→ to tracks"** (→ в треки; make it a separate track in
+  caption in the tooltip. Each has: ▶, ⤓ (save flac), **"→ to tracks"** (make it a separate track in
   the list), ✕.
-- "details: metric numbers" — changes in sound measurements for each version and "full delta" (полная дельта).
+- "details: metric numbers" — changes in sound measurements for each version and "full delta".
 
 ## Sound presets
 
@@ -565,8 +570,8 @@ the new track form and in the studio (the "Done" step).
 
 <!-- screenshot: the "Sound presets" page — search and family chips, the "Mine" and "Rock" blocks -->
 
-**Library.** Presets are laid out as blocks by family, nothing is collapsed: "Mine" (Мои) first, then "Rock" (Рок),
-"Heavy" (Тяжёлое), "Electronic" (Электроника), "Pop and more" (Поп и другое); inside a family the movements are
+**Library.** Presets are laid out as blocks by family, nothing is collapsed: "Mine" first, then "Rock",
+"Heavy", "Electronic", "Pop and other"; inside a family the movements are
 subheadings. At the top are a search (name, description, movement) and the chips "All · Mine · Rock …" with the
 number of presets: a chip keeps one family, search and chip work together. There are 109 built-in presets: 34 movements (post-punk, cold wave, goth, indie, shoegaze, metal, synth-pop,
 trip-hop, house, soul…) with 3 variants each, plus 7 more. Each built-in preset replaces the drums with a kit,
@@ -575,14 +580,14 @@ master; it does not touch the voice. The guitar is the neural network's own guit
 (pedals, overdrive, echo); no track plan is needed for that. The
 preset sets the loudness of the result itself: most built-in presets target −14 or −11 LUFS, some −16.
 
-A preset row has:
+A preset row has (buttons are icons, what each does is in its tooltip):
 
 - the arrow on the left — what is inside: stem edits, "final:", "result loudness: N LUFS", "tuned on track #N";
-- ▶ "listen on the demo" — apply the preset to the demo and play the result at once (a few minutes; progress is
+- ▶ (tooltip "listen on the demo") — apply the preset to the demo and play the result at once (a few minutes; progress is
   shown as a line at the top of the page);
-- a built-in preset has "Save as my own": it opens the editor with a copy (the built-in preset itself does not
-  change);
-- your own preset has "preset editor", a pencil (rename and edit the description), ✕ (delete, with
+- a built-in preset has a save icon ("Save as my own"): it opens the editor with a copy (the built-in preset itself
+  does not change);
+- your own preset has a sliders icon (preset editor), a pencil (rename and edit the description), ✕ (delete, with
   confirmation).
 
 **"New preset"** (in the title row) — the editor with an empty recipe.
@@ -593,7 +598,7 @@ the right — "Listening" (it stays in place while you scroll). In the title row
 "Save as my own") and "← To presets"; Esc also goes back to the library. On the page:
 
 - title and description ("what the sound is like");
-- **"reference:"** — what to listen on: the family demo ("Rock", "Heavy", "Electronic", "Pop and more") or your own
+- **"reference:"** — what to listen on: the family demo ("Rock", "Heavy", "Electronic", "Pop and other") or your own
   track from the list; "stem only", "▶ before" and "window a–b s" — the stretch used for listening;
 - **"Track processing"** — the recipe entries. Each has: ▶ "after", ✕, which stems it applies to (buttons),
   volume, "loudness to the track" (the stem's loudness target by measurement when applied), stereo placement and
@@ -674,13 +679,13 @@ while you scroll), below — "Voice cards".
 - **seed** — empty: a new one for each audition; a number — lock the voice (the same seed and knobs — the same
   voice).
 - Under the knobs — the line that goes into the "Voice" slot.
-- **"audition"** — a ~18 s sample (rendering on the GPU takes 1–2 minutes), it plays automatically. While it
+- **"Audition"** — a ~18 s sample (rendering on the GPU takes 1–2 minutes), it plays automatically. While it
   renders you can turn the knobs — the sample will not change.
-- After the sample — a name and **"save voice"**.
+- After the sample — a name and **"Save voice"**.
 
 **Voice cards** — saved voices: description, seed, ▶ (if the sample still exists, otherwise "source deleted"),
-"re-audition" (a new sample with these settings), ✕.
-**"clear probes"** — delete all audition samples from the track list; the cards stay.
+"Re-audition" (a new sample with these settings), ✕.
+**"Clear probes"** — delete all audition samples from the track list; the cards stay.
 
 A saved voice is chosen in the new track form — with the "saved voice — descriptor + seed" list: it fills the
 "Voice" slot and sets the card seed.
@@ -688,7 +693,7 @@ A saved voice is chosen in the new track form — with the "saved voice — desc
 ## Settings
 
 The "Settings" menu item. Settings are blocks in a single column; everything is applied with the "Save"
-button in the title row — "Saved" or an error shows next to it.
+button in the title row — "saved" or an error shows next to it.
 
 - **"Worker connection"** — "Worker address". "Check" — check the address in the field without saving.
   You can enter just an IP: port 8091 is added. Both the app and the MCP server use this address.

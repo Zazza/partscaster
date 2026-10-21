@@ -7,7 +7,7 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
 
 ## 1. Generate
 
-- **New track form** — hints in slots: genre, rhythm, guitars, keys, voice, mood, sound. On
+- **New track form** — hints in slots: language, style, rhythm, guitars, keys, voice, mood, sound. On
   submit they become English tags for the YuE2 model; write your own words in English — Russian ones are not
   translated, and the form warns about it. The result is shown in the
   "Style as a single line" field — you can rewrite it by hand.
@@ -20,8 +20,8 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
   chorus one octave higher).
 - **Plan (ABC)** — the song's note score (melody, chords, sections) that the model writes before the sound: "notes →"
   shows it in seconds; you can fix it and attach it to the form. "Import ABC" — a ready score as the skeleton of the track.
-- **Queue** — one generation; **×5 seeds** — five variants of one song (a seed is the random number); you pick the best one
-  by ear.
+- **Queue** — one generation; **"Variants: N"** — 2 to 5 variants of one song, each with its own seed (the random
+  number); you pick the best one by ear.
 - **Sound presets right in the form** — up to three; when the track is ready, the "track · preset" versions appear by themselves.
 - **A generation model to fit your graphics card** — generation runs on yue2.cpp, from 8 GB of video memory. "Settings"
   suggest a model for your card (BF16, Q8 or Q8 in economy mode); you can choose any. The same seed on another model gives
@@ -29,15 +29,16 @@ AI agent — [mcp.md](mcp.md), what cannot be done — [limitations.md](limitati
 
 ## 2. Edit
 
-The track studio opens with the "studio" button on the track card. The source does not change when you edit: every edit is a new
+The track studio opens with the "Studio →" button in the track row. The source does not change when you edit: every edit is a new
 version. Details — [ui-guide.md](ui-guide.md).
 
 - **Listen** — waveform, spectrum and the plan's piano roll; a click plays from that point, a drag selects a stretch.
 - **Tricks on a selection** — "wrong chord" (darker / brighter / more tense), "drop-out (silence)", "cut bars",
-  "vocal ↑/↓ oct.", tempo. The tricks collect in the plan, "Apply" puts them into the draft, they sound after "apply all" in "Done"; for a quick listen —
+  "vocal ↑/↓ oct.", tempo. The tricks collect in the plan, "Apply" puts them into "Track changes", they sound after "apply all" in "Done"; for a quick listen —
   "stretch with edits".
-- **Voice by sections** — "voice higher", "voice: variations", "voice: hold phrase ends", "voice: stop", then
-  "↻ re-sing from here": two new vocal takes only in the selected part; the music does not change.
+- **Voice by sections** — "voice higher", "voice: variations", "voice: hold phrase ends", then
+  "↻ re-sing from here": two new vocal takes only in the selected part; the music does not change. "Voice: stop" —
+  the voice goes silent in the stretch (the vocal stem is muted, no re-singing needed).
 - **Rebuilding sections by continuation** — the model re-renders the selected stretch in the context of the track, and only the
   needed stem goes into the track (guitars/keys, bass or drums); "continue from here" — the same performance up to the mark,
   new after it.
@@ -50,7 +51,8 @@ version. Details — [ui-guide.md](ui-guide.md).
 - **Stems** — the track is split into vocals, drums, bass, guitar, keys and "other" by the BS-RoFormer-SW model
   (about a minute and a half per track); the drums are also split into parts (kick, snare, toms, hi-hat, ride, crash).
   The "Stems" desk: volume, pan, width, its own sound for each stem, "before / after" on a selection.
-- **Replacing instruments with real samples from the track's notes** — the "replace" button in the desk: live drums and
+- **Replacing instruments with real samples from the track's notes** — in the "Stems" desk: "sound ▾" → instrument → "Apply";
+  all drums and bass at once — "rhythm section from kits". Live drums and
   drum machines (808, 909, Linn, CR-78, Simmons), bass guitars, orchestra (violins, cellos, brass), keyboards and synths.
   The hits and notes are taken from the stem itself.
 - **Guitarist** — a part played from the plan's chords replaces the YuE2 guitar: strumming, fingerpicking, bass + chord, fifths or "auto" by
@@ -58,7 +60,8 @@ version. Details — [ui-guide.md](ui-guide.md).
 - **Synth from chords** and **percussion on the grid** — a new part over the track, in time: old synths (pad, arpeggio,
   pulse, drone) and hi-hat, shaker, tambourine, claps, cowbell, kick doubling.
 - **Genre sound presets** — a recipe for processing the whole track; the result is a new version "track · preset". 109
-  built-in: 106 genre presets (34 styles in the families "Rock" (Рок), "Heavy" (Тяжёлое), "Electronic" (Электроника), "Pop and other" (Поп и другое)) and 3 general ones. One
+  built-in: 106 genre presets (34 styles in the families "Rock", "Heavy", "Electronic", "Pop and other") and 3 separate
+  ones (two are post-punk and indie rock variants, the third is a live rhythm section). One
   preset changes:
   - drums — all parts as a kit (live or drum machine) with rhythm section processing;
   - bass and guitar — processing and volume (the guitar stays the YuE2 guitar);
@@ -84,8 +87,9 @@ version. Details — [ui-guide.md](ui-guide.md).
 - **Master** — the final chain on the whole mix: glue, equalizer, true-peak limiter, loudness target
   (LUFS); ready variants for streaming. The quick option — "one-click mastering".
 - **All track versions** — listen, compare, make one the track; metrics (loudness, dynamics, stereo, spectrum).
-- **Download** a version or a stem as a file; "Album loudness" matches the album tracks to each other.
-- **Track recipe** — "Export recipe": the song's rules as a small file without audio; "Import recipe" reproduces it
+- **Download** a version or a stem as a file; the "Album loudness" effect (the "Sound" step) brings a track to the
+  common album loudness without changing the timbre.
+- **Track recipe** — "Export recipe": the song's rules as a small file without audio; "Import" → "Track recipe" reproduces it
   on another installation (by seed or by the note plan).
 
 ## 5. Around the track
@@ -94,12 +98,12 @@ version. Details — [ui-guide.md](ui-guide.md).
   an "AI" mark on what an agent started.
 - **MCP for AI agents** — an agent (Claude, Codex) runs the whole flow: generation, studio, sound, installation and diagnostics.
   Tools and setup — [mcp.md](mcp.md).
-- **Voice fitting room** ("voices" menu) — knobs for the voice character, a ~18 s preview, a voice card with a seed;
+- **Voice fitting room** (the "Voices" section in the left panel) — knobs for the voice character, a ~18 s preview, a voice card with a seed;
   a saved voice is chosen in the new track form.
 - **Covers** — "From a track…" in the plan editor: SheetSage2 turns someone else's song or your own into a plan; you paste
   the lyrics yourself.
 - **Album voice** (experiment) — the track's voice with the timbre of the voice from another song (Seed-VC).
-- **Importing your own track** (flac/mp3/wav/ogg/m4a) — with the "import track" button in the track list; with stems, effects, presets and, if transcription worked,
+- **Importing your own track** (flac/mp3/wav/ogg/m4a) — in the track list: "Import" → "Your own track (audio file)"; with stems, effects, presets and, if transcription worked,
   a plan.
 
 ## Under the hood

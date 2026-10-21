@@ -16,7 +16,7 @@ func RegisterWorkflowTools(s *Server) {
 	registerQueueTools(s)
 	s.Register(Tool{
 		Name:        "status",
-		Description: "Статус воркера Partscaster: доступность, загружена ли модель YuE2 в память.",
+		Description: "Статус воркера Partscaster: доступность, загружена ли модель YuE2 в память, версия воркера.",
 		InputSchema: props(nil),
 		Handler: func(s *Server, _ map[string]any) (string, error) {
 			h, err := s.client.Health(context.Background())

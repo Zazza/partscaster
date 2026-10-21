@@ -2,6 +2,9 @@
 
 **English** · [Русский](../ru/examples.md)
 
+Examples with a player are on the website: https://zazza.github.io/partscaster/ (the "Before → after" section); the
+table here will be filled in.
+
 Each pair is the same track: on the left is what the neural network produced, on the right is the result after
 Partscaster. Below each pair is what exactly was done. It is best to listen one after the other, 20–30 seconds
 of the same spot.
@@ -12,7 +15,7 @@ of the same spot.
 
 ## Whole genre preset
 
-One click: different drums and guitar, pedals, track volumes modeled on real recordings of the genre.
+One click: different drums, guitar and bass processed with pedals, track volumes modeled on real recordings of the genre.
 
 | Before | After | What was done |
 |---|---|---|

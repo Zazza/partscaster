@@ -37,10 +37,12 @@ Partscaster — это три программы: desktop-приложение (
 |---|---|
 | `main.go` | запуск Wails, встраивание собранного фронтенда, прокси `/audio/<id>/<файл>` на воркер |
 | `app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go` | биндинги для Vue (методы `Yue*`): тонкие обёртки над клиентом воркера и конвейерами `internal/studio`; превью эффектов; экспорт/импорт рецепта трека; версия, проверка воркера, раздел «Для AI-агентов». Здесь же — фоновый запуск пресетов звука, выбранных при создании трека (раз в 10 с) |
+| `app_welcome.go`, `internal/welcome` | окно знакомства при первом запуске: клипы «было/стало», встроенные в приложение (окно открывается и до установки воркера) |
+| `frame_linux.go`, `frame_other.go` | фон и рамка окна: на Linux окно полупрозрачное, скругление углов рисует CSS (`TitleBar.vue`) |
 | `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | встроенный плеер: у webview во Wails нет аудиовыхода. Linux — `pw-play` (PipeWire), пауза — остановкой процесса; Windows — WPF MediaPlayer через PowerShell (пауза не держит позицию). macOS — системный `afplay` (громкость — со следующего запуска) |
 | `loopwav.go` | круг фразы страницы «Инструменты», разложенный в длинный WAV для плеера |
 | `internal/config` | адрес воркера и настройки приложения (`settings.json` в каталоге настроек пользователя, `partscaster/`) |
-| `internal/yue` | HTTP-клиент воркера. `client.go` — только транспорт; методы разложены по доменам: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; интерфейс `Service` — в `types.go` |
+| `internal/yue` | HTTP-клиент воркера. `client.go` — только транспорт; методы разложены по доменам: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `drafts.go`, `version.go`; интерфейс `Service` — в `types.go` |
 | `internal/dsp` | эффекты ffmpeg на готовом файле: цепочки (динамика, модуляция, пространство, педали, глитч), вклейки и их подгонка по ритму, место в стерео, линия громкости, замер уровня |
 | `internal/studio` | конвейеры студии и пресетов звука на стороне ПК (ниже) |
 | `internal/agentsetup` | раздел «Для AI-агентов»: готовые фрагменты конфига для Claude Desktop и Codex, подключение к Claude Code командой `claude mcp add` |
@@ -75,7 +77,7 @@ Partscaster — это три программы: desktop-приложение (
 | Каталог/файл | Роль |
 |---|---|
 | `src/main.js`, `src/App.vue` | вход и оболочка: боковая панель, список треков, форма «Новый трек», переключение страниц |
-| `src/components/` | экраны и крупные блоки (31 компонент): `SideBar` (разделы и витрина очереди), `StudioPage` (студия трека) с `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` и редактор пресетов, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, модальные окна |
+| `src/components/` | экраны и крупные блоки: `SideBar` (разделы и витрина очереди), `StudioPage` (студия трека) с `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` и редактор пресетов, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, модальные окна |
 | `src/composables/` | общее состояние и поведение: `usePlayer`, `useProcQueue` (слежение за операцией очереди), `useWorkerCompat` (совместимость версий), `useInserts` (реестр «Изменения трека» — черновик студии: главный экземпляр на воркере, `/jobs/{id}/draft`, копия в localStorage, слияние по времени правки — `draftEdits.js`), `useRevoice`, `useWindowPlay` и др. |
 | `src/*.js` | чистая логика без DOM (тесты рядом — `*.test.js`, vitest): библиотека стилей (`presets.js`, `slotOptions.js`, `groups.js`), цепочки эффектов (`fxPresets.js`, `fxBlocks.json`, `fxChain.js`), пресеты звука, очередь (`queueView.js`), рецепт и др. |
 | `src/api.js` | обёртка над сгенерированными биндингами Wails (`src/wailsjs/`) |
@@ -91,9 +93,9 @@ Codex) те же возможности, что у приложения. Тра�
 
 - Ходит к воркеру тем же клиентом `internal/yue` и использует те же конвейеры `internal/studio`
   (пресеты, пересборка, эффекты) — результат совпадает с приложением.
-- Инструменты (75) разложены по файлам: `tools_workflow.go` (генерация и треки), `tools_studio.go`,
-  `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go` (библиотека стилей),
-  `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
+- Инструменты (полный список — в [mcp.md](mcp.md)) разложены по файлам: `tools_workflow.go` (генерация и
+  треки), `tools_studio.go`, `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go`
+  (библиотека стилей), `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
 - Данные библиотеки (`internal/mcp/*.json`) — копии источников фронтенда, встроенные в бинарник;
   перегенерирует их `make mcp-data` (`tools/mcp-gendata.sh`, он же пишет `worker/fx_presets.json`).
 - Скачанные файлы — в `PARTSCASTER_MCP_DIR` (по умолчанию `~/partscaster-mcp-downloads`).
@@ -127,8 +129,8 @@ Codex) те же возможности, что у приложения. Тра�
 | `whisper_run.py` | что поёт готовый трек (MCP `job_lyrics`); запускается интерпретатором отдельного окружения whisper |
 | `dsp.py`, `waveform.py`, `media.py` | замер трека (librosa); волна громкости и спектрограмма; конвертация аудио |
 
-Таблицы SQLite: `jobs`, `sound_presets`, `job_ops` (журнал правок), `recipe_imports`,
-`fx_instruments`, `voices`.
+Таблицы SQLite: `jobs`, `sound_presets`, `job_ops` (журнал правок), `studio_drafts` (черновики студии),
+`recipe_imports`, `fx_instruments`, `voices`.
 
 Данные (`PARTSCASTER_DATA_DIR`): `jobs/<id>/` — `audio.flac`/`.mp3`/`.wav`, `score.abc`, `request.abc`,
 `latent.npy` (25 кадров/с), `semantic.npy`, `metrics.json`, варианты `dsp-*`/`overdub-*`/`preview-*`/`stem-*.flac`;
@@ -169,6 +171,10 @@ whisper и Seed-VC работают в своих окружениях.
   Рекомендуемую модель для карты считает `engine_cpp.recommend` (единственное место порогов): от 11776 МиБ —
   `bf16`, от 9728 — `q8`, меньше или неизвестно — `q8` в экономном режиме. Это подсказка (`GET /config` →
   `cpp_recommended`), выбирает пользователь.
+- Потолок песни — контекст минус запас под стиль, текст и план (2792 шага): полный контекст ≈ 14,5 мин
+  (`YUE2_MAX_TOKENS` задаёт предел ниже), экономный режим на карте 8 ГБ ≈ 10 мин, вместе с продолжениями. Виден в
+  `GET /config` → `max_song_sec`, `cpp_context`. Заявку, не влезшую в контекст, воркер повторяет с меньшим
+  бюджетом (`engine_cpp.fit_budget`).
 - Трек помнит свою модель (`jobs.engine` = `cpp-<модель>`; у старых треков прежнего движка — `""` или `torch`).
   **Сид между моделями не переносится** — получится другое исполнение. **Ноты переносятся**: продолжение
   и превью идут по `semantic.npy` / `latent.npy`, поэтому старые треки продолжаются на yue2.cpp.
@@ -248,5 +254,7 @@ guitar + piano модели, а остаток «трек − сумма осн�
 | `deploy.sh` | `worker` — архив на GPU-машину и его `install.sh`; `build` — сборка приложения |
 | `.github/workflows/ci.yml` | тесты и линтеры Go, фронтенда, воркера; сверка данных MCP с фронтендом (push в `main` и pull request) |
 | `.github/workflows/release.yml` | по тегу `v*` — пакеты Linux, Windows, macOS и выкладка в GitHub Release |
+| `.github/workflows/yue2cpp.yml` | готовая программа yue2.cpp для пакетов релиза (Linux, Windows) — заранее, один раз на коммит yue2.cpp; `release.yml` скачивает её |
+| `.github/workflows/pages.yml`, `tools/site-build.sh` | сайт на GitHub Pages: `site/index.html` и клипы «было/стало» окна знакомства |
 
 Команды `make` и сборка по ОС — в [deployment.md](deployment.md).

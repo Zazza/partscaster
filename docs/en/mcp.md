@@ -82,7 +82,8 @@ env = { PARTSCASTER_URL = "http://gpu-host:8091" }
 ## Confirmation by a person
 
 Tools marked **†** cannot be undone: they require `confirm=true`, and the agent must ask the user first. These
-are `cancel`, `delete_job`, `queue_cancel`, `dsp_variant_delete`, `sound_preset_delete`, `voice_delete`.
+are `cancel`, `delete_job`, `queue_cancel`, `dsp_variant_delete`, `sound_preset_delete`, `voice_delete`,
+`draft_clear`.
 
 Three more tools without `confirm` only show a plan, and act with `confirm=true` — also after asking the user:
 `recipe_import` (without `confirm` — an import preview), `install_worker` and `install_app` (a dry run by
@@ -90,7 +91,7 @@ default; installation — `dry_run=false` and `confirm=true`).
 
 ## Tools
 
-76 in total. In the "Parameters" column, required ones are in **bold**.
+80 in total. In the "Parameters" column, required ones are in **bold**.
 
 ### Worker queue
 
@@ -166,7 +167,7 @@ What the YuE model itself does not have: the same mechanisms as in the app studi
 | `draft_list` | — | Studio drafts (unfinished work) of all tracks: `[{job_id, state, updated_at}]` |
 | `draft_get` | **job_id** | The track's draft: `state` — `{v, edits, queue, ts, gen?, applying?}` ("Track changes", pending renders, changes that need a render — voice/plan tricks/no vocals, the "apply all" progress); none — empty |
 | `draft_set` | **job_id**, **state** | Write the track's draft (a JSON object). The studio picks it up on its next start |
-| `draft_clear` | **job_id**, **confirm** | Delete the track's draft — the studio edits are lost. Only with `confirm=true` after the human agrees |
+| `draft_clear` † | **job_id**, **confirm** | Delete the track's draft — the studio edits are lost. Only with `confirm=true` after the human agrees |
 
 ### ffmpeg effects (on the PC)
 
@@ -250,8 +251,8 @@ edit log after each successful change.
 
 | Tool | Parameters | What it does |
 |---|---|---|
-| `config_get` | — | Worker address, worker data paths, generation model (chosen and recommended for the GPU) and worker engines |
-| `config_set` | server_url, stems_auto, fx_engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `fx_engine` — effects engine on/off; `cpp_model` — generation model (any downloaded one: `bf16`, `q8`, `q6`, `q5`; the one recommended for the card is in `config_get`; the same seed on another model gives a different performance), `cpp_low_vram` — low-VRAM mode; model and mode — from the next generation |
+| `config_get` | — | Worker address, worker data paths, generation model (chosen and recommended for the GPU), how much of a song fits (up to ~N min with continuations) and worker engines |
+| `config_set` | server_url, stems_auto, fx_engine, cpp_model, cpp_low_vram | `server_url` is also saved to the app settings; `stems_auto` — when to make stems: `studio` (when the studio opens) / `always` (right away for every finished track) / `manual`; `fx_engine` — effects engine on/off; `cpp_model` — generation model (any downloaded one: `bf16`, `q8`, `q6`, `q5`; the one recommended for the card is in `config_get`; the same seed on another model gives a different performance), `cpp_low_vram` — low-VRAM mode for cards up to 10 GB: the context is cut to the VRAM (8 GB — a song up to ~10 min with continuations); model and mode — from the next generation |
 | `engine_model_install` | **name** | Download a yue2.cpp model: `bf16` (7.2 GB), `q8` (3.8 GB), `q6` (2.9 GB), `q5` (2.6 GB). Waits for the download to finish; then — `config_set cpp_model=<name>` |
 
 ### Installation and diagnostics
@@ -259,7 +260,7 @@ edit log after each successful change.
 | Tool | Parameters | What it does |
 |---|---|---|
 | `doctor` | host | Environment check: is the worker available and which components it has (including whether stem separation is installed — `roformer_available`), ffmpeg, Go, Node; on the machine with the graphics card (`host` — over ssh) — GPU and video memory, disk space. Worker version |
-| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB) and Seed-VC (~11 GB) are needed. RoFormer stem separation (~7.3 GB, non-commercial weights) is always installed, together with the worker. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`. GPU and disk space are checked before installation. Generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one by VRAM). Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` (or the paths already written in `worker.env`); `sep_dir` is passed to `install.sh --sep-dir` |
+| `install_worker` | host, archive, dry_run, confirm, whisper, seedvc, cpp_model, hf_home, seedvc_dir, sep_dir | Install the worker (Ubuntu + NVIDIA/CUDA). The base takes up to ~17.8 GB (environment, yue2.cpp with the generation model, note-transcription weights). A dry run by default: the agent shows the plan and asks whether whisper (~3.2 GB) and Seed-VC (~11 GB) are needed. RoFormer stem separation (~7.3 GB, non-commercial weights) is always installed, together with the worker. Installation — `dry_run=false`, `confirm=true` and explicit `whisper`/`seedvc`. GPU and disk space are checked before installation. Generation model — `cpp_model=auto|bf16|q8|q6|q5` (without it — the one chosen earlier, if downloaded, otherwise the recommended one by VRAM). Default directories: `hf_home` — `~/yue/hf-cache`, `seedvc_dir` — `~/partscaster/seedvc`, `sep_dir` — `~/sep-venv` and `~/sep-models` (or the paths already written in `worker.env`); `sep_dir` is passed to `install.sh --sep-dir` |
 | `install_app` | dry_run, confirm | Build the app on this PC (`wails build`; needs Go, Node, wails CLI). A dry run by default |
 
 ## Work recipes

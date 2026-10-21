@@ -37,10 +37,12 @@ installation is in [deployment.md](deployment.md), the worker API is in [api.md]
 |---|---|
 | `main.go` | starts Wails, embeds the built frontend, proxies `/audio/<id>/<file>` to the worker |
 | `app.go`, `app_preview.go`, `app_recipe.go`, `app_setup.go` | bindings for Vue (`Yue*` methods): thin wrappers over the worker client and the `internal/studio` pipelines; effect previews; export/import of a track recipe; version, worker check, the "For AI agents" section. Also here: background run of the sound presets chosen when a track was created (every 10 s) |
+| `app_welcome.go`, `internal/welcome` | the welcome window on first start: "before/after" clips embedded in the app (it opens even before a worker exists) |
+| `frame_linux.go`, `frame_other.go` | window background and frame: on Linux the window is translucent, the rounded corners are drawn by CSS (`TitleBar.vue`) |
 | `player.go`, `player_unix.go`, `player_darwin.go`, `player_windows.go`, `player_volume_*.go` | built-in player: the webview in Wails has no audio output. Linux — `pw-play` (PipeWire), pause by stopping the process; Windows — WPF MediaPlayer through PowerShell (pause does not keep the position). macOS — the system `afplay` (volume applies from the next start) |
 | `loopwav.go` | a phrase loop from the "Instruments" page, laid out into a long WAV for the player |
 | `internal/config` | worker address and app settings (`settings.json` in the user settings directory, `partscaster/`) |
-| `internal/yue` | HTTP client of the worker. `client.go` — transport only; methods are split by domain: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `version.go`; the `Service` interface is in `types.go` |
+| `internal/yue` | HTTP client of the worker. `client.go` — transport only; methods are split by domain: `jobs.go`, `stems.go`, `plan.go`, `fx.go`, `presets.go`, `queue.go`, `recipe.go`, `voices.go`, `engine.go`, `instruments.go`, `journal.go`, `drafts.go`, `version.go`; the `Service` interface is in `types.go` |
 | `internal/dsp` | ffmpeg effects on a finished file: chains (dynamics, modulation, space, pedals, glitch), inserts and fitting them to the rhythm, stereo position, volume line, level measurement |
 | `internal/studio` | studio and sound preset pipelines on the PC side (below) |
 | `internal/agentsetup` | the "For AI agents" section: ready-made config snippets for Claude Desktop and Codex, connecting to Claude Code with the `claude mcp add` command |
@@ -75,7 +77,7 @@ The worker stores the preset recipes and the "preset on track" statuses (table `
 | Directory/file | Role |
 |---|---|
 | `src/main.js`, `src/App.vue` | entry and shell: sidebar, track list, "New track" form, page switching |
-| `src/components/` | screens and large blocks (31 components): `SideBar` (sections and the queue panel), `StudioPage` (track studio) with `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` and the preset editor, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, modal windows |
+| `src/components/` | screens and large blocks: `SideBar` (sections and the queue panel), `StudioPage` (track studio) with `StudioPresets`/`StudioMaster`/`StudioSynth`/`StudioPerc`/`TrackDesk`/`WaveView`/`PedalBoard`, `PresetsPage` and the preset editor, `InstrumentsPage`, `VoicesPage`, `SettingsPage`, modal windows |
 | `src/composables/` | shared state and behavior: `usePlayer`, `useProcQueue` (tracking a queue operation), `useWorkerCompat` (version compatibility), `useInserts` (the "Track changes" registry — the studio draft: the main copy on the worker, `/jobs/{id}/draft`, a copy in localStorage, merged by edit time — `draftEdits.js`), `useRevoice`, `useWindowPlay` and others |
 | `src/*.js` | pure logic without DOM (tests next to it — `*.test.js`, vitest): style library (`presets.js`, `slotOptions.js`, `groups.js`), effect chains (`fxPresets.js`, `fxBlocks.json`, `fxChain.js`), sound presets, queue (`queueView.js`), recipe and others |
 | `src/api.js` | wrapper over the generated Wails bindings (`src/wailsjs/`) |
@@ -91,9 +93,9 @@ Codex) the same features as the app. Transport — stdio, protocol — JSON-RPC 
 
 - It calls the worker with the same `internal/yue` client and uses the same `internal/studio` pipelines
   (presets, rebuild, effects) — the result matches the app.
-- The tools (75) are split into files: `tools_workflow.go` (generation and tracks), `tools_studio.go`,
-  `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go` (style library),
-  `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
+- The tools (the full list is in [mcp.md](mcp.md)) are split into files: `tools_workflow.go` (generation and
+  tracks), `tools_studio.go`, `tools_revoice.go`, `tools_fx.go`, `tools_presets.go`, `tools_library.go`
+  (style library), `tools_queue.go`, `tools_recipe.go`, `tools_install.go` (`doctor`, `install_worker`, `install_app`).
 - Library data (`internal/mcp/*.json`) are copies of frontend sources embedded in the binary;
   `make mcp-data` regenerates them (`tools/mcp-gendata.sh`, which also writes `worker/fx_presets.json`).
 - Downloaded files go to `PARTSCASTER_MCP_DIR` (default `~/partscaster-mcp-downloads`).
@@ -127,8 +129,8 @@ in `worker/`.
 | `whisper_run.py` | what a finished track sings (MCP `job_lyrics`); runs with the interpreter of the separate whisper environment |
 | `dsp.py`, `waveform.py`, `media.py` | track measurement (librosa); loudness waveform and spectrogram; audio conversion |
 
-SQLite tables: `jobs`, `sound_presets`, `job_ops` (edit journal), `recipe_imports`,
-`fx_instruments`, `voices`.
+SQLite tables: `jobs`, `sound_presets`, `job_ops` (edit journal), `studio_drafts` (studio drafts),
+`recipe_imports`, `fx_instruments`, `voices`.
 
 Data (`PARTSCASTER_DATA_DIR`): `jobs/<id>/` — `audio.flac`/`.mp3`/`.wav`, `score.abc`, `request.abc`,
 `latent.npy` (25 frames/s), `semantic.npy`, `metrics.json`, variants `dsp-*`/`overdub-*`/`preview-*`/`stem-*.flac`;
@@ -169,6 +171,10 @@ run on it, while stems (RoFormer), whisper and Seed-VC work in their own environ
   The recommended model for the card comes from `engine_cpp.recommend` (the only place with thresholds): from
   11776 MiB — `bf16`, from 9728 — `q8`, less or unknown — `q8` in low-VRAM mode. It is a hint (`GET /config` →
   `cpp_recommended`); the user chooses.
+- The song ceiling is the context minus a reserve for style, lyrics and plan (2792 steps): full context ≈ 14.5 min
+  (`YUE2_MAX_TOKENS` sets a lower limit), low-VRAM mode on an 8 GB card ≈ 10 min, with continuations. It is shown
+  in `GET /config` → `max_song_sec`, `cpp_context`. A request that does not fit the context is retried with a
+  smaller budget (`engine_cpp.fit_budget`).
 - A track remembers its model (`jobs.engine` = `cpp-<model>`; old tracks of the former engine have `""` or `torch`).
   **The seed does not carry over between models** — you get a different performance. **Notes carry over**:
   continuation and preview use `semantic.npy` / `latent.npy`, so old tracks continue on yue2.cpp.
@@ -249,5 +255,7 @@ data is in `data\`. Details: [deployment.md](deployment.md).
 | `deploy.sh` | `worker` — the archive to the GPU machine and its `install.sh`; `build` — app build |
 | `.github/workflows/ci.yml` | tests and linters for Go, frontend, worker; check of MCP data against the frontend (push to `main` and pull request) |
 | `.github/workflows/release.yml` | on a `v*` tag — Linux, Windows, macOS packages and upload to GitHub Release |
+| `.github/workflows/yue2cpp.yml` | the ready-made yue2.cpp program for release packages (Linux, Windows), built in advance once per yue2.cpp commit; `release.yml` downloads it |
+| `.github/workflows/pages.yml`, `tools/site-build.sh` | the GitHub Pages site: `site/index.html` and the "before/after" clips of the welcome window |
 
 The `make` commands and the build for each OS are in [deployment.md](deployment.md).
