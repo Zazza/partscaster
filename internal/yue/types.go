@@ -165,6 +165,9 @@ type Job struct {
 	// стилю/нотам); 0 — по умолчанию воркера
 	Temperature float64 `json:"temperature,omitempty"`
 	Cfg         float64 `json:"cfg,omitempty"`
+	// движок генерации («cpp-q8»; пусто — старые треки на PyTorch): метка модели
+	// у трека и предупреждение при «повторить» — по нему
+	Engine string `json:"engine,omitempty"`
 
 	// живой прогресс (только у running-джоб; дополняется воркером поверх строки БД)
 	Stage       string   `json:"stage,omitempty"`
