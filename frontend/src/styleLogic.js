@@ -1,26 +1,135 @@
 // Чистая логика сборки строки стиля и подготовки стиха к отправке.
-import { slotDict } from './slotOptions.js'
+import { slotDict, slotOptions, multiSlots } from './slotOptions.js'
+import { allRackItems, effectPhrase, rackAdd } from './rack.js'
 
 // порядок слотов в строке стиля — язык/жанр первыми, продакшн последним
 export const SLOT_ORDER = [
   'language', 'genre', 'rhythm', 'guitars', 'keys', 'vocals', 'mood', 'production',
 ]
 
-// строка стиля из слотов (+ строка стойки, + BPM): пустые слоты пропускаются
+// строка стиля из слотов (+ строка стойки, + BPM): пустые слоты пропускаются,
+// значения нормализуются как списки тегов (мультивыбор слотов: хвостовые запятые выпадают)
 export function buildStyleLine(slots, rackStr = '') {
   const parts = SLOT_ORDER
-    .map(k => (slots[k] || '').trim())
+    .map(k => splitSlotTags(slots[k]).join(', '))
     .filter(Boolean)
   if (rackStr) parts.push(rackStr)
   if (slots.bpm) parts.push(slots.bpm + ' BPM')
   return parts.join(', ')
 }
 
-// значение слота → английский тег: известное русское подставляется словарём,
-// неизвестное (в т.ч. самописное) проходит как есть
+// значения слота — список тегов через запятую или точку с запятой (мультивыбор):
+// пустые элементы и хвостовые разделители выпадают
+export function splitSlotTags(s) {
+  return (s || '').split(/\s*[;,]\s*/).map(x => x.trim()).filter(Boolean)
+}
+
+// логические теги слота: соседние куски склеиваются, если вместе образуют словарное
+// значение — русские подписи бывают из нескольких частей через запятую
+// («1980-е сибирский андеграунд, панк-энергия поверх пост-панк тоски»), и при наивном
+// разрезании их перевод бы терялся. Кусок без словарной склейки — самописный тег
+export function slotTagList(s) {
+  const items = splitSlotTags(s)
+  const out = []
+  let i = 0
+  while (i < items.length) {
+    let len = 0
+    for (let j = items.length; j > i; j--) {
+      if (slotDict[items.slice(i, j).join(', ').toLowerCase()] !== undefined) { len = j - i; break }
+    }
+    if (!len) len = 1
+    out.push(items.slice(i, i + len).join(', '))
+    i += len
+  }
+  return out
+}
+
+// значение слота → английские теги: каждый логический тег переводится отдельно
+// (составное «блюз, дум-метал» словарю не принадлежит — переводить надо поштучно),
+// словарное русское подставляется словарём, самописное (в т.ч. английское) проходит как есть
 export function dictStyle(s) {
-  const t = (s || '').trim()
-  return slotDict[t.toLowerCase()] || t
+  return slotTagList(s)
+    .map(x => slotDict[x.toLowerCase()] || x)
+    .join(', ')
+}
+
+// выбор тега из подсказок в мультислоте: теги до хвоста-черновика (текст после последнего
+// разделителя — им фильтровались подсказки) сохраняются, новый тег добавляется без дубликата
+// (сравнение по логическим тегам — составные словарные значения равны себе целиком).
+// Запятая на конце — приглашение продолжать список: фильтр подсказок идёт по хвосту,
+// и после выбора хвост пуст — список снова полный
+export function pickMultiSlotTag(current, tag) {
+  const cur = current || ''
+  const t = (tag || '').trim()
+  const cut = cur.search(/\s*[;,][^;,]*$/)   // конец последнего разделителя — начало хвоста
+  const items = slotTagList(cut >= 0 ? cur.slice(0, cut) : cur)
+  if (t && !items.some(x => x.toLowerCase() === t.toLowerCase())) items.push(t)
+  return items.join(', ') + ', '
+}
+
+// Обратный разбор строки стиля в поля формы: слоты, BPM и инструментальная стойка.
+// Словарные значения (русские и английские ключи) расходятся по своим слотам — мультислоты
+// копятся без дублей, одиночные берут первое (второе — в «не распознано»); «N BPM» — в BPM;
+// фразы стойки (phrasing инструмента, при эффекте — с припиской) — карточками в стойку.
+// Совпадающее значение слота и фразы стойки («fuzz wall of guitars») — слот: словарные
+// значения первичны, фраза с эффектом («… drenched in reverb») стойке всё равно уникальна.
+// Нераспознанные куски возвращаются списком — их показываем под полем, а не теряем
+export function parseStyleLine(line, locale = 'ru') {
+  const bySlot = new Map()
+  for (const [key, opts] of Object.entries(slotOptions)) {
+    for (const [ru, en] of opts) {
+      const value = locale === 'en' ? en : ru
+      bySlot.set(ru.toLowerCase(), { key, value })
+      bySlot.set(en.toLowerCase(), { key, value })
+    }
+  }
+  const byRack = new Map()
+  for (const it of allRackItems()) {
+    byRack.set(it.phrasing.toLowerCase(), { id: it.id, effect: '' })
+    for (const [eff, phr] of Object.entries(effectPhrase)) {
+      byRack.set((it.phrasing + ' ' + phr).toLowerCase(), { id: it.id, effect: eff })
+    }
+  }
+
+  const slots = {}
+  let bpm = null
+  let rack = []
+  const unknown = []
+  const items = splitSlotTags(line)
+  let i = 0
+  while (i < items.length) {
+    // жадно: самый длинный чанк из оставшихся кусков — словарные значения и фразы стойки
+    // бывают из нескольких частей через запятую («1980-е …, панк-энергия…», «instrumental, no vocals»)
+    let hit = null
+    let len = 0
+    for (let j = items.length; j > i; j--) {
+      const chunk = items.slice(i, j).join(', ').toLowerCase()
+      const s = bySlot.get(chunk)
+      if (s) { hit = { kind: 'slot', ...s }; len = j - i; break }
+      const r = byRack.get(chunk)
+      if (r) { hit = { kind: 'rack', ...r }; len = j - i; break }
+      const m = chunk.match(/^(\d{2,3}) bpm$/)
+      if (m) { hit = { kind: 'bpm', value: Number(m[1]) }; len = j - i; break }
+    }
+    if (!hit) { unknown.push(items[i]); i += 1; continue }
+    const raw = items.slice(i, i + len).join(', ')
+    if (hit.kind === 'slot') {
+      if (multiSlots.has(hit.key)) {
+        const cur = splitSlotTags(slots[hit.key])
+        if (!cur.some(x => x.toLowerCase() === hit.value.toLowerCase())) cur.push(hit.value)
+        slots[hit.key] = cur.join(', ')
+      } else if (!(hit.key in slots)) slots[hit.key] = hit.value
+      else unknown.push(raw)
+    } else if (hit.kind === 'rack') {
+      rack = rackAdd(rack, hit.id, hit.effect)
+    } else if (bpm === null) {
+      bpm = hit.value
+    } else {
+      unknown.push(raw)
+    }
+    i += len
+  }
+  return { slots, bpm, rack, unknown }
 }
 
 // стих к отправке: строки-пометки (начинаются с #) вырезаются — это заметки

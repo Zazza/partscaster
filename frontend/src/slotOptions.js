@@ -3,6 +3,10 @@
 
 export const slotKeys = ['language', 'genre', 'rhythm', 'guitars', 'keys', 'vocals', 'mood', 'production']
 
+// слоты с выбором нескольких значений (копятся через запятую; строка стиля YuE — список тегов):
+// язык, ритм и голос — строго одно значение
+export const multiSlots = new Set(['genre', 'guitars', 'keys', 'mood', 'production'])
+
 export const slotOptions = {
   language: [
     ['Русский', 'Russian'], ['English', 'English'],

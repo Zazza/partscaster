@@ -137,17 +137,11 @@ describe('новый трек: заявка POST /jobs (newTrackPayload)', () =>
     expect(p.sound_preset_ids).toEqual([3, 7])
   })
 
-  it('черновик пресетов звука не получает (воркер: с draft — 422)', () => {
-    const p = newTrackPayload(form({ soundPresetIds: [3] }), { draft: true })
-    expect(p.draft).toBe(true)
-    expect(p).not.toHaveProperty('sound_preset_ids')
-  })
-
   it('без выбранных пресетов поля sound_preset_ids нет', () => {
     expect(newTrackPayload(form({ soundPresetIds: [] }))).not.toHaveProperty('sound_preset_ids')
   })
 
-  it('полный трек — без поля draft', () => {
+  it('заявка не содержит поля draft (черновики из формы убраны)', () => {
     expect(newTrackPayload(form())).not.toHaveProperty('draft')
   })
 })

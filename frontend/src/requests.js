@@ -26,8 +26,8 @@ export function formStyle(override, slots, rack) {
 // кириллица в строке стиля: YuE2 понимает теги по-английски — форма предупреждает (не переводит)
 export const hasCyrillic = (s) => CYR.test(s || '')
 
-// заявка нового трека без стиля (стиль — formStyle); extra — {draft: true} у черновика
-export function newTrackPayload(f, extra = {}) {
+// заявка нового трека без стиля (стиль — formStyle)
+export function newTrackPayload(f) {
   const abc = f.abc.trim()
   return {
     title: f.title,
@@ -38,9 +38,7 @@ export function newTrackPayload(f, extra = {}) {
     arc: f.arc,
     ...characterPayload(f.temperature, f.cfg),
     ...(abc ? { abc } : {}),
-    // пресеты звука — только у полного трека (черновик их не получает)
-    ...(f.soundPresetIds.length && !extra.draft ? { sound_preset_ids: [...f.soundPresetIds] } : {}),
-    ...extra,
+    ...(f.soundPresetIds.length ? { sound_preset_ids: [...f.soundPresetIds] } : {}),
   }
 }
 

@@ -98,7 +98,9 @@ export const rackEffects = [
   { id: 'echo', name: 'эхо', nameEn: 'echo' },
 ]
 
-const effectPhrase = {
+// фразы эффектов в строке стиля (rackCompile приписывает их к phrasing инструмента);
+// экспортировано для обратного разбора строки в стойку (parseStyleLine)
+export const effectPhrase = {
   reverb: 'drenched in reverb',
   fuzz: 'through fuzz',
   tremolo: 'with tremolo',

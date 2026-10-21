@@ -5,7 +5,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { api } from './api.js'
 import { rackCompile } from './rack.js'
 import { groups as builtinGroups, loadCustomGroups, saveCustomGroups } from './groups.js'
-import { slotKeys, slotHints, slotHintsEn } from './slotOptions.js'
+import { slotKeys, slotHints, slotHintsEn, multiSlots } from './slotOptions.js'
 import { CHARACTER, characterPayload, characterLabel } from './character.js'
 import { useI18n } from './i18n/index.js'
 import { voiceDescriptor, normalizeVoiceParams } from './voiceLab.js'
@@ -16,7 +16,7 @@ import { useInserts } from './composables/useInserts.js'
 import { useWorkerCompat } from './composables/useWorkerCompat.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
-import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine } from './styleLogic.js'
+import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine, slotTagList, pickMultiSlotTag, parseStyleLine } from './styleLogic.js'
 import { formStyle, hasCyrillic, newTrackPayload } from './requests.js'
 import { insertSectionTag, SECTION_TAGS } from './lyricsTags.js'
 import { usePlayer, fmtDur } from './composables/usePlayer.js'
@@ -149,13 +149,35 @@ const rackSel = ref([])   // инструменты: [{ id, effect }] (RackPicke
 // свой выпадающий список подсказок слотов (нативные datalist в WebView2 глючат)
 const openSlot = ref('')
 // подсказки: весь список без обрезки (обрезка в 30 прятала хвост алфавита — металл
-// и прочее в конце списка было не найти), подписи и поиск — на языке интерфейса
+// и прочее в конце списка было не найти), подписи и поиск — на языке интерфейса.
+// В мультислотах поиск — по хвосту после последней запятой (текст после выбранных тегов),
+// чтобы список не сужался до уже выбранного значения
 function slotFiltered(key) {
-  const v = (slots.value[key] || '').trim().toLowerCase()
+  const raw = (slots.value[key] || '').trim()
+  const v = (multiSlots.has(key) ? raw.split(/\s*[;,]\s*/).pop() : raw).trim().toLowerCase()
   const en = locale.value === 'en'
   const opts = (en ? slotHintsEn : slotHints)[key] || []
   const label = (o) => (en ? o[1] : o[0])
   return v ? opts.filter((o) => label(o).toLowerCase().includes(v)) : opts
+}
+
+// выбор из подсказок: мультислот копит значения через запятую и остаётся открытым
+// (pickMultiSlotTag заменяет хвост-черновик выбранным тегом), одиночный слот —
+// заменяет значение и закрывается
+function pickSlot(key, o) {
+  const v = locale.value === 'en' ? o[1] : o[0]
+  if (multiSlots.has(key)) slots.value[key] = pickMultiSlotTag(slots.value[key], v)
+  else {
+    slots.value[key] = v
+    openSlot.value = ''
+  }
+}
+
+// тег уже в списке значений слота — подсветка в подсказках (составные словарные
+// значения сравниваются целиком — slotTagList склеивает их части)
+function slotHas(key, o) {
+  const v = (locale.value === 'en' ? o[1] : o[0]).toLowerCase()
+  return slotTagList(slots.value[key]).some((x) => x.toLowerCase() === v)
 }
 
 const compiledStyle = computed(() =>
@@ -165,8 +187,22 @@ const compiledStyle = computed(() =>
 // из слотов и стойки; первая правка фиксирует ручную версию (переопределяет форму)
 const styleLine = computed({
   get: () => styleOverride.value || compiledStyle.value,
-  set: (v) => { styleOverride.value = v },
+  set: (v) => { styleOverride.value = v; parseUnknown.value = [] },
 })
+
+// «разобрать по полям»: слоты, BPM и стойка из ручной строки; строка возвращается
+// к авто-сборке, нераспознанные куски показываются под полем (руками правка их чистит)
+const parseUnknown = ref([])
+function parseStyleToForm() {
+  const line = styleLine.value.trim()
+  if (!line) return
+  const res = parseStyleLine(line, locale.value)
+  slots.value = { ...slots.value, ...res.slots }
+  if (res.bpm !== null) slots.value.bpm = res.bpm
+  if (res.rack.length) rackSel.value = res.rack
+  styleOverride.value = ''   // снова «показывает выбранное выше»
+  parseUnknown.value = res.unknown
+}
 
 // финальная строка стиля к отправке: русские значения из списков подставляются словарём,
 // самописная кириллица уходит как есть — под строкой стиля предупреждение (hasCyrillic)
@@ -175,12 +211,12 @@ const sentStyle = computed(() =>
   formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value, rackCompile(rackSel.value)))
 function finalStyle() { return sentStyle.value }
 
-function payload(extra = {}) {
+function payload() {
   return newTrackPayload({
     title: title.value, lyrics: lyrics.value, noLyrics: noLyrics.value,
     seed: seed.value, cot: cot.value, arc: arcKind.value, abc: customAbc.value,
     temperature: temperature.value, cfg: cfgScale.value, soundPresetIds: soundPresetIds.value,
-  }, extra)
+  })
 }
 
 // guard отправки: стиль есть и стих есть (или инструментал)
@@ -193,21 +229,6 @@ async function submit() {
   submitErr.value = ''
   try {
     const id = await api.submit({ ...payload(), style: finalStyle() })
-    if (customAbc.value.trim()) inheritTrickMarks(id)
-    newTrackPage.value = false   // к списку: трек уже в очереди
-    await refresh()
-  } catch (e) {
-    submitErr.value = String(e?.message || e)
-  } finally { submitting.value = false }
-}
-
-// черновик ~40 с: быстро послушать стиль, прежде чем рендерить полный трек
-async function submitDraft() {
-  if (!canSubmit.value) return
-  submitting.value = true
-  submitErr.value = ''
-  try {
-    const id = await api.submit({ ...payload({ draft: true }), style: finalStyle() })
     if (customAbc.value.trim()) inheritTrickMarks(id)
     newTrackPage.value = false   // к списку: трек уже в очереди
     await refresh()
@@ -920,8 +941,8 @@ function onWindowClick(e) {
                 <input v-model="slots[key]" :placeholder="t('slot.' + key + '.hint')"
                        @focus="openSlot = key" @click.stop @input="openSlot = key" />
                 <ul v-if="openSlot === key && slotFiltered(key).length" class="slot-drop">
-                  <li v-for="o in slotFiltered(key)" :key="o[0]"
-                      @mousedown.prevent="slots[key] = locale === 'en' ? o[1] : o[0]; openSlot = ''"
+                  <li v-for="o in slotFiltered(key)" :key="o[0]" :class="{ sel: slotHas(key, o) }"
+                      @mousedown.prevent="pickSlot(key, o)"
                   >{{ locale === 'en' ? o[1] : o[0] }}</li>
                 </ul>
               </div>
@@ -945,9 +966,14 @@ function onWindowClick(e) {
                 <span v-else class="muted">{{ t('form.styleline.auto') }}</span>
               </summary>
               <textarea v-model="styleLine" rows="3" :placeholder="t('form.styleline.ph')"></textarea>
-              <button v-if="styleOverride" class="ghost small-btn" style="margin-top:6px"
-                      :title="t('form.styleline.follow.tip')"
-                      @click="styleOverride = ''">{{ t('form.styleline.follow') }}</button>
+              <div v-if="parseUnknown.length" class="style-unparsed"
+                   :title="t('form.styleline.unparsed.tip')">{{ t('form.styleline.unparsed', { tags: parseUnknown.join(', ') }) }}</div>
+              <div v-if="styleOverride" style="margin-top:6px; display:flex; gap:6px">
+                <button class="ghost small-btn" :title="t('form.styleline.parse.tip')" @click="parseStyleToForm">
+                  {{ t('form.styleline.parse') }}</button>
+                <button class="ghost small-btn" :title="t('form.styleline.follow.tip')"
+                        @click="styleOverride = ''; parseUnknown = []">{{ t('form.styleline.follow') }}</button>
+              </div>
             </details>
 
         </PageBox>
@@ -1000,8 +1026,6 @@ function onWindowClick(e) {
                       :title="t('form.notes.tip')">
                 {{ planBusy ? t('form.planning') : t('form.notes') }}
               </button>
-              <button class="ghost" :disabled="submitting || !canSubmit" @click="submitDraft"
-                      :title="t('form.draft.tip')">{{ t('form.draft') }}</button>
               <span v-if="submitErr" class="error submit-err" :title="submitErr">{{ submitErr }}</span>
             </div>
             <details class="form-advanced">
@@ -1505,6 +1529,7 @@ h2 {
 }
 .slot-drop li { padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .slot-drop li:hover { background: var(--panel2); }
+.slot-drop li.sel { color: var(--accent); font-weight: 600; }
 .lib-actions { margin-top: 8px; display: flex; gap: 8px; }
 .lib-row { display: flex; gap: 6px; align-items: center; }
 .lib-row > :first-child { flex: 1.1; min-width: 0; }
@@ -1651,6 +1676,7 @@ button.toggle.on { border-color: var(--accent); color: var(--accent); font-weigh
 .style-out-cap { flex: none; font-size: 12px; color: var(--muted); }
 .compiled { flex: 1; min-width: 0; font-size: 12px; color: var(--text); margin: 0; word-break: break-word; }
 .style-cyr { font-size: 12px; color: var(--err); margin: -2px 0 6px; }
+.style-unparsed { font-size: 12px; color: var(--warn, #c90); margin: 6px 0 0; }
 
 .primary {
   background: var(--play-grad);
