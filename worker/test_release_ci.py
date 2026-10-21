@@ -18,6 +18,8 @@
     репозитория — skip с причиной.
 ТК5 Linux-сборка релиза (internal-ci-fixes ТК2). Матрица os в release.yml содержит ubuntu-24.04 и не
     содержит ubuntu-latest.
+ТК6 Тег webkit2_41 (internal-ci-wails-tags ТК2). В run шага «Пакет» release.yml есть WAILS_TAGS=webkit2_41,
+    а GOFLAGS= с webkit2_41 нет (wails GOFLAGS не читает).
 
 Без PyYAML проверки ТК2, ТК4, ТК5 пропускаются с причиной (skip), а не проходят молча.
 """
@@ -257,6 +259,30 @@ class TestReleaseLinuxRunner(unittest.TestCase):
         oses = _matrix_oses(_load(RELEASE_WF))
         self.assertTrue(oses, "в release.yml нет матрицы os")
         self.assertNotIn("ubuntu-latest", oses)
+
+
+@unittest.skipUnless(HAVE_YAML, "нет PyYAML: шаг «Пакет» release.yml не проверен (pip install pyyaml)")
+class TestReleaseWailsTags(unittest.TestCase):
+    """ТК6 (internal-ci-wails-tags ТК2)."""
+
+    def _package_run(self):
+        steps = [s for s in _steps(_load(RELEASE_WF)) if str(s.get("name", "")).strip() == "Пакет"]
+        self.assertEqual(len(steps), 1, "ожидался ровно один шаг «Пакет»")
+        self.assertIn("run", steps[0])
+        return str(steps[0]["run"])
+
+    def _code_lines(self, run):
+        # комментарии не считаются: в них может упоминаться GOFLAGS как причина
+        return [ln for ln in run.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+    def test_exports_wails_tags(self):
+        code = "\n".join(self._code_lines(self._package_run()))
+        self.assertRegex(code, r"(?<![\w])WAILS_TAGS=[\"']?webkit2_41\b", code)
+
+    def test_no_goflags_with_webkit2_41(self):
+        for ln in self._code_lines(self._package_run()):
+            with self.subTest(line=ln):
+                self.assertFalse("GOFLAGS=" in ln and "webkit2_41" in ln, ln)
 
 
 def _eval_gh_expr(value, has_dash):

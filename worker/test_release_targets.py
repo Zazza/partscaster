@@ -10,6 +10,8 @@ T3. TARGET_OS=windows на Linux → dist/partscaster-<V>-windows-amd64.zip, в�
     Архив воркера несёт готовую сборку yue2.cpp для Windows (yue2cpp/yue-server.exe), linux-сборки в нём нет.
     Без сборки для Windows пакет не собирается — это проверяет test_cpp_only (ТК13).
     wails вызван с `-platform windows/amd64`, go build partscaster-mcp — с GOOS=windows GOARCH=amd64.
+T5. Непустая WAILS_TAGS → wails build получает `-tags <значение>`; не задана или пустая — `-tags` нет
+    (internal-ci-wails-tags ТК1).
 T4. TARGET_OS не задана → пакет под хост: linux-amd64.tar.gz с partscaster (без .exe), partscaster-mcp,
     worker, INSTALL.txt; wails вызван без `-platform windows`.
 
@@ -118,9 +120,9 @@ class TestReleaseTargets(unittest.TestCase):
         self.log = base / "stub.log"
         self.log.write_text("")
 
-    def _run(self, target_os=None):
+    def _run(self, target_os=None, wails_tags=None):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("TARGET_OS", "GOOS", "GOARCH", "WAILS")}
+               if k not in ("TARGET_OS", "GOOS", "GOARCH", "WAILS", "WAILS_TAGS")}
         env.update({
             "PATH": f"{self.bin}:/usr/bin:/bin",
             "WAILS": str(self.bin / "wails"),
@@ -131,6 +133,8 @@ class TestReleaseTargets(unittest.TestCase):
         })
         if target_os is not None:
             env["TARGET_OS"] = target_os
+        if wails_tags is not None:
+            env["WAILS_TAGS"] = wails_tags
         return subprocess.run(["bash", str(self.root / "tools" / "release.sh"), VERSION],
                               cwd=self.root, env=env, capture_output=True, text=True, timeout=180)
 
@@ -235,6 +239,35 @@ class TestReleaseTargets(unittest.TestCase):
         mcp = [ln for ln in self._log_lines("go build") if "partscaster-mcp" in ln]
         self.assertTrue(mcp, self.log.read_text())
         self.assertFalse(any("GOOS=windows" in ln for ln in mcp), mcp)
+
+
+    # T5 (internal-ci-wails-tags ТК1): WAILS_TAGS → флаг -tags у wails build
+    def _wails_build_args(self):
+        lines = self._log_lines("wails")
+        self.assertTrue(lines, self.log.read_text())
+        return [ln.split()[1:] for ln in lines if "build" in ln.split()[1:2]] or \
+            [ln.split()[1:] for ln in lines]
+
+    def test_wails_tags_passed_as_flag(self):
+        p = self._run(None, wails_tags="webkit2_41")
+        self._ok(p)
+        calls = self._wails_build_args()
+        self.assertTrue(any(any(a == "-tags" and i + 1 < len(args) and args[i + 1] == "webkit2_41"
+                                for i, a in enumerate(args)) for args in calls), calls)
+
+    def test_no_wails_tags_no_flag(self):
+        p = self._run(None)
+        self._ok(p)
+        calls = self._wails_build_args()
+        self.assertFalse(any(a == "-tags" or a.startswith("-tags=") for args in calls for a in args),
+                         calls)
+
+    def test_empty_wails_tags_no_flag(self):
+        p = self._run(None, wails_tags="")
+        self._ok(p)
+        calls = self._wails_build_args()
+        self.assertFalse(any(a == "-tags" or a.startswith("-tags=") for args in calls for a in args),
+                         calls)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,8 @@ GOARCH="$(go env GOHOSTARCH)"
 WAILS="${WAILS:-wails}"
 WAILS_ARGS=()
 [[ "$GOOS" != "$HOST_OS" ]] && WAILS_ARGS=(-platform "$GOOS/$GOARCH")
+# теги сборки приложения — флагом wails (GOFLAGS он не читает): на Linux с webkit2gtk-4.1 — WAILS_TAGS=webkit2_41
+[[ -n "${WAILS_TAGS:-}" ]] && WAILS_ARGS+=(-tags "$WAILS_TAGS")
 EXE=""
 [[ "$GOOS" == "windows" ]] && EXE=".exe"
 
