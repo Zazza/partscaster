@@ -14,6 +14,7 @@ on:
       - frontend/src/welcomeClips.json
       - frontend/src/assets/logo.png
       - internal/welcome/clips/**
+      - docs/img/**
   workflow_dispatch:
 
 permissions:

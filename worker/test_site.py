@@ -220,5 +220,167 @@ class TestPagesWorkflow(unittest.TestCase):
         self.assertEqual(perms.get("id-token"), "write")
 
 
+# ---------------------------------------------------------------------------
+# internal-screenshots: снимки приложения для README и сайта.
+# ТК1 Все картинки README.md/README.ru.md существуют; в README.md — только *-en.png, в README.ru.md —
+#     только *-ru.png; заглушек «<!-- screenshot» / «<!-- скриншот» не осталось.
+# ТК2 T.en.shots и T.ru.shots — одинаковые имена; на каждое имя есть docs/img/<имя>-en.png и -ru.png.
+# ТК3 tools/site-build.sh OUT кладёт OUT/img/*.png (все из docs/img); pages.yml push.paths содержит docs/img/**.
+# ТК4 Каждый docs/img/*.png <= 100 КБ.
+# ---------------------------------------------------------------------------
+
+IMG_DIR = REPO / "docs" / "img"
+README_LANG = {"README.md": "en", "README.ru.md": "ru"}
+_MD_IMG = re.compile(r"!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+_HTML_IMG = re.compile(r"<img\b[^>]*\bsrc=[\"']([^\"']+)[\"']", re.I)
+
+
+def _png_files():
+    return sorted(IMG_DIR.glob("*.png")) if IMG_DIR.is_dir() else []
+
+
+def _readme_images(name):
+    """[(alt, путь)] — картинки markdown и <img>, только локальные (не http)."""
+    text = _read(REPO / name)
+    out = [(alt, path) for alt, path in _MD_IMG.findall(text)]
+    out += [(None, path) for path in _HTML_IMG.findall(text)]
+    return [(a, p) for a, p in out if not re.match(r"^[a-z]+://", p, re.I)]
+
+
+class TestReadmeScreenshots(unittest.TestCase):
+    """internal-screenshots ТК1."""
+
+    def test_images_exist(self):
+        for name in README_LANG:
+            for _alt, path in _readme_images(name):
+                with self.subTest(readme=name, path=path):
+                    target = (REPO / path.split("#")[0].split("?")[0]).resolve()
+                    self.assertTrue(target.is_file(), f"{name}: картинки {path} нет")
+
+    def test_screenshots_present(self):
+        # заглушки должны быть заменены снимками, а не просто удалены
+        for name in README_LANG:
+            with self.subTest(readme=name):
+                shots = [p for _a, p in _readme_images(name) if "docs/img/" in p]
+                self.assertTrue(shots, f"{name}: нет ни одного снимка из docs/img")
+
+    def test_own_language_only(self):
+        for name, lang in README_LANG.items():
+            for _alt, path in _readme_images(name):
+                if "docs/img/" not in path:
+                    continue
+                with self.subTest(readme=name, path=path):
+                    self.assertRegex(Path(path).name, rf"-{lang}\.png$",
+                                     f"{name}: снимок не своего языка ({lang})")
+
+    def test_screenshots_have_alt(self):
+        for name in README_LANG:
+            for alt, path in _readme_images(name):
+                if "docs/img/" not in path:
+                    continue
+                with self.subTest(readme=name, path=path):
+                    self.assertIsNotNone(alt, f"{name}: снимок {path} через <img> — подпись не проверить")
+                    self.assertTrue(alt.strip(), f"{name}: у снимка {path} пустая подпись")
+
+    def test_no_placeholders(self):
+        for name in README_LANG:
+            with self.subTest(readme=name):
+                text = _read(REPO / name).lower()
+                self.assertNotIn("<!-- screenshot", text)
+                self.assertNotIn("<!-- скриншот", text)
+
+
+@unittest.skipUnless(NODE, "нет node: объект T из index.html разобрать нечем")
+class TestSiteShots(unittest.TestCase):
+    """internal-screenshots ТК2."""
+
+    @classmethod
+    def setUpClass(cls):
+        r = subprocess.run([NODE, "-e", _EXTRACT_T, str(INDEX)], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            raise AssertionError(f"не удалось разобрать T из index.html:\n{r.stderr}")
+        cls.T = json.loads(r.stdout)
+
+    def _shots(self, lang):
+        shots = self.T[lang].get("shots")
+        self.assertIsInstance(shots, list, f"{lang}.shots — не список")
+        self.assertTrue(shots, f"{lang}.shots пуст")
+        for item in shots:
+            self.assertIsInstance(item, list, f"{lang}.shots: элемент {item!r} — не пара")
+            self.assertEqual(len(item), 2, f"{lang}.shots: элемент {item!r} — не пара [имя, подпись]")
+            name, caption = item
+            self.assertIsInstance(name, str)
+            self.assertTrue(name.strip(), f"{lang}.shots: пустое имя")
+            self.assertIsInstance(caption, str)
+            self.assertTrue(caption.strip(), f"{lang}.shots: у {name} пустая подпись")
+        return shots
+
+    def test_same_names(self):
+        en = [n for n, _c in self._shots("en")]
+        ru = [n for n, _c in self._shots("ru")]
+        self.assertEqual(sorted(en), sorted(ru), "имена снимков en и ru различаются")
+        self.assertEqual(len(en), len(set(en)), "имя снимка повторяется")
+
+    def test_files_exist(self):
+        for lang in ("en", "ru"):
+            for name, _c in self._shots(lang):
+                for suffix in ("en", "ru"):
+                    with self.subTest(lang=lang, name=name, file=suffix):
+                        self.assertTrue((IMG_DIR / f"{name}-{suffix}.png").is_file(),
+                                        f"нет docs/img/{name}-{suffix}.png")
+
+
+class TestSiteBuildImages(unittest.TestCase):
+    """internal-screenshots ТК3, часть сборки."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="site-build-img-"))
+        cls.out = cls.tmp / "out"
+        r = subprocess.run(["bash", str(SITE_BUILD), str(cls.out)], cwd=REPO,
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            shutil.rmtree(cls.tmp, ignore_errors=True)
+            raise AssertionError(f"site-build.sh упал:\n{r.stdout}\n{r.stderr}")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_all_pngs_copied(self):
+        pngs = _png_files()
+        self.assertTrue(pngs, "в docs/img нет ни одного png")
+        for src in pngs:
+            with self.subTest(png=src.name):
+                dst = self.out / "img" / src.name
+                self.assertTrue(dst.is_file(), f"нет OUT/img/{src.name}")
+                self.assertEqual(dst.read_bytes(), src.read_bytes(), f"OUT/img/{src.name} отличается")
+
+
+@unittest.skipUnless(HAVE_YAML, "нет PyYAML: pages.yml не разобрать")
+class TestPagesWatchesImages(unittest.TestCase):
+    """internal-screenshots ТК3, часть pages.yml."""
+
+    def test_push_paths_docs_img(self):
+        wf = yaml.safe_load(_read(PAGES_WF))
+        on = wf.get("on", wf.get(True))
+        self.assertIn("docs/img/**", on["push"]["paths"])
+
+
+class TestImageSize(unittest.TestCase):
+    """internal-screenshots ТК4."""
+
+    LIMIT = 100 * 1024
+
+    def test_each_png_under_limit(self):
+        pngs = _png_files()
+        self.assertTrue(pngs, "в docs/img нет ни одного png")
+        for p in pngs:
+            with self.subTest(png=p.name):
+                size = p.stat().st_size
+                self.assertGreater(size, 0, f"{p.name} пустой")
+                self.assertLessEqual(size, self.LIMIT, f"{p.name}: {size} байт > 100 КБ")
+
+
 if __name__ == "__main__":
     unittest.main()

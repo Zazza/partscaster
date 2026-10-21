@@ -7,7 +7,7 @@ it swaps the instruments for real ones, has a guitarist play the song's chords a
 and mixes the tracks the way real records are mixed. A desktop app plus an MCP server for AI agents,
 open source.
 
-<!-- screenshot: track studio — the "Sound" step, the "Tracks" mixer -->
+![The track studio: the wave with song sections and the plan with chords](docs/img/studio-en.png)
 
 ## How it is different
 
@@ -45,7 +45,7 @@ the chorus, fix a part of the song.
 
 Before → after examples: [docs/en/examples.md](docs/en/examples.md).
 
-<!-- screenshot: the "Sound presets" page -->
+![The "Sound" step: every stem of the track with its level, placement and sound](docs/img/sound-en.png)
 
 ## YuE2 at the core, but not only
 
@@ -89,7 +89,7 @@ called Yue Studio.
 **Updating.** Worker first (new archive, same `install.sh`), then the app. If the versions don't match,
 the app tells you.
 
-<!-- screenshot: settings — worker address and "For AI agents" -->
+![Settings: the worker address, the generation model and economy mode](docs/img/settings-en.png)
 
 ## Documentation
 

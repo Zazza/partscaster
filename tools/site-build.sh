@@ -11,4 +11,6 @@ cp site/index.html "$out/"
 cp frontend/src/assets/logo.png "$out/logo.png"
 cp frontend/src/welcomeClips.json "$out/clips.json"
 cp internal/welcome/clips/*.mp3 "$out/clips/"
+mkdir -p "$out/img"
+cp docs/img/*.png "$out/img/"   # снимки приложения — те же, что в README
 echo "$out"
