@@ -82,6 +82,13 @@ tar xzf worker-<версия>.tar.gz
 Приложение и MCP сверяют версию API: воркер старее — плашка «обновите воркер», новее — «обновите приложение».
 Обновлять — **сначала воркер, потом приложение**.
 
+**Сайт** `https://zazza.github.io/partscaster/` — страница `site/index.html` (ru/en) с кнопками «Скачать» на
+последний релиз и примерами «было/стало» из окна знакомства. Собирает `tools/site-build.sh` (клипы и их список
+берутся из `internal/welcome/clips` и `frontend/src/welcomeClips.json`), публикует `.github/workflows/pages.yml`
+при изменении страницы или клипов в develop/main. Один раз в настройках репозитория: Settings → Pages → Source:
+GitHub Actions; для публикации из develop — Settings → Environments → github-pages → разрешить ветку develop.
+Посмотреть локально: `tools/site-build.sh && python3 -m http.server -d _site`.
+
 ## Через AI-агента
 
 MCP-инструмент `install_worker` ставит воркер (вместе с разделением на дорожки) и необязательные компоненты: пустой `host` — на этом ПК,

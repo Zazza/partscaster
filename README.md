@@ -1,6 +1,6 @@
 # Partscaster
 
-**English** · [Русский](README.ru.md)
+**English** · [Русский](README.ru.md) · [Website](https://zazza.github.io/partscaster/)
 
 A generated track is a draft. Partscaster turns it into something that sounds like a band played it:
 it swaps the instruments for real ones, has a guitarist play the song's chords and a drummer play fills,

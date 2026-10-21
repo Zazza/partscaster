@@ -84,6 +84,13 @@ Then — the app ("Settings" → worker address → "Check") and, if you want, A
 The app and MCP compare the API version: if the worker is older, a banner says "update the worker" (обновите воркер);
 if it is newer — "update the app" (обновите приложение). Update **the worker first, then the app**.
 
+**The site** `https://zazza.github.io/partscaster/` is the page `site/index.html` (ru/en) with "Download" buttons for
+the latest release and the "before/after" examples from the welcome window. `tools/site-build.sh` builds it (the
+clips and their list come from `internal/welcome/clips` and `frontend/src/welcomeClips.json`), and
+`.github/workflows/pages.yml` publishes it when the page or the clips change in develop/main. Once in the repository
+settings: Settings → Pages → Source: GitHub Actions; to publish from develop — Settings → Environments →
+github-pages → allow the develop branch. To view locally: `tools/site-build.sh && python3 -m http.server -d _site`.
+
 ## Via an AI agent
 
 The MCP tool `install_worker` installs the worker (together with stem separation) and optional components: empty `host` — on this PC,

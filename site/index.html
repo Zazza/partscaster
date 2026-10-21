@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Partscaster</title>
+<meta name="description" content="Partscaster takes a YuE2-generated track to a live band sound: real drums and bass, a guitarist on the song's chords, genre presets. Desktop app + MCP server, open source.">
+<link rel="icon" href="logo.png">
+<style>
+/* Цвета — те же, что у приложения (frontend/src/style.css): тёмная тема по умолчанию, светлая — по системе */
+:root {
+  --bg: #08080c; --panel: #16161d; --panel2: #1e1e27; --border: #33333f;
+  --text: #f2f3f7; --muted: #b9bbc8; --accent: #e8674a; --lcd: #ffbe3d; --glow: rgba(255, 190, 61, .35);
+  --btn-text: #1a1206;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #fbfbf9; --panel: #ffffff; --panel2: #f2f2ef; --border: #dcdfd9;
+    --text: #191c17; --muted: #4f554d; --accent: #c2410c; --lcd: #c2410c; --glow: rgba(194, 65, 12, .2);
+    --btn-text: #ffffff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--lcd); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.top { display: flex; align-items: center; gap: 12px; padding-top: 18px; padding-bottom: 18px; }
+header.top .name { font-weight: 700; font-size: 20px; letter-spacing: .3px; }
+header.top .spacer { flex: 1; }
+.lang { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.lang button { background: none; border: 0; color: var(--muted); padding: 5px 10px; cursor: pointer; font: inherit; font-size: 14px; }
+.lang button.on { background: var(--panel2); color: var(--text); }
+.logo { width: 40px; height: 40px; filter: drop-shadow(0 0 8px var(--glow)); }
+.hero { padding-top: 48px; padding-bottom: 40px; }
+.hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; margin: 0 0 16px; }
+.hero h1 em { font-style: normal; color: var(--lcd); }
+.hero p.lead { font-size: 19px; color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--panel2); }
+.btn.primary { background: var(--lcd); border-color: var(--lcd); color: var(--btn-text); }
+.btn small { font-weight: 400; opacity: .8; }
+.note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+section { padding: 36px 0; border-top: 1px solid var(--border); }
+section h2 { font-size: 26px; margin: 0 0 8px; }
+section > .wrap > p.sub { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.card h3 { margin: 0 0 6px; font-size: 17px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.step-title { font-size: 18px; margin: 26px 0 4px; color: var(--lcd); }
+.step-lead { color: var(--muted); margin: 0 0 10px; }
+.pair { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
+.pair:first-of-type { border-top: 0; }
+.pair .t { font-weight: 600; }
+.pair .row { display: grid; grid-template-columns: 112px 1fr 1fr; gap: 0; align-items: stretch; }
+.pair button { font: inherit; font-size: 14px; color: var(--muted); background: var(--panel2); border: 1px solid var(--border);
+  padding: 7px 10px; cursor: pointer; text-align: left; line-height: 1.3; }
+.pair button.play { border-radius: 6px; margin-right: 8px; text-align: center; color: var(--text); }
+.pair button.side:nth-child(2) { border-radius: 6px 0 0 6px; }
+.pair button.side:nth-child(3) { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.pair button.on { color: var(--text); border-color: var(--lcd); position: relative; z-index: 1; }
+.pair button .k { color: var(--lcd); margin-right: 6px; }
+table.req { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.req td, table.req th { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+table.req th { color: var(--muted); font-weight: 600; }
+ol.install { padding-left: 20px; margin: 0; }
+ol.install li { margin: 6px 0; }
+code { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 14px; }
+footer { padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+@media (max-width: 560px) {
+  .pair .row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  .pair button.play { grid-column: 1 / -1; margin-right: 0; }
+}
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <img class="logo" src="logo.png" alt="" width="40" height="40">
+  <span class="name">Partscaster</span>
+  <span class="spacer"></span>
+  <span class="lang" role="group" aria-label="Language">
+    <button data-lang="en">EN</button><button data-lang="ru">RU</button>
+  </span>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <h1 data-i="hero.title"></h1>
+    <p class="lead" data-i="hero.lead"></p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/Zazza/partscaster/releases/latest/download/partscaster-windows-amd64.zip"><span data-i="dl.win"></span></a>
+      <a class="btn" href="https://github.com/Zazza/partscaster/releases/latest/download/partscaster-linux-amd64.tar.gz"><span data-i="dl.linux"></span></a>
+      <a class="btn" href="https://github.com/Zazza/partscaster"><span>GitHub</span></a>
+    </div>
+    <p class="note"><span data-i="dl.note"></span> <a href="https://github.com/Zazza/partscaster/releases/latest" data-i="dl.all"></a></p>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2 data-i="diff.title"></h2>
+      <p class="sub" data-i="diff.sub"></p>
+      <div class="grid" id="features"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-i="ex.title"></h2>
+      <p class="sub" data-i="ex.sub"></p>
+      <div id="examples"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-i="req.title"></h2>
+      <p class="sub" data-i="req.sub"></p>
+      <table class="req" id="req"></table>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-i="inst.title"></h2>
+      <ol class="install" id="install"></ol>
+      <p class="note" data-i-html="inst.docs"></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap" data-i-html="foot"></div>
+</footer>
+
+<script>
+// Тексты ru/en; язык — сохранённый выбор, иначе язык браузера. Примеры «было/стало» — clips.json (копия
+// frontend/src/welcomeClips.json, кладёт tools/site-build.sh) и клипы окна знакомства из internal/welcome/clips.
+const T = {
+  en: {
+    'hero.title': 'From a generated draft to <em>a band that played it</em>',
+    'hero.lead': 'Partscaster takes a song made by the YuE2 model and works on it the way a producer works on a band\'s recording: real drums and bass, a guitarist playing the song\'s chords, genre presets, parts of the song rebuilt without seams. A desktop app plus an MCP server for AI agents, open source.',
+    'dl.win': 'Download for Windows', 'dl.linux': 'Download for Linux',
+    'dl.note': 'The app is free (MIT). The generation model (a 4–8 GB file) is downloaded by the installer.',
+    'dl.all': 'All files and macOS →',
+    'diff.title': 'Where other apps stop',
+    'diff.sub': 'Dozens of apps wrap YuE2, and nearly all of them make getting a song faster. What you get is a flat mix where guitar, drums and voice are fused into one. Partscaster starts there.',
+    'ex.title': 'Before → after',
+    'ex.sub': 'Pieces of an album made in Partscaster. Switch “before / after” while it plays — the other version continues from the same moment.',
+    'req.title': 'What you need',
+    'req.sub': 'Generation runs on an NVIDIA card in a separate program — the worker. It can be this computer or another machine on your network.',
+    'inst.title': 'Install',
+    'inst.docs': 'Details: <a href="https://github.com/Zazza/partscaster/blob/main/docs/en/deployment.md">deployment guide</a> · <a href="https://github.com/Zazza/partscaster/blob/main/docs/en/ui-guide.md">user guide</a> · <a href="https://github.com/Zazza/partscaster/blob/main/docs/en/mcp.md">MCP for AI agents</a>',
+    'foot': 'Partscaster — MIT license. Songs are generated by <a href="https://github.com/multimodal-art-projection/YuE">YuE2</a> running on <a href="https://github.com/ServeurpersoCom/yue2.cpp">yue2.cpp</a>. The name: guitarists call an electric guitar assembled from parts of different makers a partscaster.',
+    'play': 'Listen', 'stop': 'Stop', 'before': 'Before', 'after': 'After',
+    features: [
+      ['Real instruments', 'The track is split into stems; kick, snare, hats, cymbals and bass are played with samples of real instruments, following the notes of the track itself.'],
+      ['A guitarist on the chords', 'A recorded guitar strikes where the model\'s guitar struck and plays the chords from the song\'s score: strumming, arpeggio, power chords or “auto” by section.'],
+      ['Genre presets', '106 presets in 34 styles. One click changes the whole sound — drum kit, guitar, amp, effects and levels measured on real records.'],
+      ['A live drummer', 'Tom fills before section changes, drums step forward in choruses, crashes mark the new part.'],
+      ['Edit the song, not the take', 'Re-sing the voice from any point, add a fill or a drop, rebuild a part by continuing from the original — no splice seams. Every edit is a new version.'],
+      ['AI agents welcome', 'An MCP server gives Claude, Codex and other agents the same tools: generate, listen, edit, apply presets.'],
+    ],
+    req: [
+      ['Graphics card', 'NVIDIA with 8 GB of video memory or more'],
+      ['Video memory at peak', 'BF16 ~10 GB · Q8 ~8 GB · Q8 economy — sized to the card (~6.5 GB on 8 GB). The model is picked for your card on install.'],
+      ['Disk', '~30 GB for the worker: Python environment, the generation model, stem separation and sample kits'],
+      ['Worker', 'Windows (a program, no WSL), Linux or WSL2 — on this computer or another one on the network'],
+      ['App', 'Windows, Linux; macOS not tested'],
+    ],
+    install: [
+      'Windows: unpack <code>partscaster-windows-amd64.zip</code>, run <code>partscaster-worker.exe</code> — it installs the worker and the model for your card and stays in the tray. Then run <code>partscaster.exe</code>.',
+      'Linux: unpack <code>partscaster-linux-amd64.tar.gz</code>; install the worker on the GPU machine with <code>install.sh</code> from the worker archive, then start <code>partscaster</code>.',
+      'Open “New track”, write the lyrics, pick a style — and work on the result in the studio.',
+    ],
+  },
+  ru: {
+    'hero.title': 'От сгенерированного черновика — <em>к записи живой группы</em>',
+    'hero.lead': 'Partscaster берёт песню, сделанную моделью YuE2, и работает с ней, как продюсер с записью группы: живые барабаны и бас, гитарист по аккордам песни, жанровые пресеты, пересборка частей песни без швов. Программа для компьютера и MCP-сервер для ИИ-агентов, с открытым кодом.',
+    'dl.win': 'Скачать для Windows', 'dl.linux': 'Скачать для Linux',
+    'dl.note': 'Программа бесплатна (MIT). Модель генерации (файл 4–8 ГБ) скачает установщик.',
+    'dl.all': 'Все файлы и macOS →',
+    'diff.title': 'Там, где другие останавливаются',
+    'diff.sub': 'Вокруг YuE2 десятки программ, и почти все решают одно: как получить песню быстрее. На выходе — плоский микс, где гитара, барабаны и голос слиты в одно. Partscaster начинается с этого места.',
+    'ex.title': 'Было → стало',
+    'ex.sub': 'Куски альбома, сделанного в Partscaster. Переключайте «было / стало» во время игры — другая версия продолжится с того же места.',
+    'req.title': 'Что нужно',
+    'req.sub': 'Генерация идёт на видеокарте NVIDIA в отдельной программе — воркере. Это может быть этот же компьютер или другая машина в сети.',
+    'inst.title': 'Установка',
+    'inst.docs': 'Подробнее: <a href="https://github.com/Zazza/partscaster/blob/main/docs/ru/deployment.md">установка</a> · <a href="https://github.com/Zazza/partscaster/blob/main/docs/ru/ui-guide.md">руководство</a> · <a href="https://github.com/Zazza/partscaster/blob/main/docs/ru/mcp.md">MCP для ИИ-агентов</a>',
+    'foot': 'Partscaster — лицензия MIT. Песни генерирует <a href="https://github.com/multimodal-art-projection/YuE">YuE2</a> на <a href="https://github.com/ServeurpersoCom/yue2.cpp">yue2.cpp</a>. Название: партскастером гитаристы зовут гитару, собранную из деталей разных производителей.',
+    'play': 'Слушать', 'stop': 'Стоп', 'before': 'Было', 'after': 'Стало',
+    features: [
+      ['Настоящие инструменты', 'Трек делится на дорожки; бочка, малый, хэт, тарелки и бас играются сэмплами настоящих инструментов по нотам самого трека.'],
+      ['Гитарист по аккордам', 'Записанная гитара бьёт там, где била гитара модели, и играет аккорды из партитуры песни: бой, перебор, квинты или «авто» по частям.'],
+      ['Жанровые пресеты', '106 пресетов в 34 стилях. Одна кнопка меняет весь звук — барабаны, гитару, усилитель, эффекты и громкости по замерам настоящих записей.'],
+      ['Живой барабанщик', 'Сбивки на томах перед сменой части, барабаны выходят вперёд в припевах, тарелка отмечает новую часть.'],
+      ['Правится песня, а не дубль', 'Перепеть голос с любого места, добавить сбивку или провал, пересобрать часть продолжением от оригинала — без швов. Каждая правка — новая версия.'],
+      ['Для ИИ-агентов', 'MCP-сервер даёт Claude, Codex и другим агентам те же инструменты: генерировать, слушать, править, применять пресеты.'],
+    ],
+    req: [
+      ['Видеокарта', 'NVIDIA от 8 ГБ видеопамяти'],
+      ['Видеопамять на пике', 'BF16 ~10 ГБ · Q8 ~8 ГБ · Q8 экономный — под карту (на 8 ГБ ~6,5 ГБ). Модель под вашу карту выбирается при установке.'],
+      ['Диск', '~30 ГБ под воркер: окружение Python, модель генерации, разделение на дорожки и наборы сэмплов'],
+      ['Воркер', 'Windows (программа, без WSL), Linux или WSL2 — на этом компьютере или на другом в сети'],
+      ['Приложение', 'Windows, Linux; macOS не проверялась'],
+    ],
+    install: [
+      'Windows: распакуйте <code>partscaster-windows-amd64.zip</code>, запустите <code>partscaster-worker.exe</code> — он поставит воркер и модель под вашу карту и останется в трее. Затем запустите <code>partscaster.exe</code>.',
+      'Linux: распакуйте <code>partscaster-linux-amd64.tar.gz</code>; воркер на машине с видеокартой ставится <code>install.sh</code> из архива воркера, затем запустите <code>partscaster</code>.',
+      'Откройте «Новый трек», напишите текст, выберите стиль — и доводите результат в студии.',
+    ],
+  },
+}
+
+let lang = new URLSearchParams(location.search).get('lang') || ''  // ?lang=ru — ссылка сразу на нужный язык
+try { lang = lang || localStorage.getItem('ps_lang') || '' } catch (e) { /* хранилище недоступно — язык браузера */ }
+if (!T[lang]) lang = (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en'
+
+let clips = null
+const audio = new Audio()
+let cur = null // { pair, side, btn } — что играет
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+const tr = (o) => (o && (o[lang] || o.en || o.ru)) || ''
+
+function render() {
+  const t = T[lang]
+  document.documentElement.lang = lang
+  document.querySelectorAll('[data-i]').forEach(el => { el.innerHTML = t[el.dataset.i] })
+  document.querySelectorAll('[data-i-html]').forEach(el => { el.innerHTML = t[el.dataset.iHtml] })
+  document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang))
+  document.getElementById('features').innerHTML = t.features
+    .map(([h, p]) => `<div class="card"><h3>${esc(h)}</h3><p>${esc(p)}</p></div>`).join('')
+  document.getElementById('req').innerHTML = t.req.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')
+  document.getElementById('install').innerHTML = t.install.map(s => `<li>${s}</li>`).join('')
+  renderExamples()
+}
+
+function renderExamples() {
+  const box = document.getElementById('examples')
+  if (!clips) { box.innerHTML = ''; return }
+  const t = T[lang]
+  box.innerHTML = clips.steps.filter(s => s.pairs && s.pairs.length).map(s => `
+    <h3 class="step-title">${esc(tr(s.title))}</h3>
+    ${tr(s.lead) ? `<p class="step-lead">${esc(tr(s.lead))}</p>` : ''}
+    ${s.pairs.map(p => `
+      <div class="pair" data-pair="${esc(p.id)}">
+        <div class="t">${esc(tr(p.title))}</div>
+        <div class="row">
+          <button class="play">▶ ${esc(t.play)}</button>
+          <button class="side on" data-side="before"><span class="k">${esc(t.before)}</span>${esc(tr(p.before_label))}</button>
+          <button class="side" data-side="after"><span class="k">${esc(t.after)}</span>${esc(tr(p.after_label))}</button>
+        </div>
+      </div>`).join('')}`).join('')
+  const pairs = Object.fromEntries(clips.steps.flatMap(s => s.pairs || []).map(p => [p.id, p]))
+  box.querySelectorAll('.pair').forEach(el => {
+    const p = pairs[el.dataset.pair]
+    const playBtn = el.querySelector('.play')
+    const side = () => el.querySelector('.side.on').dataset.side
+    playBtn.onclick = () => {
+      if (cur && cur.pair === p && !audio.paused) { stop(); return }
+      play(p, side(), playBtn, 0)
+    }
+    el.querySelectorAll('.side').forEach(b => b.onclick = () => {
+      if (b.classList.contains('on')) return
+      el.querySelectorAll('.side').forEach(x => x.classList.toggle('on', x === b))
+      // играет эта пара — другая версия с той же секунды
+      if (cur && cur.pair === p && !audio.paused) play(p, b.dataset.side, playBtn, audio.currentTime)
+    })
+  })
+}
+
+function play(p, side, btn, at) {
+  if (cur && cur.btn !== btn) cur.btn.textContent = '▶ ' + T[lang].play
+  audio.src = 'clips/' + p[side]
+  audio.currentTime = 0
+  const start = () => { audio.currentTime = Math.min(at, (p.dur || 1e9) - 0.05); audio.play() }
+  if (at > 0) audio.addEventListener('loadedmetadata', start, { once: true }); else audio.play()
+  cur = { pair: p, side, btn }
+  btn.textContent = '■ ' + T[lang].stop
+}
+function stop() {
+  audio.pause()
+  if (cur) cur.btn.textContent = '▶ ' + T[lang].play
+  cur = null
+}
+audio.addEventListener('ended', stop)
+
+document.querySelectorAll('.lang button').forEach(b => b.onclick = () => {
+  lang = b.dataset.lang
+  try { localStorage.setItem('ps_lang', lang) } catch (e) { /* не сохранится — не страшно */ }
+  stop(); render()
+})
+
+fetch('clips.json').then(r => r.ok ? r.json() : null).then(j => { clips = j; renderExamples() })
+  .catch(() => { /* без примеров страница остаётся рабочей */ })
+render()
+</script>
+</body>
+</html>
