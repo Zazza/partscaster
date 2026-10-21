@@ -45,7 +45,7 @@ the chorus, fix a part of the song.
 
 Before → after examples: [docs/en/examples.md](docs/en/examples.md).
 
-![The "Sound" step: every stem of the track with its level, placement and sound](docs/img/sound-en.png)
+![Sound presets: genres, movements and variants](docs/img/presets-en.png)
 
 ## YuE2 at the core, but not only
 

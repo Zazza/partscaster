@@ -15,6 +15,8 @@ import {
   YueExportRecipe, YuePickRecipe, YueImportRecipe, YueRecipeImports, YueRecipeImportAction,
 } from './wailsjs/go/main/App'
 import { setWindowTitle } from './composables/useWindowFrame.js'
+import { useI18n } from './i18n/index.js'
+import { localizePresets } from './presetI18n.js'
 
 export const api = {
   status: () => YueStatus(),
@@ -25,7 +27,8 @@ export const api = {
   // аккорды и секции плана по тактам звука (синт по аккордам)
   chordGrid: (id) => YueChordGrid(id),
   // пресеты звука: рецепты на воркере; применить вручную → id версии; повтор у трека
-  soundPresets: () => YueSoundPresets(),
+  // встроенные пресеты — на языке интерфейса (воркер отдаёт названия по-русски)
+  soundPresets: () => YueSoundPresets().then((list) => localizePresets(list, useI18n().locale.value)),
   soundPresetCreate: (p) => YueSoundPresetCreate(p),
   soundPresetUpdate: (id, p) => YueSoundPresetUpdate(id, p),
   soundPresetDelete: (id) => YueSoundPresetDelete(id),

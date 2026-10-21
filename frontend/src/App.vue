@@ -843,6 +843,7 @@ function openMetrics(j, preset) {
 }
 
 onMounted(loadPresetNames)
+watch(locale, loadPresetNames) // подписи пресетов в карточках треков — на новом языке сразу, не после перезапуска
 onMounted(async () => {
   onVolume()
   serverURL.value = await api.getServerURL()
