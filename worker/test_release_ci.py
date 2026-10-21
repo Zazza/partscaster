@@ -13,7 +13,13 @@
     копия DIR/release/partscaster-<os>-<arch>.<ext>, побайтно та же; печатает пути созданных файлов;
     DIR/worker-<V>.tar.gz не трогает и в release/ не кладёт.
 
-Без PyYAML проверки ТК2 пропускаются с причиной (skip), а не проходят молча.
+ТК4 Права на запуск (internal-ci-fixes ТК1). Каждый tools/<имя>.sh, который run-строка workflow в
+    .github/workflows запускает, лежит в индексе git с режимом 100755 (git ls-files -s). Без git или вне
+    репозитория — skip с причиной.
+ТК5 Linux-сборка релиза (internal-ci-fixes ТК2). Матрица os в release.yml содержит ubuntu-24.04 и не
+    содержит ubuntu-latest.
+
+Без PyYAML проверки ТК2, ТК4, ТК5 пропускаются с причиной (skip), а не проходят молча.
 """
 import hashlib
 import os
@@ -159,6 +165,98 @@ class TestWorkflowsSyntax(unittest.TestCase):
             with self.subTest(has_dash=has_dash):
                 self.assertEqual(_eval_gh_expr(w.get("prerelease"), has_dash), has_dash)
                 self.assertEqual(_eval_gh_expr(w.get("make_latest"), has_dash), not has_dash)
+
+
+def _run_strings(wf):
+    for job in (wf.get("jobs") or {}).values():
+        for step in job.get("steps") or []:
+            if "run" in step:
+                yield str(step["run"])
+
+
+# tools/<имя>.sh в позиции пути: не часть другого пути/слова; ./tools/... тоже считается
+_TOOLS_SH = re.compile(r"(?<![\w/.-])(?:\./)?(tools/[\w.-]+\.sh)(?![\w.-])")
+
+
+def _git_repo_reason():
+    """None, если git доступен и REPO — рабочее дерево; иначе причина пропуска."""
+    if not shutil.which("git"):
+        return "нет git: права скриптов в индексе не проверены"
+    try:
+        r = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=REPO,
+                           capture_output=True, text=True, timeout=30)
+    except OSError as e:
+        return f"git не запускается: {e}"
+    if r.returncode != 0 or r.stdout.strip() != "true":
+        return f"{REPO} не репозиторий git: права скриптов в индексе не проверены"
+    return None
+
+
+@unittest.skipUnless(HAVE_YAML, "нет PyYAML: run-строки workflow не разобраны (pip install pyyaml)")
+class TestWorkflowScriptsExecutable(unittest.TestCase):
+    """ТК4 (internal-ci-fixes ТК1)."""
+
+    def setUp(self):
+        reason = _git_repo_reason()
+        if reason:
+            self.skipTest(reason)
+
+    def _scripts(self):
+        found = set()
+        for wf_path in sorted(WF_DIR.glob("*.yml")):
+            for run in _run_strings(_load(wf_path)):
+                found.update(_TOOLS_SH.findall(run))
+        return found
+
+    def test_scripts_found(self):
+        # иначе проверка режима ниже прошла бы на пустом множестве
+        scripts = self._scripts()
+        for need in ("tools/site-build.sh", "tools/release-assets.sh"):
+            self.assertIn(need, scripts)
+
+    def test_mode_100755_in_index(self):
+        scripts = self._scripts()
+        self.assertTrue(scripts, "в run-строках workflow нет ни одного tools/*.sh")
+        for path in sorted(scripts):
+            with self.subTest(path=path):
+                r = subprocess.run(["git", "ls-files", "-s", "--", path], cwd=REPO,
+                                   capture_output=True, text=True, timeout=30)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+                self.assertEqual(len(lines), 1, f"{path} нет в индексе git: {r.stdout!r}")
+                mode = lines[0].split()[0]
+                self.assertEqual(mode, "100755",
+                                 f"{path}: режим {mode} в индексе (нужно git update-index --chmod=+x)")
+
+
+def _matrix_oses(wf):
+    oses = []
+    for job in (wf.get("jobs") or {}).values():
+        matrix = ((job.get("strategy") or {}).get("matrix")) or {}
+        if not isinstance(matrix, dict):
+            continue
+        os_val = matrix.get("os")
+        if isinstance(os_val, list):
+            oses.extend(str(o) for o in os_val)
+        elif os_val is not None:
+            oses.append(str(os_val))
+        for inc in matrix.get("include") or []:
+            if isinstance(inc, dict) and "os" in inc:
+                oses.append(str(inc["os"]))
+    return oses
+
+
+@unittest.skipUnless(HAVE_YAML, "нет PyYAML: матрица release.yml не проверена (pip install pyyaml)")
+class TestReleaseLinuxRunner(unittest.TestCase):
+    """ТК5 (internal-ci-fixes ТК2)."""
+
+    def test_matrix_has_ubuntu_2404(self):
+        self.assertIn("ubuntu-24.04", _matrix_oses(_load(RELEASE_WF)))
+
+    def test_matrix_has_no_ubuntu_latest(self):
+        oses = _matrix_oses(_load(RELEASE_WF))
+        self.assertTrue(oses, "в release.yml нет матрицы os")
+        self.assertNotIn("ubuntu-latest", oses)
 
 
 def _eval_gh_expr(value, has_dash):

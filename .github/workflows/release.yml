@@ -19,7 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         # windows-2022: VS 2022 — nvcc 12.8 (запасная сборка yue2.cpp) отвергает VS 2026 образа windows-latest
-        os: [ubuntu-latest, windows-2022, macos-latest]
+        # ubuntu-24.04: на нём проверен webkit2gtk-4.1 (ubuntu-latest переходит на 26 с 19.10.2026)
+        os: [ubuntu-24.04, windows-2022, macos-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
