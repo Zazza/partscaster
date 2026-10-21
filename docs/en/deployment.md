@@ -385,6 +385,8 @@ The Windows package has `partscaster-worker.exe` next to the app — one program
 an installation window, after that it lives as a tray icon (by the clock). The worker runs until the program is closed
 from the icon menu. There is no autostart at Windows sign-in.
 
+![The worker installer window: the generation model for the graphics card and access (the window is in Russian for now)](../img/installer-choices-ru.png)
+
 - **Installation window** (first run):
   1. welcome and a GPU check (`nvidia-smi`; no NVIDIA — a clear message and exit);
   2. folder: default `%LOCALAPPDATA%\partscaster-worker`, «Browse…», free/needed space (~30 GB); the choice is remembered;

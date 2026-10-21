@@ -71,7 +71,16 @@ code { background: var(--panel2); border: 1px solid var(--border); border-radius
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
 .shots figure { margin: 0; }
 .shots figure:first-child { grid-column: 1 / -1; }  /* студия — главный снимок, на всю ширину */
-.shots img { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: 10px; }
+.shots img { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: 10px; cursor: zoom-in; }
+.zoom { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .85); display: flex; align-items: center;
+  justify-content: center; padding: 16px; cursor: zoom-out; }
+.zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+.zoom .x { position: fixed; top: 10px; right: 12px; font-size: 28px; line-height: 1; color: #fff; opacity: .8; }
+/* телефон: «крупно» — в натуральную величину с прокруткой пальцем, иначе снимок той же ширины, что и в ленте */
+@media (max-width: 900px) {
+  .zoom { align-items: flex-start; justify-content: flex-start; overflow: auto; }
+  .zoom img { max-width: none; max-height: none; }
+}
 .shots figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
 @media (max-width: 560px) { .shots { grid-template-columns: 1fr; } }
 footer { padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
@@ -170,6 +179,8 @@ const T = {
       ['studio', 'The track studio: the wave with song sections, the plan with chords — select a piece and edit it.'],
       ['sound', 'The “Sound” step: every stem with its level, placement and sound.'],
       ['new', 'A new track: style, sound and lyrics — the model writes the plan and sings it.'],
+      ['installer-choices', 'The Windows worker installer: the model is picked for your graphics card.', 'installer-choices-ru'],
+      ['installer-install', 'Then it installs everything itself and stays in the tray.', 'installer-install-ru'],
     ],
     features: [
       ['Real instruments', 'The track is split into stems; kick, snare, hats, cymbals and bass are played with samples of real instruments, following the notes of the track itself.'],
@@ -212,6 +223,8 @@ const T = {
       ['studio', 'Студия трека: волна с частями песни, план с аккордами — выделите кусок и правьте.'],
       ['sound', 'Шаг «Звук»: каждая дорожка — громкость, место и звук.'],
       ['new', 'Новый трек: стиль, звучание и текст — модель пишет план и поёт по нему.'],
+      ['installer-choices', 'Установщик воркера на Windows: модель подбирается под вашу видеокарту.', 'installer-choices-ru'],
+      ['installer-install', 'Дальше он ставит всё сам и остаётся значком в трее.', 'installer-install-ru'],
     ],
     features: [
       ['Настоящие инструменты', 'Трек делится на дорожки; бочка, малый, хэт, тарелки и бас играются сэмплами настоящих инструментов по нотам самого трека.'],
@@ -257,10 +270,26 @@ function render() {
     .map(([h, p]) => `<div class="card"><h3>${esc(h)}</h3><p>${esc(p)}</p></div>`).join('')
   document.getElementById('req').innerHTML = t.req.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')
   document.getElementById('install').innerHTML = t.install.map(s => `<li>${s}</li>`).join('')
-  // снимки — свои для каждого языка (docs/img/<имя>-<язык>.png, копирует tools/site-build.sh)
-  document.getElementById('shots').innerHTML = t.shots.map(([n, c]) =>
-    `<figure><img src="img/${n}-${lang}.png" alt="${esc(c)}" loading="lazy" width="1440" height="1000"><figcaption>${esc(c)}</figcaption></figure>`).join('')
+  // снимки — свои для каждого языка (docs/img/<имя>-<язык>.png, копирует tools/site-build.sh); третий элемент —
+  // общий файл для обоих языков (окно установщика есть только по-русски); щелчок — крупно поверх страницы
+  document.getElementById('shots').innerHTML = t.shots.map(([n, c, f]) => {
+    const [w, h] = n.startsWith('installer') ? [760, 680] : [1440, 1000]  // размеры — чтобы страница не прыгала при загрузке
+    return `<figure><img src="img/${f || n + '-' + lang}.png" alt="${esc(c)}" loading="lazy" width="${w}" height="${h}"><figcaption>${esc(c)}</figcaption></figure>`
+  }).join('')
+  document.querySelectorAll('#shots img').forEach(img => { img.onclick = () => zoom(img) })
   renderExamples()
+}
+
+// просмотр снимка крупно: щелчок по снимку — поверх страницы, щелчок или Esc — закрыть
+function zoom(img) {
+  const box = document.createElement('div')
+  box.className = 'zoom'
+  box.innerHTML = `<img src="${img.getAttribute('src')}" alt="${esc(img.alt)}"><span class="x" aria-hidden="true">×</span>`
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey) }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  box.onclick = close
+  document.addEventListener('keydown', onKey)
+  document.body.appendChild(box)
 }
 
 function renderExamples() {

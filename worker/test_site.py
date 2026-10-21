@@ -292,7 +292,8 @@ class TestReadmeScreenshots(unittest.TestCase):
 
 @unittest.skipUnless(NODE, "нет node: объект T из index.html разобрать нечем")
 class TestSiteShots(unittest.TestCase):
-    """internal-screenshots ТК2."""
+    """internal-screenshots ТК2, изменено internal-site-zoom ТК1: элемент shots — [имя, подпись] или
+    [имя, подпись, файл]; с третьим значением снимок общий для обоих языков — docs/img/<файл>.png."""
 
     @classmethod
     def setUpClass(cls):
@@ -306,28 +307,30 @@ class TestSiteShots(unittest.TestCase):
         self.assertIsInstance(shots, list, f"{lang}.shots — не список")
         self.assertTrue(shots, f"{lang}.shots пуст")
         for item in shots:
-            self.assertIsInstance(item, list, f"{lang}.shots: элемент {item!r} — не пара")
-            self.assertEqual(len(item), 2, f"{lang}.shots: элемент {item!r} — не пара [имя, подпись]")
-            name, caption = item
-            self.assertIsInstance(name, str)
-            self.assertTrue(name.strip(), f"{lang}.shots: пустое имя")
-            self.assertIsInstance(caption, str)
-            self.assertTrue(caption.strip(), f"{lang}.shots: у {name} пустая подпись")
+            self.assertIsInstance(item, list, f"{lang}.shots: элемент {item!r} — не список")
+            self.assertIn(len(item), (2, 3), f"{lang}.shots: элемент {item!r} — не [имя, подпись(, файл)]")
+            for i, v in enumerate(item):
+                self.assertIsInstance(v, str, f"{lang}.shots: {item!r}[{i}] — не строка")
+                self.assertTrue(v.strip(), f"{lang}.shots: {item!r}[{i}] пустое")
         return shots
 
     def test_same_names(self):
-        en = [n for n, _c in self._shots("en")]
-        ru = [n for n, _c in self._shots("ru")]
+        en = [it[0] for it in self._shots("en")]
+        ru = [it[0] for it in self._shots("ru")]
         self.assertEqual(sorted(en), sorted(ru), "имена снимков en и ru различаются")
         self.assertEqual(len(en), len(set(en)), "имя снимка повторяется")
 
     def test_files_exist(self):
         for lang in ("en", "ru"):
-            for name, _c in self._shots(lang):
-                for suffix in ("en", "ru"):
-                    with self.subTest(lang=lang, name=name, file=suffix):
-                        self.assertTrue((IMG_DIR / f"{name}-{suffix}.png").is_file(),
-                                        f"нет docs/img/{name}-{suffix}.png")
+            for item in self._shots(lang):
+                name = item[0]
+                if len(item) == 3:
+                    files = [f"{item[2]}.png"]
+                else:
+                    files = [f"{name}-en.png", f"{name}-ru.png"]
+                for f in files:
+                    with self.subTest(lang=lang, name=name, file=f):
+                        self.assertTrue((IMG_DIR / f).is_file(), f"нет docs/img/{f}")
 
 
 class TestSiteBuildImages(unittest.TestCase):
@@ -380,6 +383,65 @@ class TestImageSize(unittest.TestCase):
                 size = p.stat().st_size
                 self.assertGreater(size, 0, f"{p.name} пустой")
                 self.assertLessEqual(size, self.LIMIT, f"{p.name}: {size} байт > 100 КБ")
+
+
+# ---------------------------------------------------------------------------
+# internal-site-zoom: снимки сайта крупно по щелчку; снимки окна установщика воркера.
+# ТК1 — см. TestSiteShots выше (третье значение элемента shots — общий файл).
+# ТК2 Картинки ../img/… в docs/ru/deployment.md и docs/en/deployment.md существуют.
+# ТК3 site/index.html: функция zoom, класс .zoom в стилях, keydown с 'Escape', снимкам #shots img
+#     назначается обработчик щелчка, вызывающий zoom. Проверка по коду страницы (браузера в тестах нет).
+# ТК4 — TestImageSize выше.
+# ---------------------------------------------------------------------------
+
+DEPLOY_DOCS = [REPO / "docs" / lang / "deployment.md" for lang in ("ru", "en")]
+
+
+class TestDeploymentImages(unittest.TestCase):
+    """internal-site-zoom ТК2."""
+
+    def test_img_links_exist(self):
+        for doc in DEPLOY_DOCS:
+            text = _read(doc)
+            paths = [p for _a, p in _MD_IMG.findall(text)] + _HTML_IMG.findall(text)
+            imgs = [p for p in paths if p.startswith("../img/")]
+            with self.subTest(doc=doc.relative_to(REPO).as_posix()):
+                self.assertTrue(imgs, f"{doc.name}: нет ни одной картинки ../img/…")
+            for p in imgs:
+                with self.subTest(doc=doc.relative_to(REPO).as_posix(), path=p):
+                    target = (doc.parent / p.split("#")[0].split("?")[0]).resolve()
+                    self.assertTrue(target.is_file(), f"{doc}: картинки {p} нет")
+
+
+class TestSiteZoom(unittest.TestCase):
+    """internal-site-zoom ТК3."""
+
+    @classmethod
+    def setUpClass(cls):
+        src = _read(INDEX)
+        cls.style = "\n".join(re.findall(r"<style\b[^>]*>([\s\S]*?)</style>", src, re.I))
+        cls.script = "\n".join(re.findall(r"<script\b[^>]*>([\s\S]*?)</script>", src, re.I))
+        cls.html = src
+
+    def test_zoom_function(self):
+        self.assertRegex(self.script, r"\bfunction\s+zoom\s*\(", "нет function zoom")
+
+    def test_zoom_class_styled(self):
+        self.assertRegex(self.style, r"(^|[\s,}])\.zoom\b[^{]*\{", "в стилях нет класса .zoom")
+        self.assertRegex(self.script, r"""['"`]zoom['"`]""", "класс zoom не назначается в скрипте")
+
+    def test_escape_closes(self):
+        self.assertRegex(self.script, r"""addEventListener\(\s*['"]keydown['"]|\.onkeydown\s*=""",
+                         "нет обработчика keydown")
+        self.assertRegex(self.script, r"""\.key\s*===?\s*['"]Escape['"]|['"]Escape['"]\s*===?\s*\w+\.key""",
+                         "нет проверки клавиши 'Escape'")
+
+    def test_shots_click_opens_zoom(self):
+        self.assertRegex(self.html, r"""id=["']shots["']""", "нет контейнера #shots")
+        self.assertRegex(self.script, r"#shots\s+img", "снимки #shots img не выбираются в скрипте")
+        click = r"""(\.onclick\s*=|addEventListener\(\s*['"]click['"]|onclick\s*=\s*["'])"""
+        self.assertRegex(self.script, click + r"[\s\S]{0,300}?\bzoom\s*\(",
+                         "обработчик щелчка не вызывает zoom")
 
 
 if __name__ == "__main__":
