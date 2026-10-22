@@ -151,7 +151,7 @@ func TestInstallDownloadsExtractsAndSkipsWhenInstalled(t *testing.T) {
 	hits := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		w.Write(zipBytes)
+		_, _ = w.Write(zipBytes)
 	}))
 	defer srv.Close()
 	url, sha := URL, SHA256
@@ -194,7 +194,7 @@ func TestInstallBadChecksum(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	zipBytes, _ := fakeZip(t, []byte("x"))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(zipBytes)
+		_, _ = w.Write(zipBytes)
 	}))
 	defer srv.Close()
 	url, sha := URL, SHA256

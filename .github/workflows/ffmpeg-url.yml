@@ -1,0 +1,28 @@
+name: ffmpeg URL
+
+# Жива ли ссылка на закреплённую сборку ffmpeg для Windows (internal/ffmpegbin): её качает приложение на чистой
+# Windows. Сборки BtbN удаляются по расписанию — красный запуск значит «обнови URL/SHA256/Size», причина в логе теста.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  push:
+    paths:
+      - internal/ffmpegbin/**
+      - .github/workflows/ffmpeg-url.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  url:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Ссылка на сборку ffmpeg жива
+        env:
+          PARTSCASTER_NET_TEST: '1'
+        run: go test ./internal/ffmpegbin/ -run TestPinnedURLAlive -v -count=1

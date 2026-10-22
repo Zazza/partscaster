@@ -1,10 +1,12 @@
 <script setup>
 // «Нужен ffmpeg»: на чистой Windows нет ffmpeg — перемотка и эффекты студии не работали молча.
 // Качаем закреплённую сборку в папку данных приложения (система не трогается); у кого ffmpeg
-// уже в PATH — окно не появляется. На Linux/macOS предлагаем системный пакет.
+// уже в PATH — окно не появляется. На Linux/macOS — подсказка системной установки своей ОС.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Environment } from '../wailsjs/runtime/runtime.js'
 import { useI18n } from '../i18n/index.js'
 import { api } from '../api.js'
+import { ffmpegVariant } from '../ffmpegHint.js'
 
 const emit = defineEmits(['close', 'installed'])
 const { t } = useI18n()
@@ -15,8 +17,10 @@ const total = ref(0)
 const err = ref('')
 let timer = null
 
-const windows = computed(() => typeof navigator !== 'undefined'
-  && /win/i.test(navigator.userAgent || navigator.platform || ''))
+// ОС — из Wails; пока не ответил (или не wails) — подсказка, без кнопки «Скачать»
+const platform = ref('')
+const variant = computed(() => ffmpegVariant(platform.value))
+const windows = computed(() => variant.value.kind === 'install')
 const pct = computed(() => (total.value > 0 ? Math.min(100, Math.round(100 * done.value / total.value)) : 0))
 
 async function install() {
@@ -40,7 +44,11 @@ async function install() {
   }
 }
 
-onMounted(() => { if (!windows.value) return })
+onMounted(async () => {
+  try {
+    platform.value = (await Environment()).platform
+  } catch { /* не wails — остаётся подсказка */ }
+})
 onBeforeUnmount(() => clearInterval(timer))
 </script>
 
@@ -57,7 +65,7 @@ onBeforeUnmount(() => clearInterval(timer))
       <div class="modal-head">
         <h3>{{ t('ffmpeg.title') }}</h3>
       </div>
-      <p class="muted">{{ t('ffmpeg.text') }}</p>
+      <p class="muted">{{ windows ? t('ffmpeg.text') : t('ffmpeg.textUnix') }}</p>
       <template v-if="windows">
         <div v-if="installing" class="ffmpeg-progress">
           <div class="bar"><div class="fill" :style="{ width: pct + '%' }" /></div>
@@ -72,7 +80,13 @@ onBeforeUnmount(() => clearInterval(timer))
           </button>
         </div>
       </template>
-      <p v-else class="muted">{{ t('ffmpeg.unixHint') }}</p>
+      <template v-else>
+        <p><code>{{ t(variant.hintKey) }}</code></p>
+        <div class="row">
+          <span class="grow" />
+          <button class="primary" @click="emit('close')">{{ t('ffmpeg.ok') }}</button>
+        </div>
+      </template>
     </div>
   </div>
 </template>

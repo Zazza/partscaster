@@ -311,9 +311,11 @@ program:
 **ffmpeg on the app machine** is needed by player seeking and studio effects (they run locally).
 On Windows the app checks for it at startup and, if missing, offers to download a pinned build
 (GPL, ~82 MB — LGPL builds lack the rubberband filter the studio needs) into its data folder — `%AppData%\partscaster\tools\ffmpeg\bin`;
-nothing is changed system-wide. An ffmpeg found in PATH is used as is; the app's own copy takes
-precedence. The `PARTSCASTER_FFMPEG` variable forces a path (app and MCP). On Linux/macOS a
-system package is enough (`sudo apt install ffmpeg`).
+nothing is changed system-wide. Lookup order: the `PARTSCASTER_FFMPEG` variable (app and MCP) → PATH →
+on macOS the Homebrew folders (`/opt/homebrew/bin`, `/usr/local/bin`: an app started from Finder does not see them
+in PATH) → the app's own folder. On Linux/macOS the app warns at startup when ffmpeg is missing and shows the
+install command (`apt`/`dnf`/`pacman`, `brew install ffmpeg`); no restart is needed after installing. A monthly BtbN
+build is pinned (kept ~2 years, daily ones ~2 weeks); the `ffmpeg-url.yml` workflow checks the link weekly.
 
 ### NAM amplifiers
 
