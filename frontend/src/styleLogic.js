@@ -53,18 +53,46 @@ export function dictStyle(s) {
     .join(', ')
 }
 
-// выбор тега из подсказок в мультислоте: теги до хвоста-черновика (текст после последнего
-// разделителя — им фильтровались подсказки) сохраняются, новый тег добавляется без дубликата
-// (сравнение по логическим тегам — составные словарные значения равны себе целиком).
-// Запятая на конце — приглашение продолжать список: фильтр подсказок идёт по хвосту,
-// и после выбора хвост пуст — список снова полный
+// все готовые значения подсказок (ru и en, любой слот) — в нижнем регистре
+let knownLabels = null
+function isKnownLabel(s) {
+  if (!knownLabels) {
+    knownLabels = new Set()
+    for (const opts of Object.values(slotOptions)) {
+      for (const [ru, en] of opts) { knownLabels.add(ru.toLowerCase()); knownLabels.add(en.toLowerCase()) }
+    }
+  }
+  return knownLabels.has(s.toLowerCase())
+}
+
+// выбор тега из подсказок в мультислоте: хвост (текст после последнего разделителя, а без разделителей — всё
+// поле) — черновик поиска, им фильтровались подсказки, и выбранный тег его заменяет. Хвост, равный целиком
+// готовому значению подсказок, — уже выбранный тег (загруженный стиль без запятой на конце) — он остаётся.
+// Новый тег добавляется без дубликата (сравнение по логическим тегам — составные словарные значения равны
+// себе целиком). Запятая на конце — приглашение продолжать список: после выбора хвост пуст — список снова полный
 export function pickMultiSlotTag(current, tag) {
   const cur = current || ''
   const t = (tag || '').trim()
-  const cut = cur.search(/\s*[;,][^;,]*$/)   // конец последнего разделителя — начало хвоста
-  const items = slotTagList(cut >= 0 ? cur.slice(0, cut) : cur)
+  const cut = cur.search(/[;,][^;,]*$/)   // последний разделитель — начало хвоста
+  const head = cut >= 0 ? cur.slice(0, cut) : ''
+  const tail = (cut >= 0 ? cur.slice(cut + 1) : cur).trim()
+  const items = slotTagList(head)
+  if (tail && isKnownLabel(tail)) items.push(tail)
   if (t && !items.some(x => x.toLowerCase() === t.toLowerCase())) items.push(t)
   return items.join(', ') + ', '
+}
+
+// «Разобрать по полям» точно: слоты и BPM — ровно из разбора строки (чего в строке нет — пусто, а не старое)
+export function applyParsedSlots(slots, res) {
+  const out = { ...slots }
+  for (const k of SLOT_ORDER) out[k] = (res.slots && res.slots[k]) || ''
+  out.bpm = res.bpm ?? null
+  return out
+}
+
+// хвост строки стиля после слотов: стойка и нераспознанные при разборе куски (уходят в отправку как есть)
+export function styleExtra(rackStr, unknown = []) {
+  return [rackStr, ...unknown].map(x => (x || '').trim()).filter(Boolean).join(', ')
 }
 
 // Обратный разбор строки стиля в поля формы: слоты, BPM и инструментальная стойка.

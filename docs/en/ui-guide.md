@@ -153,8 +153,6 @@ A collapsed block; its header shows a summary of what is selected:
 - **"Variants: N"** — N tracks (2–5, the number is in the list next to it) with neighboring seeds: listen and pick
   the best one. The chosen number is remembered.
 - **"Notes →"** — the "Track notation (ABC)" window (below): the attached plan or a new plan from the style.
-- **"Draft ~18 s"** — only the first ~18 seconds in this style with these lyrics, about half a minute of GPU: hear
-  whether the style is right before the full render. It is marked "draft" in the track list.
 
 ### The "Track notation (ABC)" window
 

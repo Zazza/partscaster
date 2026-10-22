@@ -74,7 +74,8 @@ onBeforeUnmount(() => clearInterval(timer))
         <p v-if="err" class="error">{{ err }}</p>
         <div class="row">
           <span class="grow" />
-          <button class="ghost" :disabled="installing" @click="emit('close')">{{ t('ffmpeg.later') }}</button>
+          <!-- «Позже» и во время скачивания: оно продолжится в фоне (Install на стороне Go), окно не держит приложение -->
+          <button class="ghost" @click="emit('close')">{{ t('ffmpeg.later') }}</button>
           <button class="primary" :disabled="installing" @click="install">
             {{ installing ? t('ffmpeg.installing') : t('ffmpeg.download') }}
           </button>

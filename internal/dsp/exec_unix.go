@@ -8,7 +8,8 @@ import (
 	"partscaster/internal/ffmpegbin"
 )
 
-// ffmpegCmd — на unix окна консоли не мелькают; свой ffmpeg (если приложение скачало) — прежде PATH.
+// ffmpegCmd — на unix окна консоли не мелькают; какой ffmpeg — решает ffmpegbin.Path(): переменная → PATH →
+// Homebrew (macOS) → своя папка.
 func ffmpegCmd(args []string) *exec.Cmd {
 	return exec.Command(ffmpegbin.Path(), args...)
 }

@@ -10,8 +10,8 @@ import (
 )
 
 // ffmpegCmd — ffmpeg без окна консоли: у GUI-процесса оно иначе мелькает
-// на каждом применении эффектов/перемотке. Свой ffmpeg (скачанный в папку данных)
-// — прежде PATH.
+// на каждом применении эффектов/перемотке. Какой ffmpeg — решает ffmpegbin.Path(): переменная → PATH →
+// своя папка (скачанный приложением).
 func ffmpegCmd(args []string) *exec.Cmd {
 	cmd := exec.Command(ffmpegbin.Path(), args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}

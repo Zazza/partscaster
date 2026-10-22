@@ -61,7 +61,11 @@ if [[ "$GOOS" == "windows" ]]; then
   # partscaster-worker.exe — воркер без WSL: код воркера вшивается в программу (go:embed из payload/); окно установки
   # (Wails — теги desktop,production) и значок в трее, без консоли (-H windowsgui); cgo не нужен.
   # Иконка exe и сведения о файле — ресурсом .syso (go-winres): go build подхватывает его сам; перегенерация —
-  # из cmd/partscaster-worker/icon.ico (рисует tools/make-worker-icon.py)
+  # из cmd/partscaster-worker/icon.ico (рисует tools/make-worker-icon.py). Ресурс с версией релиза нужен только этой
+  # сборке: закоммиченный .syso сохраняется и возвращается после go build, иначе каждый релиз пачкал бы дерево
+  SYSO="cmd/partscaster-worker/rsrc_windows_$GOARCH.syso"
+  SYSO_KEEP=""
+  if [[ -f "$SYSO" ]]; then SYSO_KEEP="$(mktemp)"; cp "$SYSO" "$SYSO_KEEP"; fi
   (cd cmd/partscaster-worker && go tool go-winres simply --icon icon.ico --manifest none \
     --product-name "Partscaster Worker" --file-description "Partscaster — воркер (установка и трей)" \
     --product-version "$VERSION" --arch "$GOARCH")
@@ -72,6 +76,7 @@ if [[ "$GOOS" == "windows" ]]; then
   CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -tags desktop,production -ldflags "$LDFLAGS -H windowsgui" \
     -o build/bin/partscaster-worker.exe ./cmd/partscaster-worker
   rm -f "$PAYLOAD"/worker-*.tar.gz
+  if [[ -n "$SYSO_KEEP" ]]; then mv "$SYSO_KEEP" "$SYSO"; fi
 fi
 
 NAME="partscaster-$VERSION-$GOOS-$GOARCH"

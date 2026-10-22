@@ -16,7 +16,7 @@ import { useInserts } from './composables/useInserts.js'
 import { useWorkerCompat } from './composables/useWorkerCompat.js'
 // сервис «перепеть с места»: живёт всё время, как вклейки (студию закрывают)
 import './composables/useRevoice.js'
-import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine, slotTagList, pickMultiSlotTag, parseStyleLine } from './styleLogic.js'
+import { buildStyleLine, cleanLyrics, withInstrumental, instrumentalLine, slotTagList, pickMultiSlotTag, parseStyleLine, applyParsedSlots, styleExtra } from './styleLogic.js'
 import { formStyle, hasCyrillic, newTrackPayload } from './requests.js'
 import { insertSectionTag, SECTION_TAGS } from './lyricsTags.js'
 import { usePlayer, fmtDur } from './composables/usePlayer.js'
@@ -180,8 +180,10 @@ function slotHas(key, o) {
   return slotTagList(slots.value[key]).some((x) => x.toLowerCase() === v)
 }
 
+// нераспознанные куски последнего «Разобрать по полям» (см. parseStyleToForm)
+const parseUnknown = ref([])
 const compiledStyle = computed(() =>
-  styleOverride.value.trim() || buildStyleLine(slots.value, rackCompile(rackSel.value)))
+  styleOverride.value.trim() || buildStyleLine(slots.value, styleExtra(rackCompile(rackSel.value), parseUnknown.value)))
 
 // поле «Стиль одной строкой»: пока не трогали — показывает то, что собрано
 // из слотов и стойки; первая правка фиксирует ручную версию (переопределяет форму)
@@ -190,16 +192,15 @@ const styleLine = computed({
   set: (v) => { styleOverride.value = v; parseUnknown.value = [] },
 })
 
-// «разобрать по полям»: слоты, BPM и стойка из ручной строки; строка возвращается
-// к авто-сборке, нераспознанные куски показываются под полем (руками правка их чистит)
-const parseUnknown = ref([])
+// «разобрать по полям»: слоты, BPM и стойка — ровно из ручной строки (чего в ней нет — очищается); строка
+// возвращается к авто-сборке. Нераспознанные куски дописываются в конец строки и уходят в отправку как есть,
+// под полем — их список (правка строки руками, «следовать полям» или выбор стиля их сбрасывают)
 function parseStyleToForm() {
   const line = styleLine.value.trim()
   if (!line) return
   const res = parseStyleLine(line, locale.value)
-  slots.value = { ...slots.value, ...res.slots }
-  if (res.bpm !== null) slots.value.bpm = res.bpm
-  if (res.rack.length) rackSel.value = res.rack
+  slots.value = applyParsedSlots(slots.value, res)
+  rackSel.value = res.rack
   styleOverride.value = ''   // снова «показывает выбранное выше»
   parseUnknown.value = res.unknown
 }
@@ -208,7 +209,8 @@ function parseStyleToForm() {
 // самописная кириллица уходит как есть — под строкой стиля предупреждение (hasCyrillic)
 // «без слов» у строки 1:1 — пометка в начале строки (у слотов — голос стиля, см. applyInstrumental)
 const sentStyle = computed(() =>
-  formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value, rackCompile(rackSel.value)))
+  formStyle(instrumentalLine(styleOverride.value, noLyrics.value), slots.value,
+    styleExtra(rackCompile(rackSel.value), parseUnknown.value)))
 function finalStyle() { return sentStyle.value }
 
 function payload() {
@@ -261,6 +263,7 @@ function applyPreset(p, mode) {
     language: '', genre: '', rhythm: '', guitars: '', keys: '',
     vocals: '', mood: '', production: '', bpm: p.bpm || null,
   }
+  parseUnknown.value = []
   if (mode === 'line' || !p.slots) {
     // точная строка (1:1) или свой стиль библиотеки — у него нет слотов
     styleOverride.value = p.style
@@ -595,6 +598,7 @@ const reuseJob = (j) => withEngineCheck(j, () => fillFromJob(j))
 function fillFromJob(j) {
   title.value = j.title
   styleOverride.value = j.style
+  parseUnknown.value = []
   lyrics.value = j.lyrics
   seed.value = j.seed || null
   cot.value = j.cot === 'melody' ? 'melody' : 'full'   // «без плана» в форме нет
