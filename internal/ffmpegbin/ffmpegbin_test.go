@@ -62,9 +62,11 @@ func TestGetEnvWins(t *testing.T) {
 func TestGetPathBeforeOwn(t *testing.T) {
 	isolate(t)
 	withOwn(t)
-	// в PATH тоже есть — системный приоритетнее: у кого стоит свой (часто полнее) — не подменяем
+	// в PATH тоже есть — системный приоритетнее: у кого стоит свой (часто полнее) — не подменяем.
+	// Оба имени: на unix LookPath ищет «ffmpeg», на windows — «ffmpeg.exe»
 	dir := t.TempDir()
 	writeExe(t, filepath.Join(dir, "ffmpeg.exe"))
+	writeExe(t, filepath.Join(dir, "ffmpeg"))
 	t.Setenv("PATH", dir)
 	s := Get()
 	if !s.Ok || s.Source != "path" {
@@ -115,6 +117,7 @@ func fakeZip(t *testing.T, ffmpegBody []byte) (zipBytes []byte, sum string) {
 	w := zip.NewWriter(&buf)
 	files := map[string][]byte{
 		"ffmpeg-n9.0.2-win64/bin/ffmpeg.exe":  ffmpegBody,
+		"ffmpeg-n9.0.2-win64/bin/ffmpeg":      ffmpegBody, // unix-имя: Install сверяется с own() той же ОС
 		"ffmpeg-n9.0.2-win64/bin/avcodec.dll": []byte("dll"),
 		"ffmpeg-n9.0.2-win64/bin/ffplay.exe":  []byte("play"),
 		"ffmpeg-n9.0.2-win64/bin/ffprobe.exe": []byte("probe"),
