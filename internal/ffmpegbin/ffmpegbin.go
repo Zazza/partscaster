@@ -78,7 +78,8 @@ func Get() Status {
 	return Status{}
 }
 
-// Path — путь к ffmpeg для запуска (player.go, internal/dsp): PATH → своя папка → имя «ffmpeg»
+// Path — путь к ffmpeg для запуска (player.go, internal/dsp): порядок Get (переменная → PATH → Homebrew на macOS →
+// своя папка), не нашлось — имя «ffmpeg»
 // (запуск упадёт с внятной ошибкой exec, которую вызывающий покажет).
 func Path() string {
 	if s := Get(); s.Ok {

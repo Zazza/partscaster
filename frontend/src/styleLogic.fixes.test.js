@@ -152,3 +152,45 @@ describe('нераспознанные куски уходят в отправк
     expect(s.indexOf('tape echo')).toBeLessThan(s.indexOf('странный тег'))
   })
 })
+
+// ТК5 (условие 8): хвост мультиполя — последний логический тег; составное словарное значение
+// (подпись подсказки с запятой внутри) — один тег
+describe('pickMultiSlotTag — составные словарные значения (условие 8)', () => {
+  const RU = 'грустно, тоска'
+  const RU2 = 'страшно, тревожно'
+  const EN = 'melancholy, sadness'
+  const EN2 = 'dark, unsettling'
+
+  it('значения взяты из реальных подсказок', () => {
+    expect(slotOptions.mood).toContainEqual([RU, EN])
+    expect(slotOptions.mood).toContainEqual([RU2, EN2])
+  })
+
+  it("('<составное>', '<составное>') → '<составное>, ' — повтор не плодит обрывок", () => {
+    expect(pickMultiSlotTag(RU, RU)).toBe(RU + ', ')
+    expect(pickMultiSlotTag(RU + ', ', RU)).toBe(RU + ', ')
+  })
+
+  it("('рок, <составное>', X) → 'рок, <составное>, X, '", () => {
+    expect(pickMultiSlotTag('рок, ' + RU, 'блюз')).toBe('рок, ' + RU + ', блюз, ')
+  })
+
+  it("('<составное>', '<другое>') → оба значения", () => {
+    expect(pickMultiSlotTag(RU, 'блюз')).toBe(RU + ', блюз, ')
+    expect(pickMultiSlotTag(RU, RU2)).toBe(RU + ', ' + RU2 + ', ')
+  })
+
+  it('en: повтор составного без обрывка', () => {
+    expect(pickMultiSlotTag(EN, EN)).toBe(EN + ', ')
+    expect(pickMultiSlotTag(EN + ', ', EN)).toBe(EN + ', ')
+  })
+
+  it("en: ('rock, <составное>', X) → 'rock, <составное>, X, '", () => {
+    expect(pickMultiSlotTag('rock, ' + EN, 'blues')).toBe('rock, ' + EN + ', blues, ')
+  })
+
+  it('en: составное + другое → оба значения', () => {
+    expect(pickMultiSlotTag(EN, 'blues')).toBe(EN + ', blues, ')
+    expect(pickMultiSlotTag(EN, EN2)).toBe(EN + ', ' + EN2 + ', ')
+  })
+})

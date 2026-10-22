@@ -24,10 +24,23 @@ export function splitSlotTags(s) {
   return (s || '').split(/\s*[;,]\s*/).map(x => x.trim()).filter(Boolean)
 }
 
+// все готовые значения подсказок (ru и en, любой слот) — в нижнем регистре
+let knownLabels = null
+function isKnownLabel(s) {
+  if (!knownLabels) {
+    knownLabels = new Set()
+    for (const opts of Object.values(slotOptions)) {
+      for (const [ru, en] of opts) { knownLabels.add(ru.toLowerCase()); knownLabels.add(en.toLowerCase()) }
+    }
+  }
+  return knownLabels.has(s.toLowerCase())
+}
+
 // логические теги слота: соседние куски склеиваются, если вместе образуют словарное
 // значение — русские подписи бывают из нескольких частей через запятую
 // («1980-е сибирский андеграунд, панк-энергия поверх пост-панк тоски»), и при наивном
-// разрезании их перевод бы терялся. Кусок без словарной склейки — самописный тег
+// разрезании их перевод бы терялся; английские составные подписи подсказок («melancholy, sadness») — так же.
+// Кусок без словарной склейки — самописный тег
 export function slotTagList(s) {
   const items = splitSlotTags(s)
   const out = []
@@ -35,7 +48,8 @@ export function slotTagList(s) {
   while (i < items.length) {
     let len = 0
     for (let j = items.length; j > i; j--) {
-      if (slotDict[items.slice(i, j).join(', ').toLowerCase()] !== undefined) { len = j - i; break }
+      const chunk = items.slice(i, j).join(', ').toLowerCase()
+      if (slotDict[chunk] !== undefined || isKnownLabel(chunk)) { len = j - i; break }
     }
     if (!len) len = 1
     out.push(items.slice(i, i + len).join(', '))
@@ -53,31 +67,18 @@ export function dictStyle(s) {
     .join(', ')
 }
 
-// все готовые значения подсказок (ru и en, любой слот) — в нижнем регистре
-let knownLabels = null
-function isKnownLabel(s) {
-  if (!knownLabels) {
-    knownLabels = new Set()
-    for (const opts of Object.values(slotOptions)) {
-      for (const [ru, en] of opts) { knownLabels.add(ru.toLowerCase()); knownLabels.add(en.toLowerCase()) }
-    }
-  }
-  return knownLabels.has(s.toLowerCase())
-}
-
-// выбор тега из подсказок в мультислоте: хвост (текст после последнего разделителя, а без разделителей — всё
-// поле) — черновик поиска, им фильтровались подсказки, и выбранный тег его заменяет. Хвост, равный целиком
-// готовому значению подсказок, — уже выбранный тег (загруженный стиль без запятой на конце) — он остаётся.
+// выбор тега из подсказок в мультислоте: хвост (последний логический тег поля, если поле не кончается запятой)
+// — черновик поиска, им фильтровались подсказки, и выбранный тег его заменяет. Хвост, равный целиком готовому
+// значению подсказок, — уже выбранный тег (загруженный стиль без запятой на конце) — он остаётся; составное
+// значение с запятой внутри («грустно, тоска») — один логический тег.
 // Новый тег добавляется без дубликата (сравнение по логическим тегам — составные словарные значения равны
 // себе целиком). Запятая на конце — приглашение продолжать список: после выбора хвост пуст — список снова полный
 export function pickMultiSlotTag(current, tag) {
   const cur = current || ''
   const t = (tag || '').trim()
-  const cut = cur.search(/[;,][^;,]*$/)   // последний разделитель — начало хвоста
-  const head = cut >= 0 ? cur.slice(0, cut) : ''
-  const tail = (cut >= 0 ? cur.slice(cut + 1) : cur).trim()
-  const items = slotTagList(head)
-  if (tail && isKnownLabel(tail)) items.push(tail)
+  const items = slotTagList(cur)
+  const open = /[;,]\s*$/.test(cur)   // запятая на конце — хвоста-черновика нет
+  if (!open && items.length && !isKnownLabel(items[items.length - 1])) items.pop()
   if (t && !items.some(x => x.toLowerCase() === t.toLowerCase())) items.push(t)
   return items.join(', ') + ', '
 }
